@@ -17,7 +17,7 @@ namespace DotNetSigningServer.Controllers
             _signingService = signingService;
         }
 
-        [HttpPost("/api/v1/presign")]
+        [HttpPost("/presign")]
         public async Task<IActionResult> PreSign([FromBody] PreSignInput input)
         {
             try
@@ -41,7 +41,7 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
-        [HttpPost("/api/v1/sign")]
+        [HttpPost("/sign")]
         public async Task<IActionResult> Sign([FromBody] SignInput input)
         {
             var signingData = await _dbContext.SigningData.FindAsync(input.Id);

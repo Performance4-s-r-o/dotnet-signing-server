@@ -10,6 +10,18 @@ builder.Services.AddScoped<PdfSigningService>();
 
 PostgreSqlContainer? postgresContainer = null;
 
+var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(name: MyAllowSpecificOrigins,
+                      policy =>
+                      {
+                          policy.WithOrigins("http://localhost:5173") // The origin of your React app
+                                .AllowAnyHeader()
+                                .AllowAnyMethod();
+                      });
+});
 
 string envFile = ".env";
 if (!File.Exists(envFile))
@@ -41,6 +53,7 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
 }
 
+app.UseCors(MyAllowSpecificOrigins);
 app.UseRouting();
 app.MapControllers();
 
