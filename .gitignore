@@ -1,0 +1,42 @@
+# ===================================================================
+# Visual Studio / .NET Core template
+# ===================================================================
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+# This is the most important part for your question
+[Bb]in/
+[Oo]bj/
+
+# Other
+_UpgradeReport_Files/
+Backup*/
+TestResults/
+.vs/
+*.dotcover
+*.pidb
+*.svclog
+*.vsp
+
+# Environment files - Do not commit secrets!
+.env
+
+# Rider
+.idea/
+*.sln.iml
