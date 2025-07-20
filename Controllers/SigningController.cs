@@ -37,6 +37,7 @@ namespace DotNetSigningServer.Controllers
             }
             catch (Exception ex)
             {
+                Console.Out.WriteLine(ex);
                 return Problem($"An error occurred during the presign process: {ex.Message}");
             }
         }
@@ -62,6 +63,7 @@ namespace DotNetSigningServer.Controllers
             }
             catch (Exception ex)
             {
+                Console.Out.WriteLine(ex);
                 return Problem($"An error occurred during the final signing process: {ex.Message}");
             }
         }
