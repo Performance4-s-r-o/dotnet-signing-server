@@ -6,7 +6,7 @@ using System;
 using iText.Kernel.Crypto;
 using iText.Commons.Bouncycastle.Cert;
 
-namespace DotNetSigningServer.Services.Old
+namespace DotNetSigningServer.ExternalSignatures
 {
 
     internal class DigestCalcBlankSigner : IExternalSignatureContainer
