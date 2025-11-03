@@ -1,5 +1,4 @@
 using DotNetSigningServer.Models;
-using DotNetSigningServer.Services.Old;
 using iText.Bouncycastle.X509;
 using iText.Commons.Bouncycastle.Cert;
 using iText.Forms.Fields.Properties;
@@ -9,6 +8,7 @@ using iText.Kernel.Geom;
 using iText.Kernel.Pdf;
 using iText.Signatures;
 using Org.BouncyCastle.X509;
+using DotNetSigningServer.ExternalSignatures;
 
 using IOPath = System.IO.Path;
 
@@ -100,6 +100,7 @@ namespace DotNetSigningServer.Services
             IExternalSignatureContainer external = new ExternalSignatureContainer(chain, signatureBytes);
 
             PdfSigner.SignDeferred(reader, FIELD_NAME, msOut, external);
+            // PdfSigner.SignDeferred(new PdfDocument(reader, new PdfWriter(msOut), new StampingProperties().UseAppendMode()), FIELD_NAME, msOut, external);
 
             return msOut.ToArray();
         }
