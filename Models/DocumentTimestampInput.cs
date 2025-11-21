@@ -1,8 +1,7 @@
 namespace DotNetSigningServer.Models
 {
-    public class PreSignInput
+    public class DocumentTimestampInput
     {
-        public string CertificatePem { get; set; } = "";
         public string PdfContent { get; set; } = "";
         public string Location { get; set; } = "";
         public string Reason { get; set; } = "";
@@ -13,13 +12,5 @@ namespace DotNetSigningServer.Models
         public string? TsaUrl { get; set; }
         public string? TsaUsername { get; set; }
         public string? TsaPassword { get; set; }
-    }
-
-    public class SignRect
-    {
-        public float X { get; set; }
-        public float Y { get; set; }
-        public float Width { get; set; }
-        public float Height { get; set; }
     }
 }

@@ -30,12 +30,26 @@ namespace dotnetsigningserver.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("FieldName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasDefaultValue("Signature1");
+
                     b.Property<string>("HashToSign")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("PresignedPdfPath")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TsaPassword")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TsaUrl")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TsaUsername")
                         .HasColumnType("text");
 
                     b.HasKey("Id");

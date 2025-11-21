@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import type { ChangeEvent } from "react";
 import "./App.css";
 import PickCertificate from "./components/PickCertificate";
 import useSignature from "./hooks/useSignature";
@@ -12,7 +13,11 @@ type AppState =
   | "signing"
   | "error"
   | "done"
-  | "signingContinue";
+| "signingContinue";
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:5000";
+const DEFAULT_SIGN_RECT = { x: 50, y: 50, width: 200, height: 50 };
+const DEFAULT_SIGN_PAGE = 1;
 
 function App() {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -20,6 +25,33 @@ function App() {
   const [location, setLocation] = useState<string>("Remote Location");
   const [appState, setAppState] = useState<AppState>("initial");
   const [error, setError] = useState<string>("");
+
+  const [pfxPdfFile, setPfxPdfFile] = useState<File | null>(null);
+  const [pfxFile, setPfxFile] = useState<File | null>(null);
+  const [pfxPassword, setPfxPassword] = useState<string>("");
+  const [pfxReason, setPfxReason] = useState<string>("PFX approval");
+  const [pfxLocation, setPfxLocation] = useState<string>("Headquarters");
+  const [pfxFieldName, setPfxFieldName] = useState<string>("");
+  const [pfxStatus, setPfxStatus] = useState<string>("");
+
+  const [timestampPdfFile, setTimestampPdfFile] = useState<File | null>(null);
+  const [timestampImageFile, setTimestampImageFile] = useState<File | null>(
+    null
+  );
+  const [timestampReason, setTimestampReason] = useState<string>(
+    "Document time-stamp"
+  );
+  const [timestampLocation, setTimestampLocation] =
+    useState<string>("Server room");
+  const [timestampFieldName, setTimestampFieldName] = useState<string>("");
+  const [timestampStatus, setTimestampStatus] = useState<string>("");
+
+  const onFileSelect =
+    (setter: (file: File | null) => void) =>
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files && event.target.files[0];
+      setter(file ?? null);
+    };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
@@ -46,7 +78,7 @@ function App() {
     try {
       const pdfContent = await fileToBase64(pdfFile);
 
-      const presignResponse = await fetch("http://localhost:8080/presign", {
+      const presignResponse = await fetch(`${API_BASE}/presign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -54,8 +86,8 @@ function App() {
           pdfContent,
           location,
           reason,
-          signRect: { x: 50, y: 50, width: 200, height: 50 },
-          signPageNumber: 1,
+          signRect: DEFAULT_SIGN_RECT,
+          signPageNumber: DEFAULT_SIGN_PAGE,
         }),
       });
 
@@ -73,7 +105,7 @@ function App() {
         throw new Error("Failed to sign the hash on the client-side.");
       }
 
-      const signResponse = await fetch("http://localhost:8080/sign", {
+      const signResponse = await fetch(`${API_BASE}/sign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, signedHash }),
@@ -103,6 +135,87 @@ function App() {
     setPdfFile(null);
     setError("");
     setAppState("initial");
+  };
+
+  const handlePfxSigning = async () => {
+    if (!pfxPdfFile || !pfxFile) {
+      setPfxStatus("Please pick both a PDF and a .pfx/.p12 file.");
+      return;
+    }
+
+    try {
+      setPfxStatus("Signing with local certificate...");
+      const [pdfContent, pfxContent] = await Promise.all([
+        fileToBase64(pfxPdfFile),
+        fileToBase64(pfxFile),
+      ]);
+
+      const response = await fetch(`${API_BASE}/sign-pfx`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pdfContent,
+          pfxContent,
+          pfxPassword,
+          reason: pfxReason,
+          location: pfxLocation,
+          fieldName: pfxFieldName || undefined,
+          signRect: DEFAULT_SIGN_RECT,
+          signPageNumber: DEFAULT_SIGN_PAGE,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const { result } = await response.json();
+      downloadBase64Pdf(result, `pfx_signed_${pfxPdfFile.name}`);
+      setPfxStatus("✅ Signed PDF downloaded.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setPfxStatus(`Error: ${message}`);
+    }
+  };
+
+  const handleTimestamp = async () => {
+    if (!timestampPdfFile) {
+      setTimestampStatus("Please pick a PDF to timestamp.");
+      return;
+    }
+
+    try {
+      setTimestampStatus("Submitting document to TSA...");
+      const pdfContent = await fileToBase64(timestampPdfFile);
+      const signImageContent = timestampImageFile
+        ? await fileToBase64(timestampImageFile)
+        : undefined;
+
+      const response = await fetch(`${API_BASE}/timestamp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pdfContent,
+          reason: timestampReason,
+          location: timestampLocation,
+          fieldName: timestampFieldName || undefined,
+          signImageContent,
+          signRect: DEFAULT_SIGN_RECT,
+          signPageNumber: DEFAULT_SIGN_PAGE,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const { result } = await response.json();
+      downloadBase64Pdf(result, `timestamped_${timestampPdfFile.name}`);
+      setTimestampStatus("✅ Timestamped PDF downloaded.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setTimestampStatus(`Error: ${message}`);
+    }
   };
 
   return (
@@ -173,6 +286,152 @@ function App() {
             <button onClick={resetState}>Sign Another Document</button>
           </div>
         )}
+
+        <section className="demo-section">
+          <h2>Sign with local .pfx/.p12</h2>
+          <p className="section-description">
+            Upload a PDF and a password-protected PKCS#12 file to have the
+            server complete the signature in a single step.
+          </p>
+          <div className="form-field">
+            <label htmlFor="pfx-pdf">PDF document</label>
+            <input
+              id="pfx-pdf"
+              type="file"
+              accept=".pdf"
+              onChange={onFileSelect(setPfxPdfFile)}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="pfx-file">.pfx / .p12 file</label>
+            <input
+              id="pfx-file"
+              type="file"
+              accept=".pfx,.p12"
+              onChange={onFileSelect(setPfxFile)}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="pfx-password">PFX password</label>
+            <input
+              id="pfx-password"
+              type="password"
+              value={pfxPassword}
+              onChange={(e) => setPfxPassword(e.target.value)}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="pfx-reason">Reason</label>
+            <input
+              id="pfx-reason"
+              type="text"
+              value={pfxReason}
+              onChange={(e) => setPfxReason(e.target.value)}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="pfx-location">Location</label>
+            <input
+              id="pfx-location"
+              type="text"
+              value={pfxLocation}
+              onChange={(e) => setPfxLocation(e.target.value)}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="pfx-field">Field name (optional)</label>
+            <input
+              id="pfx-field"
+              type="text"
+              value={pfxFieldName}
+              placeholder="Signature_Pfx"
+              onChange={(e) => setPfxFieldName(e.target.value)}
+            />
+          </div>
+          <button
+            onClick={handlePfxSigning}
+            disabled={!pfxPdfFile || !pfxFile || !pfxPassword}
+          >
+            Sign PDF with PFX
+          </button>
+          {pfxStatus && (
+            <p
+              className={`status-text ${
+                pfxStatus.startsWith("Error") ? "error" : "success"
+              }`}
+            >
+              {pfxStatus}
+            </p>
+          )}
+        </section>
+
+        <section className="demo-section">
+          <h2>Apply TSA timestamp only</h2>
+          <p className="section-description">
+            Demonstrates the `/timestamp` endpoint that adds a visible stamp and
+            RFC3161 DocTimeStamp without a signing certificate.
+          </p>
+          <div className="form-field">
+            <label htmlFor="timestamp-pdf">PDF document</label>
+            <input
+              id="timestamp-pdf"
+              type="file"
+              accept=".pdf"
+              onChange={onFileSelect(setTimestampPdfFile)}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="timestamp-image">
+              Optional image (logo/signature)
+            </label>
+            <input
+              id="timestamp-image"
+              type="file"
+              accept="image/*"
+              onChange={onFileSelect(setTimestampImageFile)}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="timestamp-reason">Reason</label>
+            <input
+              id="timestamp-reason"
+              type="text"
+              value={timestampReason}
+              onChange={(e) => setTimestampReason(e.target.value)}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="timestamp-location">Location</label>
+            <input
+              id="timestamp-location"
+              type="text"
+              value={timestampLocation}
+              onChange={(e) => setTimestampLocation(e.target.value)}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="timestamp-field">Field name (optional)</label>
+            <input
+              id="timestamp-field"
+              type="text"
+              value={timestampFieldName}
+              placeholder="Timestamp_1"
+              onChange={(e) => setTimestampFieldName(e.target.value)}
+            />
+          </div>
+          <button onClick={handleTimestamp} disabled={!timestampPdfFile}>
+            Apply timestamp
+          </button>
+          {timestampStatus && (
+            <p
+              className={`status-text ${
+                timestampStatus.startsWith("Error") ? "error" : "success"
+              }`}
+            >
+              {timestampStatus}
+            </p>
+          )}
+        </section>
       </main>
     </div>
   );

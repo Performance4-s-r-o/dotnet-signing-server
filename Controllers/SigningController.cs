@@ -22,13 +22,19 @@ namespace DotNetSigningServer.Controllers
         {
             try
             {
-                var (presignedPdfPath, hashToSign) = _signingService.HandlePreSign(input);
-                var signingData = new SigningData
-                {
-                    PresignedPdfPath = presignedPdfPath,
-                    HashToSign = hashToSign,
-                    CertificatePem = input.CertificatePem
-                };
+                var signingData = new SigningData();
+                string fieldName = string.IsNullOrWhiteSpace(input.FieldName)
+                    ? $"Signature_{signingData.Id.Replace("-", string.Empty)}"
+                    : input.FieldName;
+
+                var (presignedPdfPath, hashToSign) = _signingService.HandlePreSign(input, fieldName);
+                signingData.FieldName = fieldName;
+                signingData.PresignedPdfPath = presignedPdfPath;
+                signingData.HashToSign = hashToSign;
+                signingData.CertificatePem = input.CertificatePem;
+                signingData.TsaUrl = input.TsaUrl;
+                signingData.TsaUsername = input.TsaUsername;
+                signingData.TsaPassword = input.TsaPassword;
 
                 _dbContext.SigningData.Add(signingData);
                 await _dbContext.SaveChangesAsync();
@@ -53,7 +59,14 @@ namespace DotNetSigningServer.Controllers
 
             try
             {
-                var result = _signingService.HandleSign(input, signingData.PresignedPdfPath, signingData.CertificatePem);
+                var result = _signingService.HandleSign(
+                    input,
+                    signingData.PresignedPdfPath,
+                    signingData.CertificatePem,
+                    signingData.FieldName,
+                    signingData.TsaUrl,
+                    signingData.TsaUsername,
+                    signingData.TsaPassword);
 
                 System.IO.File.Delete(signingData.PresignedPdfPath);
                 _dbContext.SigningData.Remove(signingData);
@@ -65,6 +78,36 @@ namespace DotNetSigningServer.Controllers
             {
                 Console.Out.WriteLine(ex);
                 return Problem($"An error occurred during the final signing process: {ex.Message}");
+            }
+        }
+
+        [HttpPost("/sign-pfx")]
+        public IActionResult SignWithPfx([FromBody] PfxSignInput input)
+        {
+            try
+            {
+                var result = _signingService.SignWithPfx(input);
+                return Ok(new { result });
+            }
+            catch (Exception ex)
+            {
+                Console.Out.WriteLine(ex);
+                return Problem($"An error occurred during the PFX signing process: {ex.Message}");
+            }
+        }
+
+        [HttpPost("/timestamp")]
+        public IActionResult ApplyTimestamp([FromBody] DocumentTimestampInput input)
+        {
+            try
+            {
+                var result = _signingService.ApplyDocumentTimestamp(input);
+                return Ok(new { result });
+            }
+            catch (Exception ex)
+            {
+                Console.Out.WriteLine(ex);
+                return Problem($"An error occurred while applying the timestamp: {ex.Message}");
             }
         }
     }
