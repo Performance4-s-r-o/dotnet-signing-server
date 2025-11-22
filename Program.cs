@@ -3,8 +3,6 @@ using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
 using Microsoft.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
-using System.Collections.Generic;
-using System.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,28 +12,15 @@ builder.Services.AddScoped<PdfSigningService>();
 PostgreSqlContainer? postgresContainer = null;
 
 var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
-
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(name: MyAllowSpecificOrigins,
                       policy =>
                       {
-                          policy.WithOrigins("http://localhost:5173") // The origin of your React app
-                                .AllowAnyHeader()
+                          policy.AllowAnyHeader()
                                 .AllowAnyMethod();
                       });
 });
-
-string envFile = ".env";
-var envVariables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-if (File.Exists(envFile))
-{
-    string envFileContent = await File.ReadAllTextAsync(envFile);
-    envVariables = envFileContent.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
-        .Select(line => line.Split('='))
-        .Where(parts => parts.Length > 0)
-        .ToDictionary(parts => parts[0].Trim(), parts => parts.Length > 1 ? parts[1].Trim() : string.Empty, StringComparer.OrdinalIgnoreCase);
-}
 
 bool useLocalDb = builder.Configuration.GetValue<bool?>("UseLocalDb")
                   ?? builder.Environment.IsDevelopment();
@@ -48,12 +33,14 @@ if (useLocalDb)
 }
 else
 {
-    if (envVariables.Count == 0)
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+                         ?? BuildConnectionStringFromConfiguration(builder.Configuration);
+
+    if (string.IsNullOrWhiteSpace(connectionString))
     {
-        throw new FileNotFoundException($"Environment file '{envFile}' not found. Please create it with the necessary configuration or enable the local development database.");
+        throw new InvalidOperationException("A database connection string is required when UseLocalDb is false. Set 'ConnectionStrings__DefaultConnection' or the DB_* environment variables.");
     }
 
-    var connectionString = $"Host={envVariables["DB_HOST"]};Port={envVariables["DB_PORT"]};Database={envVariables["DB_NAME"]};Username={envVariables["DB_USER"]};Password={envVariables["DB_PASSWORD"]}";
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseNpgsql(connectionString));
 }
@@ -62,20 +49,9 @@ builder.Services.AddOptions<TimestampAuthorityOptions>()
     .Bind(builder.Configuration.GetSection("TimestampAuthority"))
     .PostConfigure(options =>
     {
-        if (envVariables.TryGetValue("TSA_URL", out var tsaUrl) && !string.IsNullOrWhiteSpace(tsaUrl))
-        {
-            options.Url = tsaUrl;
-        }
-
-        if (envVariables.TryGetValue("TSA_USERNAME", out var tsaUser) && !string.IsNullOrWhiteSpace(tsaUser))
-        {
-            options.Username = tsaUser;
-        }
-
-        if (envVariables.TryGetValue("TSA_PASSWORD", out var tsaPassword) && !string.IsNullOrWhiteSpace(tsaPassword))
-        {
-            options.Password = tsaPassword;
-        }
+        options.Url = builder.Configuration["TSA_URL"] ?? options.Url;
+        options.Username = builder.Configuration["TSA_USERNAME"] ?? options.Username;
+        options.Password = builder.Configuration["TSA_PASSWORD"] ?? options.Password;
     });
 
 
@@ -114,3 +90,22 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
+string? BuildConnectionStringFromConfiguration(ConfigurationManager configuration)
+{
+    var dbHost = configuration["DB_HOST"];
+    var dbPort = configuration["DB_PORT"] ?? "5432";
+    var dbName = configuration["DB_NAME"];
+    var dbUser = configuration["DB_USER"];
+    var dbPassword = configuration["DB_PASSWORD"];
+
+    if (string.IsNullOrWhiteSpace(dbHost)
+        || string.IsNullOrWhiteSpace(dbName)
+        || string.IsNullOrWhiteSpace(dbUser)
+        || string.IsNullOrWhiteSpace(dbPassword))
+    {
+        return null;
+    }
+
+    return $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPassword}";
+}

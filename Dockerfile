@@ -15,7 +15,7 @@ RUN dotnet publish "dotnet-signing-server.csproj" -c Release -o /app/publish /p:
 
 # Stage 2: Create the final, smaller runtime image
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
-COPY .env /app/.env
+# COPY .env /app/.env
 WORKDIR /app
 
 # Copy the published output from the build stage
