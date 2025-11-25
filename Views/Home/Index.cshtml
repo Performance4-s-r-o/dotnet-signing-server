@@ -1,0 +1,76 @@
+@{
+    ViewData["Title"] = "Digital Signing Platform";
+    var signupSuccess = ViewData["SignupSuccess"] as bool? ?? false;
+}
+
+@if (signupSuccess)
+{
+    <div class="flash info">Email verified and account created successfully. Welcome!</div>
+}
+
+<section style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:2rem;align-items:center;">
+    <div>
+        <p style="display:inline-block;padding:0.4rem 0.75rem;border-radius:999px;background:#e0f2fe;color:#075985;font-weight:700;font-size:0.9rem;">
+            PDF signing API
+        </p>
+        <h1 style="font-size:2.6rem;margin:0.75rem 0 0.5rem;line-height:1.1;">
+            PDF digital signatures, timestamps, and attachments in one API.
+        </h1>
+        <p style="color:#475569;font-size:1.05rem;max-width:38ch;margin-bottom:1.25rem;">
+            Sign PDFs, add trusted timestamps, embed attachments, and detect barcodes using a simple REST API you can call from any backend or workflow.
+        </p>
+        <div style="display:inline-flex;gap:0.25rem;flex-wrap:wrap;flex-direction:column;">
+            <a href="/Account/SignUp" style="background:#2563eb;color:#fff;padding:0.8rem 1.1rem;border-radius:8px;text-decoration:none;font-weight:700;">
+                Get Started With Free Account
+            </a>
+            <small class="muted" style="text-align:center;">No credit card required</small>
+        </div>
+    </div>
+    <div style="background:#0f172a;color:#e2e8f0;padding:1.5rem;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,0.1);">
+        <p style="color:#94a3b8;font-weight:600;font-size:0.95rem;margin:0 0 0.25rem;">Simple REST request</p>
+        <div style="font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;font-size:0.92rem;line-height:1.45;overflow-x:auto;">
+<pre style="margin:0;white-space:pre-wrap;">POST /api/sign
+Authorization: Bearer &lt;token&gt;
+Content-Type: application/json
+
+{
+  "id": "ef2c…4d7a",
+  "signedHash": "iVBORw0KG…RK5CYII="
+}</pre>
+        </div>
+        <div style="margin-top:1rem;display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;">
+            <p style="margin:0;color:#cbd5e1;font-size:0.95rem;">
+                Full reference and examples in the docs.
+            </p>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                <a href="/api/docs" style="background:#2563eb;color:#fff;padding:0.65rem 0.9rem;border-radius:8px;text-decoration:none;font-weight:700;">
+                    View API docs
+                </a>
+                <a href="https://github.com/janprasil/dotnet-signing-server/tree/main/examples/react-example" target="_blank" rel="noopener" style="background:#0ea5e9;color:#0f172a;padding:0.65rem 0.9rem;border-radius:8px;text-decoration:none;font-weight:700;">
+                    Check integration example
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section style="margin-top:2.5rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
+    <div style="background:#f8fafc;padding:1rem;border-radius:10px;border:1px solid #e2e8f0;">
+        <h3>Sign &amp; timestamp PDFs</h3>
+        <p class="muted">
+            Apply digital signatures and add trusted timestamps from your preferred TSA, fully automated.
+        </p>
+    </div>
+    <div style="background:#f8fafc;padding:1rem;border-radius:10px;border:1px solid #e2e8f0;">
+        <h3>Embed attachments</h3>
+        <p class="muted">
+            Attach reports, raw data or any supporting files directly inside the signed PDF package.
+        </p>
+    </div>
+    <div style="background:#f8fafc;padding:1rem;border-radius:10px;border:1px solid #e2e8f0;">
+        <h3>Read QR &amp; barcodes</h3>
+        <p class="muted">
+            Detect and extract QR codes, Datamatrix and other barcodes from documents via the same API.
+        </p>
+    </div>
+</section>

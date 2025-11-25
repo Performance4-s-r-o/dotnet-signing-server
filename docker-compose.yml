@@ -25,13 +25,41 @@ services:
     #   - "80:8085"
     environment:
       - ASPNETCORE_URLS=http://+:8085
+      - AllowedHosts=${ALLOWED_HOSTS:-*}
       - UseLocalDb=false
       - ConnectionStrings__DefaultConnection=Host=${DB_HOST};Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
       - TSA_URL=${TSA_URL:-}
       - TSA_USERNAME=${TSA_USERNAME:-}
       - TSA_PASSWORD=${TSA_PASSWORD:-}
+      # Stripe configuration
+      - Stripe__ApiKey=${STRIPE_API_KEY:-}
+      - Stripe__WebhookSecret=${STRIPE_WEBHOOK_SECRET:-}
+      - Stripe__Currency=${STRIPE_CURRENCY:-EUR}
+      - Stripe__EnableTaxIdCollection=${STRIPE_ENABLE_TAX_ID_COLLECTION:-true}
+      - Stripe__RequireBillingAddress=${STRIPE_REQUIRE_BILLING_ADDRESS:-true}
+      - Stripe__EnableAutomaticTax=${STRIPE_ENABLE_AUTOMATIC_TAX:-true}
+      # SMTP configuration
+      - Smtp__Host=${SMTP_HOST:-smtp.example.com}
+      - Smtp__Port=${SMTP_PORT:-587}
+      - Smtp__UseSsl=${SMTP_USE_SSL:-true}
+      - Smtp__FromAddress=${SMTP_FROM_ADDRESS:-no-reply@example.com}
+      - Smtp__FromName=${SMTP_FROM_NAME:-DotNet Signing Server}
+      - Smtp__Username=${SMTP_USERNAME:-}
+      - Smtp__Password=${SMTP_PASSWORD:-}
     # depends_on:
     #   - db
+    depends_on:
+      - mailpit
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "8025:8025" # web UI
+    environment:
+      - MP_MAX_MESSAGES=1000
+      - MP_SMTP_AUTH_ACCEPT_ANY=true
+      - MP_SMTP_AUTH_ALLOW_INSECURE=true
 
 volumes:
   db_data:

@@ -3,6 +3,7 @@ using System;
 using DotNetSigningServer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace dotnetsigningserver.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251124090256_AddUserAndBilling")]
+    partial class AddUserAndBilling
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.6");
@@ -29,15 +32,9 @@ namespace dotnetsigningserver.Migrations
                     b.Property<long?>("ExpiresAt")
                         .HasColumnType("INTEGER");
 
-                    b.Property<bool>("IsBrowserToken")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("Label")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("AllowedOrigins")
                         .HasColumnType("TEXT");
 
                     b.Property<long?>("RevokedAt")
@@ -223,9 +220,6 @@ namespace dotnetsigningserver.Migrations
                     b.Property<string>("TsaUsername")
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("TEXT");
-
                     b.HasKey("Id");
 
                     b.ToTable("SigningData");
@@ -267,27 +261,10 @@ namespace dotnetsigningserver.Migrations
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("CreditsRemaining")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");
-
-                    b.Property<string>("EmailOtpCode")
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTimeOffset?>("EmailOtpExpiresAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("EmailVerificationToken")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("EmailVerified")
-                        .HasColumnType("INTEGER");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");

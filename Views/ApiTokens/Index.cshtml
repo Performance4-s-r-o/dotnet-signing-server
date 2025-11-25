@@ -1,0 +1,118 @@
+@model IEnumerable<DotNetSigningServer.Models.ApiToken>
+@{
+    ViewData["Title"] = "API Tokens";
+}
+
+<h1>API Tokens</h1>
+
+@if (TempData["Error"] != null)
+{
+    <div class="flash error">@TempData["Error"]</div>
+}
+@if (TempData["NewToken"] != null)
+{
+    <div class="flash info">
+        <strong>Copy this token now:</strong>
+        <code>@TempData["NewToken"]</code>
+    </div>
+}
+
+<h3>Issue new token</h3>
+<form method="post" action="/ApiTokens">
+    <label>Label</label>
+    <input type="text" name="label" placeholder="e.g., CI token" required />
+    <label>Expires At (optional)</label>
+    <input type="datetime-local" name="expiresAt" />
+    <label>Usage</label>
+    <div style="display:flex;gap:1rem;align-items:center;">
+        <label style="display:flex;align-items:center;gap:0.35rem;width: 25%;">
+            <input type="radio" name="usageType" value="server" checked="" style="
+                flex-basis: 20px;
+                margin: 0;
+            "> Server-to-server
+        </label>
+        <label style="display:flex;align-items:center;gap:0.35rem;width: 25%;">
+            <input type="radio" name="usageType" value="web" style="
+                flex-basis: 20px;
+                margin: 0;
+            "> Browser-to-server
+        </label>
+    </div>
+    <div id="origin-block" style="margin-top:1rem; display:none;">
+        <label>Allowed Origins (one per line, localhost always allowed)</label>
+        <textarea name="allowedOrigins" rows="4" placeholder="https://app.example.com&#10;https://admin.example.com"
+            style="margin-top:0.25rem;width:100%;"></textarea>
+        <p class="muted" style="margin:0.35rem 0 0;">Browser tokens require a matching <code>Origin</code> header.
+            Localhost is always permitted for testing.</p>
+    </div>
+    <button type="submit" style="margin-top:1.5rem;margin-bottom:2rem;">Create token</button>
+    @Html.AntiForgeryToken()
+</form>
+
+<h3>Existing tokens</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Label</th>
+            <th>Created</th>
+            <th>Expires</th>
+            <th>Revoked</th>
+            <th>Type</th>
+            <th>Origins</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var token in Model)
+        {
+            <tr>
+                <td>@token.Label</td>
+                <td>@token.CreatedAt.ToString("u")</td>
+                <td>@(token.ExpiresAt?.ToString("u") ?? "-")</td>
+                <td>@(token.RevokedAt?.ToString("u") ?? "-")</td>
+                <td>@(token.IsBrowserToken ? "Browser" : "Server")</td>
+                <td style="max-width:220px;white-space:pre-wrap;">@(token.AllowedOrigins ?? "-")</td>
+                <td>
+                    @if (token.RevokedAt == null)
+                    {
+                        <div style="display:flex;gap:0.4rem;">
+                            <form method="post" action="/ApiTokens/@token.Id/revoke" style="display:inline">
+                                @Html.AntiForgeryToken()
+                                <button type="submit">Revoke</button>
+                            </form>
+                            <form method="post" action="/ApiTokens/@token.Id/delete" style="display:inline">
+                                @Html.AntiForgeryToken()
+                                <button type="submit">Delete</button>
+                            </form>
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="display:flex;gap:0.4rem;">
+                            <span class="muted">Revoked</span>
+                            <form method="post" action="/ApiTokens/@token.Id/delete" style="display:inline">
+                                @Html.AntiForgeryToken()
+                                <button type="submit">Delete</button>
+                            </form>
+                        </div>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@section Scripts {
+    <script>
+        (function () {
+            const radios = document.querySelectorAll('input[name="usageType"]');
+            const originBlock = document.getElementById('origin-block');
+            function toggleOrigins() {
+                const val = document.querySelector('input[name="usageType"]:checked')?.value;
+                originBlock.style.display = val === 'web' ? 'block' : 'none';
+            }
+            radios.forEach(r => r.addEventListener('change', toggleOrigins));
+            toggleOrigins();
+        })();
+    </script>
+}

@@ -1,0 +1,196 @@
+@{
+  ViewData["Title"] = "API Documentation";
+}
+
+<h1>API Documentation</h1>
+<p class="muted">
+  All endpoints are under the <code>/api</code> prefix and require a bearer token in the
+  <code>Authorization: Bearer &lt;token&gt;</code> header. Payloads are JSON; PDF and certificate inputs are base64
+  strings.
+  Tokens can be created in the <a href="/ApiTokens">API Tokens</a> page after signing in.
+  Default responses are JSON objects; non-2xx responses include a <code>message</code> describing the issue.
+</p>
+
+<h2>Endpoints</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Method</th>
+      <th>Path</th>
+      <th>Purpose</th>
+      <th>Credits</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>POST</td>
+      <td><code>/api/presign</code></td>
+      <td>Prepare a PDF for signing and return a hash to sign.</td>
+      <td>Consumes 0</td>
+    </tr>
+    <tr>
+      <td>POST</td>
+      <td><code>/api/sign</code></td>
+      <td>Finalize a prepared signing by submitting the signed hash.</td>
+      <td>Consumes 1</td>
+    </tr>
+    <tr>
+      <td>POST</td>
+      <td><code>/api/attachment</code></td>
+      <td>Add an embedded attachment/file to a PDF.</td>
+      <td>Consumes 1</td>
+    </tr>
+    <tr>
+      <td>POST</td>
+      <td><code>/api/sign-pfx</code></td>
+      <td>Sign a PDF directly using a PFX (PKCS#12) package.</td>
+      <td>Consumes 1</td>
+    </tr>
+    <tr>
+      <td>POST</td>
+      <td><code>/api/timestamp</code></td>
+      <td>Apply a timestamp signature to a PDF.</td>
+      <td>Consumes 1</td>
+    </tr>
+    <tr>
+      <td>POST</td>
+      <td><code>/api/find-codes</code></td>
+      <td>Scan a PDF for QR/DataMatrix/PDF417/Aztec barcodes.</td>
+      <td>Consumes 1</td>
+    </tr>
+  </tbody>
+</table>
+
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
+<h2 style="margin-top:0;">Presign a PDF</h2>
+<p class="muted">Obtain a hash to sign with your private key. Include TSA details to embed a timestamp later.</p>
+<pre><code>POST /api/presign
+Authorization: Bearer &lt;token&gt;
+Content-Type: application/json
+
+{
+  "certificatePem": "-----BEGIN CERTIFICATE-----…",
+  "pdfContent": "base64-pdf",
+  "location": "Prague, CZ",
+  "reason": "Approving contract",
+  "signRect": { "x": 50, "y": 120, "width": 200, "height": 50 },
+  "signPageNumber": 1,
+  "signImageContent": "base64-png-optional",
+  "fieldName": "Signature1",
+  "tsaUrl": "https://freetsa.org/tsr",
+  "tsaUsername": null,
+  "tsaPassword": null
+}</code></pre>
+<p><strong>Response</strong></p>
+<pre><code>{
+  "id": "ef2c4d7a-…",
+  "hashToSign": "6c3d…9f"
+}</code></pre>
+</div>
+
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
+<h2 style="margin-top:0;">Finalize signing</h2>
+<p class="muted">Submit the signed hash returned by your HSM or client library.</p>
+<pre><code>POST /api/sign
+Authorization: Bearer &lt;token&gt;
+Content-Type: application/json
+
+{
+  "id": "ef2c4d7a-…",
+  "signedHash": "base64-signature"
+}</code></pre>
+<p><strong>Response</strong></p>
+<pre><code>{ "result": "base64-pdf-with-signature" }</code></pre>
+</div>
+
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
+<h2 style="margin-top:0;">Add attachment</h2>
+<p class="muted">Embed an additional file into an existing PDF. Attachment bytes should be base64 encoded.</p>
+<pre><code>POST /api/attachment
+Authorization: Bearer &lt;token&gt;
+Content-Type: application/json
+
+{
+  "pdfContent": "base64-pdf",
+  "attachmentContent": "base64-binary",
+  "fileName": "terms.pdf",
+  "description": "Terms and conditions",
+  "mimeType": "application/pdf"
+}</code></pre>
+<p><strong>Response</strong></p>
+<pre><code>{ "result": "base64-pdf-with-attachment" }</code></pre>
+</div>
+
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
+<h2 style="margin-top:0;">Sign with PFX</h2>
+<p class="muted">Send a PKCS#12 archive directly; the service signs and returns the PDF.</p>
+<pre><code>POST /api/sign-pfx
+Authorization: Bearer &lt;token&gt;
+Content-Type: application/json
+
+{
+  "pdfContent": "base64-pdf",
+  "pfxContent": "base64-pfx",
+  "pfxPassword": "password",
+  "location": "Prague, CZ",
+  "reason": "Internal approval",
+  "signRect": { "x": 40, "y": 100, "width": 180, "height": 45 },
+  "signPageNumber": 1,
+  "signImageContent": null,
+  "fieldName": "Signature1"
+}</code></pre>
+<p><strong>Response</strong></p>
+<pre><code>{ "result": "base64-pdf-with-signature" }</code></pre>
+</div>
+
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
+<h2 style="margin-top:0;">Apply timestamp</h2>
+<p class="muted">Embed a timestamp token; TSA credentials are optional for public endpoints.</p>
+<pre><code>POST /api/timestamp
+Authorization: Bearer &lt;token&gt;
+Content-Type: application/json
+
+{
+  "pdfContent": "base64-pdf",
+  "location": "Prague, CZ",
+  "reason": "Timestamp",
+  "signRect": { "x": 30, "y": 90, "width": 180, "height": 40 },
+  "signPageNumber": 1,
+  "signImageContent": null,
+  "fieldName": "Timestamp1",
+  "tsaUrl": "https://freetsa.org/tsr",
+  "tsaUsername": null,
+  "tsaPassword": null
+}</code></pre>
+<p><strong>Response</strong></p>
+<pre><code>{ "result": "base64-pdf-with-timestamp" }</code></pre>
+</div>
+
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
+<h2 style="margin-top:0;">Find barcodes in a PDF</h2>
+<p class="muted">Scan for QR, Data Matrix, PDF417, or Aztec codes. Set <code>codeType</code> to limit formats
+  (<code>qr</code>, <code>datamatrix</code>, <code>pdf417</code>, <code>aztec</code>, or <code>any</code>).</p>
+<pre><code>POST /api/find-codes
+Authorization: Bearer &lt;token&gt;
+Content-Type: application/json
+
+{
+  "pdfContent": "base64-pdf",
+  "codeType": "any"
+}</code></pre>
+<p><strong>Response</strong></p>
+<pre><code>{
+  "results": [
+    {
+      "value": "INV-2024-001",
+      "codeType": "QR_CODE",
+      "position": { "x": 212.5, "y": 412.0 },
+      "page": 2
+    }
+  ]
+}</code></pre>
+</div>
+
+<p class="muted" style="margin-top:1.5rem;">
+  Need help? Reach out to support with the request ID or timestamp from your logs, and include the endpoint path.
+</p>

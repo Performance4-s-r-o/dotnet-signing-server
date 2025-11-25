@@ -20,6 +20,7 @@ const DEFAULT_SIGN_RECT = { x: 50, y: 50, width: 200, height: 50 };
 const DEFAULT_SIGN_PAGE = 1;
 
 function App() {
+  const [apiToken, setApiToken] = useState<string>("");
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [reason, setReason] = useState<string>("Contract Agreement");
   const [location, setLocation] = useState<string>("Remote Location");
@@ -59,6 +60,23 @@ function App() {
     }
   };
 
+  const buildAuthHeaders = () => {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (apiToken.trim()) {
+      headers.Authorization = `Bearer ${apiToken.trim()}`;
+    }
+    return headers;
+  };
+
+  const ensureToken = () => {
+    if (!apiToken.trim()) {
+      setError("Please paste an API token first.");
+      setAppState("error");
+      return false;
+    }
+    return true;
+  };
+
   const startSigningProcess = () => {
     if (!pdfFile) {
       setError("Please upload a PDF file first.");
@@ -73,14 +91,15 @@ function App() {
     signHash: (x: string) => Promise<string>
   ) => {
     if (!pdfFile) return;
+    if (!ensureToken()) return;
 
     setAppState("signing");
     try {
       const pdfContent = await fileToBase64(pdfFile);
 
-      const presignResponse = await fetch(`${API_BASE}/presign`, {
+      const presignResponse = await fetch(`${API_BASE}/api/presign`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: buildAuthHeaders(),
         body: JSON.stringify({
           certificatePem: publicKey,
           pdfContent,
@@ -105,9 +124,9 @@ function App() {
         throw new Error("Failed to sign the hash on the client-side.");
       }
 
-      const signResponse = await fetch(`${API_BASE}/sign`, {
+      const signResponse = await fetch(`${API_BASE}/api/sign`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: buildAuthHeaders(),
         body: JSON.stringify({ id, signedHash }),
       });
 
@@ -142,6 +161,10 @@ function App() {
       setPfxStatus("Please pick both a PDF and a .pfx/.p12 file.");
       return;
     }
+    if (!ensureToken()) {
+      setPfxStatus("Please paste an API token first.");
+      return;
+    }
 
     try {
       setPfxStatus("Signing with local certificate...");
@@ -150,9 +173,9 @@ function App() {
         fileToBase64(pfxFile),
       ]);
 
-      const response = await fetch(`${API_BASE}/sign-pfx`, {
+      const response = await fetch(`${API_BASE}/api/sign-pfx`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: buildAuthHeaders(),
         body: JSON.stringify({
           pdfContent,
           pfxContent,
@@ -183,6 +206,10 @@ function App() {
       setTimestampStatus("Please pick a PDF to timestamp.");
       return;
     }
+    if (!ensureToken()) {
+      setTimestampStatus("Please paste an API token first.");
+      return;
+    }
 
     try {
       setTimestampStatus("Submitting document to TSA...");
@@ -191,9 +218,9 @@ function App() {
         ? await fileToBase64(timestampImageFile)
         : undefined;
 
-      const response = await fetch(`${API_BASE}/timestamp`, {
+      const response = await fetch(`${API_BASE}/api/timestamp`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: buildAuthHeaders(),
         body: JSON.stringify({
           pdfContent,
           reason: timestampReason,
@@ -226,6 +253,16 @@ function App() {
       <main>
         {appState === "initial" && (
           <div className="form-container">
+            <div className="form-field">
+              <label htmlFor="api-token">API token</label>
+              <input
+                type="text"
+                id="api-token"
+                value={apiToken}
+                onChange={(e) => setApiToken(e.target.value)}
+                placeholder="Paste Bearer token"
+              />
+            </div>
             <div className="form-field">
               <label htmlFor="pdf-upload">1. Upload PDF Document</label>
               <input

@@ -3,11 +3,32 @@ using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
 using Microsoft.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllersWithViews();
 builder.Services.AddScoped<PdfSigningService>();
+builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IBillingService, BillingService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IStripeCheckoutService, StripeCheckoutService>();
+builder.Services.AddScoped<IApiAuthService, ApiAuthService>();
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();
+builder.Services.Configure<BillingOptions>(builder.Configuration.GetSection("Billing"));
+builder.Services.Configure<StripeOptions>(builder.Configuration.GetSection("Stripe"));
+builder.Services.Configure<TokenOptions>(builder.Configuration.GetSection("Token"));
+builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection("Smtp"));
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Account/SignIn";
+        options.AccessDeniedPath = "/Account/Denied";
+        options.SlidingExpiration = true;
+    });
+builder.Services.AddAuthorization();
 
 PostgreSqlContainer? postgresContainer = null;
 
@@ -27,7 +48,8 @@ bool useLocalDb = builder.Configuration.GetValue<bool?>("UseLocalDb")
 
 if (useLocalDb)
 {
-    var localDbPath = Path.Combine(AppContext.BaseDirectory, "signing-local.db");
+    // Store the local SQLite db in the content root so CLI/tools and the running app share the same file
+    var localDbPath = Path.Combine(builder.Environment.ContentRootPath, "signing-local.db");
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseSqlite($"Data Source={localDbPath}"));
 }
@@ -71,8 +93,38 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
 }
 
-app.UseCors(MyAllowSpecificOrigins);
+app.Use(async (context, next) =>
+{
+    // Apply CORS only to API routes
+    if (context.Request.Path.HasValue && context.Request.Path.Value!.StartsWith("/api", StringComparison.OrdinalIgnoreCase))
+    {
+        var origin = context.Request.Headers["Origin"].ToString();
+        if (!string.IsNullOrWhiteSpace(origin))
+        {
+            var originService = context.RequestServices.GetRequiredService<IAllowedOriginService>();
+            if (!originService.IsOriginAllowed(origin))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return;
+            }
+            context.Response.Headers["Access-Control-Allow-Origin"] = origin;
+            context.Response.Headers["Vary"] = "Origin";
+            context.Response.Headers["Access-Control-Allow-Headers"] = context.Request.Headers["Access-Control-Request-Headers"].ToString() ?? "Authorization,Content-Type";
+            context.Response.Headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS";
+        }
+
+        if (string.Equals(context.Request.Method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Response.StatusCode = StatusCodes.Status204NoContent;
+            return;
+        }
+    }
+
+    await next();
+});
 app.UseRouting();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 using (var scope = app.Services.CreateScope())

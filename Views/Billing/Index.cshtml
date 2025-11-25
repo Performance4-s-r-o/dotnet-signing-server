@@ -1,0 +1,95 @@
+@model DotNetSigningServer.Controllers.BillingController.BillingViewModel
+@{
+    ViewData["Title"] = "Billing";
+    var currency = Model.Currency;
+    var pricePer100 = Model.PricePer100.ToString("0.##");
+}
+
+<h1>Billing</h1>
+
+@if (TempData["Error"] != null)
+{
+    <div class="flash error">@TempData["Error"]</div>
+}
+@if (TempData["Info"] != null)
+{
+    <div class="flash info">@TempData["Info"]</div>
+}
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin:1rem 0;">
+    <div style="background:#f8fafc;padding:1rem 1.25rem;border-radius:10px;border:1px solid #e2e8f0;">
+        <h3>Your credits</h3>
+        <p><strong>Remaining:</strong> @Model.CreditsRemaining</p>
+        <p class="muted">Includes the first 10 free documents on your account.</p>
+        <h3>Pricing</h3>
+        <p><strong>Price per 100 credits:</strong> @pricePer100 @currency</p>
+    </div>
+    <div style="background:#f8fafc;padding:1rem 1.25rem;border-radius:10px;border:1px solid #e2e8f0;">
+        <h3>Buy more credits</h3>
+        <p class="muted">Purchase prepaid document.</p>
+        <form method="post" action="/Billing/Checkout" style="display:grid;gap:0.5rem;">
+            @Html.AntiForgeryToken()
+            <label>Credits to buy</label>
+            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+                <label style="display:flex;align-items:center;gap:0.35rem;">
+                    <input type="radio" name="documentsToBuy" value="100" style="margin:0;" checked /> 100
+                </label>
+                <label style="display:flex;align-items:center;gap:0.35rem;">
+                    <input type="radio" name="documentsToBuy" value="300" style="margin:0;" /> 300
+                </label>
+                <label style="display:flex;align-items:center;gap:0.35rem;">
+                    <input type="radio" name="documentsToBuy" value="500" style="margin:0;" /> 500
+                </label>
+                <label style="display:flex;align-items:center;gap:0.35rem;">
+                    <input type="radio" name="documentsToBuy" value="1000" style="margin:0;" /> 1000
+                </label>
+            </div>
+            <small class="muted" style="margin-top:0.25rem;">You will provide your payment information in the next step.</small>
+            <button type="submit">Pay with Stripe</button>
+            <small class="muted" style="margin-top:0;">Stripe Checkout is used for secure prepaid purchases.</small>
+        </form>
+    </div>
+</div>
+
+@if (Model.StripeInvoices.Any())
+{
+    <h3>Invoices</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Number</th>
+                <th>Amount (@Model.Currency)</th>
+                <th>Status</th>
+                <th>Link</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var invoice in Model.StripeInvoices)
+        {
+            <tr>
+                <td>@(invoice.Number ?? "-")</td>
+                <td>@(invoice.AmountDue / 100.0m)</td>
+                <td>@invoice.Status</td>
+                <td>
+                    @if (!string.IsNullOrWhiteSpace(invoice.HostedInvoiceUrl))
+                    {
+                        <a href="@invoice.HostedInvoiceUrl" target="_blank" rel="noreferrer noopener">Open</a>
+                    }
+                    else
+                    {
+                        @("-")
+                    }
+                </td>
+                <td>
+                    @{
+                        var createdAt = invoice.Created;
+                        var createdDisplay = createdAt == default ? "-" : createdAt.ToUniversalTime().ToString("u");
+                    }
+                    @createdDisplay
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
