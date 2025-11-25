@@ -19,11 +19,12 @@ body {
 }
 
 main {
-  max-width: 600px;
+  max-width: 720px;
   margin: 0 auto;
   padding: 2rem;
   background-color: white;
   border-radius: 8px;
+  text-align: left;
 }
 
 button {
@@ -35,10 +36,6 @@ button {
   font-size: 16px;
   cursor: pointer;
   transition: background-color 0.2s;
-}
-
-button:hover {
-  background-color: #3700b3;
 }
 
 .form-container {
@@ -60,12 +57,51 @@ button:hover {
 }
 
 .form-field input[type="text"],
+.form-field input[type="password"],
 .form-field input[type="file"] {
   width: calc(100% - 20px);
   padding: 10px;
   border: 1px solid #ccc;
   border-radius: 4px;
   font-size: 16px;
+}
+
+.form-field input[type="file"] {
+  padding: 5px;
+}
+
+.demo-section {
+  margin-top: 2.5rem;
+  padding-top: 2rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.demo-section h2 {
+  margin-bottom: 0.25rem;
+}
+
+.section-description {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  color: #555;
+}
+
+button:hover {
+  background-color: #3700b3;
+}
+
+button:disabled {
+  background-color: #bdbdbd;
+  cursor: not-allowed;
+}
+
+.status-text {
+  margin-top: 0.75rem;
+  font-weight: 500;
+}
+
+.status-text.success {
+  color: #0f8a0f;
 }
 
 .error-message {
@@ -75,4 +111,8 @@ button:hover {
   border: 1px solid #b00020;
   padding: 1rem;
   border-radius: 4px;
+}
+
+.status-text.error {
+  color: #b00020;
 }

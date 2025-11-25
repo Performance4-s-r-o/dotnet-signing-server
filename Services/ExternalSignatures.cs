@@ -45,11 +45,13 @@ namespace DotNetSigningServer.ExternalSignatures
     {
         private readonly IX509Certificate[] _chain;
         private readonly byte[] _signature;
+        private readonly ITSAClient? _tsaClient;
 
-        public ExternalSignatureContainer(IX509Certificate[] chain, byte[] signature)
+        public ExternalSignatureContainer(IX509Certificate[] chain, byte[] signature, ITSAClient? tsaClient)
         {
             _chain = chain;
             _signature = signature;
+            _tsaClient = tsaClient;
         }
 
         public byte[] Sign(Stream inputStream)
@@ -57,7 +59,7 @@ namespace DotNetSigningServer.ExternalSignatures
             var sgn = new PdfPKCS7(null, _chain, "SHA256", false);
             byte[] hash = DigestAlgorithms.Digest(inputStream, DigestAlgorithms.SHA256);
             sgn.SetExternalSignatureValue(_signature, null, "RSA");
-            return sgn.GetEncodedPKCS7(hash, PdfSigner.CryptoStandard.CMS, null, null, null);
+            return sgn.GetEncodedPKCS7(hash, PdfSigner.CryptoStandard.CMS, _tsaClient, null, null);
         }
 
         public void ModifySigningDictionary(PdfDictionary signDic) { }

@@ -9,6 +9,10 @@ namespace DotNetSigningServer.Models
         public SignRect SignRect { get; set; } = new();
         public string? SignImageContent { get; set; }
         public int SignPageNumber { get; set; } = 1;
+        public string? FieldName { get; set; }
+        public string? TsaUrl { get; set; }
+        public string? TsaUsername { get; set; }
+        public string? TsaPassword { get; set; }
     }
 
     public class SignRect

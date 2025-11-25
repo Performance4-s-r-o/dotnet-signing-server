@@ -1,0 +1,43 @@
+@{
+    ViewData["Title"] = "Pricing";
+}
+
+<h1>Pricing</h1>
+<p class="muted">Transparent pricing shipping signed PDFs via API. No credit card required to get started.</p>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;align-items:stretch; margin-top:1.5rem;">
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1.25rem;">
+        <h2 style="margin:0 0 0.25rem;">Free</h2>
+        <p class="muted" style="margin:0 0 0.75rem;">For individual developers and small tests.</p>
+        <p style="font-size:2rem;font-weight:800;margin:0;">0 EUR</p>
+        <p class="muted" style="margin:0 0 1rem;">Includes 10 credits.</p>
+        <ul style="padding-left:1.1rem;line-height:1.6;margin:0 0 1rem;">
+            <li>All API Features</li>
+            <li>Immediate access</li>
+        </ul>
+        <a href="/Account/SignUp" style="display:inline-block;background:#2563eb;color:#fff;padding:0.65rem 1rem;border-radius:8px;text-decoration:none;font-weight:700;">Get started</a>
+    </div>
+
+    <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:1.25rem;box-shadow:0 12px 24px rgba(37,99,235,0.12);">
+        <h2 style="margin:0 0 0.25rem;">Paid</h2>
+        <p class="muted" style="margin:0 0 0.75rem;">For production workloads with support.</p>
+        <p style="font-size:2rem;font-weight:800;margin:0;">5 EUR<span style="font-size:1rem;font-weight:600;"></span></p>
+        <p class="muted" style="margin:0 0 1rem;">Per 100 credits</p>
+        <ul style="padding-left:1.1rem;line-height:1.6;margin:0 0 1rem;">
+            <li>All Free features</li>
+            <li>Priority email support</li>
+        </ul>
+        <a href="/Account/SignUp" style="display:inline-block;background:#1d4ed8;color:#fff;padding:0.65rem 1rem;border-radius:8px;text-decoration:none;font-weight:700;">Get Started</a>
+    </div>
+</div>
+
+<div style="margin-top:2rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;">
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;">
+        <h3>Credits</h3>
+        <p class="muted">One credit covers a signing, attachment, PFX sign, or barcode scan request. Presign requests are free.</p>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;">
+        <h3>Support</h3>
+        <p class="muted">Email support for all plans.</p>
+    </div>
+</div>

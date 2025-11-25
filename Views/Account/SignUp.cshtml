@@ -1,0 +1,35 @@
+@model DotNetSigningServer.Models.SignUpViewModel
+@{
+    ViewData["Title"] = "Sign up";
+}
+<h1>Create an account</h1>
+@if (TempData["Error"] != null)
+{
+    <div class="flash error">@TempData["Error"]</div>
+}
+@if (TempData["Info"] != null)
+{
+    <div class="flash info">@TempData["Info"]</div>
+}
+<form method="post">
+    @Html.AntiForgeryToken()
+    <label>Email</label>
+    <input asp-for="Email" />
+    <span asp-validation-for="Email" class="muted"></span>
+
+    <label>Password</label>
+    <input asp-for="Password" type="password" />
+    <span asp-validation-for="Password" class="muted"></span>
+
+    <label>Confirm password</label>
+    <input asp-for="ConfirmPassword" type="password" />
+    <span asp-validation-for="ConfirmPassword" class="muted"></span>
+
+    <button type="submit">Sign up</button>
+</form>
+
+<p class="muted">Already have an account? <a href="/Account/SignIn">Sign in</a>.</p>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

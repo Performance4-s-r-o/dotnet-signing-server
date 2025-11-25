@@ -1,0 +1,27 @@
+@{
+    ViewData["Title"] = "Two-factor verification";
+    var email = ViewData["Email"]?.ToString() ?? string.Empty;
+    var rememberMe = (ViewData["RememberMe"] as bool?) ?? false;
+}
+
+<h1>Enter verification code</h1>
+
+@if (TempData["Error"] != null)
+{
+    <div class="flash error">@TempData["Error"]</div>
+}
+@if (TempData["Info"] != null)
+{
+    <div class="flash info">@TempData["Info"]</div>
+}
+
+<p class="muted">We sent a 6-digit code to @email. Enter it below to finish signing in.</p>
+
+<form method="post" action="/Account/TwoFactor">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="email" value="@email" />
+    <input type="hidden" name="rememberMe" value="@rememberMe" />
+    <label>6-digit code</label>
+    <input type="text" name="code" maxlength="6" minlength="6" pattern="\d{6}" required />
+    <button type="submit">Verify</button>
+</form>
