@@ -11,5 +11,6 @@ namespace DotNetSigningServer.Models
         public string? SignImageContent { get; set; }
         public int SignPageNumber { get; set; } = 1;
         public string? FieldName { get; set; }
+        public Guid? TemplateId { get; set; }
     }
 }

@@ -12,5 +12,6 @@ namespace DotNetSigningServer.Models
         public string? TsaUrl { get; set; }
         public string? TsaUsername { get; set; }
         public string? TsaPassword { get; set; }
+        public Guid? TemplateId { get; set; }
     }
 }

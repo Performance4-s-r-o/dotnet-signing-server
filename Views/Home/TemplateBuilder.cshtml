@@ -1,0 +1,866 @@
+@{
+  ViewData["Title"] = "PDF Template Builder";
+  Layout = "_Layout";
+}
+
+<div class="container py-4" id="template-builder-root"></div>
+
+<style>
+  .tb-row {
+    display: grid;
+    gap: 12px;
+  }
+
+  .tb-row-regular {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tb-row-expanded {
+    grid-template-columns: 1fr;
+  }
+
+  .tb-preview {
+    position: relative;
+    border: 1px dashed rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .tb-page {
+    position: relative;
+    margin-bottom: 12px;
+  }
+
+  .tb-overlay {
+    position: absolute;
+    inset: 0;
+  }
+
+  .tb-field {
+    position: absolute;
+    background: rgba(55, 55, 55, 0.8);
+    color: #e2e8f0;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    user-select: none;
+  }
+
+  .tb-chip {
+    border: 1px dashed rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    margin-bottom: 1rem;
+  }
+
+  .tb-error {
+    margin-top: 8px;
+    font-size: 0.95rem;
+  }
+
+  input,
+  select,
+  button,
+  textarea {
+    border-radius: 8px !important;
+  }
+</style>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin></script>
+<script src="https://unpkg.com/@@babel/standalone/babel.min.js" crossorigin></script>
+
+<script type="text/babel" data-presets="env,react">
+  const { useEffect, useRef, useState } = React;
+  const createRoot = ReactDOM.createRoot;
+
+  if (window.pdfjsLib) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  }
+
+  const fieldDefaults = {
+    type: "text",
+    fontSize: 12,
+    fontName: "Helvetica",
+    fontWeight: "normal",
+    horizontalAlign: "left",
+    verticalAlign: "center",
+    barcodeFormat: "code128",
+    columns: 0,
+    tableColumns: []
+  };
+  const allowedFonts = ["Helvetica", "Times-Roman", "Courier", "Symbol", "ZapfDingbats"];
+  const fontWeights = ["tiny", "normal", "bold"];
+  const fontSizes = Array.from({ length: 124 }, (_, i) => i + 5); // 5..128
+
+  function toBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function loadPdfPages(base64) {
+    const raw = atob(base64);
+    const bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    return window.pdfjsLib.getDocument({ data: bytes }).promise;
+  }
+
+  function TemplateBuilderApp() {
+    const [pdfBase64, setPdfBase64] = useState("");
+    const [pages, setPages] = useState([]);
+    const [fields, setFields] = useState([]);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [status, setStatus] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [templateId, setTemplateId] = useState(null);
+    const [templateName, setTemplateName] = useState("Template");
+    const [dragState, setDragState] = useState(null); // { id, mode, startX, startY, startLeftPx, startTopPx, startWidthPx, startHeightPx, scaleX, scaleY, page, pdfRect }
+    const [previewExpanded, setPreviewExpanded] = useState(false);
+    const [overlaySizes, setOverlaySizes] = useState({});
+    const [expandedFieldId, setExpandedFieldId] = useState(null);
+    const [dirty, setDirty] = useState(false);
+    const chipsRef = useRef(null);
+    const overlayRefs = useRef({});
+
+    useEffect(() => {
+      if (!pdfBase64) {
+        setPages([]);
+        return;
+      }
+      let cancelled = false;
+      (async () => {
+        try {
+          const doc = await loadPdfPages(pdfBase64);
+          const rendered = [];
+          for (let i = 1; i <= doc.numPages; i++) {
+            const page = await doc.getPage(i);
+            // Use scale 1 so stored coordinates match PDF units (no scaling).
+            const viewport = page.getViewport({ scale: 1 });
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            rendered.push({
+              pageNumber: i,
+              width: viewport.width,
+              height: viewport.height,
+              dataUrl: canvas.toDataURL("image/png")
+            });
+          }
+          if (!cancelled) setPages(rendered);
+        } catch (err) {
+          console.error(err);
+          setStatus("Failed to render PDF preview.");
+        }
+      })();
+      return () => { cancelled = true; };
+    }, [pdfBase64]);
+
+    const addFieldToPage = () => {
+      const page = pages.find(p => p.pageNumber === currentPage);
+      if (!page) { setStatus("Upload a PDF first."); return; }
+      const defaultWidth = page.width * 0.25;
+      const defaultHeight = page.height * 0.07;
+      const newField = {
+        id: crypto.randomUUID(),
+        fieldName: `Field_${fields.length + 1}`,
+        page: currentPage,
+        rect: {
+          x: (page.width - defaultWidth) / 2,
+          y: (page.height - defaultHeight) / 2,
+          width: defaultWidth,
+          height: defaultHeight
+        },
+        ...fieldDefaults
+      };
+      setFields([...fields, newField]);
+      setStatus("");
+    };
+
+    const updateField = (id, patch) => setFields(fields.map(f => f.id === id ? { ...f, ...patch } : f));
+    const nudgeFieldByPixels = (fieldId, dxPx, dyPx, scaleX, scaleY, pageSize) => {
+      setFields(prev => prev.map(f => {
+        if (f.id !== fieldId) return f;
+        const deltaX = dxPx / (scaleX || 1);
+        const deltaY = -dyPx / (scaleY || 1);
+        const nextX = Math.min(Math.max(0, f.rect.x + deltaX), (pageSize?.width || f.rect.width) - f.rect.width);
+        const nextY = Math.min(Math.max(0, f.rect.y + deltaY), (pageSize?.height || f.rect.height) - f.rect.height);
+        return { ...f, rect: { ...f.rect, x: nextX, y: nextY } };
+      }));
+      setDirty(true);
+    };
+    const startDrag = (field, mode, clientX, clientY, scaled) => {
+      setDragState({
+        id: field.id,
+        mode,
+        startX: clientX,
+        startY: clientY,
+        startLeftPx: scaled.x,
+        startTopPx: scaled.y,
+        startWidthPx: scaled.w,
+        startHeightPx: scaled.h,
+        scaleX: scaled.scaleX,
+        scaleY: scaled.scaleY,
+        page: field.page,
+        pdfRect: { ...field.rect }
+      });
+    };
+
+    const handleMouseMove = (e) => {
+      if (!dragState) return;
+      const page = pages.find(p => p.pageNumber === dragState.page);
+      const overlay = overlayRefs.current[dragState.page];
+      if (!page || !overlay) return;
+      const dxPx = e.clientX - dragState.startX;
+      const dyPx = e.clientY - dragState.startY;
+
+      setFields(fields.map(f => {
+        if (f.id !== dragState.id) return f;
+
+        if (dragState.mode === "move") {
+          const newLeftPx = dragState.startLeftPx + dxPx;
+          const newTopPx = dragState.startTopPx + dyPx;
+          const pdfX = newLeftPx / dragState.scaleX;
+          const pdfY = page.height - (newTopPx / dragState.scaleY) - dragState.pdfRect.height;
+          return { ...f, rect: { ...f.rect, x: pdfX, y: pdfY } };
+        }
+
+        const newWidthPx = Math.max(25, dragState.startWidthPx + dxPx);
+        const newHeightPx = Math.max(15, dragState.startHeightPx + dyPx);
+        const pdfWidth = newWidthPx / dragState.scaleX;
+        const pdfHeight = newHeightPx / dragState.scaleY;
+        const pdfX = dragState.pdfRect.x;
+        const pdfY = page.height - (dragState.startTopPx / dragState.scaleY) - pdfHeight;
+        return { ...f, rect: { ...f.rect, x: pdfX, y: pdfY, width: pdfWidth, height: pdfHeight } };
+      }));
+    };
+
+    const handleMouseUp = () => {
+      if (dragState) setDragState(null);
+    };
+    const removeField = id => { setFields(fields.filter(f => f.id !== id)); setDirty(true); };
+    const removeFieldWithConfirm = (id) => {
+      if (confirm("Remove this field?")) {
+        removeField(id);
+        if (expandedFieldId === id) setExpandedFieldId(null);
+      }
+    };
+
+    const handleFile = async (file) => {
+      setStatus("Reading PDF...");
+      const b64 = await toBase64(file);
+      setPdfBase64(b64);
+      setFields([]);
+      setCurrentPage(1);
+      setStatus("");
+      setDirty(true);
+    };
+
+    const saveTemplate = async () => {
+      if (!pdfBase64) { setStatus("Upload a PDF first."); return; }
+      if (!fields.length) { setStatus("Add at least one field."); return; }
+      const badName = fields.find(f => !/^[A-Za-z0-9_-]+$/.test(f.fieldName || ""));
+      if (badName) { setStatus("Field names may only contain letters, numbers, underscore or dash."); return; }
+      setLoading(true);
+      setStatus("Saving template...");
+      try {
+        const payload = {
+          pdfContent: pdfBase64,
+          fields: fields.map(f => ({
+            fieldName: f.fieldName,
+            rect: f.rect,
+            page: f.page,
+            fontSize: f.fontSize,
+            fontName: f.fontName,
+            fontWeight: f.fontWeight,
+            type: f.type,
+            barcodeFormat: f.barcodeFormat,
+            horizontalAlign: f.horizontalAlign,
+            verticalAlign: f.verticalAlign,
+            columns: f.columns,
+            tableColumns: f.tableColumns
+          })),
+          templateName
+        };
+        const res = await fetch(templateId ? `/api/pdf-template/${templateId}` : "/api/pdf-template", {
+          method: templateId ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+          const msg = await res.text();
+          throw new Error(msg || "Failed to save template.");
+        }
+        const json = await res.json();
+        setTemplateId(json.templateId);
+        setStatus(`Saved template: ${json.templateId}`);
+        setDirty(false);
+      } catch (err) {
+        console.error(err);
+        setStatus(err.message || "Failed to save template.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    useEffect(() => {
+      const params = new URLSearchParams(window.location.search);
+      const tid = params.get("templateId");
+      if (!tid) return;
+      (async () => {
+        try {
+          setStatus("Loading template...");
+          const res = await fetch(`/api/pdf-template/${tid}`, { credentials: "include" });
+          if (!res.ok) throw new Error(await res.text());
+          const json = await res.json();
+          setTemplateId(json.templateId);
+          setTemplateName(json.name || "Template");
+          setPdfBase64(json.pdfContent);
+          const normalizedFields = (json.fields || []).map((f, idx) => ({
+            id: crypto.randomUUID(),
+            fieldName: f.fieldName || `Field_${idx + 1}`,
+            rect: f.rect,
+            page: f.page || 1,
+            fontSize: f.fontSize || 12,
+            fontName: f.fontName || "Helvetica",
+            fontWeight: f.fontWeight || "normal",
+            type: f.type || "text",
+            barcodeFormat: f.barcodeFormat || "code128",
+            horizontalAlign: f.horizontalAlign || "left",
+            verticalAlign: f.verticalAlign || "center",
+            columns: f.columns || f.tableColumns?.length || 0,
+            tableColumns: (f.tableColumns || []).map((c, i) => ({
+              name: c.name || `Col ${i + 1}`,
+              widthPercent: c.widthPercent ?? (100 / Math.max(1, f.tableColumns?.length || 1)),
+              fontSize: c.fontSize || 12,
+              fontWeight: c.fontWeight || "normal",
+              borderStyle: c.borderStyle || (f.tableColumns?.[0]?.borderStyle) || "none",
+              horizontalAlign: c.horizontalAlign || "left",
+              verticalAlign: c.verticalAlign || "center"
+            }))
+          }));
+          setFields(normalizedFields);
+          setCurrentPage(normalizedFields[0]?.page || 1);
+          setStatus("");
+        } catch (e) {
+          console.error(e);
+          setStatus(e.message || "Failed to load template.");
+        }
+      })();
+    }, []);
+
+    const recomputeOverlaySizes = () => {
+      const next = {};
+      pages.forEach(p => {
+        const el = overlayRefs.current[p.pageNumber];
+        if (!el) return;
+        next[p.pageNumber] = { width: el.clientWidth, height: el.clientHeight };
+      });
+      if (Object.keys(next).length > 0) {
+        setOverlaySizes(next);
+      }
+    };
+
+    useEffect(() => {
+      recomputeOverlaySizes();
+    }, [pages, previewExpanded]);
+
+    useEffect(() => {
+      const handler = () => recomputeOverlaySizes();
+      window.addEventListener("resize", handler);
+      return () => window.removeEventListener("resize", handler);
+    }, [pages]);
+
+    useEffect(() => {
+      const handler = (e) => {
+        if (!chipsRef.current) return;
+        if (!chipsRef.current.contains(e.target)) {
+          setExpandedFieldId(null);
+        }
+      };
+      document.addEventListener("mousedown", handler);
+      @* const keyHandler = (e) => {
+        if (expandedFieldId && (e.key === "Delete" || e.key === "Backspace")) {
+          e.preventDefault();
+          removeFieldWithConfirm(expandedFieldId);
+        }
+      };
+      window.addEventListener("keydown", keyHandler); *@
+      const beforeUnload = (event) => {
+        if (dirty) {
+          event.preventDefault();
+          event.returnValue = "";
+        }
+      };
+      window.addEventListener("beforeunload", beforeUnload);
+      return () => {
+        document.removeEventListener("mousedown", handler);
+        @* window.removeEventListener("keydown", keyHandler); *@
+          window.removeEventListener("beforeunload", beforeUnload);
+      };
+    }, [dirty]);
+
+    const calculateNewTableColumns = (field) => {
+      const existing = field.tableColumns || [];
+      const borderStyle = existing[0]?.borderStyle || "none";
+      const hAlign = existing[0]?.horizontalAlign || "left";
+      const vAlign = existing[0]?.verticalAlign || "center";
+      const round2 = (val) => Math.round((Number(val) || 0) * 100) / 100;
+      if (existing.length === 0) {
+        return [{ name: "Col 1", widthPercent: 100, fontSize: 12, fontWeight: "normal", borderStyle, horizontalAlign: hAlign, verticalAlign: vAlign }];
+      }
+
+      const currentSum = existing.reduce((sum, col) => sum + (Number(col.widthPercent) || 0), 0);
+      const newIndex = existing.length + 1;
+      const nextCols = [];
+
+      if (Math.abs(currentSum - 100) < 0.01 || currentSum >= 100) {
+        // Sum is 100 (or above): shrink existing proportionally and give the new column an even share.
+        const newWidth = 100 / newIndex;
+        const scale = currentSum === 0 ? 0 : (100 - newWidth) / currentSum;
+        existing.forEach((col) => {
+          nextCols.push({ ...col, widthPercent: round2((Number(col.widthPercent) || 0) * scale) });
+        });
+        nextCols.push({ name: `Col ${newIndex}`, widthPercent: round2(newWidth), fontSize: 12, fontWeight: "normal", borderStyle, horizontalAlign: hAlign, verticalAlign: vAlign });
+      } else {
+        // Sum is under 100: assign the missing difference to the new column.
+        const diff = 100 - currentSum;
+        existing.forEach((col) => nextCols.push({ ...col }));
+        nextCols.push({ name: `Col ${newIndex}`, widthPercent: round2(diff), fontSize: 12, fontWeight: "normal", borderStyle, horizontalAlign: hAlign, verticalAlign: vAlign });
+      }
+
+      // Normalize tiny rounding errors onto the last column to keep the total at 100%.
+      const total = nextCols.reduce((sum, col) => sum + (Number(col.widthPercent) || 0), 0);
+      const delta = round2(100 - total);
+      if (Math.abs(delta) >= 0.01) {
+        const lastIdx = nextCols.length - 1;
+        nextCols[lastIdx] = { ...nextCols[lastIdx], widthPercent: round2((Number(nextCols[lastIdx].widthPercent) || 0) + delta) };
+      }
+
+      return nextCols;
+    };
+
+    return (
+      <>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h1>{templateId ? "Edit PDF Template" : "Create PDF Template"}</h1>
+          <a className="linkButton" href="/templates" style={{ marginTop: '0.5rem' }}>Back to list</a>
+        </div>
+        <div className="tb-panel">
+          <div className={`tb-row ${previewExpanded ? "tb-row-expanded" : "tb-row-regular"}`}>
+            {!previewExpanded && (
+              <div>
+                {templateId === null && (
+                  <>
+                    <label className="form-label text-muted">Upload PDF</label>
+                    <input className="form-control mb-3" type="file" accept="application/pdf" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+                  </>
+                )}
+                <label className="form-label text-muted">Template name</label>
+                <input className="form-control mb-3" type="text" value={templateName} onChange={e => setTemplateName(e.target.value)} />
+
+                <div className="mb-3 d-flex gap-2">
+                  <button className="btn btn-primary btn-sm" disabled={loading || !pdfBase64 || !templateName || fields.length === 0} onClick={saveTemplate} style={
+                    Object.assign({ marginTop: '0.5rem' }, loading || !pdfBase64 || !templateName || fields.length === 0 ? { background: '#6c757d', borderColor: '#6c757d', cursor: 'not-allowed' } : undefined)}>
+                    {loading ? "Saving..." : "Save Template"}
+                  </button>
+                </div>
+                {status && <div className="tb-error">{status}</div>}
+
+                {fields.length === 0 && <p className="text-muted mb-2">No fields yet. Click "Add field" for the current page.</p>}
+                <div className="d-flex flex-column gap-2" style={{ display: 'flex', flexDirection: 'column', marginTop: '1rem' }}>
+                  {fields.map(f => (
+                    <div key={f.id} className="tb-chip" style={{ width: "unset!important" }}>
+                      <div className="d-flex flex-column flex-md-row gap-2 align-items-center w-100" style={{ width: '100%' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                          <div className="flex-grow-1" onClick={() => {
+                            if (f.page !== currentPage) setCurrentPage(f.page);
+                            setExpandedFieldId(expandedFieldId === f.id ? null : f.id)
+                          }} style={{ cursor: 'pointer' }}>
+                            <strong>{f.fieldName}</strong> <small>page {f.page}</small><br />
+                            <small>{f.type}{f.type === "barcode" && f.barcodeFormat ? ` • ${f.barcodeFormat}` : ""}</small>
+                          </div>
+                          <button style={{ background: '#ae1c1c', padding: '3px 10px' }} onClick={() => removeFieldWithConfirm(f.id)}>×</button>
+                        </div>
+                        {expandedFieldId === f.id && (
+                          <div style={{ display: 'flex', gap: '0.5rem', flexDirection: 'column', width: '100%', marginTop: '0.5rem' }}>
+                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center', justifyContent: 'flex-start' }}>
+                              <label htmlFor={`fieldName-${f.id}`} style={{ fontWeight: 'normal', fontSize: '0.875rem', flexBasis: '100px', margin: 0 }}>Field Name:</label>
+                              <input
+                                style={{ margin: 0 }}
+                                id={`fieldName-${f.id}`}
+                                className="form-control form-control-sm"
+                                value={f.fieldName}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  if (!/^[A-Za-z0-9_-]*$/.test(val)) return;
+                                  updateField(f.id, { fieldName: val });
+                                  setDirty(true);
+                                }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center', justifyContent: 'flex-start' }}>
+                              <label htmlFor={`fieldType-${f.id}`} style={{ fontWeight: 'normal', fontSize: '0.875rem', flexBasis: '100px', margin: 0 }}>Type:</label>
+                              <select id={`fieldType-${f.id}`} style={{ width: '100%', margin: 0 }} className="form-select form-select-sm" value={f.type} onChange={e => {
+                                const newType = e.target.value;
+                                const patch = { type: newType };
+                                if (newType === "table" && (!f.tableColumns || f.tableColumns.length === 0)) {
+                                  patch.tableColumns = [{ name: "Col 1", widthPercent: 100, fontSize: 12, fontWeight: "normal", borderStyle: "none", horizontalAlign: "left", verticalAlign: "center" }];
+                                  patch.columns = 1;
+                                }
+                                updateField(f.id, patch);
+                                setDirty(true);
+                              }}>
+                                <option value="text">Text</option>
+                                <option value="image">Image</option>
+                                <option value="barcode">Barcode</option>
+                                <option value="signature">Signature</option>
+                                <option value="table">Table</option>
+                              </select>
+                            </div>
+                            {f.type === "barcode" && (
+                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', justifyContent: 'flex-start' }}>
+                                <label htmlFor={`barcodeFormat-${f.id}`} style={{ fontWeight: 'normal', fontSize: '0.875rem', flexBasis: '100px' }}>Barcode Format:</label>
+                                <select id={`barcodeFormat-${f.id}`} className="form-select form-select-sm" value={f.barcodeFormat} onChange={e => updateField(f.id, { barcodeFormat: e.target.value })}>
+                                  <option value="qrcode">QR</option>
+                                  <option value="datamatrix">DataMatrix</option>
+                                  <option value="pdf417">PDF417</option>
+                                  <option value="code128">Code128</option>
+                                  <option value="code39">Code39</option>
+                                  <option value="ean13">EAN13</option>
+                                  <option value="ean8">EAN8</option>
+                                  <option value="upca">UPC-A</option>
+                                  <option value="itf">ITF</option>
+                                </select>
+                              </div>
+                            )}
+                            {f.type === "text" && (
+                              <span style={{ display: 'flex', gap: '4px', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-start', justifyContent: 'center', flexDirection: 'column', flexBasis: '33.33%' }}>
+                                  <label htmlFor={`fontName-${f.id}`} style={{ fontWeight: 'normal', fontSize: '0.875rem' }}>Font:</label>
+                                  <select style={{ width: '100%' }} id={`fontName-${f.id}`} className="form-select form-select-sm" value={f.fontName} onChange={e => { updateField(f.id, { fontName: e.target.value }); setDirty(true); }}>
+                                    {allowedFonts.map(fn => <option key={fn} value={fn}>{fn}</option>)}
+                                  </select>
+                                </div>
+                                <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-start', justifyContent: 'center', flexDirection: 'column', flexBasis: '33.33%' }}>
+                                  <label htmlFor={`fontSize-${f.id}`} style={{ fontWeight: 'normal', fontSize: '0.875rem' }}>Size:</label>
+                                  <select style={{ width: '100%' }} id={`fontSize-${f.id}`} className="form-select form-select-sm" value={f.fontSize} onChange={e => { updateField(f.id, { fontSize: Number(e.target.value) }); setDirty(true); }}>
+                                    {fontSizes.map(sz => <option key={sz} value={sz}>{sz}px</option>)}
+                                  </select>
+                                </div>
+                                <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-start', justifyContent: 'center', flexDirection: 'column', flexBasis: '33.33%' }}>
+                                  <label htmlFor={`fontWeight-${f.id}`} style={{ fontWeight: 'normal', fontSize: '0.875rem' }}>Weight:</label>
+                                  <select style={{ width: '100%' }} id={`fontWeight-${f.id}`} className="form-select form-select-sm" value={f.fontWeight} onChange={e => { updateField(f.id, { fontWeight: e.target.value }); setDirty(true); }}>
+                                    {fontWeights.map(w => <option key={w} value={w}>{w}</option>)}
+                                  </select>
+                                </div>
+                                <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-start', justifyContent: 'center', flexDirection: 'column', flexBasis: '33.33%' }}>
+                                  <label style={{ fontWeight: 'normal', fontSize: '0.875rem' }}>Horizontal:</label>
+                                  <select className="form-select form-select-sm" value={f.horizontalAlign || "left"} onChange={e => { updateField(f.id, { horizontalAlign: e.target.value }); setDirty(true); }}>
+                                    <option value="left">Left</option>
+                                    <option value="center">Center</option>
+                                    <option value="right">Right</option>
+                                  </select>
+                                </div>
+                                <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-start', justifyContent: 'center', flexDirection: 'column', flexBasis: '33.33%' }}>
+                                  <label style={{ fontWeight: 'normal', fontSize: '0.875rem' }}>Vertical:</label>
+                                  <select className="form-select form-select-sm" value={f.verticalAlign || "center"} onChange={e => { updateField(f.id, { verticalAlign: e.target.value }); setDirty(true); }}>
+                                    <option value="top">Top</option>
+                                    <option value="center">Center</option>
+                                    <option value="bottom">Bottom</option>
+                                  </select>
+                                </div>
+                              </span>
+                            )}
+                            {f.type === "table" && (
+                              <div style={{ display: 'flex', gap: '4px', flexDirection: 'column' }}>
+                                <div className="d-flex gap-2">
+                                  <div className="flex-grow-1">
+                                    <label style={{ fontWeight: 'normal', fontSize: '0.875rem' }}>Font:</label>
+                                    <select className="form-select form-select-sm" value={f.fontName} onChange={e => { updateField(f.id, { fontName: e.target.value }); setDirty(true); }}>
+                                      {allowedFonts.map(fn => <option key={fn} value={fn}>{fn}</option>)}
+                                    </select>
+                                  </div>
+                                  <div className="flex-grow-1">
+                                    <label style={{ fontWeight: 'normal', fontSize: '0.875rem' }}>Border:</label>
+                                    <select className="form-select form-select-sm" value={(f.tableColumns?.[0]?.borderStyle) || "none"} onChange={e => {
+                                      let next = [...(f.tableColumns || [])].map(col => ({ ...col, borderStyle: e.target.value }));
+                                      if (next.length === 0) {
+                                        next = [{ name: "Col 1", widthPercent: 100, fontSize: 12, fontWeight: "normal", borderStyle: e.target.value, horizontalAlign: "left", verticalAlign: "center" }];
+                                      }
+                                      updateField(f.id, { tableColumns: next, columns: next.length });
+                                      setDirty(true);
+                                    }}>
+                                      <option value="none">No border</option>
+                                      <option value="dashed">Dashed</option>
+                                      <option value="filled">Filled</option>
+                                    </select>
+                                  </div>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  {(f.tableColumns || []).map((c, idx) => (
+                                    <div key={idx} className="input-group input-group-sm" style={{ alignItems: 'center' }}>
+                                      <span className="input-group-text">Col {idx + 1}</span>
+                                      <input type="text" className="form-control" placeholder="Name" value={c.name || ""} onChange={e => {
+                                        const next = [...(f.tableColumns || [])];
+                                        next[idx] = { ...next[idx], name: e.target.value };
+                                        updateField(f.id, { tableColumns: next, columns: next.length });
+                                        setDirty(true);
+                                      }} />
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        max="100"
+                                        required
+                                        className="form-control"
+                                        placeholder="Width %"
+                                        value={c.widthPercent ?? 100}
+                                        onChange={e => {
+                                          const next = [...(f.tableColumns || [])];
+                                          const raw = Number(e.target.value);
+                                          const val = Number.isFinite(raw) ? Math.min(100, Math.max(1, raw)) : 1;
+                                          next[idx] = { ...next[idx], widthPercent: val };
+                                          updateField(f.id, { tableColumns: next, columns: next.length });
+                                          setDirty(true);
+                                        }}
+                                      />
+                                      <select className="form-select form-select-sm" value={c.fontSize} onChange={e => {
+                                        const next = [...(f.tableColumns || [])];
+                                        next[idx] = { ...next[idx], fontSize: Number(e.target.value) };
+                                        updateField(f.id, { tableColumns: next, columns: next.length });
+                                        setDirty(true);
+                                      }}>
+                                        {fontSizes.map(sz => <option key={sz} value={sz}>{sz}px</option>)}
+                                      </select>
+                                      <select className="form-select form-select-sm" value={c.fontWeight} onChange={e => {
+                                        const next = [...(f.tableColumns || [])];
+                                        next[idx] = { ...next[idx], fontWeight: e.target.value };
+                                        updateField(f.id, { tableColumns: next, columns: next.length });
+                                        setDirty(true);
+                                      }}>
+                                        {fontWeights.map(w => <option key={w} value={w}>{w}</option>)}
+                                      </select>
+                                      <select className="form-select form-select-sm" value={c.horizontalAlign || "left"} onChange={e => {
+                                        const next = [...(f.tableColumns || [])];
+                                        next[idx] = { ...next[idx], horizontalAlign: e.target.value };
+                                        updateField(f.id, { tableColumns: next, columns: next.length });
+                                        setDirty(true);
+                                      }}>
+                                        <option value="left">Left</option>
+                                        <option value="center">Center</option>
+                                        <option value="right">Right</option>
+                                      </select>
+                                      <select className="form-select form-select-sm" value={c.verticalAlign || "center"} onChange={e => {
+                                        const next = [...(f.tableColumns || [])];
+                                        next[idx] = { ...next[idx], verticalAlign: e.target.value };
+                                        updateField(f.id, { tableColumns: next, columns: next.length });
+                                        setDirty(true);
+                                      }}>
+                                        <option value="top">Top</option>
+                                        <option value="center">Center</option>
+                                        <option value="bottom">Bottom</option>
+                                      </select>
+                                      <button className="btn btn-outline-danger btn-sm" onClick={() => {
+                                        const current = f.tableColumns || [];
+                                        if (current.length <= 1) return;
+                                        const next = [...current];
+                                        next.splice(idx, 1);
+                                        updateField(f.id, { tableColumns: next, columns: next.length });
+                                        setDirty(true);
+                                      }}>×</button>
+                                    </div>
+                                  ))}
+                                  <button className="btn btn-outline-secondary btn-sm" onClick={() => {
+                                    const next = calculateNewTableColumns(f);
+                                    updateField(f.id, { tableColumns: next, columns: next.length });
+                                    setDirty(true);
+                                  }}>Add column</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div style={{ marginTop: '1rem' }}>
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <div className="d-flex gap-1 mb-4" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  {pages.length > 0 && (
+                    <>
+                      <button className="btn btn-success btn-sm" onClick={addFieldToPage}>Add field</button>
+                      <button className="btn btn-outline-secondary btn-sm" onClick={() => { setPreviewExpanded(!previewExpanded); }}>
+                        {previewExpanded ? "Collapse" : "Expand"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="tb-preview" style={{ marginTop: '0.5rem' }}>
+                {pages.length === 0 && <p className="text-muted" style={{ textAlign: "center" }}>Upload a PDF to see the preview.</p>}
+                {pages.filter(p => p.pageNumber === currentPage).map(p => (
+                  <div key={p.pageNumber} className="tb-page">
+                    <img
+                      src={p.dataUrl}
+                      alt={`Page ${p.pageNumber}`}
+                      style={{ width: "100%", display: "block" }}
+                      onLoad={() => {
+                        const el = overlayRefs.current[p.pageNumber];
+                        if (el) {
+                          setOverlaySizes(prev => ({ ...prev, [p.pageNumber]: { width: el.clientWidth, height: el.clientHeight } }));
+                        }
+                      }}
+                    />
+                    <div
+                      className="tb-overlay"
+                      ref={el => overlayRefs.current[p.pageNumber] = el}
+                      onMouseMove={handleMouseMove}
+                      onMouseUp={handleMouseUp}
+                      onMouseLeave={handleMouseUp}
+                    >
+                      {fields.filter(f => f.page === p.pageNumber).map(f => {
+                        const size = overlaySizes[p.pageNumber]
+                          || { width: overlayRefs.current[p.pageNumber]?.clientWidth || p.width, height: overlayRefs.current[p.pageNumber]?.clientHeight || p.height };
+                        const scaleX = size.width / p.width;
+                        const scaleY = size.height / p.height;
+                        const x = f.rect.x * scaleX;
+                        const y = (p.height - f.rect.y - f.rect.height) * scaleY;
+                        const w = f.rect.width * scaleX;
+                        const h = f.rect.height * scaleY;
+                        const weight = f.fontWeight === "bold" ? 700 : f.fontWeight === "tiny" ? 300 : 400;
+                        const fontPx = (f.fontSize || 12) * scaleY;
+                        const horiz = f.horizontalAlign || "left";
+                        const vert = f.verticalAlign || "center";
+                        const justifyContent = horiz === "center" ? "center" : horiz === "right" ? "flex-end" : "flex-start";
+                        const alignItems = vert === "top" ? "flex-start" : vert === "bottom" ? "flex-end" : "center";
+                        return (
+                          <div
+                            key={f.id}
+                            className="tb-field"
+                            tabIndex={0}
+                            onKeyDown={e => {
+                              if ((e.key === "Delete" || e.key === "Backspace") && expandedFieldId === f.id) {
+                                e.preventDefault();
+                                removeFieldWithConfirm(f.id);
+                              }
+                              if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+                                e.preventDefault();
+                                const dx = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
+                                const dy = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
+                                nudgeFieldByPixels(f.id, dx, dy, scaleX, scaleY, { width: p.width, height: p.height });
+                              }
+                            }}
+                            style={{ left: x, top: y, width: w, height: h, background: expandedFieldId === f.id ? "rgba(75, 85, 99, 0.9)" : "rgba(55, 55, 55, 0.8)" }}>
+                            <button
+                              type="button"
+                              style={{ position: "absolute", left: -10, top: -10, zIndex: 4, padding: "2px 6px", fontSize: "10px", margin: 0 }}
+                              onClick={() => {
+                                console.log(expandedFieldId, f.id, expandedFieldId === f.id)
+                                setExpandedFieldId(expandedFieldId === f.id ? null : f.id);
+                              }}
+                            >
+                              {expandedFieldId === f.id ? 'Done' : 'Edit'}
+                            </button>
+                            <div
+                              style={{ position: "absolute", inset: 0, cursor: "move", zIndex: 3 }}
+                              onMouseDown={e => { e.preventDefault(); startDrag(f, "move", e.clientX, e.clientY, { x, y, w, h, scaleX, scaleY }); }}
+                            ></div>
+                            <div
+                              style={{ position: "absolute", right: -4, bottom: -4, width: 8, height: 8, cursor: "nwse-resize", background: "#2563eb", borderRadius: 4, zIndex: 5 }}
+                              onMouseDown={e => { e.preventDefault(); startDrag(f, "resize", e.clientX, e.clientY, { x, y, w, h, scaleX, scaleY }); }}
+                            ></div>
+                            <div style={{ position: "relative", zIndex: 2, width: "100%", height: "100%", display: "flex", alignItems: f.type === "table" ? "stretch" : alignItems, justifyContent: f.type === "table" ? "stretch" : justifyContent, padding: f.type === 'table' ? 0 : "6px", pointerEvents: "none", fontFamily: f.fontName || "Helvetica, Arial, sans-serif" }}>
+                              {f.type === "table" ? (
+                                <div style={{ display: "flex", width: "100%", height: "100%" }}>
+                                  {(f.tableColumns && f.tableColumns.length ? f.tableColumns : [{ name: "table example", widthPercent: 100, fontSize: 12, fontWeight: "normal", borderStyle: "none", horizontalAlign: "left", verticalAlign: "center" }]).map((col, idx) => {
+                                    const colWidth = `${Math.max(1, Math.min(100, col.widthPercent ?? 100))}%`;
+                                    const colWeight = col.fontWeight === "bold" ? 700 : col.fontWeight === "tiny" ? 300 : 400;
+                                    const colFont = Math.max(6, (col.fontSize || 12) * scaleY);
+                                    const colHoriz = col.horizontalAlign || "left";
+                                    const colVert = col.verticalAlign || "center";
+                                    const colJustify = colHoriz === "center" ? "center" : colHoriz === "right" ? "flex-end" : "flex-start";
+                                    const colAlign = colVert === "top" ? "flex-start" : colVert === "bottom" ? "flex-end" : "center";
+                                    let border = "none";
+                                    let background = "transparent";
+                                    if (col.borderStyle === "dashed") {
+                                      border = "2px dashed rgba(0,0,0,0.8)";
+                                    } else if (col.borderStyle === "filled") {
+                                      border = "2px solid rgba(0,0,0,0.9)";
+                                      background = "rgba(255,255,255,0.15)";
+                                    }
+                                    return (
+                                      <div key={idx} style={{ flexBasis: colWidth, border, background, display: "flex", alignItems: colAlign, justifyContent: colJustify, padding: "2px" }}>
+                                        <span style={{ fontSize: `${colFont}px`, fontWeight: colWeight, color: "#fff", textAlign: colHoriz === "center" ? "center" : colHoriz === "right" ? "right" : "left" }}>
+                                          {col.name || "table example"}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div style={{ fontSize: `${fontPx}px`, fontWeight: weight, lineHeight: 1, textAlign: "center" }}>
+                                  {f.fieldName}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {pages.length > 0 && (
+                <div className="d-grid" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+                  <button
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={() => {
+                      setCurrentPage(Math.max(1, currentPage - 1))
+                      setExpandedFieldId(null);
+                    }}
+                    disabled={currentPage === 1}
+                  >
+                    Prev
+                  </button>
+                  <div className="d-flex align-items-center justify-content-center text-muted">
+                    Page {currentPage} / {pages.length}
+                  </div>
+                  <button
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={() => {
+                      setCurrentPage(Math.min(pages.length, currentPage + 1))
+                      setExpandedFieldId(null);
+                    }}
+                    disabled={currentPage === pages.length}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div >
+      </>
+    );
+  }
+
+  const rootEl = document.getElementById("template-builder-root");
+  if (rootEl) {
+    createRoot(rootEl).render(React.createElement(TemplateBuilderApp));
+  }
+</script>

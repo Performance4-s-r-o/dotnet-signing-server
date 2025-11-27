@@ -1,20 +1,6 @@
 version: "3.8"
 
 services:
-  # The PostgreSQL Database Service
-  # db:
-  #   image: postgres:15
-  #   restart: unless-stopped
-  #   environment:
-  #     # These credentials are now sourced from the .env file
-  #     POSTGRES_USER: ${DB_USER}
-  #     POSTGRES_PASSWORD: ${DB_PASSWORD}
-  #     POSTGRES_DB: ${DB_NAME}
-  #   ports:
-  #     - "5432:5432"
-  #   volumes:
-  #     - db_data:/var/lib/postgresql/data
-
   # The .NET Signing Server Service
   server:
     build:
@@ -46,20 +32,6 @@ services:
       - Smtp__FromName=${SMTP_FROM_NAME:-DotNet Signing Server}
       - Smtp__Username=${SMTP_USERNAME:-}
       - Smtp__Password=${SMTP_PASSWORD:-}
-    # depends_on:
-    #   - db
-    depends_on:
-      - mailpit
-
-  mailpit:
-    image: axllent/mailpit:latest
-    restart: unless-stopped
-    ports:
-      - "8025:8025" # web UI
-    environment:
-      - MP_MAX_MESSAGES=1000
-      - MP_SMTP_AUTH_ACCEPT_ANY=true
-      - MP_SMTP_AUTH_ALLOW_INSECURE=true
 
 volumes:
   db_data:

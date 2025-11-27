@@ -40,3 +40,6 @@ TestResults/
 # Rider
 .idea/
 *.sln.iml
+
+signing-local.db*
+

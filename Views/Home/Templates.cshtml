@@ -1,0 +1,52 @@
+@model IEnumerable<DotNetSigningServer.Models.TemplateSummary>
+@{
+    ViewData["Title"] = "My Templates";
+    Layout = "_Layout";
+}
+
+<div class="container py-4">
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <h1 style="margin:0;">My Templates</h1>
+                <a class="linkButton" href="/template-builder">New Template</a>
+            </div>
+
+            @if (!Model.Any())
+            {
+                <p class="text-muted mb-0">No templates yet. Create one to get started.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Fields</th>
+                                <th>Created</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var t in Model)
+                            {
+                                <tr>
+                                    <td>@(string.IsNullOrWhiteSpace(t.Name) ? "Untitled" : t.Name)</td>
+                                    <td>@t.FieldCount</td>
+                                    <td>@t.CreatedAt.ToLocalTime().ToString("g")</td>
+                                    <td class="text-end">
+                                        <a class="btn btn-outline-secondary btn-sm"
+                                            href="@($"/template-builder?templateId={t.TemplateId}")">Edit</a>
+                                        <a class="btn btn-outline-primary btn-sm ms-1"
+                                           href="@($"/templates/{t.TemplateId}/docs")">API Docs</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>

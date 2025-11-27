@@ -1,6 +1,7 @@
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Middleware;
 using Microsoft.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -16,11 +17,14 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IStripeCheckoutService, StripeCheckoutService>();
 builder.Services.AddScoped<IApiAuthService, ApiAuthService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+builder.Services.AddScoped<PdfTemplateService>();
 builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();
+builder.Services.AddHttpClient<LokiClient>();
 builder.Services.Configure<BillingOptions>(builder.Configuration.GetSection("Billing"));
 builder.Services.Configure<StripeOptions>(builder.Configuration.GetSection("Stripe"));
 builder.Services.Configure<TokenOptions>(builder.Configuration.GetSection("Token"));
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection("Smtp"));
+builder.Services.Configure<LokiOptions>(builder.Configuration.GetSection("Loki"));
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -92,6 +96,8 @@ if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
 }
+
+app.UseMiddleware<LokiExceptionMiddleware>();
 
 app.Use(async (context, next) =>
 {

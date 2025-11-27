@@ -15,13 +15,17 @@ namespace DotNetSigningServer.Controllers
     {
         private readonly ApplicationDbContext _dbContext;
         private readonly PdfSigningService _signingService;
+        private readonly PdfTemplateService _pdfTemplateService;
         private readonly IApiAuthService _apiAuthService;
+        private readonly ILogger<ApiController> _logger;
 
-        public ApiController(ApplicationDbContext dbContext, PdfSigningService signingService, IApiAuthService apiAuthService)
+        public ApiController(ApplicationDbContext dbContext, PdfSigningService signingService, PdfTemplateService pdfTemplateService, IApiAuthService apiAuthService, ILogger<ApiController> logger)
         {
             _dbContext = dbContext;
             _signingService = signingService;
+            _pdfTemplateService = pdfTemplateService;
             _apiAuthService = apiAuthService;
+            _logger = logger;
         }
 
         [HttpPost("/api/presign")]
@@ -33,6 +37,16 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 var signingData = new SigningData();
+                if (input.TemplateId.HasValue)
+                {
+                    var signatureField = await GetSignatureFieldAsync(input.TemplateId.Value, user.Id);
+                    input.SignRect = signatureField.Rect;
+                    input.SignPageNumber = signatureField.Page <= 0 ? 1 : signatureField.Page;
+                    input.FieldName = string.IsNullOrWhiteSpace(signatureField.FieldName)
+                        ? $"Signature_{signingData.Id.Replace("-", string.Empty)}"
+                        : signatureField.FieldName;
+                }
+
                 string fieldName = string.IsNullOrWhiteSpace(input.FieldName)
                     ? $"Signature_{signingData.Id.Replace("-", string.Empty)}"
                     : input.FieldName;
@@ -55,8 +69,104 @@ namespace DotNetSigningServer.Controllers
             }
             catch (Exception ex)
             {
-                Console.Out.WriteLine(ex);
+                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Presign failed");
                 return Problem($"An error occurred during the presign process: {ex.Message}");
+            }
+        }
+
+    [HttpPost("/api/pdf-template")]
+        public async Task<IActionResult> CreatePdfTemplate([FromBody] CreateTemplateInput input)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+        if (input.Fields == null || input.Fields.Count == 0)
+        {
+            return BadRequest(new { message = "At least one field definition is required." });
+            }
+            if (string.IsNullOrWhiteSpace(input.PdfContent))
+            {
+                return BadRequest(new { message = "PdfContent is required." });
+            }
+
+        try
+        {
+            var response = await _pdfTemplateService.CreateTemplateAsync(input, user.Id);
+            return Ok(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Create template failed");
+                return Problem($"An error occurred while creating the template: {ex.Message}");
+            }
+        }
+
+        [HttpGet("/api/pdf-template")]
+        public async Task<IActionResult> ListPdfTemplates()
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            var templates = await _pdfTemplateService.ListTemplatesAsync(user.Id);
+            return Ok(new { templates });
+        }
+
+        [HttpGet("/api/pdf-template/{templateId:guid}")]
+        public async Task<IActionResult> GetPdfTemplate(Guid templateId)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            try
+            {
+                var template = await _pdfTemplateService.GetTemplateAsync(templateId, user.Id);
+                return Ok(template);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Get template failed");
+                return Problem($"An error occurred while retrieving the template: {ex.Message}");
+            }
+        }
+
+        [HttpPut("/api/pdf-template/{templateId:guid}")]
+        public async Task<IActionResult> UpdatePdfTemplate(Guid templateId, [FromBody] UpdateTemplateInput input)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            if (input.Fields != null && input.Fields.Count == 0 && string.IsNullOrWhiteSpace(input.PdfContent) && input.TemplateName == null)
+            {
+                return BadRequest(new { message = "Provide at least one change (fields, pdfContent, or templateName)." });
+            }
+
+            try
+            {
+                var response = await _pdfTemplateService.UpdateTemplateAsync(templateId, user.Id, input);
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Update template failed");
+                return Problem($"An error occurred while updating the template: {ex.Message}");
+            }
+        }
+
+        [HttpDelete("/api/pdf-template/{templateId:guid}")]
+        public async Task<IActionResult> DeletePdfTemplate(Guid templateId)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            try
+            {
+                await _pdfTemplateService.DeleteTemplateAsync(templateId, user.Id);
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Delete template failed");
+                return Problem($"An error occurred while deleting the template: {ex.Message}");
             }
         }
 
@@ -95,7 +205,7 @@ namespace DotNetSigningServer.Controllers
             }
             catch (Exception ex)
             {
-                Console.Out.WriteLine(ex);
+                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Sign failed");
                 return Problem($"An error occurred during the final signing process: {ex.Message}");
             }
         }
@@ -108,13 +218,22 @@ namespace DotNetSigningServer.Controllers
 
             try
             {
+                if (input.TemplateId.HasValue)
+                {
+                    var signatureField = await GetSignatureFieldAsync(input.TemplateId.Value, user.Id);
+                    input.SignRect = signatureField.Rect;
+                    input.SignPageNumber = signatureField.Page <= 0 ? 1 : signatureField.Page;
+                    input.FieldName = string.IsNullOrWhiteSpace(signatureField.FieldName)
+                        ? input.FieldName
+                        : signatureField.FieldName;
+                }
                 var result = _signingService.SignWithPfx(input);
                 await DebitUserAsync(user);
                 return Ok(new { result });
             }
             catch (Exception ex)
             {
-                Console.Out.WriteLine(ex);
+                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "PFX sign failed");
                 return Problem($"An error occurred during the PFX signing process: {ex.Message}");
             }
         }
@@ -127,13 +246,22 @@ namespace DotNetSigningServer.Controllers
 
             try
             {
+                if (input.TemplateId.HasValue)
+                {
+                    var signatureField = await GetSignatureFieldAsync(input.TemplateId.Value, user.Id);
+                    input.SignRect = signatureField.Rect;
+                    input.SignPageNumber = signatureField.Page <= 0 ? 1 : signatureField.Page;
+                    input.FieldName = string.IsNullOrWhiteSpace(signatureField.FieldName)
+                        ? input.FieldName
+                        : signatureField.FieldName;
+                }
                 var result = _signingService.ApplyDocumentTimestamp(input);
                 await DebitUserAsync(user);
                 return Ok(new { result });
             }
             catch (Exception ex)
             {
-                Console.Out.WriteLine(ex);
+                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Timestamp failed");
                 return Problem($"An error occurred while applying the timestamp: {ex.Message}");
             }
         }
@@ -152,8 +280,38 @@ namespace DotNetSigningServer.Controllers
             }
             catch (Exception ex)
             {
-                Console.Out.WriteLine(ex);
+                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Add attachment failed");
                 return Problem($"An error occurred while adding the attachment: {ex.Message}");
+            }
+        }
+
+    [HttpPost("/api/fill-pdf")]
+    public async Task<IActionResult> FillPdf([FromBody] FillPdfInput input)
+    {
+        var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+        if (error != null || user == null) return error!;
+
+            var hasTemplate = input.TemplateId != null;
+            var hasContent = !string.IsNullOrWhiteSpace(input.PdfContent);
+
+            if (hasTemplate == hasContent)
+            {
+                return BadRequest(new { message = "Provide either TemplateId or PdfContent (but not both)." });
+            }
+            if (!hasTemplate && (input.Fields == null || input.Fields.Count == 0))
+            {
+                return BadRequest(new { message = "Fields are required when using PdfContent directly." });
+            }
+
+        try
+        {
+            var response = await _pdfTemplateService.FillAsync(input, user.Id);
+            return Ok(response);
+        }
+        catch (Exception ex)
+        {
+                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Fill PDF failed");
+                return Problem($"An error occurred while filling the PDF: {ex.Message}");
             }
         }
 
@@ -177,7 +335,7 @@ namespace DotNetSigningServer.Controllers
             }
             catch (Exception ex)
             {
-                Console.Out.WriteLine(ex);
+                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Barcode scan failed");
                 return Problem($"An error occurred while scanning codes: {ex.Message}");
             }
         }
@@ -277,13 +435,26 @@ namespace DotNetSigningServer.Controllers
 
         private async Task<User?> GetAuthenticatedUserAsync(string? originHeader = null)
         {
-            var user = await _apiAuthService.ValidateTokenAsync(Request.Headers["Authorization"].ToString(), originHeader);
-            if (user == null)
+            // Prefer cookie-authenticated user
+            if (User?.Identity?.IsAuthenticated == true)
+            {
+                var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                                  ?? User.FindFirst("sub")?.Value;
+                if (Guid.TryParse(userIdClaim, out var guid))
+                {
+                    var cookieUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == guid);
+                    if (cookieUser != null) return cookieUser;
+                }
+            }
+
+            // Fallback to API token
+            var tokenUser = await _apiAuthService.ValidateTokenAsync(Request.Headers["Authorization"].ToString(), originHeader);
+            if (tokenUser == null)
             {
                 return null;
             }
 
-            return await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == user.Id);
+            return await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == tokenUser.Id);
         }
 
         private async Task<(User? user, IActionResult? error)> EnsureUserWithCreditsAsync(int requiredCredits = 1, string? originHeader = null)
@@ -291,11 +462,13 @@ namespace DotNetSigningServer.Controllers
             var user = await GetAuthenticatedUserAsync(originHeader);
             if (user == null)
             {
+                _logger.LogWarning(Logging.LoggingEvents.AuthFailed, "API auth failed");
                 return (null, Unauthorized());
             }
 
             if (requiredCredits > 0 && user.CreditsRemaining < requiredCredits)
             {
+                _logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Credits insufficient for user {UserId}", user.Id);
                 return (null, StatusCode(StatusCodes.Status402PaymentRequired, new { message = "No credits remaining. Please purchase more to continue." }));
             }
 
@@ -312,6 +485,17 @@ namespace DotNetSigningServer.Controllers
             user.CreditsRemaining = Math.Max(0, user.CreditsRemaining - debit);
             _dbContext.Users.Update(user);
             await _dbContext.SaveChangesAsync();
+        }
+
+        private async Task<PdfFieldDefinition> GetSignatureFieldAsync(Guid templateId, Guid userId)
+        {
+            var template = await _pdfTemplateService.GetTemplateAsync(templateId, userId);
+            var signatureField = template.Fields.FirstOrDefault(f => string.Equals(f.Type, "signature", StringComparison.OrdinalIgnoreCase));
+            if (signatureField == null)
+            {
+                throw new InvalidOperationException("Template does not contain a signature field.");
+            }
+            return signatureField;
         }
     }
 }

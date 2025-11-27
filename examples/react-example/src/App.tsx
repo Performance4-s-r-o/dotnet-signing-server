@@ -5,6 +5,7 @@ import PickCertificate from "./components/PickCertificate";
 import useSignature from "./hooks/useSignature";
 import { downloadBase64Pdf } from "./utils/downloadBase64";
 import { fileToBase64 } from "./utils/fileToBase64";
+import { captureError } from "./logging";
 
 // Define the state of the application to manage the UI flow
 type AppState =
@@ -46,6 +47,13 @@ function App() {
     useState<string>("Server room");
   const [timestampFieldName, setTimestampFieldName] = useState<string>("");
   const [timestampStatus, setTimestampStatus] = useState<string>("");
+
+  const [scanPdfFile, setScanPdfFile] = useState<File | null>(null);
+  const [scanCodeType, setScanCodeType] = useState<string>("any");
+  const [scanStatus, setScanStatus] = useState<string>("");
+  const [scanResults, setScanResults] = useState<
+    { value: string; codeType: string; page: number; position?: { x: number; y: number } }[]
+  >([]);
 
   const onFileSelect =
     (setter: (file: File | null) => void) =>
@@ -143,7 +151,8 @@ function App() {
       // eslint-disable-next-line
     } catch (err: any) {
       console.error(err);
-      setError(err.message);
+      const eventId = captureError(err, { flow: "cert-sign" });
+      setError(eventId ? `${err.message} (event: ${eventId})` : err.message);
       setAppState("error");
     }
   };
@@ -197,7 +206,8 @@ function App() {
       setPfxStatus("✅ Signed PDF downloaded.");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setPfxStatus(`Error: ${message}`);
+      const eventId = captureError(err, { flow: "pfx-sign" });
+      setPfxStatus(`Error: ${message}${eventId ? ` (event: ${eventId})` : ""}`);
     }
   };
 
@@ -241,7 +251,43 @@ function App() {
       setTimestampStatus("✅ Timestamped PDF downloaded.");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setTimestampStatus(`Error: ${message}`);
+      const eventId = captureError(err, { flow: "timestamp" });
+      setTimestampStatus(
+        `Error: ${message}${eventId ? ` (event: ${eventId})` : ""}`
+      );
+    }
+  };
+
+  const handleScanCodes = async () => {
+    if (!scanPdfFile) {
+      setScanStatus("Please pick a PDF to scan.");
+      return;
+    }
+    if (!ensureToken()) {
+      setScanStatus("Please paste an API token first.");
+      return;
+    }
+    try {
+      setScanStatus("Scanning for barcodes...");
+      setScanResults([]);
+      const pdfContent = await fileToBase64(scanPdfFile);
+      const response = await fetch(`${API_BASE}/api/find-codes`, {
+        method: "POST",
+        headers: buildAuthHeaders(),
+        body: JSON.stringify({ pdfContent, codeType: scanCodeType || "any" }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const { results } = await response.json();
+      setScanResults(results ?? []);
+      setScanStatus(results?.length ? `Found ${results.length} codes.` : "No codes found.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const eventId = captureError(err, { flow: "scan-codes" });
+      setScanStatus(`Error: ${message}${eventId ? ` (event: ${eventId})` : ""}`);
     }
   };
 
@@ -467,6 +513,74 @@ function App() {
             >
               {timestampStatus}
             </p>
+          )}
+        </section>
+
+        <section className="demo-section">
+          <h2>Scan barcodes (QR/DataMatrix/PDF417/Aztec)</h2>
+          <p className="section-description">
+            Calls the <code>/api/find-codes</code> endpoint to detect barcodes in a PDF.
+          </p>
+          <div className="form-field">
+            <label htmlFor="scan-pdf">PDF document</label>
+            <input
+              id="scan-pdf"
+              type="file"
+              accept=".pdf"
+              onChange={onFileSelect(setScanPdfFile)}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="scan-type">Code type</label>
+            <select
+              id="scan-type"
+              value={scanCodeType}
+              onChange={(e) => setScanCodeType(e.target.value)}
+            >
+              <option value="any">Any</option>
+              <option value="qr">QR</option>
+              <option value="datamatrix">DataMatrix</option>
+              <option value="pdf417">PDF417</option>
+              <option value="aztec">Aztec</option>
+            </select>
+          </div>
+          <button onClick={handleScanCodes} disabled={!scanPdfFile}>
+            Scan PDF
+          </button>
+          {scanStatus && (
+            <p
+              className={`status-text ${
+                scanStatus.startsWith("Error") ? "error" : "success"
+              }`}
+            >
+              {scanStatus}
+            </p>
+          )}
+          {scanResults.length > 0 && (
+            <div style={{ marginTop: "1rem", overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "0.5rem" }}>Value</th>
+                    <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "0.5rem" }}>Type</th>
+                    <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "0.5rem" }}>Page</th>
+                    <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "0.5rem" }}>Position</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scanResults.map((r, idx) => (
+                    <tr key={`${r.value}-${idx}`}>
+                      <td style={{ borderBottom: "1px solid #eee", padding: "0.5rem" }}>{r.value}</td>
+                      <td style={{ borderBottom: "1px solid #eee", padding: "0.5rem" }}>{r.codeType}</td>
+                      <td style={{ borderBottom: "1px solid #eee", padding: "0.5rem" }}>{r.page}</td>
+                      <td style={{ borderBottom: "1px solid #eee", padding: "0.5rem" }}>
+                        {r.position ? `x:${r.position.x.toFixed?.(1) ?? r.position.x}, y:${r.position.y.toFixed?.(1) ?? r.position.y}` : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
       </main>

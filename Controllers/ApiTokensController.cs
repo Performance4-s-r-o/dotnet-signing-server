@@ -13,11 +13,13 @@ public class ApiTokensController : Controller
 {
     private readonly ApplicationDbContext _dbContext;
     private readonly ITokenService _tokenService;
+    private readonly ILogger<ApiTokensController> _logger;
 
-    public ApiTokensController(ApplicationDbContext dbContext, ITokenService tokenService)
+    public ApiTokensController(ApplicationDbContext dbContext, ITokenService tokenService, ILogger<ApiTokensController> logger)
     {
         _dbContext = dbContext;
         _tokenService = tokenService;
+        _logger = logger;
     }
 
     [HttpGet("/ApiTokens")]
@@ -82,6 +84,7 @@ public class ApiTokensController : Controller
         _dbContext.ApiTokens.Add(token);
         await _dbContext.SaveChangesAsync();
 
+        _logger.LogInformation(DotNetSigningServer.Logging.LoggingEvents.TokenCreated, "Token created for user {UserId} label {Label} browser {Browser}", user.Id, label, isBrowser);
         TempData["NewToken"] = plaintext;
         return RedirectToAction(nameof(Index));
     }
@@ -105,6 +108,7 @@ public class ApiTokensController : Controller
 
         token.RevokedAt = DateTimeOffset.UtcNow;
         await _dbContext.SaveChangesAsync();
+        _logger.LogInformation(DotNetSigningServer.Logging.LoggingEvents.TokenRevoked, "Token {TokenId} revoked for user {UserId}", id, userId);
         return RedirectToAction(nameof(Index));
     }
 
@@ -127,6 +131,7 @@ public class ApiTokensController : Controller
 
         _dbContext.ApiTokens.Remove(token);
         await _dbContext.SaveChangesAsync();
+        _logger.LogInformation(DotNetSigningServer.Logging.LoggingEvents.TokenDeleted, "Token {TokenId} deleted for user {UserId}", id, userId);
         TempData["Info"] = "Token deleted.";
         return RedirectToAction(nameof(Index));
     }

@@ -85,24 +85,27 @@
 
         input,
         select {
-            width: 100%;
+            width: calc(100% - 1rem);
             padding: 0.5rem;
             margin-top: 0.25rem;
             border: 1px solid #cbd5e1;
             border-radius: 4px;
         }
 
-        button {
+        button,
+        .linkButton {
             background: #2563eb;
             color: #fff;
             border: none;
             padding: 0.6rem 1.2rem;
             border-radius: 4px;
             cursor: pointer;
-            margin-top: 0.8rem;
+
+            text-decoration: none;
         }
 
-        button:hover {
+        button:hover,
+        .linkButton:hover {
             background: #1d4ed8;
         }
 
@@ -236,6 +239,7 @@
                 <a href="/Account">Account</a>
                 <a href="/ApiTokens">API Tokens</a>
                 <a href="/Billing">Billing</a>
+                <a href="/templates">PDF Templates</a>
                 @if (!string.IsNullOrWhiteSpace(displayName))
                 {
                     <span style="color:#cbd5e1; margin-left:1rem;">@displayName</span>
@@ -282,6 +286,4 @@
         </div>
     </footer>
     @RenderSection("Scripts", required: false)
-</body>
-
-</html>
+</body></html>

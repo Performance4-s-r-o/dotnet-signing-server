@@ -59,6 +59,34 @@ namespace dotnetsigningserver.Migrations
                     b.ToTable("ApiTokens");
                 });
 
+            modelBuilder.Entity("DotNetSigningServer.Models.StoredPdfTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Base64Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FieldsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("StoredPdfTemplates");
+                });
+
             modelBuilder.Entity("DotNetSigningServer.Models.Document", b =>
                 {
                     b.Property<Guid>("Id")

@@ -1,15 +1,20 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using DotNetSigningServer.Services;
+using DotNetSigningServer.Models;
+using Microsoft.AspNetCore.Authorization;
 
 namespace DotNetSigningServer.Controllers;
 
 public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
+    private readonly PdfTemplateService _templateService;
 
-    public HomeController(ILogger<HomeController> logger)
+    public HomeController(ILogger<HomeController> logger, PdfTemplateService templateService)
     {
         _logger = logger;
+        _templateService = templateService;
     }
 
     [HttpGet("/")]
@@ -32,5 +37,46 @@ public class HomeController : Controller
     public IActionResult ApiDocs()
     {
         return View();
+    }
+
+    [HttpGet("/template-builder")]
+    [Authorize]
+    public IActionResult TemplateBuilder() => View();
+
+    [HttpGet("/templates")]
+    [Authorize]
+    public async Task<IActionResult> Templates()
+    {
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                          ?? User.FindFirst("sub")?.Value;
+        if (!Guid.TryParse(userIdClaim, out var userId))
+        {
+            return RedirectToAction("SignIn", "Account");
+        }
+
+        var templates = await _templateService.ListTemplatesAsync(userId);
+        return View(templates);
+    }
+
+    [HttpGet("/templates/{templateId:guid}/docs")]
+    [Authorize]
+    public async Task<IActionResult> TemplateDocs(Guid templateId)
+    {
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                          ?? User.FindFirst("sub")?.Value;
+        if (!Guid.TryParse(userIdClaim, out var userId))
+        {
+            return RedirectToAction("SignIn", "Account");
+        }
+
+        try
+        {
+            var template = await _templateService.GetTemplateAsync(templateId, userId);
+            return View(template);
+        }
+        catch (InvalidOperationException)
+        {
+            return NotFound();
+        }
     }
 }

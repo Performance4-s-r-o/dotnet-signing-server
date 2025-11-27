@@ -17,6 +17,7 @@ namespace DotNetSigningServer.Data
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<Payment> Payments { get; set; }
         public DbSet<WebhookEvent> WebhookEvents { get; set; }
+        public DbSet<StoredPdfTemplate> StoredPdfTemplates { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

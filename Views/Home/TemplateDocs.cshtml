@@ -1,0 +1,178 @@
+@model DotNetSigningServer.Models.TemplateDetail
+@using System.Text.Json
+@using System.Linq
+@{
+    ViewData["Title"] = "Template API Docs";
+    Layout = "_Layout";
+
+    var fields = Model.Fields ?? new List<DotNetSigningServer.Models.PdfFieldDefinition>();
+    var sampleEntries = new List<object>();
+
+    foreach (var field in fields)
+    {
+        if (string.Equals(field.Type, "signature", StringComparison.OrdinalIgnoreCase))
+        {
+            // Signature fields are handled by presign/sign/timestamp endpoints.
+            continue;
+        }
+
+        if (string.Equals(field.Type, "table", StringComparison.OrdinalIgnoreCase))
+        {
+            var columnCount = field.TableColumns?.Count ?? field.Columns ?? 1;
+            var row1 = Enumerable.Range(1, columnCount).Select(i => $"Row 1 Col {i}").ToList();
+            var row2 = Enumerable.Range(1, columnCount).Select(i => $"Row 2 Col {i}").ToList();
+            sampleEntries.Add(new
+            {
+                fieldName = field.FieldName,
+                tableValue = new List<List<string>> { row1, row2 }
+            });
+        }
+        else if (string.Equals(field.Type, "image", StringComparison.OrdinalIgnoreCase))
+        {
+            sampleEntries.Add(new { fieldName = field.FieldName, value = "BASE64_IMAGE_DATA" });
+        }
+        else if (string.Equals(field.Type, "barcode", StringComparison.OrdinalIgnoreCase))
+        {
+            sampleEntries.Add(new { fieldName = field.FieldName, value = "123456789" });
+        }
+        else
+        {
+            sampleEntries.Add(new { fieldName = field.FieldName, value = $"{field.FieldName}_value" });
+        }
+    }
+
+    var sampleRequest = new
+    {
+        templateId = Model.TemplateId,
+        data = new[]
+        {
+            new
+            {
+                data = sampleEntries
+            }
+        }
+    };
+
+    var sampleResponse = new
+    {
+        files = new[] { "BASE64_PDF" },
+        templateId = Model.TemplateId
+    };
+
+    var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+    var sampleRequestJson = JsonSerializer.Serialize(sampleRequest, jsonOptions);
+    var sampleResponseJson = JsonSerializer.Serialize(sampleResponse, jsonOptions);
+}
+
+<div class="container py-4">
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h1 style="margin:0;">API for @(!string.IsNullOrWhiteSpace(Model.Name) ? Model.Name : "Untitled")</h1>
+                <a class="linkButton" href="/templates">Back to templates</a>
+            </div>
+
+            <p class="text-muted">Use this template with the <code>/api/fill-pdf</code> endpoint. Signature fields must be filled via the presign/sign/timestamp endpoints and are excluded from the example payload.</p>
+
+            <h4>Request body</h4>
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span>POST <code>/api/fill-pdf</code> with JSON like:</span>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="copyRequestBtn">Copy request JSON</button>
+                <span id="copyRequestStatus" class="text-muted" style="font-size:0.9rem;"></span>
+            </div>
+            <pre class="bg-light p-3 rounded" style="font-size:0.9rem;"><code>@sampleRequestJson</code></pre>
+
+            <div class="d-flex align-items-center gap-2 mb-2 mt-3">
+                <span>cURL example:</span>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="copyCurlBtn">Copy cURL</button>
+                <span id="copyCurlStatus" class="text-muted" style="font-size:0.9rem;"></span>
+            </div>
+            @{
+                var escapedPayload = sampleRequestJson.Replace("'", "'\"'\"'");
+                var curlRequest = $"curl -X POST https://your-host/api/fill-pdf -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{escapedPayload}'";
+            }
+            <pre class="bg-light p-3 rounded" style="font-size:0.9rem; word-break: break-all;"><code>@curlRequest</code></pre>
+
+            <p class="text-muted">For table fields, supply <code>tableValue</code> as an array of rows. Each row is an array of strings that matches the column order you defined in the builder.</p>
+
+            <h4 class="mt-4">Response</h4>
+            <p class="mb-2">Successful responses return base64-encoded PDFs:</p>
+            <pre class="bg-light p-3 rounded" style="font-size:0.9rem;"><code>@sampleResponseJson</code></pre>
+
+            <h4 class="mt-4">Fields</h4>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Page</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var f in fields)
+                        {
+                            var isSignature = string.Equals(f.Type, "signature", StringComparison.OrdinalIgnoreCase);
+                            <tr>
+                                <td>@f.FieldName</td>
+                                <td>@f.Type</td>
+                                <td>@(f.Page <= 0 ? 1 : f.Page)</td>
+                                <td>
+                                    @if (string.Equals(f.Type, "table", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        var cols = f.TableColumns ?? new List<DotNetSigningServer.Models.TableColumnDefinition>();
+                                        <span>Columns: @cols.Count</span>
+                                        @if (cols.Count > 0)
+                                        {
+                                            <ul class="mb-0">
+                                                @foreach (var c in cols)
+                                                {
+                                                    <li>@c.Name (@(c.WidthPercent ?? 0)% wide)</li>
+                                                }
+                                            </ul>
+                                        }
+                                    }
+                                    else if (isSignature)
+                                    {
+                                        <span class="text-muted">Filled via presign/sign/timestamp endpoints only.</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Fill with <code>value</code>.</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+  (() => {
+    const payload = @Html.Raw(JsonSerializer.Serialize(sampleRequestJson));
+    const curl = @Html.Raw(JsonSerializer.Serialize(curlRequest));
+    const btn = document.getElementById("copyRequestBtn");
+    const statusEl = document.getElementById("copyRequestStatus");
+    const curlBtn = document.getElementById("copyCurlBtn");
+    const curlStatusEl = document.getElementById("copyCurlStatus");
+
+    const copy = async (text, statusTarget) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        if (statusTarget) {
+          statusTarget.textContent = "Copied";
+          setTimeout(() => statusTarget.textContent = "", 2000);
+        }
+      } catch (e) {
+        if (statusTarget) statusTarget.textContent = "Copy not available";
+      }
+    };
+
+    if (btn) btn.addEventListener("click", () => copy(payload, statusEl));
+    if (curlBtn) curlBtn.addEventListener("click", () => copy(curl, curlStatusEl));
+  })();
+</script>
