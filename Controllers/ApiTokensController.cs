@@ -9,6 +9,8 @@ using System.Security.Claims;
 namespace DotNetSigningServer.Controllers;
 
 [Authorize]
+// [ValidateAntiForgeryToken]
+// [IgnoreAntiforgeryToken] // Allow POSTs when the proxy strips or rewrites CSRF cookies/tokens
 public class ApiTokensController : Controller
 {
     private readonly ApplicationDbContext _dbContext;
@@ -42,7 +44,8 @@ public class ApiTokensController : Controller
     }
 
     [HttpPost("/ApiTokens")]
-    [ValidateAntiForgeryToken]
+    // [ValidateAntiForgeryToken]
+    [IgnoreAntiforgeryToken]
     public async Task<IActionResult> Create(string label, DateTimeOffset? expiresAt = null, string usageType = "server", string? allowedOrigins = null)
     {
         var userId = GetCurrentUserId();

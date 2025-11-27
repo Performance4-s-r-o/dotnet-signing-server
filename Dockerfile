@@ -18,6 +18,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 # COPY .env /app/.env
 WORKDIR /app
 
+ENV DOTNET_USE_POLLING_FILE_WATCHER=1
+ENV DATA_PROTECTION_KEYS_PATH=/app/data-protection-keys
+
 # Copy the published output from the build stage
 COPY --from=build /app/publish .
 

@@ -23,7 +23,7 @@ namespace dotnetsigningserver.Migrations
             migrationBuilder.AddColumn<DateTimeOffset>(
                 name: "EmailOtpExpiresAt",
                 table: "Users",
-                type: "TEXT",
+                type: "timestamp with time zone",
                 nullable: true);
         }
 

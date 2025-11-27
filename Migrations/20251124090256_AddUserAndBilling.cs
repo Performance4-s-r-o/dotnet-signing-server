@@ -86,8 +86,8 @@ namespace dotnetsigningserver.Migrations
                     Id = table.Column<int>(type: "INTEGER", nullable: false)
                         .Annotation("Sqlite:Autoincrement", true),
                     Name = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    PricePer100 = table.Column<decimal>(type: "TEXT", nullable: false),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false)
+                    PricePer100 = table.Column<decimal>(type: "numeric", nullable: false),
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -98,14 +98,14 @@ namespace dotnetsigningserver.Migrations
                 name: "Users",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
                     Email = table.Column<string>(type: "TEXT", maxLength: 256, nullable: false),
-                    PasswordHash = table.Column<byte[]>(type: "BLOB", nullable: false),
-                    PasswordSalt = table.Column<byte[]>(type: "BLOB", nullable: false),
+                    PasswordHash = table.Column<byte[]>(type: "BYTEA", nullable: false),
+                    PasswordSalt = table.Column<byte[]>(type: "BYTEA", nullable: false),
                     StripeCustomerId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
-                    CreatedAt = table.Column<long>(type: "INTEGER", nullable: false),
-                    UpdatedAt = table.Column<long>(type: "INTEGER", nullable: false)
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -116,12 +116,12 @@ namespace dotnetsigningserver.Migrations
                 name: "WebhookEvents",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
                     EventId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     EventType = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     PayloadJson = table.Column<string>(type: "TEXT", nullable: false),
-                    ReceivedAt = table.Column<long>(type: "INTEGER", nullable: false),
-                    ProcessedAt = table.Column<long>(type: "INTEGER", nullable: true),
+                    ReceivedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ProcessedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     Error = table.Column<string>(type: "TEXT", maxLength: 512, nullable: true)
                 },
                 constraints: table =>
@@ -133,13 +133,13 @@ namespace dotnetsigningserver.Migrations
                 name: "ApiTokens",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    UserId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
                     Label = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
-                    TokenHash = table.Column<byte[]>(type: "BLOB", nullable: false),
-                    ExpiresAt = table.Column<long>(type: "INTEGER", nullable: true),
-                    RevokedAt = table.Column<long>(type: "INTEGER", nullable: true),
-                    CreatedAt = table.Column<long>(type: "INTEGER", nullable: false)
+                    TokenHash = table.Column<byte[]>(type: "BYTEA", nullable: false),
+                    ExpiresAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    RevokedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -156,11 +156,11 @@ namespace dotnetsigningserver.Migrations
                 name: "Documents",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    UserId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
                     Status = table.Column<int>(type: "INTEGER", nullable: false),
-                    ProcessedAt = table.Column<long>(type: "INTEGER", nullable: true),
-                    CreatedAt = table.Column<long>(type: "INTEGER", nullable: false)
+                    ProcessedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -177,15 +177,15 @@ namespace dotnetsigningserver.Migrations
                 name: "Invoices",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    UserId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
                     StripeInvoiceId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
-                    PeriodStart = table.Column<long>(type: "INTEGER", nullable: false),
-                    PeriodEnd = table.Column<long>(type: "INTEGER", nullable: false),
+                    PeriodStart = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    PeriodEnd = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     AmountCents = table.Column<int>(type: "INTEGER", nullable: false),
                     Currency = table.Column<string>(type: "TEXT", maxLength: 8, nullable: false),
                     Status = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    CreatedAt = table.Column<long>(type: "INTEGER", nullable: false)
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -202,11 +202,11 @@ namespace dotnetsigningserver.Migrations
                 name: "UsageRecords",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    UserId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    DocumentId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DocumentId = table.Column<Guid>(type: "uuid", nullable: false),
                     Count = table.Column<int>(type: "INTEGER", nullable: false),
-                    CreatedAt = table.Column<long>(type: "INTEGER", nullable: false)
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -229,14 +229,14 @@ namespace dotnetsigningserver.Migrations
                 name: "Payments",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    UserId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    InvoiceId = table.Column<Guid>(type: "TEXT", nullable: true),
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    InvoiceId = table.Column<Guid>(type: "uuid", nullable: true),
                     StripePaymentIntentId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
                     AmountCents = table.Column<int>(type: "INTEGER", nullable: false),
                     Currency = table.Column<string>(type: "TEXT", maxLength: 8, nullable: false),
                     Status = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    CreatedAt = table.Column<long>(type: "INTEGER", nullable: false)
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {

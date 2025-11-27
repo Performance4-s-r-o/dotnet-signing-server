@@ -7,10 +7,14 @@ using Microsoft.EntityFrameworkCore;
 using ImageMagick;
 using ZXing;
 using ZXing.Common;
+using Microsoft.Extensions.Options;
+using iText.Kernel.Pdf;
+using DotNetSigningServer.Options;
 
 namespace DotNetSigningServer.Controllers
 {
     [ApiController]
+    [IgnoreAntiforgeryToken]
     public class ApiController : ControllerBase
     {
         private readonly ApplicationDbContext _dbContext;
@@ -19,8 +23,10 @@ namespace DotNetSigningServer.Controllers
         private readonly IApiAuthService _apiAuthService;
         private readonly ILogger<ApiController> _logger;
         private readonly TemplateAiService _templateAiService;
+        private readonly ContentLimitGuard _limitGuard;
+        private readonly LimitsOptions _limitOptions;
 
-        public ApiController(ApplicationDbContext dbContext, PdfSigningService signingService, PdfTemplateService pdfTemplateService, IApiAuthService apiAuthService, ILogger<ApiController> logger, TemplateAiService templateAiService)
+        public ApiController(ApplicationDbContext dbContext, PdfSigningService signingService, PdfTemplateService pdfTemplateService, IApiAuthService apiAuthService, ILogger<ApiController> logger, TemplateAiService templateAiService, ContentLimitGuard limitGuard, IOptions<LimitsOptions> limitOptions)
         {
             _dbContext = dbContext;
             _signingService = signingService;
@@ -28,6 +34,8 @@ namespace DotNetSigningServer.Controllers
             _apiAuthService = apiAuthService;
             _logger = logger;
             _templateAiService = templateAiService;
+            _limitGuard = limitGuard;
+            _limitOptions = limitOptions.Value;
         }
 
         [HttpPost("/api/presign")]
@@ -35,6 +43,16 @@ namespace DotNetSigningServer.Controllers
         {
             var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
+
+            try
+            {
+                _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Presign");
+                _limitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
 
             try
             {
@@ -149,6 +167,15 @@ namespace DotNetSigningServer.Controllers
 
             try
             {
+                _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "AI detect");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+
+            try
+            {
                 var fields = await _templateAiService.DetectFieldsAsync(input.PdfContent, input.Prompt, HttpContext.RequestAborted);
                 return Ok(new AiDetectFieldsResponse { Fields = fields.ToList() });
             }
@@ -248,6 +275,16 @@ namespace DotNetSigningServer.Controllers
 
             try
             {
+                _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Sign with PFX");
+                _limitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+
+            try
+            {
                 if (input.TemplateId.HasValue)
                 {
                     var signatureField = await GetSignatureFieldAsync(input.TemplateId.Value, user.Id);
@@ -273,6 +310,16 @@ namespace DotNetSigningServer.Controllers
         {
             var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
+
+            try
+            {
+                _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Timestamp");
+                _limitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
 
             try
             {
@@ -304,6 +351,16 @@ namespace DotNetSigningServer.Controllers
 
             try
             {
+                _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Attachment PDF");
+                _limitGuard.EnsureAttachmentWithinLimit(input.AttachmentContent, "Attachment");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+
+            try
+            {
                 var result = _signingService.AddAttachment(input);
                 await DebitUserAsync(user);
                 return Ok(new { result });
@@ -332,10 +389,37 @@ namespace DotNetSigningServer.Controllers
             {
                 return BadRequest(new { message = "Fields are required when using PdfContent directly." });
             }
+            if (input.Data == null || input.Data.Count == 0)
+            {
+                return BadRequest(new { message = "At least one data set is required." });
+            }
 
         try
         {
+            if (hasContent)
+            {
+                _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Fill PDF");
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        try
+        {
+            var (pdfBase64, pageCount) = await ResolvePdfForFillAsync(input, user.Id);
+            var requiredCredits = CalculateCreditsForPages(pageCount) * (input.Data?.Count ?? 0);
+            if (requiredCredits > 0 && user.CreditsRemaining < requiredCredits)
+            {
+                return PaymentRequired(user, requiredCredits);
+            }
+
             var response = await _pdfTemplateService.FillAsync(input, user.Id);
+            if (requiredCredits > 0)
+            {
+                await DebitUserAsync(user, requiredCredits);
+            }
             return Ok(response);
         }
         catch (Exception ex)
@@ -348,7 +432,7 @@ namespace DotNetSigningServer.Controllers
         [HttpPost("/api/find-codes")]
         public async Task<IActionResult> FindCodes([FromBody] FindCodesInput input)
         {
-            var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
 
             if (string.IsNullOrWhiteSpace(input.PdfContent))
@@ -356,11 +440,27 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { message = "PdfContent is required." });
             }
 
+            try
+            {
+                _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Barcode scan");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+
             var formats = ParseFormats(input.CodeType);
             try
             {
+                var pageCount = CountPagesFromBase64(input.PdfContent);
+                var requiredCredits = CalculateCreditsForPages(pageCount);
+                if (requiredCredits > 0 && user.CreditsRemaining < requiredCredits)
+                {
+                    return PaymentRequired(user, requiredCredits);
+                }
+
                 var results = await DetectCodesAsync(input.PdfContent, formats);
-                await DebitUserAsync(user);
+                await DebitUserAsync(user, requiredCredits);
                 return Ok(new { results });
             }
             catch (Exception ex)
@@ -526,6 +626,39 @@ namespace DotNetSigningServer.Controllers
                 throw new InvalidOperationException("Template does not contain a signature field.");
             }
             return signatureField;
+        }
+
+        private IActionResult PaymentRequired(User user, int requiredCredits)
+        {
+            _logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Credits insufficient for user {UserId}", user.Id);
+            return StatusCode(StatusCodes.Status402PaymentRequired, new { message = $"Not enough credits. {requiredCredits} credit(s) required." });
+        }
+
+        private static int CalculateCreditsForPages(int pageCount)
+        {
+            if (pageCount <= 0) return 0;
+            return (int)Math.Ceiling(pageCount / 3.0);
+        }
+
+        private static int CountPagesFromBase64(string pdfBase64)
+        {
+            using var ms = new MemoryStream(Convert.FromBase64String(pdfBase64));
+            using var reader = new PdfReader(ms);
+            using var pdf = new PdfDocument(reader);
+            return pdf.GetNumberOfPages();
+        }
+
+        private async Task<(string pdfBase64, int pageCount)> ResolvePdfForFillAsync(FillPdfInput input, Guid userId)
+        {
+            if (input.TemplateId != null)
+            {
+                var template = await _pdfTemplateService.GetTemplateAsync(input.TemplateId.Value, userId);
+                var pages = CountPagesFromBase64(template.PdfContent);
+                return (template.PdfContent, pages);
+            }
+
+            var count = CountPagesFromBase64(input.PdfContent);
+            return (input.PdfContent, count);
         }
     }
 }

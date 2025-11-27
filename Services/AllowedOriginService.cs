@@ -1,6 +1,9 @@
+using System.Security.Policy;
 using System.Text.RegularExpressions;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
 
 namespace DotNetSigningServer.Services;
 
@@ -13,7 +16,8 @@ public class AllowedOriginService : IAllowedOriginService
         "http://localhost",
         "https://localhost",
         "http://127.0.0.1",
-        "https://127.0.0.1"
+        "https://127.0.0.1",
+        "https://signproxy.cfy.performance4.cz"
     };
 
     public AllowedOriginService(IServiceScopeFactory scopeFactory)
@@ -34,7 +38,7 @@ public class AllowedOriginService : IAllowedOriginService
             return true;
         }
 
-        var allowedOrigins = LoadAllowedOrigins();
+        var allowedOrigins = LoadAllowedOrigins().Concat(LocalOrigins).ToHashSet();
         return allowedOrigins.Contains(normalized);
     }
 

@@ -77,11 +77,9 @@
                     {
                         <div style="display:flex;gap:0.4rem;">
                             <form method="post" action="/ApiTokens/@token.Id/revoke" style="display:inline">
-                                @Html.AntiForgeryToken()
                                 <button type="submit">Revoke</button>
                             </form>
                             <form method="post" action="/ApiTokens/@token.Id/delete" style="display:inline">
-                                @Html.AntiForgeryToken()
                                 <button type="submit">Delete</button>
                             </form>
                         </div>
@@ -91,7 +89,6 @@
                         <div style="display:flex;gap:0.4rem;">
                             <span class="muted">Revoked</span>
                             <form method="post" action="/ApiTokens/@token.Id/delete" style="display:inline">
-                                @Html.AntiForgeryToken()
                                 <button type="submit">Delete</button>
                             </form>
                         </div>

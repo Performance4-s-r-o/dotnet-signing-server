@@ -21,6 +21,20 @@ public class HomeController : Controller
         _aiOptions = aiOptions.Value;
     }
 
+    [HttpGet("/debug/request")]
+    public IActionResult DebugRequest()
+    {
+        return Ok(new
+        {
+            Scheme = Request.Scheme,
+            Host = Request.Host.ToString(),
+            IsHttps = Request.IsHttps,
+            XForwardedProto = Request.Headers["X-Forwarded-Proto"].ToString(),
+            XForwardedHost = Request.Headers["X-Forwarded-Host"].ToString(),
+            XForwardedFor = Request.Headers["X-Forwarded-For"].ToString()
+        });
+    }
+
     [HttpGet("/")]
     public IActionResult Index()
     {

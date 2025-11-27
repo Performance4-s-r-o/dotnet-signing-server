@@ -3,11 +3,32 @@ using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Middleware;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Authentication;
 using Testcontainers.PostgreSql;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Persist data protection keys so antiforgery/cookies survive restarts and container re-creations.
+var dataProtectionPath = Environment.GetEnvironmentVariable("DATA_PROTECTION_KEYS_PATH")
+                        ?? Path.Combine(builder.Environment.ContentRootPath, "data-protection-keys");
+Directory.CreateDirectory(dataProtectionPath);
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionPath));
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedProto |
+        ForwardedHeaders.XForwardedHost;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+    // options.ForwardLimit = 2;
+});
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddScoped<PdfSigningService>();
@@ -18,6 +39,7 @@ builder.Services.AddScoped<IStripeCheckoutService, StripeCheckoutService>();
 builder.Services.AddScoped<IApiAuthService, ApiAuthService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<PdfTemplateService>();
+builder.Services.AddSingleton<ContentLimitGuard>();
 builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();
 builder.Services.AddHttpClient<LokiClient>();
 builder.Services.AddHttpClient<TemplateAiService>();
@@ -27,12 +49,15 @@ builder.Services.Configure<TokenOptions>(builder.Configuration.GetSection("Token
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection("Smtp"));
 builder.Services.Configure<LokiOptions>(builder.Configuration.GetSection("Loki"));
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("AI"));
+builder.Services.Configure<LimitsOptions>(builder.Configuration.GetSection("Limits"));
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
         options.LoginPath = "/Account/SignIn";
         options.AccessDeniedPath = "/Account/Denied";
         options.SlidingExpiration = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
     });
 builder.Services.AddAuthorization();
 
@@ -99,22 +124,28 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
 }
 
+app.UseForwardedHeaders();
 app.UseMiddleware<LokiExceptionMiddleware>();
+app.UseMiddleware<BodySizeLimitMiddleware>();
+app.UseMiddleware<RequestThrottlingMiddleware>();
 
 app.Use(async (context, next) =>
 {
     // Apply CORS only to API routes
     if (context.Request.Path.HasValue && context.Request.Path.Value!.StartsWith("/api", StringComparison.OrdinalIgnoreCase))
     {
+        Console.WriteLine("faking cors settings");
         var origin = context.Request.Headers["Origin"].ToString();
         if (!string.IsNullOrWhiteSpace(origin))
         {
             var originService = context.RequestServices.GetRequiredService<IAllowedOriginService>();
             if (!originService.IsOriginAllowed(origin))
             {
+                Console.WriteLine("CORS origin not allowed");
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 return;
             }
+            Console.WriteLine($"Allowing CORS for origin: {origin}");
             context.Response.Headers["Access-Control-Allow-Origin"] = origin;
             context.Response.Headers["Vary"] = "Origin";
             context.Response.Headers["Access-Control-Allow-Headers"] = context.Request.Headers["Access-Control-Request-Headers"].ToString() ?? "Authorization,Content-Type";
@@ -129,6 +160,32 @@ app.Use(async (context, next) =>
     }
 
     await next();
+});
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/ApiTokens", StringComparison.OrdinalIgnoreCase)
+        || context.Request.Path.StartsWithSegments("/Account", StringComparison.OrdinalIgnoreCase))
+    {
+        var authResult = await context.AuthenticateAsync();
+        if (!authResult.Succeeded)
+        {
+            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogWarning("Auth failed for {Path}. Cookies present: {HasCookie}", context.Request.Path, context.Request.Cookies.Any());
+        }
+    }
+    await next();
+});
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path;
+    var isSensitive = path.StartsWithSegments("/ApiTokens", StringComparison.OrdinalIgnoreCase)
+                      || path.StartsWithSegments("/Account", StringComparison.OrdinalIgnoreCase);
+    await next();
+    if (isSensitive && (context.Response.StatusCode == StatusCodes.Status403Forbidden || context.Response.StatusCode == StatusCodes.Status401Unauthorized))
+    {
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogWarning("Request {Path} returned {Status}. Authenticated: {Auth}, Cookie count: {CookieCount}, User: {UserId}", path, context.Response.StatusCode, context.User?.Identity?.IsAuthenticated, context.Request.Cookies?.Count ?? 0, context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "none");
+    }
 });
 app.UseRouting();
 app.UseAuthentication();

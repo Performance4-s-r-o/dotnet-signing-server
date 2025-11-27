@@ -17,7 +17,7 @@ namespace dotnetsigningserver.Migrations
             migrationBuilder.AddColumn<bool>(
                 name: "EmailVerified",
                 table: "Users",
-                type: "INTEGER",
+                type: "boolean",
                 nullable: false,
                 defaultValue: false);
 

@@ -24,7 +24,7 @@ namespace dotnetsigningserver.Migrations
             migrationBuilder.AddColumn<bool>(
                 name: "IsBrowserToken",
                 table: "ApiTokens",
-                type: "INTEGER",
+                type: "boolean",
                 nullable: false,
                 defaultValue: false);
         }

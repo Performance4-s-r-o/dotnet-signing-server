@@ -7,6 +7,8 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    volumes:
+      - data_protection_keys:/app/data-protection-keys
     # ports:
     #   - "80:8085"
     environment:
@@ -45,6 +47,19 @@ services:
       - AI__Google__ApiKey=${AI_GOOGLE_API_KEY:-}
       - AI__Google__Model=${AI_GOOGLE_MODEL:-gemini-1.5-flash}
       - AI__Google__Endpoint=${AI_GOOGLE_ENDPOINT:-https://generativelanguage.googleapis.com/v1beta}
+      # Size limits
+      - Limits__PdfMaxBytes=${PDF_MAX_BYTES:-20971520}
+      - Limits__ImageMaxBytes=${IMAGE_MAX_BYTES:-1048576}
+      - Limits__AttachmentMaxBytes=${ATTACHMENT_MAX_BYTES:-10485760}
+      - Limits__RequestBodyLimitBytes=${REQUEST_BODY_LIMIT_BYTES:-41943040}
+      - Limits__MaxConcurrentRequestsPerKey=${MAX_CONCURRENT_REQUESTS_PER_KEY:-25}
+      - DATA_PROTECTION_KEYS_PATH=/app/data-protection-keys
+    labels:
+      - "caddy_0.handle=/*"
+      - "caddy_0.handle.0_reverse_proxy={{upstreams 8085}}"
+      - "caddy_0.handle.0_reverse_proxy.header_up_1=X-Forwarded-Proto https"
+      - "caddy_0.handle.0_reverse_proxy.header_up_0=X-Forwarded-For {remote_host}"
+      - "caddy_0.handle.0_reverse_proxy.header_up_2=X-Forwarded-Host {host}"
 
 volumes:
-  db_data:
+  data_protection_keys:

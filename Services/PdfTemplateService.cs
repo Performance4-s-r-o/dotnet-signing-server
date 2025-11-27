@@ -21,11 +21,13 @@ public class PdfTemplateService
 {
     private readonly ApplicationDbContext _dbContext;
     private readonly ILogger<PdfTemplateService> _logger;
+    private readonly ContentLimitGuard _limitGuard;
 
-    public PdfTemplateService(ApplicationDbContext dbContext, ILogger<PdfTemplateService> logger)
+    public PdfTemplateService(ApplicationDbContext dbContext, ILogger<PdfTemplateService> logger, ContentLimitGuard limitGuard)
     {
         _dbContext = dbContext;
         _logger = logger;
+        _limitGuard = limitGuard;
     }
 
     public async Task<CreateTemplateResponse> CreateTemplateAsync(CreateTemplateInput input, Guid userId, CancellationToken cancellationToken = default)
@@ -40,6 +42,7 @@ public class PdfTemplateService
         }
 
         ValidateFields(input.Fields);
+        _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Template");
 
         var entity = new StoredPdfTemplate
         {
@@ -70,6 +73,13 @@ public class PdfTemplateService
         if (input.TemplateId == null)
         {
             ValidateFields(input.Fields);
+            _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Fill PDF");
+        }
+
+        if (input.TemplateId != null)
+        {
+            var template = await GetTemplateForUserAsync(input.TemplateId.Value, userId, cancellationToken);
+            _limitGuard.EnsurePdfWithinLimit(template.Base64Content, "Template");
         }
 
         if (input.Data == null || input.Data.Count == 0)
@@ -98,6 +108,7 @@ public class PdfTemplateService
     {
         if (input.TemplateId == null)
         {
+            _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Fill PDF");
             return Convert.FromBase64String(input.PdfContent);
         }
 
@@ -170,6 +181,7 @@ public class PdfTemplateService
 
         if (!string.IsNullOrWhiteSpace(input.PdfContent))
         {
+            _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Template");
             template.Base64Content = input.PdfContent;
         }
 
