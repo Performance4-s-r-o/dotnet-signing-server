@@ -1,0 +1,9 @@
+#!/bin/sh
+# Prevent committing appsettings.json. If it is staged, unstage it and warn.
+
+if git diff --cached --name-only --diff-filter=ACM | grep -qx 'appsettings.json'; then
+  echo "pre-commit: appsettings.json is not allowed in commits. Unstaging it." >&2
+  git reset HEAD -- appsettings.json
+fi
+
+exit 0
