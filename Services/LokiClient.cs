@@ -27,10 +27,14 @@ public class LokiClient
         try
         {
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000; // nanoseconds
+            var environment = _options.Environment
+                              ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+                              ?? "production";
             var streamLabels = new Dictionary<string, string>
             {
                 ["app"] = _options.App ?? "dotnet-signing-server",
-                ["level"] = level
+                ["level"] = level,
+                ["env"] = environment
             };
 
             if (labels != null)

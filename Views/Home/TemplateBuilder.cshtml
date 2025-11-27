@@ -80,6 +80,7 @@
 <script type="text/babel" data-presets="env,react">
   const { useEffect, useRef, useState } = React;
   const createRoot = ReactDOM.createRoot;
+  const aiDetectEnabled = @(ViewData["AiDetectEnabled"] is true ? "true" : "false");
 
   if (window.pdfjsLib) {
     window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
@@ -130,6 +131,7 @@
     const [overlaySizes, setOverlaySizes] = useState({});
     const [expandedFieldId, setExpandedFieldId] = useState(null);
     const [dirty, setDirty] = useState(false);
+    const [aiBusy, setAiBusy] = useState(false);
     const chipsRef = useRef(null);
     const overlayRefs = useRef({});
 
@@ -187,6 +189,63 @@
       };
       setFields([...fields, newField]);
       setStatus("");
+    };
+
+    const detectFieldsWithAi = async () => {
+      if (!aiDetectEnabled) return;
+      if (!pdfBase64) { setStatus("Upload a PDF first."); return; }
+      setAiBusy(true);
+      setStatus("Detecting fields with AI...");
+      try {
+        const res = await fetch("/api/ai/detect-fields", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            pdfContent: pdfBase64,
+            prompt: "Detect form fields for this PDF and return JSON with fieldName, page, rect (x,y,width,height in PDF points from bottom-left), and type."
+          })
+        });
+        if (!res.ok) {
+          const msg = await res.text();
+          throw new Error(msg || "AI detection failed.");
+        }
+        const json = await res.json();
+        const aiFields = (json.fields || []).map((f, idx) => ({
+          id: crypto.randomUUID(),
+          fieldName: f.fieldName || `AI_Field_${fields.length + idx + 1}`,
+          page: f.page || 1,
+          rect: {
+            x: f.rect?.x ?? 0,
+            y: f.rect?.y ?? 0,
+            width: f.rect?.width ?? 120,
+            height: f.rect?.height ?? 32
+          },
+          fontSize: f.fontSize || fieldDefaults.fontSize,
+          fontName: f.fontName || fieldDefaults.fontName,
+          fontWeight: f.fontWeight || fieldDefaults.fontWeight,
+          type: f.type || fieldDefaults.type,
+          barcodeFormat: f.barcodeFormat || fieldDefaults.barcodeFormat,
+          horizontalAlign: f.horizontalAlign || fieldDefaults.horizontalAlign,
+          verticalAlign: f.verticalAlign || fieldDefaults.verticalAlign,
+          columns: f.columns || 0,
+          tableColumns: f.tableColumns || []
+        }));
+
+        if (aiFields.length === 0) {
+          setStatus("AI did not return any fields.");
+          return;
+        }
+
+        setFields([...fields, ...aiFields]);
+        setStatus(`AI added ${aiFields.length} field${aiFields.length === 1 ? "" : "s"}.`);
+        setDirty(true);
+      } catch (err) {
+        console.error(err);
+        setStatus(err.message || "AI detection failed.");
+      } finally {
+        setAiBusy(false);
+      }
     };
 
     const updateField = (id, patch) => setFields(fields.map(f => f.id === id ? { ...f, ...patch } : f));
@@ -699,16 +758,25 @@
               </div>
             )}
             <div style={{ marginTop: '1rem' }}>
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <div className="d-flex gap-1 mb-4" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  {pages.length > 0 && (
-                    <>
-                      <button className="btn btn-success btn-sm" onClick={addFieldToPage}>Add field</button>
-                      <button className="btn btn-outline-secondary btn-sm" onClick={() => { setPreviewExpanded(!previewExpanded); }}>
-                        {previewExpanded ? "Collapse" : "Expand"}
-                      </button>
-                    </>
-                  )}
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <div className="d-flex gap-1 mb-4" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    {pages.length > 0 && (
+                      <>
+                        <button className="btn btn-success btn-sm" onClick={addFieldToPage}>Add field</button>
+                        {aiDetectEnabled && (
+                          <button
+                            className="btn btn-outline-primary btn-sm"
+                            disabled={aiBusy || !pdfBase64}
+                            onClick={detectFieldsWithAi}
+                          >
+                            {aiBusy ? "Detecting..." : "AI detect fields"}
+                          </button>
+                        )}
+                        <button className="btn btn-outline-secondary btn-sm" onClick={() => { setPreviewExpanded(!previewExpanded); }}>
+                          {previewExpanded ? "Collapse" : "Expand"}
+                        </button>
+                      </>
+                    )}
                 </div>
               </div>
               <div className="tb-preview" style={{ marginTop: '0.5rem' }}>

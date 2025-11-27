@@ -18,14 +18,16 @@ namespace DotNetSigningServer.Controllers
         private readonly PdfTemplateService _pdfTemplateService;
         private readonly IApiAuthService _apiAuthService;
         private readonly ILogger<ApiController> _logger;
+        private readonly TemplateAiService _templateAiService;
 
-        public ApiController(ApplicationDbContext dbContext, PdfSigningService signingService, PdfTemplateService pdfTemplateService, IApiAuthService apiAuthService, ILogger<ApiController> logger)
+        public ApiController(ApplicationDbContext dbContext, PdfSigningService signingService, PdfTemplateService pdfTemplateService, IApiAuthService apiAuthService, ILogger<ApiController> logger, TemplateAiService templateAiService)
         {
             _dbContext = dbContext;
             _signingService = signingService;
             _pdfTemplateService = pdfTemplateService;
             _apiAuthService = apiAuthService;
             _logger = logger;
+            _templateAiService = templateAiService;
         }
 
         [HttpPost("/api/presign")]
@@ -126,6 +128,34 @@ namespace DotNetSigningServer.Controllers
             {
                 _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Get template failed");
                 return Problem($"An error occurred while retrieving the template: {ex.Message}");
+            }
+        }
+
+        [HttpPost("/api/ai/detect-fields")]
+        public async Task<IActionResult> DetectTemplateFields([FromBody] AiDetectFieldsInput input)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            if (!_templateAiService.IsEnabled)
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "AI detection is not configured." });
+            }
+
+            if (string.IsNullOrWhiteSpace(input.PdfContent))
+            {
+                return BadRequest(new { message = "PdfContent is required." });
+            }
+
+            try
+            {
+                var fields = await _templateAiService.DetectFieldsAsync(input.PdfContent, input.Prompt, HttpContext.RequestAborted);
+                return Ok(new AiDetectFieldsResponse { Fields = fields.ToList() });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "AI detect fields failed");
+                return Problem("AI detection failed. Check AI configuration and try again.");
             }
         }
 

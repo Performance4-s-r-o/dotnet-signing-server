@@ -7,4 +7,5 @@ public class LokiOptions
     public string? Password { get; set; }
     public string? BearerToken { get; set; }
     public string? App { get; set; } = "dotnet-signing-server";
+    public string? Environment { get; set; }
 }

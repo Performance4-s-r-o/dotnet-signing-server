@@ -3,6 +3,8 @@ using Microsoft.Extensions.Logging;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Models;
 using Microsoft.AspNetCore.Authorization;
+using DotNetSigningServer.Options;
+using Microsoft.Extensions.Options;
 
 namespace DotNetSigningServer.Controllers;
 
@@ -10,11 +12,13 @@ public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
     private readonly PdfTemplateService _templateService;
+    private readonly AiOptions _aiOptions;
 
-    public HomeController(ILogger<HomeController> logger, PdfTemplateService templateService)
+    public HomeController(ILogger<HomeController> logger, PdfTemplateService templateService, IOptions<AiOptions> aiOptions)
     {
         _logger = logger;
         _templateService = templateService;
+        _aiOptions = aiOptions.Value;
     }
 
     [HttpGet("/")]
@@ -41,7 +45,14 @@ public class HomeController : Controller
 
     [HttpGet("/template-builder")]
     [Authorize]
-    public IActionResult TemplateBuilder() => View();
+    public IActionResult TemplateBuilder()
+    {
+        var aiEnabled = _aiOptions.Enabled
+                        && string.Equals(_aiOptions.Provider, "google", StringComparison.OrdinalIgnoreCase)
+                        && !string.IsNullOrWhiteSpace(_aiOptions.Google?.ApiKey);
+        ViewData["AiDetectEnabled"] = aiEnabled;
+        return View();
+    }
 
     [HttpGet("/templates")]
     [Authorize]

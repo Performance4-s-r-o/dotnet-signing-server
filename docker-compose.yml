@@ -32,6 +32,19 @@ services:
       - Smtp__FromName=${SMTP_FROM_NAME:-DotNet Signing Server}
       - Smtp__Username=${SMTP_USERNAME:-}
       - Smtp__Password=${SMTP_PASSWORD:-}
+      # Loki logging
+      - Loki__Url=${LOKI_URL:-}
+      - Loki__Username=${LOKI_USERNAME:-}
+      - Loki__Password=${LOKI_PASSWORD:-}
+      - Loki__BearerToken=${LOKI_BEARER_TOKEN:-}
+      - Loki__App=${LOKI_APP:-dotnet-signing-server}
+      - Loki__Environment=${LOKI_ENVIRONMENT:-development}
+      # AI (Google)
+      - AI__Enabled=${AI_ENABLED:-false}
+      - AI__Provider=${AI_PROVIDER:-google}
+      - AI__Google__ApiKey=${AI_GOOGLE_API_KEY:-}
+      - AI__Google__Model=${AI_GOOGLE_MODEL:-gemini-1.5-flash}
+      - AI__Google__Endpoint=${AI_GOOGLE_ENDPOINT:-https://generativelanguage.googleapis.com/v1beta}
 
 volumes:
   db_data:
