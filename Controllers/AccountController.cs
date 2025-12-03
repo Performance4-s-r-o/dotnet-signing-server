@@ -95,7 +95,7 @@ public class AccountController : Controller
 
         // Send verification email
         var verificationLink = BuildAbsoluteUrl($"/Account/Verify?token={Uri.EscapeDataString(verificationToken)}");
-        var subject = "Verify your email for DotNet Signing Server";
+        var subject = "Verify your email for P4PDF by Performance4 s.r.o.";
         var body = $@"<p>Hello,</p>
 <p>Please verify your email to activate your account.</p>
 <p><a href=""{verificationLink}"">Click here to verify</a></p>

@@ -31,8 +31,8 @@ services:
       - Smtp__Host=${SMTP_HOST:-smtp.example.com}
       - Smtp__Port=${SMTP_PORT:-587}
       - Smtp__UseSsl=${SMTP_USE_SSL:-true}
-      - Smtp__FromAddress=${SMTP_FROM_ADDRESS:-no-reply@example.com}
-      - Smtp__FromName=${SMTP_FROM_NAME:-DotNet Signing Server}
+      - Smtp__FromAddress=${SMTP_FROM_ADDRESS:-no-reply@performance4.cz}
+      - Smtp__FromName=${SMTP_FROM_NAME:-P4PDF by Performance4 s.r.o.}
       - Smtp__Username=${SMTP_USERNAME:-}
       - Smtp__Password=${SMTP_PASSWORD:-}
       # Loki logging

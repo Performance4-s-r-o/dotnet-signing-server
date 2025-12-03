@@ -5,15 +5,13 @@
 <h1>Pricing</h1>
 <p class="muted">Transparent pricing shipping signed PDFs via API. No credit card required to get started.</p>
 
-<div
-    style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;align-items:stretch; margin-top:1.5rem;">
-    <div class="flex flex-col justify-between"
-        style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1.25rem;">
+<div class="pricing-grid">
+    <div class="pricing-card">
         <div class="flex flex-col">
-            <h2 style="margin:0 0 0.25rem;">Free</h2>
-            <p class="muted" style="margin:0 0 0.75rem;">For individual developers and small tests.</p>
-            <p style="font-size:2rem;font-weight:800;margin:0;">0 EUR</p>
-            <p class="muted" style="margin:0 0 1rem;">Includes 10 credits.</p>
+            <h2 class="pricing-title">Free</h2>
+            <p class="muted pricing-description">For individual developers and small tests.</p>
+            <p class="pricing-price">0 EUR</p>
+            <p class="muted pricing-note">Includes 10 credits.</p>
             <ul class="list list-none-style">
                 <li>All API Features</li>
                 <li>Immediate access</li>
@@ -22,15 +20,13 @@
         <a href="/Account/SignUp" class="btn btn-primary">Get started</a>
     </div>
 
-    <div class="flex flex-col"
-        style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:1.25rem;box-shadow:0 12px 24px rgba(37,99,235,0.12);">
+    <div class="pricing-card pricing-card--highlight">
         <div class="flex flex-col">
-            <h2 style="margin:0 0 0.25rem;">Paid</h2>
-            <p class="muted" style="margin:0 0 0.75rem;">For production workloads with support.</p>
-            <p style="font-size:2rem;font-weight:800;margin:0;">5 EUR<span
-                    style="font-size:1rem;font-weight:600;"></span>
+            <h2 class="pricing-title">Paid</h2>
+            <p class="muted pricing-description">For production workloads with support.</p>
+            <p class="pricing-price">5 EUR<span style="font-size:1rem;font-weight:600;"></span>
             </p>
-            <p class="muted" style="margin:0 0 1rem;">Per 100 credits • volume discounts apply</p>
+            <p class="muted pricing-note">Per 100 credits • volume discounts apply</p>
             <ul class="list list-none-style">
                 <li>All Free features</li>
                 <li>Priority email support</li>
