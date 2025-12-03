@@ -283,6 +283,7 @@
 
 .flash ul {
   margin-bottom: 0;
+  list-style-type: none;
 }
 
 .flash.info {

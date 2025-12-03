@@ -1,8 +1,17 @@
 @{
-    var title = ViewData["Title"] as string ?? "P4PDF by Performance4 s.r.o.";
+    var pageTitle = ViewData["Title"] as string;
+    var fullTitle = string.IsNullOrWhiteSpace(pageTitle)
+    ? "P4PDF by Performance4 s.r.o."
+    : $"{pageTitle} | P4PDF by Performance4 s.r.o.";
+    var metaDescription = ViewData["MetaDescription"] as string
+    ?? "P4PDF by Performance4 s.r.o. — secure PDF signing, templating, timestamps, and API tokens.";
+    var request = ViewContext?.HttpContext?.Request;
+    var canonicalUrl = request != null
+    ? $"{request.Scheme}://{request.Host}{request.Path}"
+    : string.Empty;
     var isAuthenticated = User?.Identity?.IsAuthenticated == true;
     var displayName = isAuthenticated ? User?.Identity?.Name : null;
-    var controllerName = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
+    var controllerName = ViewContext?.RouteData?.Values?["controller"]?.ToString() ?? string.Empty;
     var isAccountPage = controllerName.Equals("Account", StringComparison.OrdinalIgnoreCase);
     var isHomePage = string.Equals(ViewContext?.HttpContext?.Request?.Path.Value, "/", StringComparison.Ordinal);
     var logoBase64 =
@@ -14,7 +23,14 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@title</title>
+    <title>@fullTitle</title>
+    <meta name="description" content="@metaDescription" />
+    <link rel="canonical" href="@canonicalUrl" />
+    <meta property="og:title" content="@fullTitle" />
+    <meta property="og:description" content="@metaDescription" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="@canonicalUrl" />
+    <meta property="og:site_name" content="P4PDF" />
     <link rel="stylesheet" href="/css/custom.css" />
 </head>
 
@@ -81,14 +97,16 @@
                 <!-- Company info -->
                 <div class="footer-company">
                     <div class="footer-logo">
-                        <div class="footer-logo-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
-                                <path d="M14 2v4a2 2 0 0 0 2 2h4" />
-                            </svg>
-                        </div>
-                        <span class="footer-logo-name">P4PDF</span>
+                        <a href="/" style="text-decoration: none; color: white" class="header-logo">
+                            <div class="full-height">
+                                <img src="@logoBase64" width="32" height="32" style="width:32px;height:32px;" />
+                                <div style="line-height: 20px;">
+                                    <div>
+                                        <strong>P4</strong><span>PDF</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
                     </div>
                     <p class="footer-company-text">Created by Performance4 s.r.o.</p>
                     <div>

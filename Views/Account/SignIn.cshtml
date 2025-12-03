@@ -16,7 +16,7 @@
 @if (!ViewData.ModelState.IsValid)
 {
     <div class="flash error">
-        @Html.ValidationSummary(excludePropertyErrors: true, message: "Sign-in failed. Please check your email and    password.")
+        @Html.ValidationSummary(excludePropertyErrors: true, message: "Sign-in failed. Please check your email and password.")
     </div>
 }
 <form method="post" class="auth-form">
