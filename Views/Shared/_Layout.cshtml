@@ -69,6 +69,12 @@
         </div>
     </header>
 
+    <main>
+        <div class="@((isHomePage ? "" : "main-wrapper") + (isAccountPage ? " auth" : ""))">
+            @RenderBody()
+        </div>
+    </main>
+
     <footer class="footer">
         <div class="footer-container">
             <div class="footer-grid">
