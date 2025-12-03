@@ -20,6 +20,9 @@ WORKDIR /app
 
 ENV DOTNET_USE_POLLING_FILE_WATCHER=1
 ENV DATA_PROTECTION_KEYS_PATH=/app/data-protection-keys
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ghostscript && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy the published output from the build stage
 COPY --from=build /app/publish .

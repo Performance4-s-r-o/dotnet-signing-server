@@ -2,10 +2,13 @@
 @{
     ViewData["Title"] = "Billing";
     var currency = Model.Currency;
-    var pricePer100 = Model.PricePer100.ToString("0.##");
+    decimal price100 = Model.PricePer100;
+    decimal price300 = Model.PricePer100 * 3 * (1 - Model.Discount300);
+    decimal price500 = Model.PricePer100 * 5 * (1 - Model.Discount500);
+    decimal price1000 = Model.PricePer100 * 10 * (1 - Model.Discount1000);
+    string money(decimal v) => v.ToString("0.##");
 }
-
-<h1>Billing</h1>
+<h1 class="content-box-title">Billing</h1>
 
 @if (TempData["Error"] != null)
 {
@@ -16,80 +19,134 @@
     <div class="flash info">@TempData["Info"]</div>
 }
 
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin:1rem 0;">
-    <div style="background:#f8fafc;padding:1rem 1.25rem;border-radius:10px;border:1px solid #e2e8f0;">
-        <h3>Your credits</h3>
-        <p><strong>Remaining:</strong> @Model.CreditsRemaining</p>
-        <p class="muted">Includes the first 10 free documents on your account.</p>
-        <h3>Pricing</h3>
-        <p><strong>Price per 100 credits:</strong> @pricePer100 @currency</p>
+<div class="billing-grid">
+    <div class="card">
+        <h2 class="card-title">Your credits</h2>
+        <p class="billing-credits-remaining"><strong>Remaining:</strong> @Model.CreditsRemaining</p>
+        <p class="billing-credits-note">Includes the first 10 free credits on your account.</p>
+
+        <h3 class="billing-pricing-title">Pricing</h3>
+        <div class="billing-pricing-list">
+            <p class="billing-pricing-item">100 credits: @money(price100) @currency</p>
+            <p class="billing-pricing-item">300 credits: @money(price300) @currency <span class="discount">(5%
+                    off)</span></p>
+            <p class="billing-pricing-item">500 credits: @money(price500) @currency <span class="discount">(10%
+                    off)</span></p>
+            <p class="billing-pricing-item">1000 credits: @money(price1000) @currency <span class="discount">(15%
+                    off)</span></p>
+        </div>
     </div>
-    <div style="background:#f8fafc;padding:1rem 1.25rem;border-radius:10px;border:1px solid #e2e8f0;">
-        <h3>Buy more credits</h3>
-        <p class="muted">Purchase prepaid document.</p>
-        <form method="post" action="/Billing/Checkout" style="display:grid;gap:0.5rem;">
+
+    <div class="card">
+        <h2 class="card-title">Buy more credits</h2>
+        <p class="billing-buy-description">Purchase credits to use on your account.</p>
+        <form method="post" action="/Billing/Checkout" style="display:flex;flex-direction:column;gap:0.5rem;">
             @Html.AntiForgeryToken()
-            <label>Credits to buy</label>
-            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
-                <label style="display:flex;align-items:center;gap:0.35rem;">
-                    <input type="radio" name="documentsToBuy" value="100" style="margin:0;" checked /> 100
-                </label>
-                <label style="display:flex;align-items:center;gap:0.35rem;">
-                    <input type="radio" name="documentsToBuy" value="300" style="margin:0;" /> 300
-                </label>
-                <label style="display:flex;align-items:center;gap:0.35rem;">
-                    <input type="radio" name="documentsToBuy" value="500" style="margin:0;" /> 500
-                </label>
-                <label style="display:flex;align-items:center;gap:0.35rem;">
-                    <input type="radio" name="documentsToBuy" value="1000" style="margin:0;" /> 1000
-                </label>
+            <p class="billing-buy-label">Credits to buy</p>
+
+            <div class="billing-options">
+                <div class="billing-option">
+                    <input type="radio" id="credits-100" name="documentsToBuy" value="100" checked>
+                    <label for="credits-100" class="billing-option-label">
+                        <span class="billing-option-radio"></span>
+                        <span class="billing-option-credits">100 credits</span>
+                        <span class="billing-option-price">for @money(price100) @currency</span>
+                    </label>
+                </div>
+
+                <div class="billing-option">
+                    <input type="radio" id="credits-300" name="documentsToBuy" value="300">
+                    <label for="credits-300" class="billing-option-label">
+                        <span class="billing-option-radio"></span>
+                        <span class="billing-option-credits">300 credits</span>
+                        <span class="billing-option-price">for @money(price300) @currency</span>
+                        <span class="billing-option-discount">(5% off)</span>
+                    </label>
+                </div>
+
+                <div class="billing-option">
+                    <input type="radio" id="credits-500" name="documentsToBuy" value="500">
+                    <label for="credits-500" class="billing-option-label">
+                        <span class="billing-option-radio"></span>
+                        <span class="billing-option-credits">500 credits</span>
+                        <span class="billing-option-price">for @money(price500) @currency</span>
+                        <span class="billing-option-discount">(10% off)</span>
+                    </label>
+                </div>
+
+                <div class="billing-option">
+                    <input type="radio" id="credits-1000" name="documentsToBuy" value="1000">
+                    <label for="credits-1000" class="billing-option-label">
+                        <span class="billing-option-radio"></span>
+                        <span class="billing-option-credits">1000 credits</span>
+                        <span class="billing-option-price">for @money(price1000) @currency</span>
+                        <span class="billing-option-discount">(15% off)</span>
+                    </label>
+                </div>
             </div>
-            <small class="muted" style="margin-top:0.25rem;">You will provide your payment information in the next step.</small>
-            <button type="submit">Pay with Stripe</button>
-            <small class="muted" style="margin-top:0;">Stripe Checkout is used for secure prepaid purchases.</small>
+
+            <p class="billing-payment-note">You will provide your payment information in the next step.</p>
+
+            <button class="full-w btn-secondary" type="submit">Place order</button>
+
+            <p class="muted">
+                Stripe Checkout is used for secure prepaid purchases. By clicking "Place order", you agree to our
+                <a href="/Legal/TermsOfService">terms</a> and <a href="/Legal/PrivacyPolicy">privacy policy</a>.
+            </p>
         </form>
     </div>
 </div>
 
-@if (Model.StripeInvoices.Any())
-{
-    <h3>Invoices</h3>
-    <table>
-        <thead>
-            <tr>
-                <th>Number</th>
-                <th>Amount (@Model.Currency)</th>
-                <th>Status</th>
-                <th>Link</th>
-                <th>Date</th>
-            </tr>
-        </thead>
-        <tbody>
-        @foreach (var invoice in Model.StripeInvoices)
+<section class="billing-invoices">
+    <h2 class="billing-invoices-title">Invoices</h2>
+    <div class="table-wrapper">
+        @if (Model.StripeInvoices.Any())
         {
-            <tr>
-                <td>@(invoice.Number ?? "-")</td>
-                <td>@(invoice.AmountDue / 100.0m)</td>
-                <td>@invoice.Status</td>
-                <td>
-                    @if (!string.IsNullOrWhiteSpace(invoice.HostedInvoiceUrl))
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Invoice number</th>
+                        <th>Price (@Model.Currency)</th>
+                        <th>Status</th>
+                        <th>Download</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var invoice in Model.StripeInvoices)
                     {
-                        <a href="@invoice.HostedInvoiceUrl" target="_blank" rel="noreferrer noopener">Open</a>
+                        <tr>
+                            <td>@(invoice.Number ?? "-")</td>
+                            <td>@(invoice.AmountDue / 100.0m)</td>
+                            <td><span
+                                    class="billing-status billing-status--@invoice.Status.ToLower()">@char.ToUpper(invoice.Status[0])@invoice.Status.Substring(1)</span>
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(invoice.HostedInvoiceUrl))
+                                {
+                                    <a href="@invoice.HostedInvoiceUrl" class="billing-download-link" target="_blank"
+                                        rel="noreferrer noopener">Open</a>
+                                }
+                                else
+                                {
+                                    @("-")
+                                }
+                            </td>
+                            <td>
+                                @{
+                                    var createdAt = invoice.Created;
+                                    var createdDisplay = createdAt == default ? "-" : createdAt.ToUniversalTime().ToString("d");
+                                }
+                                @createdDisplay
+                            </td>
+                        </tr>
                     }
-                    else
-                    {
-                        @("-")
-                    }
-                </td>
-                <td>
-                    @{
-                        var createdAt = invoice.Created;
-                        var createdDisplay = createdAt == default ? "-" : createdAt.ToUniversalTime().ToString("u");
-                    }
-                    @createdDisplay
-                </td>
-            </tr>
+                </tbody>
+            </table>
         }
-        </tbody>
-    </table>
-}
+        else
+        {
+            <p class="muted m-4">No invoices found.</p>
+        }
+    </div>
+</section>

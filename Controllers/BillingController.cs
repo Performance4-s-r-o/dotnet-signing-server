@@ -80,7 +80,10 @@ public class BillingController : Controller
             PricePer100 = _billingOptions.PricePer100,
             Currency = _billingOptions.Currency,
             CreditsRemaining = user.CreditsRemaining,
-            StripeInvoices = stripeInvoices
+            StripeInvoices = stripeInvoices,
+            Discount300 = _billingOptions.Discount300,
+            Discount500 = _billingOptions.Discount500,
+            Discount1000 = _billingOptions.Discount1000
         };
 
         return View(model);
@@ -142,8 +145,24 @@ public class BillingController : Controller
         }
 
         var units = (int)Math.Ceiling(documentsToBuy / 100m);
-        var amount = units * _billingOptions.PricePer100;
-        var amountCents = (long)Math.Ceiling(amount * 100);
+        var baseAmount = units * _billingOptions.PricePer100;
+
+        decimal discount = 0m;
+        if (documentsToBuy >= 1000)
+        {
+            discount = _billingOptions.Discount1000;
+        }
+        else if (documentsToBuy >= 500)
+        {
+            discount = _billingOptions.Discount500;
+        }
+        else if (documentsToBuy >= 300)
+        {
+            discount = _billingOptions.Discount300;
+        }
+
+        var amount = baseAmount - (baseAmount * discount);
+        var amountCents = (long)Math.Round(amount * 100, MidpointRounding.AwayFromZero);
         var successUrl = Url.Action("ConfirmCheckout", "Billing", null, Request.Scheme) ?? "/";
         successUrl += successUrl.Contains('?') ? "&session_id={CHECKOUT_SESSION_ID}" : "?session_id={CHECKOUT_SESSION_ID}";
         var cancelUrl = Url.Action("Index", "Billing", null, Request.Scheme) ?? "/";
@@ -224,7 +243,7 @@ public class BillingController : Controller
             }
 
             await _dbContext.SaveChangesAsync();
-            TempData["Info"] = $"Added {documents} document credits to your account.";
+            TempData["Info"] = $"Added {documents} document credits to your account. You can find invoice in the list below in few moments.";
         }
         catch (Exception ex)
         {
@@ -242,6 +261,9 @@ public class BillingController : Controller
         public string Currency { get; set; } = "EUR";
         public int CreditsRemaining { get; set; }
         public IReadOnlyList<global::Stripe.Invoice> StripeInvoices { get; set; } = Array.Empty<global::Stripe.Invoice>();
+        public decimal Discount300 { get; set; }
+        public decimal Discount500 { get; set; }
+        public decimal Discount1000 { get; set; }
     }
 
     private Guid? GetCurrentUserId()

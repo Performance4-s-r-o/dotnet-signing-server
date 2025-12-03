@@ -1,125 +1,132 @@
 @{
   ViewData["Title"] = "API Documentation";
+  var baseUrl = (ViewData["BaseUrl"]?.ToString() ?? string.Empty).TrimEnd('/');
+  var apiBase = string.IsNullOrWhiteSpace(baseUrl) ? "/api" : $"{baseUrl}/api";
 }
 
-<h1>API Documentation</h1>
+<h1 class="content-box-title">API Documentation</h1>
 <p class="muted">
-  All endpoints live under <code>/api</code> and expect JSON. PDFs, certificates, and attachments are base64 strings.
+  All endpoints live under <code>@apiBase</code> and expect JSON. PDFs, certificates, and attachments are base64 strings.
+  <br />
   Add <code>Authorization: Bearer &lt;token&gt;</code> (create tokens in <a href="/ApiTokens">API Tokens</a>).
-  Non-2xx responses include a <code>message</code>.
 </p>
 
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:1rem 0;">
-  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:0.75rem;">
+  <div class="card">
     <strong>Credits</strong>
-    <p class="muted" style="margin:6px 0 0;">Presign is free. Sign/attachment/timestamp/sign-pfx cost 1 credit.
-      Find-codes and fill-pdf cost 1 credit per started 3 pages (9 pages → 3 credits).</p>
+    <p class="muted" style="margin:6px 0 0;">
+      In the table below, you can find information on the credit costs for each API call.
+    </p>
   </div>
-  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:0.75rem;">
+  <div class="card">
     <strong>Limits</strong>
     <p class="muted" style="margin:6px 0 0;">PDFs & templates: 20MB. Images: 1MB. Attachments: 10MB. Request body limit:
       40MB. Too-large requests return “Request exceeded limit”.</p>
   </div>
-  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:0.75rem;">
+  <div class="card">
     <strong>Abuse protection</strong>
     <p class="muted" style="margin:6px 0 0;">Concurrent API calls per user/IP are throttled; bursts return HTTP 429.</p>
   </div>
 </div>
 
-<h2>Endpoint overview</h2>
-<table>
-  <thead>
-    <tr>
-      <th>Method</th>
-      <th>Path</th>
-      <th>Purpose</th>
-      <th>Credits</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>POST</td>
-      <td><code>/api/presign</code></td>
-      <td>Prepare PDF and return hash to sign</td>
-      <td>0</td>
-    </tr>
-    <tr>
-      <td>POST</td>
-      <td><code>/api/sign</code></td>
-      <td>Finalize presigned PDF</td>
-      <td>1</td>
-    </tr>
-    <tr>
-      <td>POST</td>
-      <td><code>/api/sign-pfx</code></td>
-      <td>Sign directly with PFX</td>
-      <td>1</td>
-    </tr>
-    <tr>
-      <td>POST</td>
-      <td><code>/api/timestamp</code></td>
-      <td>Apply TSA timestamp</td>
-      <td>1</td>
-    </tr>
-    <tr>
-      <td>POST</td>
-      <td><code>/api/attachment</code></td>
-      <td>Embed attachment</td>
-      <td>1</td>
-    </tr>
-    <tr>
-      <td>POST</td>
-      <td><code>/api/fill-pdf</code></td>
-      <td>Fill a template with data</td>
-      <td>1 credit / 3 pages / output</td>
-    </tr>
-    <tr>
-      <td>POST</td>
-      <td><code>/api/find-codes</code></td>
-      <td>Scan for QR/DataMatrix/PDF417/Aztec</td>
-      <td>1 credit / 3 pages</td>
-    </tr>
-    <tr>
-      <td>POST</td>
-      <td><code>/api/pdf-template</code></td>
-      <td>Create template</td>
-      <td>0</td>
-    </tr>
-    <tr>
-      <td>GET</td>
-      <td><code>/api/pdf-template</code></td>
-      <td>List templates</td>
-      <td>0</td>
-    </tr>
-    <tr>
-      <td>GET</td>
-      <td><code>/api/pdf-template/{id}</code></td>
-      <td>Get template</td>
-      <td>0</td>
-    </tr>
-    <tr>
-      <td>PUT</td>
-      <td><code>/api/pdf-template/{id}</code></td>
-      <td>Update template</td>
-      <td>0</td>
-    </tr>
-    <tr>
-      <td>DELETE</td>
-      <td><code>/api/pdf-template/{id}</code></td>
-      <td>Delete template</td>
-      <td>0</td>
-    </tr>
-    @* <tr>
+<h2 class="tokens-existing-title">Endpoint overview</h2>
+<div class="table-wrapper">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Method</th>
+        <th>Path</th>
+        <th>Purpose</th>
+        <th>Credits</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>POST</td>
+        <td><code>/api/presign</code></td>
+        <td>Prepare PDF and return hash to sign</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><code>/api/sign</code></td>
+        <td>Finalize presigned PDF</td>
+        <td>1</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><code>/api/sign-pfx</code></td>
+        <td>Sign directly with PFX</td>
+        <td>1</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><code>/api/timestamp</code></td>
+        <td>Apply TSA timestamp</td>
+        <td>1</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><code>/api/attachment</code></td>
+        <td>Embed attachment</td>
+        <td>1</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><code>/api/fill-pdf</code></td>
+        <td>Fill a template with data</td>
+        <td>1 credit / 3 pages / output</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><code>/api/find-codes</code></td>
+        <td>Scan for QR/DataMatrix/PDF417/Aztec</td>
+        <td>1 credit / 3 pages</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><code>/api/pdf-template</code></td>
+        <td>Create template</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td>GET</td>
+        <td><code>/api/pdf-template</code></td>
+        <td>List templates</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td>GET</td>
+        <td><code>/api/pdf-template/{id}</code></td>
+        <td>Get template</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td>PUT</td>
+        <td><code>/api/pdf-template/{id}</code></td>
+        <td>Update template</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td>DELETE</td>
+        <td><code>/api/pdf-template/{id}</code></td>
+        <td>Delete template</td>
+        <td>0</td>
+      </tr>
+      @* <tr>
       <td>POST</td>
       <td><code>/api/ai/detect-fields</code></td>
       <td>Auto-detect fields (when AI is configured)</td>
       <td>0</td>
     </tr> *@
-  </tbody>
-</table>
+    </tbody>
+  </table>
+</div>
 
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
-  <h3 style="margin-top:0;">Presign</h3>
+<h2 class="tokens-existing-title mt-4 mb-4">Endpoint details</h2>
+
+<div class="card mb-3">
+  <h3 class="card-title">Presign</h3>
   <pre><code>POST /api/presign
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
@@ -140,8 +147,8 @@ Response:
 { "id": "ef2c4d7a-…", "hashToSign": "6c3d…9f" }</code></pre>
 </div>
 
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
-  <h3 style="margin-top:0;">Finalize signing</h3>
+<div class="card mb-3">
+  <h3 class="card-title">Finalize signing</h3>
   <pre><code>POST /api/sign
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
@@ -152,8 +159,8 @@ Response:
 { "result": "base64-pdf-with-signature" }</code></pre>
 </div>
 
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
-  <h3 style="margin-top:0;">Sign with PFX</h3>
+<div class="card mb-3">
+  <h3 class="card-title">Sign with PFX</h3>
   <pre><code>POST /api/sign-pfx
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
@@ -174,8 +181,8 @@ Response:
 { "result": "base64-pdf-with-signature" }</code></pre>
 </div>
 
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
-  <h3 style="margin-top:0;">Apply timestamp</h3>
+<div class="card mb-3">
+  <h3 class="card-title">Apply timestamp</h3>
   <pre><code>POST /api/timestamp
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
@@ -194,8 +201,8 @@ Response:
 { "result": "base64-pdf-with-timestamp" }</code></pre>
 </div>
 
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
-  <h3 style="margin-top:0;">Add attachment</h3>
+<div class="card mb-3">
+  <h3 class="card-title">Add attachment</h3>
   <pre><code>POST /api/attachment
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
@@ -212,8 +219,8 @@ Response:
 { "result": "base64-pdf-with-attachment" }</code></pre>
 </div>
 
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
-  <h3 style="margin-top:0;">Fill PDF from template</h3>
+<div class="card mb-3">
+  <h3 class="card-title">Fill PDF from template</h3>
   <p class="muted" style="margin:0 0 6px;">Costs 1 credit per started 3 pages per generated output (dataset).</p>
   <pre><code>POST /api/fill-pdf
 Authorization: Bearer &lt;token&gt;
@@ -231,8 +238,8 @@ Response:
 { "files": ["base64-pdf", "base64-pdf"], "templateId": "a1b2c3d4-…" }</code></pre>
 </div>
 
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
-  <h3 style="margin-top:0;">Find barcodes</h3>
+<div class="card mb-3">
+  <h3 class="card-title">Find barcodes</h3>
   <p class="muted" style="margin:0 0 6px;">Costs 1 credit per started 3 pages.</p>
   <pre><code>POST /api/find-codes
 Authorization: Bearer &lt;token&gt;
@@ -251,8 +258,8 @@ Response:
 }</code></pre>
 </div>
 
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
-  <h3 style="margin-top:0;">Manage templates</h3>
+<div class="card mb-3">
+  <h3 class="card-title">Manage templates</h3>
   <pre><code>// Create
 POST /api/pdf-template
 {
@@ -273,8 +280,8 @@ PUT /api/pdf-template/{templateId}
 DELETE /api/pdf-template/{templateId}</code></pre>
 </div>
 
-@* <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
-<h3 style="margin-top:0;">AI: Detect fields (optional)</h3>
+@* <div class="card mb-3">
+<h3 class="card-title">AI: Detect fields (optional)</h3>
 <p class="muted" style="margin:0 0 6px;">Available when AI is configured in environment variables. Returns inferred fields for Template Builder.</p>
 <pre><code>POST /api/ai/detect-fields
 {

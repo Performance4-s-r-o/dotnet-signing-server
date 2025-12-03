@@ -9,8 +9,6 @@ using System.Security.Claims;
 namespace DotNetSigningServer.Controllers;
 
 [Authorize]
-// [ValidateAntiForgeryToken]
-// [IgnoreAntiforgeryToken] // Allow POSTs when the proxy strips or rewrites CSRF cookies/tokens
 public class ApiTokensController : Controller
 {
     private readonly ApplicationDbContext _dbContext;
@@ -44,14 +42,21 @@ public class ApiTokensController : Controller
     }
 
     [HttpPost("/ApiTokens")]
-    // [ValidateAntiForgeryToken]
-    [IgnoreAntiforgeryToken]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(string label, DateTimeOffset? expiresAt = null, string usageType = "server", string? allowedOrigins = null)
     {
         var userId = GetCurrentUserId();
         if (userId == null)
         {
             return RedirectToAction("SignIn", "Account");
+        }
+
+        var nowUtc = DateTimeOffset.UtcNow;
+        var expiresUtc = expiresAt?.ToUniversalTime();
+        if (expiresUtc.HasValue && expiresUtc.Value <= nowUtc)
+        {
+            TempData["Error"] = "Expiration must be in the future.";
+            return RedirectToAction(nameof(Index));
         }
 
         var user = await _dbContext.Users.FindAsync(userId.Value);
@@ -79,9 +84,10 @@ public class ApiTokensController : Controller
             UserId = user.Id,
             Label = label,
             TokenHash = hash,
-            ExpiresAt = expiresAt,
+            ExpiresAt = expiresUtc,
             IsBrowserToken = isBrowser,
-            AllowedOrigins = isBrowser ? string.Join("\n", normalizedOrigins) : null
+            AllowedOrigins = isBrowser ? string.Join("\n", normalizedOrigins) : null,
+            CreatedAt = nowUtc
         };
 
         _dbContext.ApiTokens.Add(token);

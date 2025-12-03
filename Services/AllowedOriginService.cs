@@ -16,8 +16,7 @@ public class AllowedOriginService : IAllowedOriginService
         "http://localhost",
         "https://localhost",
         "http://127.0.0.1",
-        "https://127.0.0.1",
-        "https://signproxy.cfy.performance4.cz"
+        "https://127.0.0.1"
     };
 
     public AllowedOriginService(IServiceScopeFactory scopeFactory)
@@ -25,7 +24,7 @@ public class AllowedOriginService : IAllowedOriginService
         _scopeFactory = scopeFactory;
     }
 
-    public bool IsOriginAllowed(string origin)
+    public bool IsOriginAllowed(string origin, HttpContext context)
     {
         var normalized = NormalizeOrigin(origin);
         if (normalized == null)
@@ -38,7 +37,9 @@ public class AllowedOriginService : IAllowedOriginService
             return true;
         }
 
-        var allowedOrigins = LoadAllowedOrigins().Concat(LocalOrigins).ToHashSet();
+        var allowedOrigins = LoadAllowedOrigins().Concat(LocalOrigins).Concat(
+            [context.Request.Scheme + "://" + context.Request.Host.ToString()]
+        ).ToHashSet();
         return allowedOrigins.Contains(normalized);
     }
 

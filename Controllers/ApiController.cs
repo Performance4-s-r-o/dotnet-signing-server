@@ -535,8 +535,10 @@ namespace DotNetSigningServer.Controllers
                 {
                     PossibleFormats = formats.ToList(),
                     TryHarder = true,
+                    TryInverted = true,
                     PureBarcode = false
-                }
+                },
+                AutoRotate = true
             };
 
             for (var pageIndex = 0; pageIndex < collection.Count; pageIndex++)

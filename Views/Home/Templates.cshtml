@@ -4,49 +4,42 @@
     Layout = "_Layout";
 }
 
-<div class="container py-4">
-    <div class="card shadow-sm">
-        <div class="card-body">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <h1 style="margin:0;">My Templates</h1>
-                <a class="linkButton" href="/template-builder">New Template</a>
-            </div>
-
-            @if (!Model.Any())
-            {
-                <p class="text-muted mb-0">No templates yet. Create one to get started.</p>
-            }
-            else
-            {
-                <div class="table-responsive">
-                    <table class="table table-sm align-middle">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Fields</th>
-                                <th>Created</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var t in Model)
-                            {
-                                <tr>
-                                    <td>@(string.IsNullOrWhiteSpace(t.Name) ? "Untitled" : t.Name)</td>
-                                    <td>@t.FieldCount</td>
-                                    <td>@t.CreatedAt.ToLocalTime().ToString("g")</td>
-                                    <td style="text-align:right;">
-                                        <a class="linkButton smallButton"
-                                            href="@($"/template-builder?templateId={t.TemplateId}")">Edit</a>
-                                        <a class="linkButton smallButton" href="@($"/templates/{t.TemplateId}/docs")">API
-                                            Docs</a>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-        </div>
-    </div>
+<div class="mb-4 flex justify-between items-center">
+    <h1 class="content-box-title">My Templates</h1>
+    <a class="btn btn-primary" href="/template-builder">New Template</a>
 </div>
+
+<div class="table-wrapper">
+@if (!Model.Any())
+{
+    <p class="muted m-4">No templates yet. Create one to get started.</p>
+}
+else
+{
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Fields</th>
+                    <th>Created</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var t in Model)
+                {
+                    <tr>
+                        <td>@(string.IsNullOrWhiteSpace(t.Name) ? "Untitled" : t.Name)</td>
+                        <td>@t.FieldCount</td>
+                        <td>@t.CreatedAt.ToLocalTime().ToString("g")</td>
+                        <td style="text-align:right;">
+                            <a class="btn-token-action" href="@($"/template-builder?templateId={t.TemplateId}")">Edit</a>
+                            <a class="btn-token-action" href="@($"/templates/{t.TemplateId}/docs")">API
+                                Docs</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+}
+    </div>

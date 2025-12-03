@@ -3,7 +3,8 @@
     ViewData["Title"] = "Sign in";
     var returnUrl = ViewData["ReturnUrl"] as string;
 }
-<h1>Sign in</h1>
+<h1 class="content-box-title">Sign In</h1>
+
 @if (TempData["Error"] != null)
 {
     <div class="flash error">@TempData["Error"]</div>
@@ -15,28 +16,33 @@
 @if (!ViewData.ModelState.IsValid)
 {
     <div class="flash error">
-        @Html.ValidationSummary(excludePropertyErrors: true, message: "Sign-in failed. Please check your email and password.")
+        @Html.ValidationSummary(excludePropertyErrors: true, message: "Sign-in failed. Please check your email and    password.")
     </div>
 }
-<form method="post">
+<form method="post" class="auth-form">
     @Html.AntiForgeryToken()
     <input type="hidden" name="returnUrl" value="@returnUrl" />
-    <label>Email</label>
-    <input asp-for="Email" />
-    <span asp-validation-for="Email" class="muted"></span>
+    <div class="form-group">
+        <label asp-for="Email" class="form-label">Email</label>
+        <input asp-for="Email" class="form-input" />
+        <span asp-validation-for="Email" class="form-validation"></span>
+    </div>
 
-    <label>Password</label>
-    <input asp-for="Password" type="password" />
-    <span asp-validation-for="Password" class="muted"></span>
+    <div class="form-group">
+        <label asp-for="Password" class="form-label">Password</label>
+        <input asp-for="Password" type="password" class="form-input" />
+        <span asp-validation-for="Password" class="form-validation"></span>
+    </div>
 
-    <label style="display:flex; align-items:center; gap:0.4rem;">
-        <input asp-for="RememberMe" type="checkbox" style="width:auto" /> Remember me
+    <label class="form-check">
+        <input asp-for="RememberMe" type="checkbox" /> Remember me
     </label>
 
-    <button type="submit" style="margin-top:0.5rem;">Sign in</button>
+    <button type="submit" class="btn btn-primary">Sign in</button>
 </form>
 
-<p class="muted">No account? <a href="/Account/SignUp">Sign up</a>.</p>
+<p class="muted mt-3 text-center">No account? <a href="/Account/SignUp">Sign up</a>.</p>
+
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />

@@ -3,8 +3,8 @@
     ViewData["Title"] = "Account";
 }
 <h1>Account</h1>
-<p class="muted">Your profile and billing identity.</p>
-<div style="background:#f8fafc;padding:1rem 1.25rem;border-radius:10px;border:1px solid #e2e8f0;max-width:520px;">
+<p class="muted mt-2 mb-3">Your profile and billing identity.</p>
+<div class="card">
     <p><strong>Email:</strong> @Model.Email</p>
     <p><strong>Email verified:</strong> @(Model.EmailVerified ? "Yes" : "No")</p>
     <p><strong>Status:</strong> @(Model.IsActive ? "Active" : "Inactive")</p>

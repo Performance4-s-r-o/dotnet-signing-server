@@ -50,6 +50,7 @@ builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection("Smtp")
 builder.Services.Configure<LokiOptions>(builder.Configuration.GetSection("Loki"));
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("AI"));
 builder.Services.Configure<LimitsOptions>(builder.Configuration.GetSection("Limits"));
+builder.Services.Configure<AppOptions>(builder.Configuration);
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -79,10 +80,25 @@ bool useLocalDb = builder.Configuration.GetValue<bool?>("UseLocalDb")
 
 if (useLocalDb)
 {
-    // Store the local SQLite db in the content root so CLI/tools and the running app share the same file
-    var localDbPath = Path.Combine(builder.Environment.ContentRootPath, "signing-local.db");
+    var currentDirectory = Directory.GetCurrentDirectory();
+    var hostDataPath = Path.Combine(currentDirectory, "postgres-data");
+    Directory.CreateDirectory(hostDataPath);
+    postgresContainer = new PostgreSqlBuilder()
+        .WithImage("postgres:16-alpine")
+        .WithDatabase("signing_local")
+        .WithUsername("postgres")
+        .WithPassword("postgres")
+        .WithReuse(true)
+        .WithAutoRemove(false)
+        .WithBindMount(hostDataPath, "/var/lib/postgresql/data")
+        .Build();
+
+    await postgresContainer.StartAsync();
+
+    var localConnectionString = postgresContainer.GetConnectionString();
+
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseSqlite($"Data Source={localDbPath}"));
+        options.UseNpgsql(localConnectionString));
 }
 else
 {
@@ -139,7 +155,7 @@ app.Use(async (context, next) =>
         if (!string.IsNullOrWhiteSpace(origin))
         {
             var originService = context.RequestServices.GetRequiredService<IAllowedOriginService>();
-            if (!originService.IsOriginAllowed(origin))
+            if (!originService.IsOriginAllowed(origin, context))
             {
                 Console.WriteLine("CORS origin not allowed");
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
@@ -150,6 +166,7 @@ app.Use(async (context, next) =>
             context.Response.Headers["Vary"] = "Origin";
             context.Response.Headers["Access-Control-Allow-Headers"] = context.Request.Headers["Access-Control-Request-Headers"].ToString() ?? "Authorization,Content-Type";
             context.Response.Headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS";
+            Console.WriteLine($"nex thting: {origin}");
         }
 
         if (string.Equals(context.Request.Method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
@@ -187,6 +204,7 @@ app.Use(async (context, next) =>
         logger.LogWarning("Request {Path} returned {Status}. Authenticated: {Auth}, Cookie count: {CookieCount}, User: {UserId}", path, context.Response.StatusCode, context.User?.Identity?.IsAuthenticated, context.Request.Cookies?.Count ?? 0, context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "none");
     }
 });
+app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();

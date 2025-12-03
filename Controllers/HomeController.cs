@@ -13,12 +13,14 @@ public class HomeController : Controller
     private readonly ILogger<HomeController> _logger;
     private readonly PdfTemplateService _templateService;
     private readonly AiOptions _aiOptions;
+    private readonly AppOptions _appOptions;
 
-    public HomeController(ILogger<HomeController> logger, PdfTemplateService templateService, IOptions<AiOptions> aiOptions)
+    public HomeController(ILogger<HomeController> logger, PdfTemplateService templateService, IOptions<AiOptions> aiOptions, IOptions<AppOptions> appOptions)
     {
         _logger = logger;
         _templateService = templateService;
         _aiOptions = aiOptions.Value;
+        _appOptions = appOptions.Value;
     }
 
     [HttpGet("/debug/request")]
@@ -54,6 +56,7 @@ public class HomeController : Controller
     [HttpGet("/api/docs")]
     public IActionResult ApiDocs()
     {
+        ViewData["BaseUrl"] = BuildBaseUrl();
         return View();
     }
 
@@ -97,11 +100,32 @@ public class HomeController : Controller
         try
         {
             var template = await _templateService.GetTemplateAsync(templateId, userId);
+            ViewData["BaseUrl"] = BuildBaseUrl();
             return View(template);
         }
         catch (InvalidOperationException)
         {
             return NotFound();
         }
+    }
+
+    private string BuildBaseUrl()
+    {
+        var configured = _appOptions.FqdnServerName?.TrimEnd('/');
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            if (configured.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                configured.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                return configured;
+            }
+
+            var scheme = Request?.IsHttps == true ? "https" : "http";
+            return $"{scheme}://{configured}";
+        }
+
+        var fallbackScheme = Request?.Scheme ?? "https";
+        var host = Request?.Host.Value ?? "localhost";
+        return $"{fallbackScheme}://{host}";
     }
 }

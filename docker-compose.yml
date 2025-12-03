@@ -15,6 +15,7 @@ services:
       - ASPNETCORE_URLS=http://+:8085
       - AllowedHosts=${ALLOWED_HOSTS:-*}
       - UseLocalDb=false
+      - FqdnServerName=${SERVICE_FQDN_SERVER:-localhost}
       - ConnectionStrings__DefaultConnection=Host=${DB_HOST};Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
       - TSA_URL=${TSA_URL:-}
       - TSA_USERNAME=${TSA_USERNAME:-}

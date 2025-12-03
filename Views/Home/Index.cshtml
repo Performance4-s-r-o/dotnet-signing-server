@@ -1,93 +1,289 @@
 @{
-    ViewData["Title"] = "Digital Signing Platform";
-    var signupSuccess = ViewData["SignupSuccess"] as bool? ?? false;
+  ViewData["Title"] = "PDF Automation Platform | P4PDF by Performance4 s.r.o.";
+  var signupSuccess = ViewData["SignupSuccess"] as bool? ?? false;
 }
 
 @if (signupSuccess)
 {
-    <div class="flash info">Email verified and account created successfully. Welcome!</div>
+  <div class="flash info m-0">Your account is ready. Welcome to DocForge.</div>
 }
 
-<section style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:2rem;align-items:center;">
-    <div>
-        <p
-            style="display:inline-block;padding:0.4rem 0.75rem;border-radius:999px;background:#e0f2fe;color:#075985;font-weight:700;font-size:0.9rem;">
-            PDF signing &amp; templates API
-        </p>
-        <h1 style="font-size:2.6rem;margin:0.75rem 0 0.5rem;line-height:1.1;">
-            Sign PDFs, add timestamps, and generate documents from templates.
-        </h1>
-        <p style="color:#475569;font-size:1.05rem;max-width:38ch;margin-bottom:0.75rem;">
-            Build fully automated signing workflows and reusable document templates for reports, certificates,
-            and contracts – all from a single REST API.
-        </p>
-        <div style="display:inline-flex;gap:0.25rem;flex-wrap:wrap;flex-direction:column;">
-            <a href="/Account/SignUp"
-                style="background:#2563eb;color:#fff;padding:0.8rem 1.1rem;border-radius:8px;text-decoration:none;font-weight:700;">
-                Get Started With Free Account
-            </a>
-            <small class="muted" style="text-align:center;">No credit card required</small>
+<section class="hero">
+  <div class="hero-container">
+    <div class="hero-grid">
+      <!-- Left side - Content -->
+      <div class="hero-content">
+        <div class="hero-badge">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+            <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+          </svg>
+          Document Automation API
         </div>
-    </div>
-    <div
-        style="background:#0f172a;color:#e2e8f0;padding:1.5rem;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,0.1);">
-        <p style="color:#94a3b8;font-weight:600;font-size:0.95rem;margin:0 0 0.25rem;">Simple REST requests</p>
-        <div
-            style="font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;font-size:0.92rem;line-height:1.45;overflow-x:auto;">
-            <pre style="margin:0;white-space:pre-wrap;">
-POST /api/sign
-Authorization: Bearer &lt;token&gt;
-Content-Type: application/json
 
-{
-  "id": "ef2c…4d7a",
-  "signedHash": "iVBORw0KG…RK5CYII="
-}</pre>
+        <h1 class="hero-title">Generate, fill, sign and process PDF documents with one API.</h1>
+
+        <p class="hero-description">
+          DocForge turns your data into complete PDF documents. Render templates, fill dynamic fields, apply digital
+          signatures and timestamps, embed attachments, and read QR or barcodes — all fully automated.
+        </p>
+
+        <div class="hero-buttons">
+          <a href="/api/docs" class="btn btn-primary">
+            API Documentation
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h14" />
+              <path d="m12 5 7 7-7 7" />
+            </svg>
+          </a>
+          <a href="https://github.com/janprasil/dotnet-signing-server/tree/main/examples"
+            class="btn btn-secondary">Example Integration</a>
         </div>
-        <div
-            style="margin-top:1rem;display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;">
-            <p style="margin:0;color:#cbd5e1;font-size:0.95rem;">
-                Full reference and examples in the docs.
-            </p>
-            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                <a href="/api/docs"
-                    style="background:#2563eb;color:#fff;padding:0.65rem 0.9rem;border-radius:8px;text-decoration:none;font-weight:700;">
-                    View API docs
-                </a>
-                <a href="https://github.com/janprasil/dotnet-signing-server/tree/main/examples/react-example"
-                    target="_blank" rel="noopener"
-                    style="background:#0ea5e9;color:#0f172a;padding:0.65rem 0.9rem;border-radius:8px;text-decoration:none;font-weight:700;">
-                    Check integration example
-                </a>
-            </div>
+      </div>
+
+      <!-- Right side - Code example -->
+      <div class="hero-code">
+        <div class="hero-code-header">
+          <div class="hero-code-dot hero-code-dot--red"></div>
+          <div class="hero-code-dot hero-code-dot--yellow"></div>
+          <div class="hero-code-dot hero-code-dot--green"></div>
+          <span class="hero-code-label">Example API request</span>
         </div>
+        <pre><code><span class="code-accent">POST</span> /api/sign
+<span class="code-dim">Authorization:</span> Bearer &lt;token&gt;
+<span class="code-dim">Content-Type:</span> application/json
+
+<span class="code-white">{</span>
+  <span class="code-accent">"id"</span>: <span class="code-string">"ef2c...4d7a"</span>,
+  <span class="code-accent">"signedHash"</span>: <span class="code-string">"iVB0Rw0KGgo..."</span>
+<span class="code-white">}</span></code></pre>
+        <p class="hero-code-footer">See full reference in the docs.</p>
+      </div>
     </div>
+  </div>
 </section>
 
-<section style="margin-top:2.5rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
-    <div style="background:#f8fafc;padding:1rem;border-radius:10px;border:1px solid #e2e8f0;">
-        <h3>Generate documents from templates</h3>
-        <p class="muted">
-            Define reusable templates for certificates, reports and contracts, then fill text, images and barcodes over
-            API.
+<!-- ============================================
+       FEATURES SECTION
+       ============================================ -->
+<section class="features">
+  <div class="features-groups">
+
+    <!-- Feature Group 1: Generate PDFs -->
+    <div class="feature-group">
+      <div class="feature-group-header">
+        <h2 class="feature-group-title">Generate PDFs from templates</h2>
+        <p class="feature-group-description">
+          Upload a PDF template and define dynamic fields for text, images and barcodes. Map your data directly into
+          placeholders and render consistent documents at scale.
         </p>
+      </div>
+
+      <div class="feature-cards">
+        <div class="feature-card">
+          <div class="feature-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+              <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Visual field mapping</h3>
+          <p class="feature-card-description">Click and define text fields, images or barcodes directly on the PDF.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path
+                d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z" />
+              <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65" />
+              <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65" />
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Dynamic data binding</h3>
+          <p class="feature-card-description">Fill templates using structured JSON — no manual formatting.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Live preview</h3>
+          <p class="feature-card-description">Render a preview and validate the layout before generating final PDFs.</p>
+        </div>
+      </div>
     </div>
-    <div style="background:#f8fafc;padding:1rem;border-radius:10px;border:1px solid #e2e8f0;">
-        <h3>Sign &amp; timestamp PDFs</h3>
-        <p class="muted">
-            Apply digital signatures and add trusted timestamps from your preferred TSA, fully automated.
+
+    <!-- Feature Group 2: Digital signatures -->
+    <div class="feature-group">
+      <div class="feature-group-header">
+        <h2 class="feature-group-title">Digital signatures & timestamps</h2>
+        <p class="feature-group-description">
+          Apply certificate-based signatures, add trusted timestamps (TSA), and automate hashing workflows with full
+          cryptographic integrity.
         </p>
+      </div>
+
+      <div class="feature-cards">
+        <div class="feature-card">
+          <div class="feature-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Certificate-based signing</h3>
+          <p class="feature-card-description">Support for external signers, HSM, smartcards or custom clients.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Trusted timestamps</h3>
+          <p class="feature-card-description">Integrate with any TSA to add verifiable timestamp tokens.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Multiple signatures</h3>
+          <p class="feature-card-description">Support for multi-party, multi-step signing workflows.</p>
+        </div>
+      </div>
     </div>
-    <div style="background:#f8fafc;padding:1rem;border-radius:10px;border:1px solid #e2e8f0;">
-        <h3>Embed attachments</h3>
-        <p class="muted">
-            Attach reports, raw data or any supporting files directly inside the signed PDF package.
+
+    <!-- Feature Group 3: Embed attachments -->
+    <div class="feature-group">
+      <div class="feature-group-header">
+        <h2 class="feature-group-title">Embed file attachments</h2>
+        <p class="feature-group-description">
+          Store supporting documentation such as raw data, reports or logs directly inside the PDF to create verifiable
+          document bundles.
         </p>
+      </div>
+
+      <div class="feature-cards">
+        <div class="feature-card">
+          <div class="feature-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path
+                d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Any file type</h3>
+          <p class="feature-card-description">Attach binary files, datasets or custom audit outputs.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path
+                d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+              <path d="M12 10v6" />
+              <path d="m9 13 3-3 3 3" />
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Evidence bundles</h3>
+          <p class="feature-card-description">Keep measurements, logs and certificates in a single container.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <ellipse cx="12" cy="5" rx="9" ry="3" />
+              <path d="M3 5v14a9 3 0 0 0 18 0V5" />
+              <path d="M3 12a9 3 0 0 0 18 0" />
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Metadata support</h3>
+          <p class="feature-card-description">Store attachment metadata for validation or audit trails.</p>
+        </div>
+      </div>
     </div>
-    <div style="background:#f8fafc;padding:1rem;border-radius:10px;border:1px solid #e2e8f0;">
-        <h3>Read QR &amp; barcodes</h3>
-        <p class="muted">
-            Detect and extract QR codes, Datamatrix and other barcodes from documents via the same API.
+
+    <!-- Feature Group 4: QR & barcodes -->
+    <div class="feature-group">
+      <div class="feature-group-header">
+        <h2 class="feature-group-title">Read QR & barcodes</h2>
+        <p class="feature-group-description">
+          Detect and extract QR codes, Datamatrix and other barcode types from any PDF page, including coordinates and
+          orientation.
         </p>
+      </div>
+
+      <div class="feature-cards">
+        <div class="feature-card">
+          <div class="feature-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="5" height="5" x="3" y="3" rx="1" />
+              <rect width="5" height="5" x="16" y="3" rx="1" />
+              <rect width="5" height="5" x="3" y="16" rx="1" />
+              <path d="M21 16h-3a2 2 0 0 0-2 2v3" />
+              <path d="M21 21v.01" />
+              <path d="M12 7v3a2 2 0 0 1-2 2H7" />
+              <path d="M3 12h.01" />
+              <path d="M12 3h.01" />
+              <path d="M12 16v.01" />
+              <path d="M16 12h1" />
+              <path d="M21 12v.01" />
+              <path d="M12 21v-1" />
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Multi-code detection</h3>
+          <p class="feature-card-description">Scan pages with multiple QR/Datamatrix codes.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <circle cx="12" cy="12" r="6" />
+              <circle cx="12" cy="12" r="2" />
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Coordinates & bounds</h3>
+          <p class="feature-card-description">Extract the exact x/y position and size of each code.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <path d="m9 11 3 3L22 4" />
+            </svg>
+          </div>
+          <h3 class="feature-card-title">Error correction</h3>
+          <p class="feature-card-description">Robust decoding of damaged or low-quality codes.</p>
+        </div>
+      </div>
     </div>
+
+  </div>
 </section>

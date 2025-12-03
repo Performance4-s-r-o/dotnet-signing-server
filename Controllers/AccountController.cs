@@ -1,11 +1,13 @@
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Options;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using System.Security.Cryptography;
 
@@ -16,12 +18,14 @@ public class AccountController : Controller
     private readonly ApplicationDbContext _dbContext;
     private readonly IAuthService _authService;
     private readonly IEmailSender _emailSender;
+    private readonly AppOptions _appOptions;
 
-    public AccountController(ApplicationDbContext dbContext, IAuthService authService, IEmailSender emailSender)
+    public AccountController(ApplicationDbContext dbContext, IAuthService authService, IEmailSender emailSender, IOptions<AppOptions> appOptions)
     {
         _dbContext = dbContext;
         _authService = authService;
         _emailSender = emailSender;
+        _appOptions = appOptions.Value;
     }
 
     [Authorize]
@@ -45,12 +49,23 @@ public class AccountController : Controller
     }
 
     [HttpGet("/Account/SignUp")]
-    public IActionResult SignUp() => View(new SignUpViewModel());
+    public IActionResult SignUp()
+    {
+        if (User?.Identity?.IsAuthenticated == true)
+        {
+            return RedirectToAction("Index", "Home");
+        }
+        return View(new SignUpViewModel());
+    }
 
     [HttpPost("/Account/SignUp")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SignUp(SignUpViewModel model)
     {
+        if (User?.Identity?.IsAuthenticated == true)
+        {
+            return RedirectToAction("Index", "Home");
+        }
         if (!ModelState.IsValid) return View(model);
 
         bool exists = await _dbContext.Users.AnyAsync(u => u.Email == model.Email);
@@ -79,7 +94,7 @@ public class AccountController : Controller
         await _dbContext.SaveChangesAsync();
 
         // Send verification email
-        var verificationLink = Url.Action("Verify", "Account", new { token = verificationToken }, Request.Scheme) ?? string.Empty;
+        var verificationLink = BuildAbsoluteUrl($"/Account/Verify?token={Uri.EscapeDataString(verificationToken)}");
         var subject = "Verify your email for DotNet Signing Server";
         var body = $@"<p>Hello,</p>
 <p>Please verify your email to activate your account.</p>
@@ -99,9 +114,33 @@ public class AccountController : Controller
         return RedirectToAction(nameof(Verify));
     }
 
+    private string BuildAbsoluteUrl(string path)
+    {
+        var configuredHost = _appOptions.FqdnServerName?.TrimEnd('/');
+        if (!string.IsNullOrWhiteSpace(configuredHost))
+        {
+            if (configuredHost.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                configuredHost.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"{configuredHost}{path}";
+            }
+
+            var scheme = Request?.IsHttps == true ? "https" : "http";
+            return $"{scheme}://{configuredHost}{path}";
+        }
+
+        var fallbackScheme = Request?.Scheme ?? "https";
+        var host = Request?.Host.Value ?? "localhost";
+        return $"{fallbackScheme}://{host}{path}";
+    }
+
     [HttpGet("/Account/SignIn")]
     public IActionResult SignIn(string? returnUrl = null)
     {
+        if (User?.Identity?.IsAuthenticated == true)
+        {
+            return RedirectToAction("Index", "Home");
+        }
         ViewData["ReturnUrl"] = returnUrl;
         return View(new SignInViewModel());
     }
@@ -110,6 +149,10 @@ public class AccountController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SignIn(SignInViewModel model, string? returnUrl = null)
     {
+        if (User?.Identity?.IsAuthenticated == true)
+        {
+            return RedirectToAction("Index", "Home");
+        }
         if (!ModelState.IsValid) return View(model);
 
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == model.Email);
@@ -214,6 +257,14 @@ public class AccountController : Controller
     [HttpGet("/Account/TwoFactor")]
     public IActionResult TwoFactor(string email, bool rememberMe = false)
     {
+        if (User?.Identity?.IsAuthenticated == true)
+        {
+            return RedirectToAction("Index", "Home");
+        }
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return RedirectToAction(nameof(SignIn));
+        }
         ViewData["Email"] = email;
         ViewData["RememberMe"] = rememberMe;
         return View();
@@ -223,6 +274,10 @@ public class AccountController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> TwoFactorPost(string email, string code, bool rememberMe = false)
     {
+        if (User?.Identity?.IsAuthenticated == true)
+        {
+            return RedirectToAction("Index", "Home");
+        }
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(code))
         {
             TempData["Error"] = "Email and code are required.";

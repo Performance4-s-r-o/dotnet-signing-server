@@ -21,7 +21,7 @@
 
   .tb-preview {
     position: relative;
-    border: 1px dashed rgba(0, 0, 0, 0.5);
+    border: 1px dashed rgba(71, 71, 71, 0.5);
     border-radius: 10px;
     overflow: hidden;
   }
@@ -60,7 +60,6 @@
   }
 
   .tb-error {
-    margin-top: 8px;
     font-size: 0.95rem;
   }
 
@@ -365,7 +364,7 @@
         }
         const json = await res.json();
         setTemplateId(json.templateId);
-        setStatus(`Saved template: ${json.templateId}`);
+        setStatus(`Template saved successfully`);
         setDirty(false);
       } catch (err) {
         console.error(err);
@@ -514,54 +513,55 @@
 
     return (
       <>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1>{templateId ? "Edit PDF Template" : "Create PDF Template"}</h1>
-          <a className="linkButton" href="/templates" style={{ marginTop: '0.5rem' }}>Back to list</a>
+        @* <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}> *@
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="content-box-title">{templateId ? "Edit PDF Template" : "Create PDF Template"}</h1>
+          <a className="btn btn-primary" href="/templates">Back to list</a>
         </div>
-        <div className="tb-panel">
+        <div className="card">
           <div className={`tb-row ${previewExpanded ? "tb-row-expanded" : "tb-row-regular"}`}>
             {!previewExpanded && (
               <div>
                 {templateId === null && (
-                  <>
-                    <label className="form-label text-muted">Upload PDF</label>
-                    <input className="form-control mb-3" type="file" accept="application/pdf" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
-                  </>
+                  <div className="form-group">
+                    <label className="form-label muted">Upload PDF</label>
+                    <input className="form-input mb-3" type="file" accept="application/pdf" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+                  </div>
                 )}
-                <label className="form-label text-muted">Template name</label>
-                <input className="form-control mb-3" type="text" value={templateName} onChange={e => setTemplateName(e.target.value)} />
-
-                <div className="mb-3 d-flex gap-2">
-                  <button className="btn btn-primary btn-sm" disabled={loading || !pdfBase64 || !templateName || fields.length === 0} onClick={saveTemplate} style={
-                    Object.assign({ marginTop: '0.5rem' }, loading || !pdfBase64 || !templateName || fields.length === 0 ? { background: '#6c757d', borderColor: '#6c757d', cursor: 'not-allowed' } : undefined)}>
-                    {loading ? "Saving..." : "Save Template"}
-                  </button>
+                <div className="form-group">
+                  <label className="form-label muted">Template name</label>
+                  <input className="form-input mb-3" type="text" value={templateName} onChange={e => setTemplateName(e.target.value)} />
                 </div>
-                {status && <div className="tb-error">{status}</div>}
 
-                {fields.length === 0 && <p className="text-muted mb-2">No fields yet. Click "Add field" for the current page.</p>}
-                <div className="d-flex flex-column gap-2" style={{ display: 'flex', flexDirection: 'column', marginTop: '1rem' }}>
+
+                <button className={`full-w mb-4 btn btn-primary${loading || !pdfBase64 || !templateName || fields.length === 0 ? " btn-disabled" : ""}`} onClick={saveTemplate} disabled={loading || !pdfBase64 || !templateName || fields.length === 0}>
+                  {loading ? "Saving..." : "Save Template"}
+                </button>
+
+                {status && <div className="tb-error mt-2 mb-4">{status}</div>}
+
+                {fields.length === 0 && <p className="muted mb-2">No fields yet. Click "Add field" for the current page.</p>}
+                <div className="flex flex-col gap-2">
                   {fields.map(f => (
-                    <div key={f.id} className="tb-chip" style={{ width: "unset!important" }}>
-                      <div className="d-flex flex-column flex-md-row gap-2 align-items-center w-100" style={{ width: '100%' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <div key={f.id} className="card">
+                      <div className="flex flex-col gap-2 items-center full-w">
+                        <div className="flex items-center justify-between full-w">
                           <div className="flex-grow-1" onClick={() => {
                             if (f.page !== currentPage) setCurrentPage(f.page);
                             setExpandedFieldId(expandedFieldId === f.id ? null : f.id)
                           }} style={{ cursor: 'pointer' }}>
-                            <strong>{f.fieldName}</strong> <small>page {f.page}</small><br />
-                            <small>{f.type}{f.type === "barcode" && f.barcodeFormat ? ` • ${f.barcodeFormat}` : ""}</small>
+                            <strong>{f.fieldName}</strong><br />
+                            <small>Page {f.page} • {f.type}{f.type === "barcode" && f.barcodeFormat ? ` • ${f.barcodeFormat}` : ""}</small>
                           </div>
-                          <button style={{ background: '#ae1c1c', padding: '3px 10px' }} onClick={() => removeFieldWithConfirm(f.id)}>×</button>
+                          <button className="btn btn-danger btn-small" onClick={() => removeFieldWithConfirm(f.id)}>×</button>
                         </div>
                         {expandedFieldId === f.id && (
-                          <div style={{ display: 'flex', gap: '0.5rem', flexDirection: 'column', width: '100%', marginTop: '0.5rem' }}>
-                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center', justifyContent: 'flex-start' }}>
-                              <label htmlFor={`fieldName-${f.id}`} style={{ fontWeight: 'normal', fontSize: '0.875rem', flexBasis: '100px', margin: 0 }}>Field Name:</label>
+                          <div className="flex flex-col gap-2 full-w mt-2">
+                            <div className="form-group form-group-sm">
+                              <label htmlFor={`fieldName-${f.id}`} className="form-label form-label-sm">Field Name:</label>
                               <input
-                                style={{ margin: 0 }}
                                 id={`fieldName-${f.id}`}
-                                className="form-control form-control-sm"
+                                className="form-input form-input-sm"
                                 value={f.fieldName}
                                 onChange={e => {
                                   const val = e.target.value;
@@ -570,9 +570,9 @@
                                   setDirty(true);
                                 }} />
                             </div>
-                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center', justifyContent: 'flex-start' }}>
-                              <label htmlFor={`fieldType-${f.id}`} style={{ fontWeight: 'normal', fontSize: '0.875rem', flexBasis: '100px', margin: 0 }}>Type:</label>
-                              <select id={`fieldType-${f.id}`} style={{ width: '100%', margin: 0 }} className="form-select form-select-sm" value={f.type} onChange={e => {
+                            <div className="form-group form-group-sm">
+                              <label htmlFor={`fieldType-${f.id}`} className="form-label form-label-sm">Type:</label>
+                              <select id={`fieldType-${f.id}`} className="form-input form-input-sm" value={f.type} onChange={e => {
                                 const newType = e.target.value;
                                 const patch = { type: newType };
                                 if (newType === "table" && (!f.tableColumns || f.tableColumns.length === 0)) {
@@ -590,9 +590,9 @@
                               </select>
                             </div>
                             {f.type === "barcode" && (
-                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', justifyContent: 'flex-start' }}>
-                                <label htmlFor={`barcodeFormat-${f.id}`} style={{ fontWeight: 'normal', fontSize: '0.875rem', flexBasis: '100px' }}>Barcode Format:</label>
-                                <select id={`barcodeFormat-${f.id}`} className="form-select form-select-sm" value={f.barcodeFormat} onChange={e => updateField(f.id, { barcodeFormat: e.target.value })}>
+                              <div className="form-group form-group-sm">
+                                <label htmlFor={`barcodeFormat-${f.id}`} className="form-label form-label-sm">Barcode Format:</label>
+                                <select id={`barcodeFormat-${f.id}`} className="form-input form-input-sm" value={f.barcodeFormat} onChange={e => updateField(f.id, { barcodeFormat: e.target.value })}>
                                   <option value="qrcode">QR</option>
                                   <option value="datamatrix">DataMatrix</option>
                                   <option value="pdf417">PDF417</option>
@@ -606,36 +606,36 @@
                               </div>
                             )}
                             {f.type === "text" && (
-                              <span style={{ display: 'flex', gap: '4px', justifyContent: 'space-between' }}>
-                                <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-start', justifyContent: 'center', flexDirection: 'column', flexBasis: '33.33%' }}>
-                                  <label htmlFor={`fontName-${f.id}`} style={{ fontWeight: 'normal', fontSize: '0.875rem' }}>Font:</label>
-                                  <select style={{ width: '100%' }} id={`fontName-${f.id}`} className="form-select form-select-sm" value={f.fontName} onChange={e => { updateField(f.id, { fontName: e.target.value }); setDirty(true); }}>
+                              <span className="flex gap-1 justify-between">
+                                <div className="form-group form-group-sm">
+                                  <label htmlFor={`fontName-${f.id}`} className="form-label form-label-sm">Font:</label>
+                                  <select id={`fontName-${f.id}`} className="form-input form-input-sm" value={f.fontName} onChange={e => { updateField(f.id, { fontName: e.target.value }); setDirty(true); }}>
                                     {allowedFonts.map(fn => <option key={fn} value={fn}>{fn}</option>)}
                                   </select>
                                 </div>
-                                <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-start', justifyContent: 'center', flexDirection: 'column', flexBasis: '33.33%' }}>
-                                  <label htmlFor={`fontSize-${f.id}`} style={{ fontWeight: 'normal', fontSize: '0.875rem' }}>Size:</label>
-                                  <select style={{ width: '100%' }} id={`fontSize-${f.id}`} className="form-select form-select-sm" value={f.fontSize} onChange={e => { updateField(f.id, { fontSize: Number(e.target.value) }); setDirty(true); }}>
+                                <div className="form-group form-group-sm">
+                                  <label htmlFor={`fontSize-${f.id}`} className="form-label form-label-sm">Size:</label>
+                                  <select id={`fontSize-${f.id}`} className="form-input form-input-sm" value={f.fontSize} onChange={e => { updateField(f.id, { fontSize: Number(e.target.value) }); setDirty(true); }}>
                                     {fontSizes.map(sz => <option key={sz} value={sz}>{sz}px</option>)}
                                   </select>
                                 </div>
-                                <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-start', justifyContent: 'center', flexDirection: 'column', flexBasis: '33.33%' }}>
-                                  <label htmlFor={`fontWeight-${f.id}`} style={{ fontWeight: 'normal', fontSize: '0.875rem' }}>Weight:</label>
-                                  <select style={{ width: '100%' }} id={`fontWeight-${f.id}`} className="form-select form-select-sm" value={f.fontWeight} onChange={e => { updateField(f.id, { fontWeight: e.target.value }); setDirty(true); }}>
+                                <div className="form-group form-group-sm">
+                                  <label htmlFor={`fontWeight-${f.id}`} className="form-label form-label-sm">Weight:</label>
+                                  <select id={`fontWeight-${f.id}`} className="form-input form-input-sm" value={f.fontWeight} onChange={e => { updateField(f.id, { fontWeight: e.target.value }); setDirty(true); }}>
                                     {fontWeights.map(w => <option key={w} value={w}>{w}</option>)}
                                   </select>
                                 </div>
-                                <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-start', justifyContent: 'center', flexDirection: 'column', flexBasis: '33.33%' }}>
-                                  <label style={{ fontWeight: 'normal', fontSize: '0.875rem' }}>Horizontal:</label>
-                                  <select className="form-select form-select-sm" value={f.horizontalAlign || "left"} onChange={e => { updateField(f.id, { horizontalAlign: e.target.value }); setDirty(true); }}>
+                                <div className="form-group form-group-sm">
+                                  <label className="form-label form-label-sm">Horizontal:</label>
+                                  <select className="form-input form-input-sm" value={f.horizontalAlign || "left"} onChange={e => { updateField(f.id, { horizontalAlign: e.target.value }); setDirty(true); }}>
                                     <option value="left">Left</option>
                                     <option value="center">Center</option>
                                     <option value="right">Right</option>
                                   </select>
                                 </div>
-                                <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-start', justifyContent: 'center', flexDirection: 'column', flexBasis: '33.33%' }}>
-                                  <label style={{ fontWeight: 'normal', fontSize: '0.875rem' }}>Vertical:</label>
-                                  <select className="form-select form-select-sm" value={f.verticalAlign || "center"} onChange={e => { updateField(f.id, { verticalAlign: e.target.value }); setDirty(true); }}>
+                                <div className="form-group form-group-sm">
+                                  <label className="form-label form-label-sm">Vertical:</label>
+                                  <select className="form-input form-input-sm" value={f.verticalAlign || "center"} onChange={e => { updateField(f.id, { verticalAlign: e.target.value }); setDirty(true); }}>
                                     <option value="top">Top</option>
                                     <option value="center">Center</option>
                                     <option value="bottom">Bottom</option>
@@ -644,104 +644,124 @@
                               </span>
                             )}
                             {f.type === "table" && (
-                              <div style={{ display: 'flex', gap: '4px', flexDirection: 'column' }}>
-                                <div className="d-flex gap-2">
-                                  <div className="flex-grow-1">
-                                    <label style={{ fontWeight: 'normal', fontSize: '0.875rem' }}>Font:</label>
-                                    <select className="form-select form-select-sm" value={f.fontName} onChange={e => { updateField(f.id, { fontName: e.target.value }); setDirty(true); }}>
-                                      {allowedFonts.map(fn => <option key={fn} value={fn}>{fn}</option>)}
-                                    </select>
-                                  </div>
-                                  <div className="flex-grow-1">
-                                    <label style={{ fontWeight: 'normal', fontSize: '0.875rem' }}>Border:</label>
-                                    <select className="form-select form-select-sm" value={(f.tableColumns?.[0]?.borderStyle) || "none"} onChange={e => {
-                                      let next = [...(f.tableColumns || [])].map(col => ({ ...col, borderStyle: e.target.value }));
-                                      if (next.length === 0) {
-                                        next = [{ name: "Col 1", widthPercent: 100, fontSize: 12, fontWeight: "normal", borderStyle: e.target.value, horizontalAlign: "left", verticalAlign: "center" }];
-                                      }
-                                      updateField(f.id, { tableColumns: next, columns: next.length });
-                                      setDirty(true);
-                                    }}>
-                                      <option value="none">No border</option>
-                                      <option value="dashed">Dashed</option>
-                                      <option value="filled">Filled</option>
-                                    </select>
-                                  </div>
+                              <div className="flex gap-1 flex-col">
+                                <div className="form-group form-group-sm">
+                                  <label className="form-label form-label-sm">Font:</label>
+                                  <select className="form-input form-input-sm" value={f.fontName} onChange={e => { updateField(f.id, { fontName: e.target.value }); setDirty(true); }}>
+                                    {allowedFonts.map(fn => <option key={fn} value={fn}>{fn}</option>)}
+                                  </select>
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <div className="flex-grow-1">
+                                  <label className="form-label form-label-sm">Border:</label>
+                                  <select className="form-input form-input-sm" value={(f.tableColumns?.[0]?.borderStyle) || "none"} onChange={e => {
+                                    let next = [...(f.tableColumns || [])].map(col => ({ ...col, borderStyle: e.target.value }));
+                                    if (next.length === 0) {
+                                      next = [{ name: "Col 1", widthPercent: 100, fontSize: 12, fontWeight: "normal", borderStyle: e.target.value, horizontalAlign: "left", verticalAlign: "center" }];
+                                    }
+                                    updateField(f.id, { tableColumns: next, columns: next.length });
+                                    setDirty(true);
+                                  }}>
+                                    <option value="none">No border</option>
+                                    <option value="dashed">Dashed</option>
+                                    <option value="filled">Filled</option>
+                                  </select>
+                                </div>
+
+                                <div class="flex flex-col gap-2">
+                                  <strong className="mt-2 mb-1">Columns</strong>
                                   {(f.tableColumns || []).map((c, idx) => (
-                                    <div key={idx} className="input-group input-group-sm" style={{ alignItems: 'center' }}>
-                                      <span className="input-group-text">Col {idx + 1}</span>
-                                      <input type="text" className="form-control" placeholder="Name" value={c.name || ""} onChange={e => {
-                                        const next = [...(f.tableColumns || [])];
-                                        next[idx] = { ...next[idx], name: e.target.value };
-                                        updateField(f.id, { tableColumns: next, columns: next.length });
-                                        setDirty(true);
-                                      }} />
-                                      <input
-                                        type="number"
-                                        min="1"
-                                        max="100"
-                                        required
-                                        className="form-control"
-                                        placeholder="Width %"
-                                        value={c.widthPercent ?? 100}
-                                        onChange={e => {
-                                          const next = [...(f.tableColumns || [])];
-                                          const raw = Number(e.target.value);
-                                          const val = Number.isFinite(raw) ? Math.min(100, Math.max(1, raw)) : 1;
-                                          next[idx] = { ...next[idx], widthPercent: val };
+                                    <div key={idx} className="card card-sm">
+                                      <div className="flex justify-between items-center mb-1">
+                                        <span>Column {idx + 1}</span>
+                                        <button className="btn btn-small btn-danger" onClick={() => {
+                                          const current = f.tableColumns || [];
+                                          if (current.length <= 1) return;
+                                          const next = [...current];
+                                          next.splice(idx, 1);
                                           updateField(f.id, { tableColumns: next, columns: next.length });
                                           setDirty(true);
-                                        }}
-                                      />
-                                      <select className="form-select form-select-sm" value={c.fontSize} onChange={e => {
-                                        const next = [...(f.tableColumns || [])];
-                                        next[idx] = { ...next[idx], fontSize: Number(e.target.value) };
-                                        updateField(f.id, { tableColumns: next, columns: next.length });
-                                        setDirty(true);
-                                      }}>
-                                        {fontSizes.map(sz => <option key={sz} value={sz}>{sz}px</option>)}
-                                      </select>
-                                      <select className="form-select form-select-sm" value={c.fontWeight} onChange={e => {
-                                        const next = [...(f.tableColumns || [])];
-                                        next[idx] = { ...next[idx], fontWeight: e.target.value };
-                                        updateField(f.id, { tableColumns: next, columns: next.length });
-                                        setDirty(true);
-                                      }}>
-                                        {fontWeights.map(w => <option key={w} value={w}>{w}</option>)}
-                                      </select>
-                                      <select className="form-select form-select-sm" value={c.horizontalAlign || "left"} onChange={e => {
-                                        const next = [...(f.tableColumns || [])];
-                                        next[idx] = { ...next[idx], horizontalAlign: e.target.value };
-                                        updateField(f.id, { tableColumns: next, columns: next.length });
-                                        setDirty(true);
-                                      }}>
-                                        <option value="left">Left</option>
-                                        <option value="center">Center</option>
-                                        <option value="right">Right</option>
-                                      </select>
-                                      <select className="form-select form-select-sm" value={c.verticalAlign || "center"} onChange={e => {
-                                        const next = [...(f.tableColumns || [])];
-                                        next[idx] = { ...next[idx], verticalAlign: e.target.value };
-                                        updateField(f.id, { tableColumns: next, columns: next.length });
-                                        setDirty(true);
-                                      }}>
-                                        <option value="top">Top</option>
-                                        <option value="center">Center</option>
-                                        <option value="bottom">Bottom</option>
-                                      </select>
-                                      <button className="btn btn-outline-danger btn-sm" onClick={() => {
-                                        const current = f.tableColumns || [];
-                                        if (current.length <= 1) return;
-                                        const next = [...current];
-                                        next.splice(idx, 1);
-                                        updateField(f.id, { tableColumns: next, columns: next.length });
-                                        setDirty(true);
-                                      }}>×</button>
+                                        }}>×</button>
+                                      </div>
+                                      <div className="form-group form-group-sm">
+                                        <label className="form-label form-label-sm">Column name:</label>
+                                        <input type="text" className="form-input form-input-sm" placeholder="Name" value={c.name || ""} onChange={e => {
+                                          const next = [...(f.tableColumns || [])];
+                                          next[idx] = { ...next[idx], name: e.target.value };
+                                          updateField(f.id, { tableColumns: next, columns: next.length });
+                                          setDirty(true);
+                                        }} />
+                                      </div>
+                                      <div className="form-group form-group-sm">
+                                        <label className="form-label form-label-sm">Column width (%):</label>
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          max="100"
+                                          required
+                                          className="form-input form-input-sm"
+                                          placeholder="Width %"
+                                          value={c.widthPercent ?? 100}
+                                          onChange={e => {
+                                            const next = [...(f.tableColumns || [])];
+                                            const raw = Number(e.target.value);
+                                            const val = Number.isFinite(raw) ? Math.min(100, Math.max(1, raw)) : 1;
+                                            next[idx] = { ...next[idx], widthPercent: val };
+                                            updateField(f.id, { tableColumns: next, columns: next.length });
+                                            setDirty(true);
+                                          }}
+                                        />
+                                      </div>
+                                      <div className="form-group form-group-sm">
+                                        <label className="form-label form-label-sm">Column font size:</label>
+                                        <select className="form-input form-input-sm" value={c.fontSize} onChange={e => {
+                                          const next = [...(f.tableColumns || [])];
+                                          next[idx] = { ...next[idx], fontSize: Number(e.target.value) };
+                                          updateField(f.id, { tableColumns: next, columns: next.length });
+                                          setDirty(true);
+                                        }}>
+                                          {fontSizes.map(sz => <option key={sz} value={sz}>{sz}px</option>)}
+                                        </select>
+                                      </div>
+                                      <div className="form-group form-group-sm">
+                                        <label className="form-label form-label-sm">Column font weight:</label>
+                                        <select className="form-input form-input-sm" value={c.fontWeight} onChange={e => {
+                                          const next = [...(f.tableColumns || [])];
+                                          next[idx] = { ...next[idx], fontWeight: e.target.value };
+                                          updateField(f.id, { tableColumns: next, columns: next.length });
+                                          setDirty(true);
+                                        }}>
+                                          {fontWeights.map(w => <option key={w} value={w}>{w}</option>)}
+                                        </select>
+                                      </div>
+                                      <div className="form-group form-group-sm">
+                                        <label className="form-label form-label-sm">Column horizontal alignment:</label>
+                                        <select className="form-input form-input-sm" value={c.horizontalAlign || "left"} onChange={e => {
+                                          const next = [...(f.tableColumns || [])];
+                                          next[idx] = { ...next[idx], horizontalAlign: e.target.value };
+                                          updateField(f.id, { tableColumns: next, columns: next.length });
+                                          setDirty(true);
+                                        }}>
+                                          <option value="left">Left</option>
+                                          <option value="center">Center</option>
+                                          <option value="right">Right</option>
+                                        </select>
+                                      </div>
+                                      <div className="form-group form-group-sm">
+                                        <label className="form-label form-label-sm">Column vertical alignment:</label>
+                                        <select className="form-input form-input-sm" value={c.verticalAlign || "center"} onChange={e => {
+                                          const next = [...(f.tableColumns || [])];
+                                          next[idx] = { ...next[idx], verticalAlign: e.target.value };
+                                          updateField(f.id, { tableColumns: next, columns: next.length });
+                                          setDirty(true);
+                                        }}>
+                                          <option value="top">Top</option>
+                                          <option value="center">Center</option>
+                                          <option value="bottom">Bottom</option>
+                                        </select>
+                                      </div>
                                     </div>
                                   ))}
-                                  <button className="btn btn-outline-secondary btn-sm" onClick={() => {
+                                  <button className="btn btn-small" onClick={() => {
                                     const next = calculateNewTableColumns(f);
                                     updateField(f.id, { tableColumns: next, columns: next.length });
                                     setDirty(true);
@@ -757,30 +777,29 @@
                 </div>
               </div>
             )}
-            <div style={{ marginTop: '1rem' }}>
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <div className="d-flex gap-1 mb-4" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    {pages.length > 0 && (
-                      <>
-                        <button className="btn btn-success btn-sm" onClick={addFieldToPage}>Add field</button>
-                        {aiDetectEnabled && (
-                          <button
-                            className="btn btn-outline-primary btn-sm"
-                            disabled={aiBusy || !pdfBase64}
-                            onClick={detectFieldsWithAi}
-                          >
-                            {aiBusy ? "Detecting..." : "AI detect fields"}
-                          </button>
-                        )}
-                        <button className="btn btn-outline-secondary btn-sm" onClick={() => { setPreviewExpanded(!previewExpanded); }}>
-                          {previewExpanded ? "Collapse" : "Expand"}
-                        </button>
-                      </>
-                    )}
+            <div>
+
+              {pages.length > 0 && (
+                <div className="flex gap-1 mb-1 justify-between">
+                  <button className="btn btn-primary btn-small" onClick={addFieldToPage}>Add field</button>
+                  {aiDetectEnabled && (
+                    <button
+                      className="btn btn-secondary btn-small"
+                      disabled={aiBusy || !pdfBase64}
+                      onClick={detectFieldsWithAi}
+                    >
+                      {aiBusy ? "Detecting..." : "AI detect fields"}
+                    </button>
+                  )}
+                  <button className="btn btn-secondary btn-small" onClick={() => { setPreviewExpanded(!previewExpanded); }}>
+                    {previewExpanded ? "Collapse" : "Expand"}
+                  </button>
+
                 </div>
-              </div>
-              <div className="tb-preview" style={{ marginTop: '0.5rem' }}>
-                {pages.length === 0 && <p className="text-muted" style={{ textAlign: "center" }}>Upload a PDF to see the preview.</p>}
+              )}
+
+              <div className="tb-preview">
+                {pages.length === 0 && <p className="muted p-4 text-center">Upload a PDF to see a preview.</p>}
                 {pages.filter(p => p.pageNumber === currentPage).map(p => (
                   <div key={p.pageNumber} className="tb-page">
                     <img
@@ -836,7 +855,8 @@
                             style={{ left: x, top: y, width: w, height: h, background: expandedFieldId === f.id ? "rgba(75, 85, 99, 0.9)" : "rgba(55, 55, 55, 0.8)" }}>
                             <button
                               type="button"
-                              style={{ position: "absolute", left: -10, top: -10, zIndex: 4, padding: "2px 6px", fontSize: "10px", margin: 0 }}
+                              style={{ position: "absolute", left: -10, top: -10, zIndex: 4 }}
+                              class="btn btn-primary btn-template-builder-field"
                               onClick={() => {
                                 console.log(expandedFieldId, f.id, expandedFieldId === f.id)
                                 setExpandedFieldId(expandedFieldId === f.id ? null : f.id);
@@ -849,7 +869,7 @@
                               onMouseDown={e => { e.preventDefault(); startDrag(f, "move", e.clientX, e.clientY, { x, y, w, h, scaleX, scaleY }); }}
                             ></div>
                             <div
-                              style={{ position: "absolute", right: -4, bottom: -4, width: 8, height: 8, cursor: "nwse-resize", background: "#2563eb", borderRadius: 4, zIndex: 5 }}
+                              style={{ position: "absolute", right: -3, bottom: -3, width: 6, height: 6, cursor: "nwse-resize", background: "#2563eb", borderRadius: 4, zIndex: 5 }}
                               onMouseDown={e => { e.preventDefault(); startDrag(f, "resize", e.clientX, e.clientY, { x, y, w, h, scaleX, scaleY }); }}
                             ></div>
                             <div style={{ position: "relative", zIndex: 2, width: "100%", height: "100%", display: "flex", alignItems: f.type === "table" ? "stretch" : alignItems, justifyContent: f.type === "table" ? "stretch" : justifyContent, padding: f.type === 'table' ? 0 : "6px", pointerEvents: "none", fontFamily: f.fontName || "Helvetica, Arial, sans-serif" }}>
@@ -896,20 +916,20 @@
               {pages.length > 0 && (
                 <div className="d-grid" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
                   <button
-                    className="btn btn-outline-secondary btn-sm"
+                    className={`btn btn-primary btn-small ${currentPage === 1 ? "btn-disabled" : ""}`}
                     onClick={() => {
                       setCurrentPage(Math.max(1, currentPage - 1))
                       setExpandedFieldId(null);
                     }}
                     disabled={currentPage === 1}
                   >
-                    Prev
+                    Previous
                   </button>
-                  <div className="d-flex align-items-center justify-content-center text-muted">
+                  <div className="muted">
                     Page {currentPage} / {pages.length}
                   </div>
                   <button
-                    className="btn btn-outline-secondary btn-sm"
+                    className={`btn btn-primary btn-small ${currentPage === pages.length ? "btn-disabled" : ""}`}
                     onClick={() => {
                       setCurrentPage(Math.min(pages.length, currentPage + 1))
                       setExpandedFieldId(null);
@@ -921,7 +941,7 @@
                 </div>
               )}
             </div>
-          </div>
+          </div >
         </div >
       </>
     );

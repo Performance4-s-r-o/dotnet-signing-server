@@ -42,4 +42,6 @@ TestResults/
 *.sln.iml
 
 signing-local.db*
+postgres-data/
+data-protection-keys/
 
