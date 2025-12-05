@@ -39,6 +39,8 @@ builder.Services.AddScoped<IStripeCheckoutService, StripeCheckoutService>();
 builder.Services.AddScoped<IApiAuthService, ApiAuthService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<PdfTemplateService>();
+builder.Services.AddScoped<PdfConversionService>();
+builder.Services.AddScoped<FlowPipelineService>();
 builder.Services.AddSingleton<ContentLimitGuard>();
 builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();
 builder.Services.AddHttpClient<LokiClient>();

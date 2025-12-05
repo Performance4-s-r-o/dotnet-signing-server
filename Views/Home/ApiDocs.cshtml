@@ -75,6 +75,21 @@ new { fieldName = "Name", page = 1, rect = new { x = 40, y = 700, width = 200, h
 }
   }, new JsonSerializerOptions { WriteIndented = true });
   var curlTemplatesCreate = $"curl -X POST {apiBase}/pdf-template -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlTemplatesCreatePayload}'";
+  var curlConvertPdfaPayload = JsonSerializer.Serialize(new
+  {
+    pdfContent = "base64-pdf",
+    conformance = "PDF/A-2B"
+  }, new JsonSerializerOptions { WriteIndented = true });
+  var curlConvertPdfa = $"curl -X POST {apiBase}/convert/pdfa -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlConvertPdfaPayload}'";
+  var curlFlowPayload = "{\n"
+    + "  \"pdfContents\": [\"base64-pdf-1\", \"base64-pdf-2\"],\n"
+    + "  \"flow\": [\n"
+    + "    { \"action\": \"pdfa\", \"data\": { \"conformance\": \"PDF/A-2B\" } },\n"
+    + "    { \"action\": \"attachment\", \"data\": { \"attachmentContent\": \"base64\", \"fileName\": \"notes.txt\", \"mimeType\": \"text/plain\", \"description\": \"Notes\" } },\n"
+    + "    { \"action\": \"presign\", \"data\": { \"certificatePem\": \"-----BEGIN CERTIFICATE-----...-----END CERTIFICATE-----\", \"fieldName\": \"Signature1\" } }\n"
+    + "  ]\n"
+    + "}";
+  var curlFlow = $"curl -X POST {apiBase}/flow -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlFlowPayload}'";
 }
 
 <h1 class="content-box-title">API Documentation</h1>
@@ -150,6 +165,18 @@ new { fieldName = "Name", page = 1, rect = new { x = 40, y = 700, width = 200, h
         <td><a href="#fill-pdf"><code>/api/fill-pdf</code></a></td>
         <td>Fill a template with data</td>
         <td>1 credit / 3 pages / output</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><a href="#convert-pdfa"><code>/api/convert/pdfa</code></a></td>
+        <td>Convert PDF to PDF/A (PDF/A-2B default)</td>
+        <td>1 credit / 3 pages</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><a href="#flow"><code>/api/flow</code></a></td>
+        <td>Pipeline: fill/template + pdfa/attachment/presign/timestamp/sign-pfx</td>
+        <td>1 per flow step; fill costs 1 / 3 pages / dataset</td>
       </tr>
       <tr>
         <td>POST</td>
@@ -323,6 +350,74 @@ Response:
 { "result": "base64-pdf-with-attachment" }</code></pre>
 </div>
 
+<div class="card mb-3" id="convert-pdfa">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Convert to PDF/A</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="convertPdfa">Copy cURL</button>
+      <span id="curl-status-convertPdfa" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <p class="muted" style="margin:0 0 6px;">Costs 1 credit per started 3 pages. Defaults to PDF/A-2B.</p>
+  <p class="muted" style="margin:0 0 6px;">Conformance options: PDF/A-1A, PDF/A-1B, PDF/A-2A, PDF/A-2B, PDF/A-2U, PDF/A-3A, PDF/A-3B, PDF/A-3U, PDF/A-4, PDF/A-4E, PDF/A-4F.</p>
+  <pre class="code-block"><code>POST /api/convert/pdfa
+Authorization: Bearer &lt;token&gt;
+Content-Type: application/json
+
+{
+  "pdfContent": "base64-pdf",
+  "conformance": "PDF/A-2B"
+}
+
+Response:
+{
+  "result": "base64-pdf-a",
+  "conformance": "PDF/A-2B"
+}</code></pre>
+</div>
+
+<div class="card mb-3" id="flow">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Flow pipeline</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="flow">Copy cURL</button>
+      <span id="curl-status-flow" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <p class="muted" style="margin:0 0 6px;">Run fill (optional) then a sequence of pdfa/attachment/presign/timestamp/sign-pfx. One terminal step (presign/timestamp/sign-pfx) per flow.</p>
+  <pre class="code-block"><code>POST /api/flow
+Authorization: Bearer &lt;token&gt;
+Content-Type: application/json
+
+{
+  "pdfContents": ["base64-pdf-1", "base64-pdf-2"],
+  // or "fillPdf": { "templateId": "a1b2...", "data": [ { "data": [ { "fieldName": "Name", "value": "Ada" } ] } ] },
+  "flow": [
+    { "action": "pdfa", "data": { "conformance": "PDF/A-2B" } },
+    { "action": "attachment", "data": { "attachmentContent": "base64", "fileName": "notes.txt", "mimeType": "text/plain", "description": "Notes" } },
+    { "action": "presign", "data": { "certificatePem": "-----BEGIN CERTIFICATE-----…", "fieldName": "Signature1" } }
+  ]
+}
+
+Response (start):
+{ "id": "flow-id", "status": "inprogress" }
+
+Status polling:
+GET /api/flow/{flowId}
+Response:
+{ "id": "flow-id", "status": "waiting_for_signatures", "pendingSignatures": [ { "id": "signing-id", "hashToSign": "..." } ] }
+
+Complete signatures (when presign used):
+POST /api/flow-sign
+{
+  "flowId": "flow-id",
+  "signatures": [ { "id": "signing-id", "signedHash": "base64-signature" } ]
+}
+
+Final status:
+{ "id": "flow-id", "status": "done", "results": ["base64-pdf", "base64-pdf"] }</code></pre>
+</div>
+
 <div class="card mb-3" id="fill-pdf">
   <div class="flex justify-between items-center mb-2">
     <h3 class="card-title" style="margin:0;">Fill PDF from template</h3>
@@ -431,6 +526,8 @@ Response:
       signPfx: @Html.Raw(JsonSerializer.Serialize(curlSignPfx)),
       timestamp: @Html.Raw(JsonSerializer.Serialize(curlTimestamp)),
       attachment: @Html.Raw(JsonSerializer.Serialize(curlAttachment)),
+      convertPdfa: @Html.Raw(JsonSerializer.Serialize(curlConvertPdfa)),
+      flow: @Html.Raw(JsonSerializer.Serialize(curlFlow)),
       fillPdf: @Html.Raw(JsonSerializer.Serialize(curlFillPdf)),
       findCodes: @Html.Raw(JsonSerializer.Serialize(curlFindCodes)),
       templates: @Html.Raw(JsonSerializer.Serialize(curlTemplatesCreate))
@@ -448,14 +545,15 @@ Response:
       }
     };
 
-    documentcopy - curl").forEach((btn) => {
-    const key = btn.dataset.curlKey;
-    const statusId = `curl-status-${key}`;
-    const statusEl = document.getElementById(statusId);
-    btn.addEventListener("click", () => {
-      const text = curlMap[key];
-      copy(text, statusEl);
+    document.querySelectorAll('button[data-curl-key]').forEach((btn) =>
+    {
+      const key = btn.dataset.curlKey;
+      const statusId = `curl-status-${key}`;
+      const statusEl = document.getElementById(statusId);
+      btn.addEventListener("click", () => {
+        const text = curlMap[key];
+        copy(text, statusEl);
+      });
     });
-  });
-  }) ();
+  })();
 </script>
