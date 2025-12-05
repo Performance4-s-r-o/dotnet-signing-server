@@ -948,6 +948,16 @@ a {
   line-height: 1.7;
 }
 
+.code-block {
+  font-size: 0.9rem;
+  word-break: break-all;
+  color: white;
+  background: #353535;
+  padding: 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
 /* Pricing */
 .pricing-grid {
   display: grid;

@@ -1,12 +1,86 @@
+@using System.Text.Json
 @{
   ViewData["Title"] = "API Documentation";
   var baseUrl = (ViewData["BaseUrl"]?.ToString() ?? string.Empty).TrimEnd('/');
   var apiBase = string.IsNullOrWhiteSpace(baseUrl) ? "/api" : $"{baseUrl}/api";
+  var sampleRequest = new
+  {
+    pdfContent = "base64-pdf",
+    location = "Prague, CZ",
+    reason = "Approving contract",
+    signRect = new { x = 50, y = 120, width = 200, height = 50 },
+    signPageNumber = 1,
+    fieldName = "Signature1",
+    tsaUrl = "https://freetsa.org/tsr"
+  };
+  var curlPayload = JsonSerializer.Serialize(sampleRequest, new JsonSerializerOptions { WriteIndented = true });
+  var curlRequest = $"curl -X POST {apiBase}/presign -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlPayload}'";
+  var curlSign = $"curl -X POST {apiBase}/sign -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{{ \"id\": \"ef2c4d7a-...\", \"signedHash\": \"base64-signature\" }}'";
+  var curlSignPfxPayload = JsonSerializer.Serialize(new
+  {
+    pdfContent = "base64-pdf",
+    pfxContent = "base64-pfx",
+    pfxPassword = "password",
+    location = "Prague, CZ",
+    reason = "Internal approval",
+    signRect = new { x = 40, y = 100, width = 180, height = 45 },
+    signPageNumber = 1,
+    signImageContent = (string?)null,
+    fieldName = "Signature1"
+  }, new JsonSerializerOptions { WriteIndented = true });
+  var curlSignPfx = $"curl -X POST {apiBase}/sign-pfx -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlSignPfxPayload}'";
+  var curlTimestampPayload = JsonSerializer.Serialize(new
+  {
+    pdfContent = "base64-pdf",
+    location = "Prague, CZ",
+    reason = "Timestamp",
+    signRect = new { x = 30, y = 90, width = 180, height = 40 },
+    signPageNumber = 1,
+    fieldName = "Timestamp1",
+    tsaUrl = "https://freetsa.org/tsr"
+  }, new JsonSerializerOptions { WriteIndented = true });
+  var curlTimestamp = $"curl -X POST {apiBase}/timestamp -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlTimestampPayload}'";
+  var curlAttachmentPayload = JsonSerializer.Serialize(new
+  {
+    pdfContent = "base64-pdf",
+    attachmentContent = "base64-binary",
+    fileName = "terms.pdf",
+    description = "Terms and conditions",
+    mimeType = "application/pdf"
+  }, new JsonSerializerOptions { WriteIndented = true });
+  var curlAttachment = $"curl -X POST {apiBase}/attachment -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlAttachmentPayload}'";
+  var curlFillPayload = JsonSerializer.Serialize(new
+  {
+    templateId = "a1b2c3d4-…",
+    data = new[]
+  {
+new { data = new[] { new { fieldName = "Name", value = "Ada" } } },
+new { data = new[] { new { fieldName = "Name", value = "Grace" } } }
+}
+  }, new JsonSerializerOptions { WriteIndented = true });
+  var curlFillPdf = $"curl -X POST {apiBase}/fill-pdf -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlFillPayload}'";
+  var curlFindCodesPayload = JsonSerializer.Serialize(new
+  {
+    pdfContent = "base64-pdf",
+    codeType = "any"
+  }, new JsonSerializerOptions { WriteIndented = true });
+  var curlFindCodes = $"curl -X POST {apiBase}/find-codes -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlFindCodesPayload}'";
+  var curlTemplatesCreatePayload = JsonSerializer.Serialize(new
+  {
+    pdfContent = "base64-pdf",
+    templateName = "Invoice",
+    fields = new[]
+  {
+new { fieldName = "Name", page = 1, rect = new { x = 40, y = 700, width = 200, height = 32 }, type = "text" }
+}
+  }, new JsonSerializerOptions { WriteIndented = true });
+  var curlTemplatesCreate = $"curl -X POST {apiBase}/pdf-template -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlTemplatesCreatePayload}'";
 }
 
 <h1 class="content-box-title">API Documentation</h1>
 <p class="muted">
-  All endpoints live under <code>@apiBase</code> and expect JSON. PDFs, certificates, and attachments are base64 strings.
+  All endpoints live under <code>@apiBase</code> and expect JSON. PDFs, certificates, and attachments are base64
+  strings.
   <br />
   Add <code>Authorization: Bearer &lt;token&gt;</code> (create tokens in <a href="/ApiTokens">API Tokens</a>).
 </p>
@@ -43,73 +117,73 @@
     <tbody>
       <tr>
         <td>POST</td>
-        <td><code>/api/presign</code></td>
+        <td><a href="#presign"><code>/api/presign</code></a></td>
         <td>Prepare PDF and return hash to sign</td>
         <td>0</td>
       </tr>
       <tr>
         <td>POST</td>
-        <td><code>/api/sign</code></td>
+        <td><a href="#sign"><code>/api/sign</code></a></td>
         <td>Finalize presigned PDF</td>
         <td>1</td>
       </tr>
       <tr>
         <td>POST</td>
-        <td><code>/api/sign-pfx</code></td>
+        <td><a href="#sign-pfx"><code>/api/sign-pfx</code></a></td>
         <td>Sign directly with PFX</td>
         <td>1</td>
       </tr>
       <tr>
         <td>POST</td>
-        <td><code>/api/timestamp</code></td>
+        <td><a href="#timestamp"><code>/api/timestamp</code></a></td>
         <td>Apply TSA timestamp</td>
         <td>1</td>
       </tr>
       <tr>
         <td>POST</td>
-        <td><code>/api/attachment</code></td>
+        <td><a href="#attachment"><code>/api/attachment</code></a></td>
         <td>Embed attachment</td>
         <td>1</td>
       </tr>
       <tr>
         <td>POST</td>
-        <td><code>/api/fill-pdf</code></td>
+        <td><a href="#fill-pdf"><code>/api/fill-pdf</code></a></td>
         <td>Fill a template with data</td>
         <td>1 credit / 3 pages / output</td>
       </tr>
       <tr>
         <td>POST</td>
-        <td><code>/api/find-codes</code></td>
+        <td><a href="#find-codes"><code>/api/find-codes</code></a></td>
         <td>Scan for QR/DataMatrix/PDF417/Aztec</td>
         <td>1 credit / 3 pages</td>
       </tr>
       <tr>
         <td>POST</td>
-        <td><code>/api/pdf-template</code></td>
+        <td><a href="#templates"><code>/api/pdf-template</code></a></td>
         <td>Create template</td>
         <td>0</td>
       </tr>
       <tr>
         <td>GET</td>
-        <td><code>/api/pdf-template</code></td>
+        <td><a href="#templates"><code>/api/pdf-template</code></a></td>
         <td>List templates</td>
         <td>0</td>
       </tr>
       <tr>
         <td>GET</td>
-        <td><code>/api/pdf-template/{id}</code></td>
+        <td><a href="#templates"><code>/api/pdf-template/{id}</code></a></td>
         <td>Get template</td>
         <td>0</td>
       </tr>
       <tr>
         <td>PUT</td>
-        <td><code>/api/pdf-template/{id}</code></td>
+        <td><a href="#templates"><code>/api/pdf-template/{id}</code></a></td>
         <td>Update template</td>
         <td>0</td>
       </tr>
       <tr>
         <td>DELETE</td>
-        <td><code>/api/pdf-template/{id}</code></td>
+        <td><a href="#templates"><code>/api/pdf-template/{id}</code></a></td>
         <td>Delete template</td>
         <td>0</td>
       </tr>
@@ -125,9 +199,15 @@
 
 <h2 class="tokens-existing-title mt-4 mb-4">Endpoint details</h2>
 
-<div class="card mb-3">
-  <h3 class="card-title">Presign</h3>
-  <pre><code>POST /api/presign
+<div class="card mb-3" id="presign">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Presign</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="presign">Copy cURL</button>
+      <span id="curl-status-presign" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <pre class="code-block"><code>POST /api/presign
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
 
@@ -147,9 +227,15 @@ Response:
 { "id": "ef2c4d7a-…", "hashToSign": "6c3d…9f" }</code></pre>
 </div>
 
-<div class="card mb-3">
-  <h3 class="card-title">Finalize signing</h3>
-  <pre><code>POST /api/sign
+<div class="card mb-3" id="sign">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Finalize signing</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="sign">Copy cURL</button>
+      <span id="curl-status-sign" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <pre class="code-block"><code>POST /api/sign
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
 
@@ -159,9 +245,15 @@ Response:
 { "result": "base64-pdf-with-signature" }</code></pre>
 </div>
 
-<div class="card mb-3">
-  <h3 class="card-title">Sign with PFX</h3>
-  <pre><code>POST /api/sign-pfx
+<div class="card mb-3" id="sign-pfx">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Sign with PFX</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="signPfx">Copy cURL</button>
+      <span id="curl-status-signPfx" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <pre class="code-block"><code>POST /api/sign-pfx
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
 
@@ -181,9 +273,15 @@ Response:
 { "result": "base64-pdf-with-signature" }</code></pre>
 </div>
 
-<div class="card mb-3">
-  <h3 class="card-title">Apply timestamp</h3>
-  <pre><code>POST /api/timestamp
+<div class="card mb-3" id="timestamp">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Apply timestamp</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="timestamp">Copy cURL</button>
+      <span id="curl-status-timestamp" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <pre class="code-block"><code>POST /api/timestamp
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
 
@@ -201,9 +299,15 @@ Response:
 { "result": "base64-pdf-with-timestamp" }</code></pre>
 </div>
 
-<div class="card mb-3">
-  <h3 class="card-title">Add attachment</h3>
-  <pre><code>POST /api/attachment
+<div class="card mb-3" id="attachment">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Add attachment</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="attachment">Copy cURL</button>
+      <span id="curl-status-attachment" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <pre class="code-block"><code>POST /api/attachment
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
 
@@ -219,10 +323,16 @@ Response:
 { "result": "base64-pdf-with-attachment" }</code></pre>
 </div>
 
-<div class="card mb-3">
-  <h3 class="card-title">Fill PDF from template</h3>
+<div class="card mb-3" id="fill-pdf">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Fill PDF from template</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="fillPdf">Copy cURL</button>
+      <span id="curl-status-fillPdf" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
   <p class="muted" style="margin:0 0 6px;">Costs 1 credit per started 3 pages per generated output (dataset).</p>
-  <pre><code>POST /api/fill-pdf
+  <pre class="code-block"><code>POST /api/fill-pdf
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
 
@@ -239,9 +349,15 @@ Response:
 </div>
 
 <div class="card mb-3">
-  <h3 class="card-title">Find barcodes</h3>
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" id="find-codes" style="margin:0;">Find barcodes</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="findCodes">Copy cURL</button>
+      <span id="curl-status-findCodes" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
   <p class="muted" style="margin:0 0 6px;">Costs 1 credit per started 3 pages.</p>
-  <pre><code>POST /api/find-codes
+  <pre class="code-block"><code>POST /api/find-codes
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
 
@@ -258,9 +374,15 @@ Response:
 }</code></pre>
 </div>
 
-<div class="card mb-3">
-  <h3 class="card-title">Manage templates</h3>
-  <pre><code>// Create
+<div class="card mb-3" id="templates">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Manage templates</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="templates">Copy cURL</button>
+      <span id="curl-status-templates" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <pre class="code-block"><code>// Create
 POST /api/pdf-template
 {
   "pdfContent": "base64-pdf",
@@ -300,3 +422,40 @@ Response:
 <p class="muted" style="margin-top:1.5rem;">
   Need help? Reach out with the endpoint path, timestamp, and request ID from your logs.
 </p>
+
+<script>
+  (() => {
+    const curlMap = {
+      presign: @Html.Raw(JsonSerializer.Serialize(curlRequest)),
+      sign: @Html.Raw(JsonSerializer.Serialize(curlSign)),
+      signPfx: @Html.Raw(JsonSerializer.Serialize(curlSignPfx)),
+      timestamp: @Html.Raw(JsonSerializer.Serialize(curlTimestamp)),
+      attachment: @Html.Raw(JsonSerializer.Serialize(curlAttachment)),
+      fillPdf: @Html.Raw(JsonSerializer.Serialize(curlFillPdf)),
+      findCodes: @Html.Raw(JsonSerializer.Serialize(curlFindCodes)),
+      templates: @Html.Raw(JsonSerializer.Serialize(curlTemplatesCreate))
+    };
+
+    const copy = async (text, statusTarget) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        if (statusTarget) {
+          statusTarget.textContent = "Copied";
+          setTimeout(() => statusTarget.textContent = "", 2000);
+        }
+      } catch (e) {
+        if (statusTarget) statusTarget.textContent = "Copy not available";
+      }
+    };
+
+    documentcopy - curl").forEach((btn) => {
+    const key = btn.dataset.curlKey;
+    const statusId = `curl-status-${key}`;
+    const statusEl = document.getElementById(statusId);
+    btn.addEventListener("click", () => {
+      const text = curlMap[key];
+      copy(text, statusEl);
+    });
+  });
+  }) ();
+</script>

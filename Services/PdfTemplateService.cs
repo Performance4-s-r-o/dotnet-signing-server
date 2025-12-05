@@ -287,19 +287,8 @@ public class PdfTemplateService
 
     private static void AddText(string value, PdfDocument pdfDoc, int pageNumber, Rectangle rect, PdfFieldDefinition field)
     {
-        Console.WriteLine(value);
-        Console.WriteLine(pageNumber);
-        Console.WriteLine(rect.GetX());
-        Console.WriteLine(rect.GetWidth());
-        Console.WriteLine(rect.GetY());
-        Console.WriteLine(rect.GetHeight());
-        Console.WriteLine(field.Rect.X);
-        Console.WriteLine(field.Rect.Y);
-        Console.WriteLine(field.Rect.Width);
-        Console.WriteLine(field.Rect.Height);
-
         var page = pdfDoc.GetPage(pageNumber);
-        var canvas = new Canvas(new PdfCanvas(page), page.GetPageSize());
+        // var canvas = new Canvas(new PdfCanvas(page), page.GetPageSize());
         var fontName = ResolveFont(field.FontName, field.FontWeight);
         var horiz = (field.HorizontalAlign ?? "left").ToLowerInvariant();
         var vert = (field.VerticalAlign ?? "center").ToLowerInvariant();
@@ -355,8 +344,22 @@ public class PdfTemplateService
         // };
 
         // canvas.ShowTextAligned(paragraph, anchorX, anchorY, pageNumber, textAlign, vAlign, 0);
-        canvas.Add(paragraph);
-        canvas.Close();
+        // canvas.Add(paragraph);
+        // canvas.Close();
+
+        var pdfCanvas = new PdfCanvas(page);
+        pdfCanvas.SaveState();
+
+        try
+        {
+            var canvas = new Canvas(pdfCanvas, rect);
+            canvas.Add(paragraph);
+            canvas.Close();
+        }
+        finally
+        {
+            pdfCanvas.RestoreState();
+        }
     }
 
     private static void TryAddImage(string base64, PdfDocument pdfDoc, int pageNumber, Rectangle rect)
@@ -370,9 +373,19 @@ public class PdfTemplateService
                 .SetFixedPosition(pageNumber, rect.GetX(), rect.GetY());
 
             var page = pdfDoc.GetPage(pageNumber);
-            var canvas = new Canvas(new PdfCanvas(page), page.GetPageSize());
-            canvas.Add(image);
-            canvas.Close();
+            var pdfCanvas = new PdfCanvas(page);
+            pdfCanvas.SaveState();
+
+            try
+            {
+                var canvas = new Canvas(pdfCanvas, rect);
+                canvas.Add(image);
+                canvas.Close();
+            }
+            finally
+            {
+                pdfCanvas.RestoreState();
+            }
         }
         catch
         {
@@ -404,9 +417,19 @@ public class PdfTemplateService
             barcodeImage.SetFixedPosition(pageNumber, rect.GetX(), rect.GetY());
 
             var page = pdfDoc.GetPage(pageNumber);
-            var canvas = new Canvas(new PdfCanvas(page), page.GetPageSize());
-            canvas.Add(barcodeImage);
-            canvas.Close();
+            var pdfCanvas = new PdfCanvas(page);
+            pdfCanvas.SaveState();
+
+            try
+            {
+                var canvas = new Canvas(pdfCanvas, rect);
+                canvas.Add(barcodeImage);
+                canvas.Close();
+            }
+            finally
+            {
+                pdfCanvas.RestoreState();
+            }
         }
         catch
         {
@@ -501,8 +524,21 @@ public class PdfTemplateService
             }
         }
 
-        using var canvas = new Canvas(new PdfCanvas(page), rect);
-        canvas.Add(table);
+        // using var canvas = new Canvas(new PdfCanvas(page), rect);
+
+        var pdfCanvas = new PdfCanvas(page);
+        pdfCanvas.SaveState();
+
+        try
+        {
+            var canvas = new Canvas(pdfCanvas, rect);
+            canvas.Add(table);
+            canvas.Close();
+        }
+        finally
+        {
+            pdfCanvas.RestoreState();
+        }
     }
 
     private static Image CreateQrCode(PdfDocument pdfDoc, string value)

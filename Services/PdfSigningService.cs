@@ -322,7 +322,6 @@ namespace DotNetSigningServer.Services
             {
                 var pemReader = new Org.BouncyCastle.OpenSsl.PemReader(reader);
                 var certs = new List<IX509Certificate>();
-                Console.Out.WriteLine(certs.ToArray());
                 object? readObject;
                 while ((readObject = pemReader.ReadObject()) != null)
                 {

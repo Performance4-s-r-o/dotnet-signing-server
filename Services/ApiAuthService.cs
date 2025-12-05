@@ -32,8 +32,8 @@ public class ApiAuthService : IApiAuthService
             return null;
         }
 
-        // Hash and match against stored tokens
-        var tokenHash = _tokenService.HashToken(token);
+        token = NormalizeToken(token);
+
         var now = DateTimeOffset.UtcNow;
 
         var candidates = await _dbContext.ApiTokens
@@ -41,7 +41,7 @@ public class ApiAuthService : IApiAuthService
             .Where(t => t.RevokedAt == null && (t.ExpiresAt == null || t.ExpiresAt > now))
             .ToListAsync();
 
-        var apiToken = candidates.FirstOrDefault(t => CryptographicOperations.FixedTimeEquals(t.TokenHash, tokenHash));
+        var apiToken = candidates.FirstOrDefault(t => _tokenService.VerifyToken(token, t.TokenHash));
         if (apiToken == null)
         {
             return null;
@@ -67,5 +67,19 @@ public class ApiAuthService : IApiAuthService
         }
 
         return apiToken.User;
+    }
+
+    private static string NormalizeToken(string token)
+    {
+        var trimmed = token.Trim().Trim('"');
+        // Replace common copy/paste issues where + becomes space
+        trimmed = trimmed.Replace(' ', '+');
+        // Base64 padding fixup if user trimmed it
+        int mod4 = trimmed.Length % 4;
+        if (mod4 != 0)
+        {
+            trimmed = trimmed.PadRight(trimmed.Length + (4 - mod4), '=');
+        }
+        return trimmed;
     }
 }

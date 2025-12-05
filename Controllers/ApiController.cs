@@ -94,29 +94,29 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
-    [HttpPost("/api/pdf-template")]
+        [HttpPost("/api/pdf-template")]
         public async Task<IActionResult> CreatePdfTemplate([FromBody] CreateTemplateInput input)
         {
             var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
 
-        if (input.Fields == null || input.Fields.Count == 0)
-        {
-            return BadRequest(new { message = "At least one field definition is required." });
+            if (input.Fields == null || input.Fields.Count == 0)
+            {
+                return BadRequest(new { message = "At least one field definition is required." });
             }
             if (string.IsNullOrWhiteSpace(input.PdfContent))
             {
                 return BadRequest(new { message = "PdfContent is required." });
             }
 
-        try
-        {
-            var response = await _pdfTemplateService.CreateTemplateAsync(input, user.Id);
-            return Ok(response);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Create template failed");
+            try
+            {
+                var response = await _pdfTemplateService.CreateTemplateAsync(input, user.Id);
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Create template failed");
                 return Problem($"An error occurred while creating the template: {ex.Message}");
             }
         }
@@ -372,11 +372,11 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
-    [HttpPost("/api/fill-pdf")]
-    public async Task<IActionResult> FillPdf([FromBody] FillPdfInput input)
-    {
-        var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
-        if (error != null || user == null) return error!;
+        [HttpPost("/api/fill-pdf")]
+        public async Task<IActionResult> FillPdf([FromBody] FillPdfInput input)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
 
             var hasTemplate = input.TemplateId != null;
             var hasContent = !string.IsNullOrWhiteSpace(input.PdfContent);
@@ -394,36 +394,36 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { message = "At least one data set is required." });
             }
 
-        try
-        {
-            if (hasContent)
+            try
             {
-                _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Fill PDF");
+                if (hasContent)
+                {
+                    _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Fill PDF");
+                }
             }
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-
-        try
-        {
-            var (pdfBase64, pageCount) = await ResolvePdfForFillAsync(input, user.Id);
-            var requiredCredits = CalculateCreditsForPages(pageCount) * (input.Data?.Count ?? 0);
-            if (requiredCredits > 0 && user.CreditsRemaining < requiredCredits)
+            catch (InvalidOperationException ex)
             {
-                return PaymentRequired(user, requiredCredits);
+                return BadRequest(new { message = ex.Message });
             }
 
-            var response = await _pdfTemplateService.FillAsync(input, user.Id);
-            if (requiredCredits > 0)
+            try
             {
-                await DebitUserAsync(user, requiredCredits);
+                var (pdfBase64, pageCount) = await ResolvePdfForFillAsync(input, user.Id);
+                var requiredCredits = CalculateCreditsForPages(pageCount) * (input.Data?.Count ?? 0);
+                if (requiredCredits > 0 && user.CreditsRemaining < requiredCredits)
+                {
+                    return PaymentRequired(user, requiredCredits);
+                }
+
+                var response = await _pdfTemplateService.FillAsync(input, user.Id);
+                if (requiredCredits > 0)
+                {
+                    await DebitUserAsync(user, requiredCredits);
+                }
+                return Ok(response);
             }
-            return Ok(response);
-        }
-        catch (Exception ex)
-        {
+            catch (Exception ex)
+            {
                 _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Fill PDF failed");
                 return Problem($"An error occurred while filling the PDF: {ex.Message}");
             }
@@ -504,7 +504,72 @@ namespace DotNetSigningServer.Controllers
             return formats;
         }
 
-        private async Task<List<object>> DetectCodesAsync(string base64Pdf, IList<BarcodeFormat> formats)
+        // private async Task<List<object>> DetectCodesAsync(string base64Pdf, IList<BarcodeFormat> formats)
+        // {
+        //     byte[] pdfBytes;
+        //     try
+        //     {
+        //         pdfBytes = Convert.FromBase64String(base64Pdf);
+        //     }
+        //     catch
+        //     {
+        //         throw new InvalidOperationException("PdfContent is not valid base64.");
+        //     }
+
+        //     var results = new List<object>();
+
+        //     using var collection = new MagickImageCollection();
+        //     var settings = new MagickReadSettings
+        //     {
+        //         Density = new Density(300, 300),
+        //         Format = MagickFormat.Pdf
+        //     };
+        //     using (var ms = new MemoryStream(pdfBytes))
+        //     {
+        //         await collection.ReadAsync(ms, settings);
+        //     }
+
+        //     var reader = new BarcodeReaderGeneric
+        //     {
+        //         Options = new DecodingOptions
+        //         {
+        //             PossibleFormats = formats.ToList(),
+        //             TryHarder = true,
+        //             TryInverted = true,
+        //             PureBarcode = false
+        //         },
+        //         AutoRotate = true
+        //     };
+
+        //     for (var pageIndex = 0; pageIndex < collection.Count; pageIndex++)
+        //     {
+        //         var page = collection[pageIndex];
+        //         var rgba = page.ToByteArray(MagickFormat.Rgba);
+        //         var luminance = new RGBLuminanceSource(rgba, (int)page.Width, (int)page.Height, RGBLuminanceSource.BitmapFormat.RGBA32);
+        //         var decoded = reader.DecodeMultiple(luminance);
+        //         if (decoded == null) continue;
+
+        //         foreach (var code in decoded)
+        //         {
+        //             var point = code.ResultPoints?.FirstOrDefault();
+        //             results.Add(new
+        //             {
+        //                 value = code.Text,
+        //                 codeType = code.BarcodeFormat.ToString(),
+        //                 position = new { x = point?.X ?? 0, y = point?.Y ?? 0 },
+        //                 page = pageIndex + 1
+        //             });
+        //         }
+        //     }
+
+        //     return results;
+        // }
+
+
+        [NonAction]
+        public async Task<IReadOnlyList<object>> DetectCodesAsync(
+            string base64Pdf,
+            IEnumerable<BarcodeFormat> formats)
         {
             byte[] pdfBytes;
             try
@@ -517,6 +582,7 @@ namespace DotNetSigningServer.Controllers
             }
 
             var results = new List<object>();
+            var seen = new HashSet<string>(); // pro deduplikaci
 
             using var collection = new MagickImageCollection();
             var settings = new MagickReadSettings
@@ -524,47 +590,170 @@ namespace DotNetSigningServer.Controllers
                 Density = new Density(300, 300),
                 Format = MagickFormat.Pdf
             };
+
             using (var ms = new MemoryStream(pdfBytes))
             {
                 await collection.ReadAsync(ms, settings);
             }
 
-            var reader = new BarcodeReaderGeneric
+            var reader = new BarcodeReaderGeneric(
+            reader: null,
+            createBinarizer: source => new HybridBinarizer(source),
+            createRGBLuminanceSource: null)
             {
                 Options = new DecodingOptions
                 {
                     PossibleFormats = formats.ToList(),
                     TryHarder = true,
                     TryInverted = true,
-                    PureBarcode = false
+                    PureBarcode = false,
+                    ReturnCodabarStartEnd = true,
+                    UseCode39ExtendedMode = true
                 },
-                AutoRotate = true
+                AutoRotate = true,
             };
 
             for (var pageIndex = 0; pageIndex < collection.Count; pageIndex++)
             {
                 var page = collection[pageIndex];
-                var rgba = page.ToByteArray(MagickFormat.Rgba);
-                var luminance = new RGBLuminanceSource(rgba, (int)page.Width, (int)page.Height, RGBLuminanceSource.BitmapFormat.RGBA32);
-                var decoded = reader.DecodeMultiple(luminance);
-                if (decoded == null) continue;
 
-                foreach (var code in decoded)
+                // základ – sRGB, bez alfy
+                var baseVariant = new MagickImage(page)
                 {
-                    var point = code.ResultPoints?.FirstOrDefault();
-                    results.Add(new
+                    ColorSpace = ColorSpace.sRGB,
+                    Depth = 8
+                };
+                baseVariant.Alpha(AlphaOption.Remove);
+
+                var variants = CreateVariants(baseVariant);
+
+                try
+                {
+                    foreach (var variant in variants)
                     {
-                        value = code.Text,
-                        codeType = code.BarcodeFormat.ToString(),
-                        position = new { x = point?.X ?? 0, y = point?.Y ?? 0 },
-                        page = pageIndex + 1
-                    });
+
+                        var decoded = TryDecodeVariant(variant, reader);
+                        if (decoded.Count == 0) continue;
+
+                        foreach (var code in decoded)
+                        {
+                            var text = code.Text ?? "";
+                            var format = code.BarcodeFormat.ToString();
+                            var key = $"{pageIndex + 1}|{format}|{text}|{code.ResultPoints?.FirstOrDefault()?.X}|{code.ResultPoints?.FirstOrDefault()?.Y}";
+
+                            if (!seen.Add(key))
+                                continue; // už jsme ho přidali z jiné varianty
+
+                            var point = code.ResultPoints?.FirstOrDefault();
+                            results.Add(new
+                            {
+                                value = text,
+                                codeType = format,
+                                position = new
+                                {
+                                    x = point?.X ?? 0,
+                                    y = point?.Y ?? 0
+                                },
+                                page = pageIndex + 1
+                            });
+                        }
+                    }
+                }
+                finally
+                {
+                    // uklidit všechny varianty
+                    foreach (var v in variants)
+                        v.Dispose();
+
+                    baseVariant.Dispose();
                 }
             }
 
             return results;
         }
 
+        /// <summary>
+        /// Vytvoří různé varianty obrázku, které zvyšují šanci na detekci.
+        /// </summary>
+        private static List<IMagickImage> CreateVariants(IMagickImage baseVariant)
+        {
+            var variants = new List<IMagickImage>();
+
+            // 1) originál (už je v sRGB, bez alfy)
+            variants.Add(((MagickImage)baseVariant).Clone());
+
+            // 2) grayscale + zvýšení kontrastu
+            var gray = ((MagickImage)baseVariant).Clone();
+            gray.ColorType = ColorType.Grayscale;
+            gray.Contrast();
+            variants.Add(gray);
+
+            // 3) grayscale + adaptive sharpen
+            var sharpen = gray.Clone();
+            sharpen.AdaptiveSharpen();
+            variants.Add(sharpen);
+
+            // 4) zvětšení (pro malé kódy) – z gray verze
+            if (baseVariant.Width < 2000 || baseVariant.Height < 2000)
+            {
+                var scaled1 = gray.Clone();
+                scaled1.Resize((uint)(baseVariant.Width * 1.5), (uint)(baseVariant.Height * 1.5));
+                variants.Add(scaled1);
+
+                var scaled2 = gray.Clone();
+                scaled2.Resize((uint)(baseVariant.Width * 2.0), (uint)(baseVariant.Height * 2.0));
+                variants.Add(scaled2);
+            }
+
+            // // 5) rotace – některé 1D kódy jsou prostě „naležato“
+            // var rotated90 = gray.Clone();
+            // rotated90.Rotate(90);
+            // variants.Add(rotated90);
+
+            // var rotated270 = gray.Clone();
+            // rotated270.Rotate(270);
+            // variants.Add(rotated270);
+
+            // 6) jednoduchý threshold – někdy pomůže úplné zčernobílení
+            var threshold = gray.Clone();
+            threshold.Threshold(new Percentage(60)); // můžeš si pohrát s hodnotou
+            variants.Add(threshold);
+
+            return variants;
+        }
+
+        /// <summary>
+        /// Zkusí dekódovat jeden variant obrázku.
+        /// </summary>
+        private static List<Result> TryDecodeVariant(IMagickImage variant, BarcodeReaderGeneric reader)
+        {
+            // převedeme MagickImage na RGBA byte pole
+            var rgba = variant.ToByteArray(MagickFormat.Rgba);
+            // Save the variant image for debugging
+            var debugDir = Path.Combine("debug_images");
+            Directory.CreateDirectory(debugDir);
+            var debugPath = Path.Combine(debugDir, $"variant_{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}.png");
+            variant.Write(debugPath, MagickFormat.Png);
+
+
+            var luminance = new RGBLuminanceSource(
+                rgba,
+                (int)variant.Width,
+                (int)variant.Height,
+                RGBLuminanceSource.BitmapFormat.RGBA32
+            );
+
+            // Primárně zkusíme DecodeMultiple
+            var decodedMultiple = reader.DecodeMultiple(luminance);
+            if (decodedMultiple is { Length: > 0 })
+            {
+                return decodedMultiple.ToList();
+            }
+
+            // fallback na single decode
+            var single = reader.Decode(luminance);
+            return single != null ? new List<Result> { single } : new List<Result>();
+        }
         private async Task<User?> GetAuthenticatedUserAsync(string? originHeader = null)
         {
             // Prefer cookie-authenticated user
@@ -580,6 +769,7 @@ namespace DotNetSigningServer.Controllers
             }
 
             // Fallback to API token
+            Console.WriteLine("Validating API token from Authorization header");
             var tokenUser = await _apiAuthService.ValidateTokenAsync(Request.Headers["Authorization"].ToString(), originHeader);
             if (tokenUser == null)
             {

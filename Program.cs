@@ -150,7 +150,6 @@ app.Use(async (context, next) =>
     // Apply CORS only to API routes
     if (context.Request.Path.HasValue && context.Request.Path.Value!.StartsWith("/api", StringComparison.OrdinalIgnoreCase))
     {
-        Console.WriteLine("faking cors settings");
         var origin = context.Request.Headers["Origin"].ToString();
         if (!string.IsNullOrWhiteSpace(origin))
         {
@@ -166,7 +165,6 @@ app.Use(async (context, next) =>
             context.Response.Headers["Vary"] = "Origin";
             context.Response.Headers["Access-Control-Allow-Headers"] = context.Request.Headers["Access-Control-Request-Headers"].ToString() ?? "Authorization,Content-Type";
             context.Response.Headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS";
-            Console.WriteLine($"nex thting: {origin}");
         }
 
         if (string.Equals(context.Request.Method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
