@@ -289,7 +289,7 @@ namespace DotNetSigningServer.Services
             var template = await _pdfTemplateService.GetTemplateAsync(templateId, userId, cancellationToken);
             var fields = template.Fields ?? new List<PdfFieldDefinition>();
             return fields.FirstOrDefault(f =>
-                string.Equals(f.Type, "signature", StringComparison.OrdinalIgnoreCase)
+                f.Type == PdfFieldType.Signature
                 && (string.IsNullOrWhiteSpace(fieldName) || string.Equals(f.FieldName, fieldName, StringComparison.OrdinalIgnoreCase)));
         }
 

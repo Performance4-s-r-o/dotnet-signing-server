@@ -1,6 +1,126 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace DotNetSigningServer.Models;
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PdfFieldType
+{
+    [JsonStringEnumMemberName("text")]
+    Text,
+    [JsonStringEnumMemberName("image")]
+    Image,
+    [JsonStringEnumMemberName("barcode")]
+    Barcode,
+    [JsonStringEnumMemberName("signature")]
+    Signature,
+    [JsonStringEnumMemberName("table")]
+    Table
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PdfFontName
+{
+    [JsonStringEnumMemberName("Helvetica")]
+    Helvetica,
+    [JsonStringEnumMemberName("Times-Roman")]
+    TimesRoman,
+    [JsonStringEnumMemberName("Courier")]
+    Courier,
+    [JsonStringEnumMemberName("Symbol")]
+    Symbol,
+    [JsonStringEnumMemberName("ZapfDingbats")]
+    ZapfDingbats
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PdfFontWeight
+{
+    [JsonStringEnumMemberName("normal")]
+    Normal,
+    [JsonStringEnumMemberName("tiny")]
+    Tiny,
+    [JsonStringEnumMemberName("bold")]
+    Bold
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PdfHorizontalAlign
+{
+    [JsonStringEnumMemberName("left")]
+    Left,
+    [JsonStringEnumMemberName("center")]
+    Center,
+    [JsonStringEnumMemberName("right")]
+    Right
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PdfVerticalAlign
+{
+    [JsonStringEnumMemberName("center")]
+    Center,
+    [JsonStringEnumMemberName("top")]
+    Top,
+    [JsonStringEnumMemberName("bottom")]
+    Bottom
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PdfBorderStyle
+{
+    [JsonStringEnumMemberName("none")]
+    None,
+    [JsonStringEnumMemberName("dashed")]
+    Dashed,
+    [JsonStringEnumMemberName("filled")]
+    Filled
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PdfBarcodeFormat
+{
+    [JsonStringEnumMemberName("code128")]
+    Code128,
+    [JsonStringEnumMemberName("qr")]
+    Qr,
+    [JsonStringEnumMemberName("qrcode")]
+    QrCode,
+    [JsonStringEnumMemberName("qr-code")]
+    QrCodeHyphen,
+    [JsonStringEnumMemberName("datamatrix")]
+    DataMatrix,
+    [JsonStringEnumMemberName("data-matrix")]
+    DataMatrixHyphen,
+    [JsonStringEnumMemberName("dm")]
+    Dm,
+    [JsonStringEnumMemberName("pdf417")]
+    Pdf417,
+    [JsonStringEnumMemberName("ean13")]
+    Ean13,
+    [JsonStringEnumMemberName("ean-13")]
+    Ean13Hyphen,
+    [JsonStringEnumMemberName("ean8")]
+    Ean8,
+    [JsonStringEnumMemberName("ean-8")]
+    Ean8Hyphen,
+    [JsonStringEnumMemberName("upc")]
+    Upc,
+    [JsonStringEnumMemberName("upca")]
+    UpcA,
+    [JsonStringEnumMemberName("upc-a")]
+    UpcAHyphen,
+    [JsonStringEnumMemberName("code39")]
+    Code39,
+    [JsonStringEnumMemberName("code-39")]
+    Code39Hyphen,
+    [JsonStringEnumMemberName("itf")]
+    Itf,
+    [JsonStringEnumMemberName("interleaved2of5")]
+    Interleaved2Of5,
+    [JsonStringEnumMemberName("i2of5")]
+    I2Of5
+}
 
 public class PdfFieldDefinition
 {
@@ -10,12 +130,12 @@ public class PdfFieldDefinition
     public SignRect Rect { get; set; } = new();
     public int Page { get; set; } = 1;
     public float FontSize { get; set; } = 12;
-    public string FontName { get; set; } = "Helvetica";
-    public string FontWeight { get; set; } = "normal";
-    public string Type { get; set; } = "text"; // text, image, barcode, signature, table
-    public string HorizontalAlign { get; set; } = "left"; // left, center, right
-    public string VerticalAlign { get; set; } = "center"; // top, center, bottom
-    public string? BarcodeFormat { get; set; } // Used when Type == barcode
+    public PdfFontName? FontName { get; set; } = PdfFontName.Helvetica;
+    public PdfFontWeight? FontWeight { get; set; } = PdfFontWeight.Normal;
+    public PdfFieldType Type { get; set; } = PdfFieldType.Text;
+    public PdfHorizontalAlign? HorizontalAlign { get; set; } = PdfHorizontalAlign.Left;
+    public PdfVerticalAlign? VerticalAlign { get; set; } = PdfVerticalAlign.Center;
+    public PdfBarcodeFormat? BarcodeFormat { get; set; } = PdfBarcodeFormat.Code128; // Used when Type == barcode
     public int? Columns { get; set; } // table
     public List<TableColumnDefinition>? TableColumns { get; set; } // table
 }
@@ -25,10 +145,10 @@ public class TableColumnDefinition
     public string Name { get; set; } = string.Empty;
     public float? WidthPercent { get; set; }
     public float FontSize { get; set; } = 12;
-    public string FontWeight { get; set; } = "normal";
-    public string BorderStyle { get; set; } = "none"; // none, dashed, filled
-    public string HorizontalAlign { get; set; } = "left"; // left, center, right
-    public string VerticalAlign { get; set; } = "center"; // top, center, bottom
+    public PdfFontWeight? FontWeight { get; set; } = PdfFontWeight.Normal;
+    public PdfBorderStyle? BorderStyle { get; set; } = PdfBorderStyle.None;
+    public PdfHorizontalAlign? HorizontalAlign { get; set; } = PdfHorizontalAlign.Left;
+    public PdfVerticalAlign? VerticalAlign { get; set; } = PdfVerticalAlign.Center;
 }
 
 public class PdfFieldValue

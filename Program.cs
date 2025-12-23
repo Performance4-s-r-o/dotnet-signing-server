@@ -10,6 +10,8 @@ using Testcontainers.PostgreSql;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -45,6 +47,19 @@ builder.Services.AddSingleton<ContentLimitGuard>();
 builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();
 builder.Services.AddHttpClient<LokiClient>();
 builder.Services.AddHttpClient<TemplateAiService>();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "API", Version = "v1" });
+    options.DocInclusionPredicate((docName, apiDesc) =>
+    {
+        if (apiDesc.ActionDescriptor is ControllerActionDescriptor cad)
+        {
+            return cad.ControllerTypeInfo.AsType() == typeof(DotNetSigningServer.Controllers.ApiController);
+        }
+        return false;
+    });
+});
 builder.Services.Configure<BillingOptions>(builder.Configuration.GetSection("Billing"));
 builder.Services.Configure<StripeOptions>(builder.Configuration.GetSection("Stripe"));
 builder.Services.Configure<TokenOptions>(builder.Configuration.GetSection("Token"));
@@ -146,6 +161,13 @@ app.UseForwardedHeaders();
 app.UseMiddleware<LokiExceptionMiddleware>();
 app.UseMiddleware<BodySizeLimitMiddleware>();
 app.UseMiddleware<RequestThrottlingMiddleware>();
+
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "API v1");
+    options.RoutePrefix = "swagger";
+});
 
 app.Use(async (context, next) =>
 {

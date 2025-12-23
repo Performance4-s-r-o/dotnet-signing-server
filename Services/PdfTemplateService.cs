@@ -203,9 +203,9 @@ public class PdfTemplateService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    private async Task<StoredPdfTemplate> GetTemplateForUserAsync(Guid templateId, Guid userId, CancellationToken cancellationToken)
+    private async Task<StoredPdfTemplate> GetTemplateForUserAsync(Guid id, Guid userId, CancellationToken cancellationToken)
     {
-        var template = await _dbContext.StoredPdfTemplates.FindAsync(new object[] { templateId }, cancellationToken);
+        var template = await _dbContext.StoredPdfTemplates.FindAsync(new object[] { id }, cancellationToken);
         if (template == null || template.UserId != userId)
         {
             throw new InvalidOperationException("Template not found or not accessible for the current user.");
@@ -234,7 +234,7 @@ public class PdfTemplateService
                 continue;
             }
 
-            if (string.Equals(field.Type, "signature", StringComparison.OrdinalIgnoreCase))
+            if (field.Type == PdfFieldType.Signature)
             {
                 // Signature fields are filled via presign/sign/timestamp endpoints only.
                 continue;
@@ -249,7 +249,7 @@ public class PdfTemplateService
             var page = pdfDoc.GetPage(pageNumber);
             var rect = NormalizeRectForRotation(page, new Rectangle(field.Rect.X, field.Rect.Y, field.Rect.Width, field.Rect.Height));
 
-            if (string.Equals(field.Type, "image", StringComparison.OrdinalIgnoreCase))
+            if (field.Type == PdfFieldType.Image)
             {
                 if (!string.IsNullOrWhiteSpace(value))
                 {
@@ -257,7 +257,7 @@ public class PdfTemplateService
                 }
                 continue;
             }
-            if (string.Equals(field.Type, "barcode", StringComparison.OrdinalIgnoreCase))
+            if (field.Type == PdfFieldType.Barcode)
             {
                 if (!string.IsNullOrWhiteSpace(value))
                 {
@@ -265,7 +265,7 @@ public class PdfTemplateService
                 }
                 continue;
             }
-            if (string.Equals(field.Type, "table", StringComparison.OrdinalIgnoreCase))
+            if (field.Type == PdfFieldType.Table)
             {
                 if (provided.TableValue != null)
                 {
@@ -290,22 +290,22 @@ public class PdfTemplateService
         var page = pdfDoc.GetPage(pageNumber);
         // var canvas = new Canvas(new PdfCanvas(page), page.GetPageSize());
         var fontName = ResolveFont(field.FontName, field.FontWeight);
-        var horiz = (field.HorizontalAlign ?? "left").ToLowerInvariant();
-        var vert = (field.VerticalAlign ?? "center").ToLowerInvariant();
+        var horiz = field.HorizontalAlign ?? PdfHorizontalAlign.Left;
+        var vert = field.VerticalAlign ?? PdfVerticalAlign.Center;
         var paragraph = new Paragraph(value)
             .SetFontSize(field.FontSize <= 0 ? 12 : field.FontSize)
             .SetTextAlignment(
                 horiz switch
                 {
-                    "center" => TextAlignment.CENTER,
-                    "right" => TextAlignment.RIGHT,
+                    PdfHorizontalAlign.Center => TextAlignment.CENTER,
+                    PdfHorizontalAlign.Right => TextAlignment.RIGHT,
                     _ => TextAlignment.LEFT
                 }
             )
             .SetVerticalAlignment(vert switch
             {
-                "top" => VerticalAlignment.TOP,
-                "bottom" => VerticalAlignment.BOTTOM,
+                PdfVerticalAlign.Top => VerticalAlignment.TOP,
+                PdfVerticalAlign.Bottom => VerticalAlignment.BOTTOM,
                 _ => VerticalAlignment.MIDDLE
             })
             .SetMargin(0)
@@ -397,17 +397,17 @@ public class PdfTemplateService
     {
         try
         {
-            var format = (field.BarcodeFormat ?? "code128").ToLowerInvariant();
+            var format = field.BarcodeFormat ?? PdfBarcodeFormat.Code128;
             Image? barcodeImage = format switch
             {
-                "qr" or "qrcode" or "qr-code" => CreateQrCode(pdfDoc, value),
-                "datamatrix" or "data-matrix" or "dm" => CreateDataMatrix(pdfDoc, value),
-                "pdf417" => CreatePdf417(pdfDoc, value),
-                "ean13" or "ean-13" => CreateEan(pdfDoc, value, BarcodeEAN.EAN13),
-                "ean8" or "ean-8" => CreateEan(pdfDoc, value, BarcodeEAN.EAN8),
-                "upc" or "upca" or "upc-a" => CreateEan(pdfDoc, value, BarcodeEAN.UPCA),
-                "code39" or "code-39" => CreateCode39(pdfDoc, value),
-                "itf" or "interleaved2of5" or "i2of5" => CreateInterleaved25(pdfDoc, value),
+                PdfBarcodeFormat.Qr or PdfBarcodeFormat.QrCode or PdfBarcodeFormat.QrCodeHyphen => CreateQrCode(pdfDoc, value),
+                PdfBarcodeFormat.DataMatrix or PdfBarcodeFormat.DataMatrixHyphen or PdfBarcodeFormat.Dm => CreateDataMatrix(pdfDoc, value),
+                PdfBarcodeFormat.Pdf417 => CreatePdf417(pdfDoc, value),
+                PdfBarcodeFormat.Ean13 or PdfBarcodeFormat.Ean13Hyphen => CreateEan(pdfDoc, value, BarcodeEAN.EAN13),
+                PdfBarcodeFormat.Ean8 or PdfBarcodeFormat.Ean8Hyphen => CreateEan(pdfDoc, value, BarcodeEAN.EAN8),
+                PdfBarcodeFormat.Upc or PdfBarcodeFormat.UpcA or PdfBarcodeFormat.UpcAHyphen => CreateEan(pdfDoc, value, BarcodeEAN.UPCA),
+                PdfBarcodeFormat.Code39 or PdfBarcodeFormat.Code39Hyphen => CreateCode39(pdfDoc, value),
+                PdfBarcodeFormat.Itf or PdfBarcodeFormat.Interleaved2Of5 or PdfBarcodeFormat.I2Of5 => CreateInterleaved25(pdfDoc, value),
                 _ => CreateCode128(pdfDoc, value),
             };
 
@@ -448,8 +448,8 @@ public class PdfTemplateService
                 Name = "Column 1",
                 WidthPercent = 100,
                 FontSize = field.FontSize,
-                FontWeight = field.FontWeight,
-                BorderStyle = "none"
+                FontWeight = field.FontWeight ?? PdfFontWeight.Normal,
+                BorderStyle = PdfBorderStyle.None
             });
         }
 
@@ -481,10 +481,10 @@ public class PdfTemplateService
                 var paragraph = new Paragraph(cellText)
                     .SetMargin(0)
                     .SetPadding(0)
-                    .SetTextAlignment((col.HorizontalAlign ?? "left").ToLowerInvariant() switch
+                    .SetTextAlignment((col.HorizontalAlign ?? PdfHorizontalAlign.Left) switch
                     {
-                        "center" => TextAlignment.CENTER,
-                        "right" => TextAlignment.RIGHT,
+                        PdfHorizontalAlign.Center => TextAlignment.CENTER,
+                        PdfHorizontalAlign.Right => TextAlignment.RIGHT,
                         _ => TextAlignment.LEFT
                     })
                     .SetFontSize(col.FontSize <= 0 ? field.FontSize : col.FontSize)
@@ -498,19 +498,19 @@ public class PdfTemplateService
 
                 var cell = new Cell().Add(paragraph)
                     .SetPadding(4)
-                    .SetVerticalAlignment((col.VerticalAlign ?? "center").ToLowerInvariant() switch
+                    .SetVerticalAlignment((col.VerticalAlign ?? PdfVerticalAlign.Center) switch
                     {
-                        "top" => VerticalAlignment.TOP,
-                        "bottom" => VerticalAlignment.BOTTOM,
+                        PdfVerticalAlign.Top => VerticalAlignment.TOP,
+                        PdfVerticalAlign.Bottom => VerticalAlignment.BOTTOM,
                         _ => VerticalAlignment.MIDDLE
                     });
 
-                var borderStyle = (col.BorderStyle ?? "none").ToLowerInvariant();
-                if (borderStyle == "dashed")
+                var borderStyle = col.BorderStyle ?? PdfBorderStyle.None;
+                if (borderStyle == PdfBorderStyle.Dashed)
                 {
                     cell.SetBorder(new DashedBorder(ColorConstants.BLACK, 1));
                 }
-                else if (borderStyle == "filled")
+                else if (borderStyle == PdfBorderStyle.Filled)
                 {
                     cell.SetBorder(new SolidBorder(ColorConstants.BLACK, 1));
                     cell.SetBackgroundColor(new DeviceRgb(240, 240, 240));
@@ -599,14 +599,6 @@ public class PdfTemplateService
     private static void ValidateFields(IEnumerable<PdfFieldDefinition> fields)
     {
         var regex = new Regex("^[A-Za-z0-9_-]+$", RegexOptions.Compiled);
-        var allowedTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "text", "image", "barcode", "signature", "table" };
-        var allowedWeights = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "tiny", "normal", "bold" };
-        var allowedHorizontal = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "left", "center", "right" };
-        var allowedVertical = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "top", "center", "bottom" };
-        var allowedFonts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "Helvetica", "Times-Roman", "Courier", "Symbol", "ZapfDingbats"
-        };
 
         foreach (var field in fields)
         {
@@ -615,16 +607,16 @@ public class PdfTemplateService
                 throw new ArgumentException("FieldName must contain only letters, numbers, underscore or dash.");
             }
 
-            if (!allowedTypes.Contains(field.Type ?? ""))
+            if (!Enum.IsDefined(typeof(PdfFieldType), field.Type))
             {
-                throw new ArgumentException("Unsupported field type. Allowed: text, image, barcode.");
+                throw new ArgumentException("Unsupported field type. Allowed: text, image, barcode, signature, table.");
             }
 
-            if (!allowedHorizontal.Contains(field.HorizontalAlign ?? "left"))
+            if (field.HorizontalAlign.HasValue && !Enum.IsDefined(typeof(PdfHorizontalAlign), field.HorizontalAlign.Value))
             {
                 throw new ArgumentException("HorizontalAlign must be one of: left, center, right.");
             }
-            if (!allowedVertical.Contains(field.VerticalAlign ?? "center"))
+            if (field.VerticalAlign.HasValue && !Enum.IsDefined(typeof(PdfVerticalAlign), field.VerticalAlign.Value))
             {
                 throw new ArgumentException("VerticalAlign must be one of: top, center, bottom.");
             }
@@ -634,17 +626,22 @@ public class PdfTemplateService
                 throw new ArgumentException("FontSize must be between 5 and 128.");
             }
 
-            if (!allowedWeights.Contains(field.FontWeight ?? "normal"))
+            if (field.FontWeight.HasValue && !Enum.IsDefined(typeof(PdfFontWeight), field.FontWeight.Value))
             {
                 throw new ArgumentException("FontWeight must be one of: tiny, normal, bold.");
             }
 
-            if (!string.IsNullOrWhiteSpace(field.FontName) && !allowedFonts.Contains(field.FontName))
+            if (field.FontName.HasValue && !Enum.IsDefined(typeof(PdfFontName), field.FontName.Value))
             {
-                throw new ArgumentException("FontName is not allowed.");
+                throw new ArgumentException("FontName must be one of: Helvetica, Times-Roman, Courier, Symbol, ZapfDingbats.");
             }
 
-            if (string.Equals(field.Type, "table", StringComparison.OrdinalIgnoreCase))
+            if (field.BarcodeFormat.HasValue && !Enum.IsDefined(typeof(PdfBarcodeFormat), field.BarcodeFormat.Value))
+            {
+                throw new ArgumentException("BarcodeFormat is not supported.");
+            }
+
+            if (field.Type == PdfFieldType.Table)
             {
                 if (field.Columns.HasValue && field.Columns.Value <= 0)
                 {
@@ -671,20 +668,19 @@ public class PdfTemplateService
                         {
                             throw new ArgumentException("Table column font size must be between 5 and 128.");
                         }
-                        if (!allowedWeights.Contains(col.FontWeight ?? "normal"))
+                        if (col.FontWeight.HasValue && !Enum.IsDefined(typeof(PdfFontWeight), col.FontWeight.Value))
                         {
                             throw new ArgumentException("Table column font weight must be one of: tiny, normal, bold.");
                         }
-                        if (!allowedHorizontal.Contains(col.HorizontalAlign ?? "left"))
+                        if (col.HorizontalAlign.HasValue && !Enum.IsDefined(typeof(PdfHorizontalAlign), col.HorizontalAlign.Value))
                         {
                             throw new ArgumentException("Table column horizontal align must be one of: left, center, right.");
                         }
-                        if (!allowedVertical.Contains(col.VerticalAlign ?? "center"))
+                        if (col.VerticalAlign.HasValue && !Enum.IsDefined(typeof(PdfVerticalAlign), col.VerticalAlign.Value))
                         {
                             throw new ArgumentException("Table column vertical align must be one of: top, center, bottom.");
                         }
-                        var border = (col.BorderStyle ?? "none").ToLowerInvariant();
-                        if (border is not ("none" or "dashed" or "filled"))
+                        if (col.BorderStyle.HasValue && !Enum.IsDefined(typeof(PdfBorderStyle), col.BorderStyle.Value))
                         {
                             throw new ArgumentException("Table column border must be one of: none, dashed, filled.");
                         }
@@ -698,34 +694,24 @@ public class PdfTemplateService
         }
     }
 
-    private static string ResolveFont(string? fontName, string? fontWeight)
+    private static string ResolveFont(PdfFontName? fontName, PdfFontWeight? fontWeight)
     {
-        var weight = (fontWeight ?? "normal").ToLowerInvariant();
-        var isBold = weight.Contains("bold");
-        if (weight == "tiny")
+        var resolvedName = fontName ?? PdfFontName.Helvetica;
+        var weight = fontWeight ?? PdfFontWeight.Normal;
+        var isBold = weight == PdfFontWeight.Bold;
+        if (weight == PdfFontWeight.Tiny)
         {
             isBold = false;
         }
 
-        if (string.Equals(fontName, "courier", StringComparison.OrdinalIgnoreCase))
+        return resolvedName switch
         {
-            return isBold ? StandardFonts.COURIER_BOLD : StandardFonts.COURIER;
-        }
-        if (string.Equals(fontName, "times-roman", StringComparison.OrdinalIgnoreCase) || string.Equals(fontName, "times", StringComparison.OrdinalIgnoreCase))
-        {
-            return isBold ? StandardFonts.TIMES_BOLD : StandardFonts.TIMES_ROMAN;
-        }
-        if (string.Equals(fontName, "symbol", StringComparison.OrdinalIgnoreCase))
-        {
-            return StandardFonts.SYMBOL;
-        }
-        if (string.Equals(fontName, "zapfdingbats", StringComparison.OrdinalIgnoreCase))
-        {
-            return StandardFonts.ZAPFDINGBATS;
-        }
-
-        // Default Helvetica
-        return isBold ? StandardFonts.HELVETICA_BOLD : StandardFonts.HELVETICA;
+            PdfFontName.Courier => isBold ? StandardFonts.COURIER_BOLD : StandardFonts.COURIER,
+            PdfFontName.TimesRoman => isBold ? StandardFonts.TIMES_BOLD : StandardFonts.TIMES_ROMAN,
+            PdfFontName.Symbol => StandardFonts.SYMBOL,
+            PdfFontName.ZapfDingbats => StandardFonts.ZAPFDINGBATS,
+            _ => isBold ? StandardFonts.HELVETICA_BOLD : StandardFonts.HELVETICA
+        };
     }
 
     private static Rectangle NormalizeRectForRotation(PdfPage page, Rectangle rect)

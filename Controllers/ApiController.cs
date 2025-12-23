@@ -10,6 +10,7 @@ using ZXing.Common;
 using Microsoft.Extensions.Options;
 using iText.Kernel.Pdf;
 using DotNetSigningServer.Options;
+using System.Text.Json;
 
 namespace DotNetSigningServer.Controllers
 {
@@ -136,7 +137,8 @@ namespace DotNetSigningServer.Controllers
         }
 
         [HttpGet("/api/pdf-template/{templateId:guid}")]
-        public async Task<IActionResult> GetPdfTemplate(Guid templateId)
+        [ProducesResponseType(typeof(TemplateDetail), StatusCodes.Status200OK)]
+        public async Task<ActionResult<TemplateDetail>> GetPdfTemplate(Guid templateId)
         {
             var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
@@ -867,7 +869,7 @@ namespace DotNetSigningServer.Controllers
             return await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == tokenUser.Id);
         }
 
-        private async Task<(User? user, IActionResult? error)> EnsureUserWithCreditsAsync(int requiredCredits = 1, string? originHeader = null)
+        private async Task<(User? user, ActionResult? error)> EnsureUserWithCreditsAsync(int requiredCredits = 1, string? originHeader = null)
         {
             var user = await GetAuthenticatedUserAsync(originHeader);
             if (user == null)
@@ -900,7 +902,7 @@ namespace DotNetSigningServer.Controllers
         private async Task<PdfFieldDefinition> GetSignatureFieldAsync(Guid templateId, Guid userId)
         {
             var template = await _pdfTemplateService.GetTemplateAsync(templateId, userId);
-            var signatureField = template.Fields.FirstOrDefault(f => string.Equals(f.Type, "signature", StringComparison.OrdinalIgnoreCase));
+            var signatureField = template.Fields.FirstOrDefault(f => f.Type == PdfFieldType.Signature);
             if (signatureField == null)
             {
                 throw new InvalidOperationException("Template does not contain a signature field.");

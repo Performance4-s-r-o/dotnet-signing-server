@@ -21,6 +21,7 @@
     <PackageReference Include="ZXing.Net" Version="0.16.8" />
     <PackageReference Include="Stripe.net" Version="46.0.0" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.9.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
 
   </ItemGroup>
 

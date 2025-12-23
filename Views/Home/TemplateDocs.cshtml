@@ -10,13 +10,13 @@
 
     foreach (var field in fields)
     {
-        if (string.Equals(field.Type, "signature", StringComparison.OrdinalIgnoreCase))
+        if (field.Type == DotNetSigningServer.Models.PdfFieldType.Signature)
         {
             // Signature fields are handled by presign/sign/timestamp endpoints.
             continue;
         }
 
-        if (string.Equals(field.Type, "table", StringComparison.OrdinalIgnoreCase))
+        if (field.Type == DotNetSigningServer.Models.PdfFieldType.Table)
         {
             var columnCount = field.TableColumns?.Count ?? field.Columns ?? 1;
             var row1 = Enumerable.Range(1, columnCount).Select(i => $"Row 1 Col {i}").ToList();
@@ -27,11 +27,11 @@
                 tableValue = new List<List<string>> { row1, row2 }
             });
         }
-        else if (string.Equals(field.Type, "image", StringComparison.OrdinalIgnoreCase))
+        else if (field.Type == DotNetSigningServer.Models.PdfFieldType.Image)
         {
             sampleEntries.Add(new { fieldName = field.FieldName, value = "BASE64_IMAGE_DATA" });
         }
-        else if (string.Equals(field.Type, "barcode", StringComparison.OrdinalIgnoreCase))
+        else if (field.Type == DotNetSigningServer.Models.PdfFieldType.Barcode)
         {
             sampleEntries.Add(new { fieldName = field.FieldName, value = "123456789" });
         }
@@ -108,13 +108,13 @@ data = sampleEntries
         <tbody>
             @foreach (var f in fields)
             {
-                var isSignature = string.Equals(f.Type, "signature", StringComparison.OrdinalIgnoreCase);
+                var isSignature = f.Type == DotNetSigningServer.Models.PdfFieldType.Signature;
                 <tr>
                     <td>@f.FieldName</td>
                     <td>@f.Type</td>
                     <td>@(f.Page <= 0 ? 1 : f.Page)</td>
                     <td>
-                        @if (string.Equals(f.Type, "table", StringComparison.OrdinalIgnoreCase))
+                        @if (f.Type == DotNetSigningServer.Models.PdfFieldType.Table)
                         {
                             var cols = f.TableColumns ?? new
                             List<DotNetSigningServer.Models.TableColumnDefinition>();
