@@ -8,11 +8,13 @@ public class BodySizeLimitMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly LimitsOptions _options;
+    private readonly ILogger<BodySizeLimitMiddleware> _logger;
 
-    public BodySizeLimitMiddleware(RequestDelegate next, IOptions<LimitsOptions> options)
+    public BodySizeLimitMiddleware(RequestDelegate next, IOptions<LimitsOptions> options, ILogger<BodySizeLimitMiddleware> logger)
     {
         _next = next;
         _options = options.Value;
+        _logger = logger;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -29,7 +31,7 @@ public class BodySizeLimitMiddleware
         if (contentLength.HasValue && contentLength.Value > limit)
         {
             context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
-            Console.WriteLine("body size limit exceeded");
+            _logger.LogWarning("Body size limit exceeded: {ContentLength} > {Limit} for {Path}", contentLength.Value, limit, context.Request.Path);
             await context.Response.WriteAsJsonAsync(new { message = "Request exceeded limit." });
             return;
         }

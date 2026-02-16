@@ -36,6 +36,8 @@ TestResults/
 
 # Environment files - Do not commit secrets!
 .env
+appsettings.Development.json
+appsettings.Production.json
 
 # Rider
 .idea/

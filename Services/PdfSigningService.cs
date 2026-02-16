@@ -4,10 +4,18 @@ using iText.Commons.Bouncycastle.Cert;
 using iText.Forms.Fields.Properties;
 using iText.Forms.Form.Element;
 using iText.IO.Image;
+using iText.Kernel.Colors;
+using iText.Kernel.Font;
 using iText.Kernel.Geom;
 using iText.Kernel.Pdf;
+using iText.IO.Font.Constants;
 using iText.Kernel.Pdf.Filespec;
+using iText.Kernel.Pdf.Xobject;
 using iText.Signatures;
+using iText.Layout;
+using iText.Layout.Element;
+using iText.Layout.Properties;
+using iText.Layout.Borders;
 using Org.BouncyCastle.X509;
 using DotNetSigningServer.ExternalSignatures;
 using DotNetSigningServer.Options;
@@ -17,6 +25,7 @@ using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Security;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 using IOPath = System.IO.Path;
 
@@ -49,7 +58,11 @@ namespace DotNetSigningServer.Services
                 input.Location,
                 input.SignPageNumber,
                 input.SignImageContent,
-                chain);
+                chain,
+                input.Appearance,
+                input.StampImageContent,
+                input.BackgroundImageContent,
+                input.CompanyLogoContent);
 
             string preSignedPdfPath = IOPath.Combine(IOPath.GetTempPath(), $"presigned_{Guid.NewGuid():N}.pdf");
             File.WriteAllBytes(preSignedPdfPath, pdfWithPlaceholder);
@@ -93,7 +106,11 @@ namespace DotNetSigningServer.Services
                 input.Location,
                 input.SignPageNumber,
                 input.SignImageContent,
-                chain);
+                chain,
+                input.Appearance,
+                input.StampImageContent,
+                input.BackgroundImageContent,
+                input.CompanyLogoContent);
 
             byte[] signatureBytes = SignAuthenticatedAttributes(preSignContainer.GetDocBytesHash(), privateKey);
             ITSAClient? tsaClient = CreateTsaClient();
@@ -123,7 +140,11 @@ namespace DotNetSigningServer.Services
                 input.Location,
                 input.SignPageNumber,
                 input.SignImageContent,
-                null);
+                null,
+                input.Appearance,
+                input.StampImageContent,
+                input.BackgroundImageContent,
+                input.CompanyLogoContent);
 
             signer.SetSignerProperties(signerProperties);
             signer.Timestamp(tsaClient, fieldName);
@@ -175,7 +196,11 @@ namespace DotNetSigningServer.Services
             string location,
             int pageNumber,
             string? signImageContent,
-            IX509Certificate[] chain)
+            IX509Certificate[] chain,
+            SignatureAppearanceOptions? appearance = null,
+            string? stampImageContent = null,
+            string? backgroundImageContent = null,
+            string? companyLogoContent = null)
         {
             using var msIn = new MemoryStream(originalPdf);
             using var msOut = new MemoryStream();
@@ -190,7 +215,11 @@ namespace DotNetSigningServer.Services
                 location,
                 pageNumber,
                 signImageContent,
-                chain);
+                chain,
+                appearance,
+                stampImageContent,
+                backgroundImageContent,
+                companyLogoContent);
 
             signer.SetSignerProperties(signerProperties);
             // Reserve extra space so the deferred signature can include TSA timestamp tokens when present.
@@ -235,27 +264,158 @@ namespace DotNetSigningServer.Services
             string location,
             int pageNumber,
             string? signImageContent,
-            IX509Certificate[]? chain)
+            IX509Certificate[]? chain,
+            SignatureAppearanceOptions? appearanceOptions = null,
+            string? stampImageContent = null,
+            string? backgroundImageContent = null,
+            string? companyLogoContent = null)
         {
             SignerProperties signerProperties = new SignerProperties().SetFieldName(fieldName);
 
-            var cn = chain?.FirstOrDefault()?.GetSubjectDN()?.ToString()?.Split(",")[0].Split("=")[1];
+            var subjectDN = chain?.FirstOrDefault()?.GetSubjectDN()?.ToString();
+            var cn = subjectDN?.Split(",").Select(p => p.Trim()).FirstOrDefault(p => p.StartsWith("CN="))?.Substring(3);
 
             SignatureFieldAppearance appearance = new SignatureFieldAppearance(SignerProperties.IGNORED_ID);
-            var reasonLine =
-                string.IsNullOrWhiteSpace(reason)
-                    ? (string.IsNullOrWhiteSpace(cn) ? string.Empty : $"Signed by {cn}")
-                    : (string.IsNullOrWhiteSpace(cn) ? $"Reason: {reason}" : $"Signed by {cn}\nReason: {reason}");
-            var appearanceText = new SignedAppearanceText().SetReasonLine(reasonLine);
 
-            if (!string.IsNullOrEmpty(signImageContent))
+            // Build text lines based on appearance options (or use defaults)
+            var showSignerName = appearanceOptions?.ShowSignerName ?? true;
+            var showCompanyName = appearanceOptions?.ShowCompanyName ?? true;
+            var showReason = appearanceOptions?.ShowReason ?? true;
+            var showDate = appearanceOptions?.ShowDate ?? true;
+
+            var lines = new List<string>();
+            if (showSignerName && !string.IsNullOrWhiteSpace(cn))
+                lines.Add($"Signed by {cn}");
+            if (showCompanyName && !string.IsNullOrWhiteSpace(subjectDN))
             {
-                byte[] image = Convert.FromBase64String(signImageContent);
-                appearance.SetContent(appearanceText, ImageDataFactory.Create(image));
+                var orgMatch = subjectDN!.Split(",").Select(p => p.Trim()).FirstOrDefault(p => p.StartsWith("O="));
+                if (orgMatch != null)
+                    lines.Add($"Company: {orgMatch.Substring(2)}");
+            }
+            if (showReason && !string.IsNullOrWhiteSpace(reason))
+                lines.Add($"Reason: {reason}");
+            if (!string.IsNullOrWhiteSpace(appearanceOptions?.DescriptionText))
+                lines.Add(appearanceOptions!.DescriptionText!);
+
+            // Resolve styling
+            var hasSignImage = !string.IsNullOrEmpty(signImageContent);
+            var hasCompanyLogo = !string.IsNullOrEmpty(companyLogoContent);
+            var hasStamp = !string.IsNullOrEmpty(stampImageContent);
+            var hasBgImage = !string.IsNullOrEmpty(backgroundImageContent);
+
+            DeviceRgb? fgColor = !string.IsNullOrWhiteSpace(appearanceOptions?.ForegroundColor)
+                ? ParseHexColor(appearanceOptions!.ForegroundColor!) : null;
+            DeviceRgb? bgColor = !string.IsNullOrWhiteSpace(appearanceOptions?.BackgroundColor)
+                ? ParseHexColor(appearanceOptions!.BackgroundColor!) : null;
+
+            PdfFont? font = null;
+            if (!string.IsNullOrWhiteSpace(appearanceOptions?.FontFamily))
+            {
+                var fontName = appearanceOptions!.FontFamily switch
+                {
+                    "Times" => StandardFonts.TIMES_ROMAN,
+                    "Courier" => StandardFonts.COURIER,
+                    _ => StandardFonts.HELVETICA,
+                };
+                font = PdfFontFactory.CreateFont(fontName);
+            }
+
+            float? fontSize = appearanceOptions?.FontSize;
+
+            if (hasStamp || hasBgImage || hasCompanyLogo)
+            {
+                // Custom Div-based layout for stamp/background/company logo support
+                var div = new Div()
+                    .SetWidth(UnitValue.CreatePercentValue(100))
+                    .SetHeight(UnitValue.CreatePercentValue(100));
+
+                // Background: image takes priority over color
+                if (hasBgImage)
+                {
+                    var bgData = ImageDataFactory.Create(Convert.FromBase64String(backgroundImageContent!));
+                    var bgSize = new BackgroundSize();
+                    bgSize.SetBackgroundSizeToContain();
+                    div.SetBackgroundImage(new BackgroundImage.Builder()
+                        .SetImage(new PdfImageXObject(bgData))
+                        .SetBackgroundSize(bgSize)
+                        .Build());
+                }
+                else if (bgColor != null)
+                {
+                    div.SetBackgroundColor(bgColor);
+                }
+
+                // 3-column table: [signature+logo | text | stamp]
+                var table = new Table(new float[] { 1, 2, 1 })
+                    .SetWidth(UnitValue.CreatePercentValue(100))
+                    .UseAllAvailableWidth();
+
+                // Left: signature image + company logo (stacked vertically)
+                var leftCell = new Cell().SetBorder(Border.NO_BORDER).SetVerticalAlignment(VerticalAlignment.MIDDLE);
+                if (hasSignImage)
+                {
+                    var img = new Image(ImageDataFactory.Create(Convert.FromBase64String(signImageContent!)));
+                    img.SetAutoScale(true);
+                    leftCell.Add(img);
+                }
+                if (hasCompanyLogo)
+                {
+                    var logoImg = new Image(ImageDataFactory.Create(Convert.FromBase64String(companyLogoContent!)));
+                    logoImg.SetAutoScale(true);
+                    leftCell.Add(logoImg);
+                }
+                table.AddCell(leftCell);
+
+                // Center: text paragraphs
+                var centerCell = new Cell().SetBorder(Border.NO_BORDER).SetVerticalAlignment(VerticalAlignment.MIDDLE);
+                foreach (var line in lines)
+                {
+                    var p = new Paragraph(line);
+                    if (font != null) p.SetFont(font);
+                    if (fgColor != null) p.SetFontColor(fgColor);
+                    if (fontSize.HasValue) p.SetFontSize(fontSize.Value);
+                    centerCell.Add(p);
+                }
+                table.AddCell(centerCell);
+
+                // Right: stamp image
+                var rightCell = new Cell().SetBorder(Border.NO_BORDER).SetVerticalAlignment(VerticalAlignment.MIDDLE);
+                if (hasStamp)
+                {
+                    var stampImg = new Image(ImageDataFactory.Create(Convert.FromBase64String(stampImageContent!)));
+                    stampImg.SetAutoScale(true);
+                    rightCell.Add(stampImg);
+                }
+                table.AddCell(rightCell);
+
+                div.Add(table);
+                appearance.SetContent(div);
             }
             else
             {
-                appearance.SetContent(appearanceText);
+                // Existing path — backward compatible
+                var reasonLine = string.Join("\n", lines);
+                var appearanceText = new SignedAppearanceText().SetReasonLine(reasonLine);
+
+                if (hasSignImage)
+                {
+                    byte[] image = Convert.FromBase64String(signImageContent!);
+                    appearance.SetContent(appearanceText, ImageDataFactory.Create(image));
+                }
+                else
+                {
+                    appearance.SetContent(appearanceText);
+                }
+
+                // Apply color and font customization
+                if (fgColor != null)
+                    appearance.SetFontColor(fgColor);
+                if (bgColor != null)
+                    appearance.SetBackgroundColor(bgColor);
+                if (fontSize.HasValue)
+                    appearance.SetFontSize(fontSize.Value);
+                if (font != null)
+                    appearance.SetFont(font);
             }
 
             signerProperties
@@ -268,6 +428,18 @@ namespace DotNetSigningServer.Services
                 .SetSignatureAppearance(appearance);
 
             return signerProperties;
+        }
+
+        private static DeviceRgb ParseHexColor(string hex)
+        {
+            hex = hex.TrimStart('#');
+            if (hex.Length != 6)
+                return new DeviceRgb(0, 0, 0);
+
+            int r = Convert.ToInt32(hex.Substring(0, 2), 16);
+            int g = Convert.ToInt32(hex.Substring(2, 2), 16);
+            int b = Convert.ToInt32(hex.Substring(4, 2), 16);
+            return new DeviceRgb(r, g, b);
         }
 
         private static (IX509Certificate[] Chain, ICipherParameters PrivateKey) LoadFromPfx(string pfxContent, string password)

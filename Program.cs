@@ -29,7 +29,6 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
         ForwardedHeaders.XForwardedHost;
     options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
-    // options.ForwardLimit = 2;
 });
 
 builder.Services.AddControllersWithViews();
@@ -78,6 +77,9 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
     });
 builder.Services.AddAuthorization();
+
+// Health checks
+builder.Services.AddHealthChecks();
 
 PostgreSqlContainer? postgresContainer = null;
 
@@ -128,7 +130,14 @@ else
     }
 
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseNpgsql(connectionString));
+        options.UseNpgsql(connectionString, npgsqlOptions =>
+        {
+            npgsqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorCodesToAdd: null);
+            npgsqlOptions.CommandTimeout(30);
+        }));
 }
 
 builder.Services.AddOptions<TimestampAuthorityOptions>()
@@ -143,11 +152,13 @@ builder.Services.AddOptions<TimestampAuthorityOptions>()
 
 var app = builder.Build();
 
+var appLogger = app.Services.GetRequiredService<ILogger<Program>>();
+
 if (postgresContainer != null)
 {
     app.Lifetime.ApplicationStopping.Register(async () =>
     {
-        Console.WriteLine("Application is stopping. Disposing of PostgreSQL Testcontainer...");
+        appLogger.LogInformation("Application is stopping. Disposing of PostgreSQL Testcontainer...");
         await postgresContainer.DisposeAsync();
     });
 }
@@ -162,12 +173,16 @@ app.UseMiddleware<LokiExceptionMiddleware>();
 app.UseMiddleware<BodySizeLimitMiddleware>();
 app.UseMiddleware<RequestThrottlingMiddleware>();
 
-app.UseSwagger();
-app.UseSwaggerUI(options =>
+// Swagger only in non-production environments
+if (!app.Environment.IsProduction())
 {
-    options.SwaggerEndpoint("/swagger/v1/swagger.json", "API v1");
-    options.RoutePrefix = "swagger";
-});
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "API v1");
+        options.RoutePrefix = "swagger";
+    });
+}
 
 app.Use(async (context, next) =>
 {
@@ -180,11 +195,11 @@ app.Use(async (context, next) =>
             var originService = context.RequestServices.GetRequiredService<IAllowedOriginService>();
             if (!originService.IsOriginAllowed(origin, context))
             {
-                Console.WriteLine("CORS origin not allowed");
+                var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+                logger.LogWarning("CORS origin not allowed: {Origin}", origin);
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 return;
             }
-            Console.WriteLine($"Allowing CORS for origin: {origin}");
             context.Response.Headers["Access-Control-Allow-Origin"] = origin;
             context.Response.Headers["Vary"] = "Origin";
             context.Response.Headers["Access-Control-Allow-Headers"] = context.Request.Headers["Access-Control-Request-Headers"].ToString() ?? "Authorization,Content-Type";
@@ -231,6 +246,10 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+// Health check endpoints
+app.MapHealthChecks("/health");
+app.MapHealthChecks("/healthz");
 
 using (var scope = app.Services.CreateScope())
 {

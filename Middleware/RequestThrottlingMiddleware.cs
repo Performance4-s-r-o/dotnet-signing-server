@@ -10,11 +10,13 @@ public class RequestThrottlingMiddleware
 
     private readonly RequestDelegate _next;
     private readonly LimitsOptions _options;
+    private readonly ILogger<RequestThrottlingMiddleware> _logger;
 
-    public RequestThrottlingMiddleware(RequestDelegate next, IOptions<LimitsOptions> options)
+    public RequestThrottlingMiddleware(RequestDelegate next, IOptions<LimitsOptions> options, ILogger<RequestThrottlingMiddleware> logger)
     {
         _next = next;
         _options = options.Value;
+        _logger = logger;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -32,7 +34,7 @@ public class RequestThrottlingMiddleware
         if (current > _options.MaxConcurrentRequestsPerKey)
         {
             InFlightCounts.AddOrUpdate(key, 0, (_, val) => Math.Max(0, val - 1));
-            Console.WriteLine("too many concurrent requests");
+            _logger.LogWarning("Too many concurrent requests for key {Key} ({Count}/{Max})", key, current, _options.MaxConcurrentRequestsPerKey);
             context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
             await context.Response.WriteAsJsonAsync(new { message = "Too many concurrent requests. Please slow down." });
             return;

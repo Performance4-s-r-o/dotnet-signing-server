@@ -28,8 +28,9 @@ namespace DotNetSigningServer.Controllers
         private readonly LimitsOptions _limitOptions;
         private readonly PdfConversionService _pdfConversionService;
         private readonly FlowPipelineService _flowPipelineService;
+        private readonly IWebHostEnvironment _env;
 
-        public ApiController(ApplicationDbContext dbContext, PdfSigningService signingService, PdfTemplateService pdfTemplateService, IApiAuthService apiAuthService, ILogger<ApiController> logger, TemplateAiService templateAiService, ContentLimitGuard limitGuard, IOptions<LimitsOptions> limitOptions, PdfConversionService pdfConversionService, FlowPipelineService flowPipelineService)
+        public ApiController(ApplicationDbContext dbContext, PdfSigningService signingService, PdfTemplateService pdfTemplateService, IApiAuthService apiAuthService, ILogger<ApiController> logger, TemplateAiService templateAiService, ContentLimitGuard limitGuard, IOptions<LimitsOptions> limitOptions, PdfConversionService pdfConversionService, FlowPipelineService flowPipelineService, IWebHostEnvironment env)
         {
             _dbContext = dbContext;
             _signingService = signingService;
@@ -41,6 +42,20 @@ namespace DotNetSigningServer.Controllers
             _limitOptions = limitOptions.Value;
             _pdfConversionService = pdfConversionService;
             _flowPipelineService = flowPipelineService;
+            _env = env;
+        }
+
+        /// <summary>
+        /// Returns a Problem response with trace ID. Only includes exception details in Development.
+        /// </summary>
+        private ObjectResult SafeProblem(string genericMessage, Exception? ex = null)
+        {
+            var traceId = HttpContext.TraceIdentifier;
+            var detail = _env.IsDevelopment() && ex != null
+                ? $"{genericMessage}: {ex.Message}"
+                : $"{genericMessage} (traceId: {traceId})";
+
+            return Problem(detail: detail, statusCode: StatusCodes.Status500InternalServerError);
         }
 
         [HttpPost("/api/presign")]
@@ -95,7 +110,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Presign failed");
-                return Problem($"An error occurred during the presign process: {ex.Message}");
+                return SafeProblem("An error occurred during the presign process", ex);
             }
         }
 
@@ -122,7 +137,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Create template failed");
-                return Problem($"An error occurred while creating the template: {ex.Message}");
+                return SafeProblem("An error occurred while creating the template", ex);
             }
         }
 
@@ -151,7 +166,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Get template failed");
-                return Problem($"An error occurred while retrieving the template: {ex.Message}");
+                return SafeProblem("An error occurred while retrieving the template", ex);
             }
         }
 
@@ -211,7 +226,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Update template failed");
-                return Problem($"An error occurred while updating the template: {ex.Message}");
+                return SafeProblem("An error occurred while updating the template", ex);
             }
         }
 
@@ -229,7 +244,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Delete template failed");
-                return Problem($"An error occurred while deleting the template: {ex.Message}");
+                return SafeProblem("An error occurred while deleting the template", ex);
             }
         }
 
@@ -269,7 +284,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Sign failed");
-                return Problem($"An error occurred during the final signing process: {ex.Message}");
+                return SafeProblem("An error occurred during the final signing process", ex);
             }
         }
 
@@ -307,7 +322,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(Logging.LoggingEvents.ApiError, ex, "PFX sign failed");
-                return Problem($"An error occurred during the PFX signing process: {ex.Message}");
+                return SafeProblem("An error occurred during the PFX signing process", ex);
             }
         }
 
@@ -345,7 +360,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Timestamp failed");
-                return Problem($"An error occurred while applying the timestamp: {ex.Message}");
+                return SafeProblem("An error occurred while applying the timestamp", ex);
             }
         }
 
@@ -374,7 +389,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Add attachment failed");
-                return Problem($"An error occurred while adding the attachment: {ex.Message}");
+                return SafeProblem("An error occurred while adding the attachment", ex);
             }
         }
 
@@ -435,7 +450,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Flow start failed");
-                return Problem($"An error occurred while starting the flow: {ex.Message}");
+                return SafeProblem("An error occurred while starting the flow", ex);
             }
         }
 
@@ -475,7 +490,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Flow sign failed");
-                return Problem($"An error occurred while completing the flow signatures: {ex.Message}");
+                return SafeProblem("An error occurred while completing the flow signatures", ex);
             }
         }
 
@@ -520,7 +535,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(Logging.LoggingEvents.ApiError, ex, "PDF/A conversion failed");
-                return Problem($"An error occurred while converting the document to PDF/A: {ex.Message}");
+                return SafeProblem("An error occurred while converting the document to PDF/A", ex);
             }
         }
 
@@ -577,7 +592,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Fill PDF failed");
-                return Problem($"An error occurred while filling the PDF: {ex.Message}");
+                return SafeProblem("An error occurred while filling the PDF", ex);
             }
         }
 
@@ -618,7 +633,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Barcode scan failed");
-                return Problem($"An error occurred while scanning codes: {ex.Message}");
+                return SafeProblem("An error occurred while scanning codes", ex);
             }
         }
 
@@ -817,14 +832,7 @@ namespace DotNetSigningServer.Controllers
         /// </summary>
         private static List<Result> TryDecodeVariant(IMagickImage variant, BarcodeReaderGeneric reader)
         {
-            // převedeme MagickImage na RGBA byte pole
             var rgba = variant.ToByteArray(MagickFormat.Rgba);
-            // Save the variant image for debugging
-            var debugDir = Path.Combine("debug_images");
-            Directory.CreateDirectory(debugDir);
-            var debugPath = Path.Combine(debugDir, $"variant_{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}.png");
-            variant.Write(debugPath, MagickFormat.Png);
-
 
             var luminance = new RGBLuminanceSource(
                 rgba,
@@ -859,7 +867,7 @@ namespace DotNetSigningServer.Controllers
             }
 
             // Fallback to API token
-            Console.WriteLine("Validating API token from Authorization header");
+            _logger.LogDebug("Validating API token from Authorization header");
             var tokenUser = await _apiAuthService.ValidateTokenAsync(Request.Headers["Authorization"].ToString(), originHeader);
             if (tokenUser == null)
             {
