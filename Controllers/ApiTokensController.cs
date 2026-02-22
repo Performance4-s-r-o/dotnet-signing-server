@@ -13,12 +13,14 @@ public class ApiTokensController : Controller
 {
     private readonly ApplicationDbContext _dbContext;
     private readonly ITokenService _tokenService;
+    private readonly IIpWhitelistService _ipWhitelistService;
     private readonly ILogger<ApiTokensController> _logger;
 
-    public ApiTokensController(ApplicationDbContext dbContext, ITokenService tokenService, ILogger<ApiTokensController> logger)
+    public ApiTokensController(ApplicationDbContext dbContext, ITokenService tokenService, IIpWhitelistService ipWhitelistService, ILogger<ApiTokensController> logger)
     {
         _dbContext = dbContext;
         _tokenService = tokenService;
+        _ipWhitelistService = ipWhitelistService;
         _logger = logger;
     }
 
@@ -43,12 +45,25 @@ public class ApiTokensController : Controller
 
     [HttpPost("/ApiTokens")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(string label, DateTimeOffset? expiresAt = null, string usageType = "server", string? allowedOrigins = null)
+    public async Task<IActionResult> Create(string label, DateTimeOffset? expiresAt = null, string usageType = "server", string? allowedOrigins = null, string? allowedIps = null)
     {
         var userId = GetCurrentUserId();
         if (userId == null)
         {
             return RedirectToAction("SignIn", "Account");
+        }
+
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            TempData["LabelError"] = "Label is required.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        label = label.Trim();
+        if (label.Length > 128)
+        {
+            TempData["LabelError"] = "Label must be 128 characters or fewer.";
+            return RedirectToAction(nameof(Index));
         }
 
         var nowUtc = DateTimeOffset.UtcNow;
@@ -78,6 +93,27 @@ public class ApiTokensController : Controller
             return RedirectToAction(nameof(Index));
         }
 
+        // Validate AllowedIps for server tokens
+        string? storedIps = null;
+        if (!isBrowser && !string.IsNullOrWhiteSpace(allowedIps))
+        {
+            var (validIps, invalidIps) = _ipWhitelistService.ParseAndValidateIps(allowedIps);
+            if (invalidIps.Count > 0)
+            {
+                TempData["Error"] = $"Invalid IP address(es): {string.Join(", ", invalidIps)}";
+                return RedirectToAction(nameof(Index));
+            }
+            if (validIps.Count > 20)
+            {
+                TempData["Error"] = "Maximum 20 IP entries allowed.";
+                return RedirectToAction(nameof(Index));
+            }
+            if (validIps.Count > 0)
+            {
+                storedIps = string.Join("\n", validIps);
+            }
+        }
+
         var (plaintext, hash, _) = _tokenService.IssueToken(user, label, expiresAt);
         var token = new ApiToken
         {
@@ -87,6 +123,7 @@ public class ApiTokensController : Controller
             ExpiresAt = expiresUtc,
             IsBrowserToken = isBrowser,
             AllowedOrigins = isBrowser ? string.Join("\n", normalizedOrigins) : null,
+            AllowedIps = storedIps,
             CreatedAt = nowUtc
         };
 

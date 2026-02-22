@@ -364,6 +364,41 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
+        [HttpPost("/api/visual-sign")]
+        public async Task<IActionResult> ApplyVisualSign([FromBody] VisualSignInput input)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            try
+            {
+                _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Visual sign");
+                _limitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+
+            try
+            {
+                if (input.TemplateId.HasValue)
+                {
+                    var signatureField = await GetSignatureFieldAsync(input.TemplateId.Value, user.Id);
+                    input.SignRect = signatureField.Rect;
+                    input.SignPageNumber = signatureField.Page <= 0 ? 1 : signatureField.Page;
+                }
+                var result = _signingService.ApplyVisualSign(input);
+                await DebitUserAsync(user);
+                return Ok(new { result });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Visual sign failed");
+                return SafeProblem("An error occurred while applying the visual signature", ex);
+            }
+        }
+
         [HttpPost("/api/attachment")]
         public async Task<IActionResult> AddAttachment([FromBody] AddAttachmentInput input)
         {
@@ -868,7 +903,7 @@ namespace DotNetSigningServer.Controllers
 
             // Fallback to API token
             _logger.LogDebug("Validating API token from Authorization header");
-            var tokenUser = await _apiAuthService.ValidateTokenAsync(Request.Headers["Authorization"].ToString(), originHeader);
+            var tokenUser = await _apiAuthService.ValidateTokenAsync(Request.Headers["Authorization"].ToString(), originHeader, HttpContext.Connection.RemoteIpAddress);
             if (tokenUser == null)
             {
                 return null;

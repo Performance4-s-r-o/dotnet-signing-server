@@ -8,6 +8,7 @@ using iText.Kernel.Colors;
 using iText.Kernel.Font;
 using iText.Kernel.Geom;
 using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas;
 using iText.IO.Font.Constants;
 using iText.Kernel.Pdf.Filespec;
 using iText.Kernel.Pdf.Xobject;
@@ -150,6 +151,194 @@ namespace DotNetSigningServer.Services
             signer.Timestamp(tsaClient, fieldName);
 
             return Convert.ToBase64String(msOut.ToArray());
+        }
+
+        public string ApplyVisualSign(VisualSignInput input)
+        {
+            byte[] pdfBytes = Convert.FromBase64String(input.PdfContent);
+
+            using var msIn = new MemoryStream(pdfBytes);
+            using var msOut = new MemoryStream();
+
+            var reader = new PdfReader(msIn);
+            var writer = new PdfWriter(msOut);
+            var pdfDoc = new PdfDocument(reader, writer, new StampingProperties().UseAppendMode());
+
+            int pageNumber = input.SignPageNumber <= 0 ? 1 : input.SignPageNumber;
+            var page = pdfDoc.GetPage(pageNumber);
+            var pageSize = page.GetPageSize();
+
+            float x = input.SignRect.X;
+            float y = input.SignRect.Y;
+            float width = input.SignRect.Width;
+            float height = input.SignRect.Height;
+
+            var hasSignImage = !string.IsNullOrEmpty(input.SignImageContent);
+            var hasCompanyLogo = !string.IsNullOrEmpty(input.CompanyLogoContent);
+            var hasStamp = !string.IsNullOrEmpty(input.StampImageContent);
+            var hasBgImage = !string.IsNullOrEmpty(input.BackgroundImageContent);
+
+            var appearanceOptions = input.Appearance ?? new SignatureAppearanceOptions();
+            var showReason = appearanceOptions.ShowReason;
+            var showDate = appearanceOptions.ShowDate;
+
+            DeviceRgb? fgColor = !string.IsNullOrWhiteSpace(appearanceOptions.ForegroundColor)
+                ? ParseHexColor(appearanceOptions.ForegroundColor!) : null;
+            DeviceRgb? bgColor = !string.IsNullOrWhiteSpace(appearanceOptions.BackgroundColor)
+                ? ParseHexColor(appearanceOptions.BackgroundColor!) : null;
+
+            PdfFont? font = null;
+            if (!string.IsNullOrWhiteSpace(appearanceOptions.FontFamily))
+            {
+                var fontName = appearanceOptions.FontFamily switch
+                {
+                    "Times" => StandardFonts.TIMES_ROMAN,
+                    "Courier" => StandardFonts.COURIER,
+                    _ => StandardFonts.HELVETICA,
+                };
+                font = PdfFontFactory.CreateFont(fontName);
+            }
+
+            float? fontSize = appearanceOptions.FontSize;
+
+            var rect = new Rectangle(x, y, width, height);
+            var canvas = new Canvas(new PdfCanvas(page), rect);
+
+            if (hasStamp || hasBgImage || hasCompanyLogo)
+            {
+                // Full layout: 3-column table matching BuildSignerProperties pattern
+                var div = new Div()
+                    .SetWidth(UnitValue.CreatePercentValue(100))
+                    .SetHeight(UnitValue.CreatePercentValue(100));
+
+                if (hasBgImage)
+                {
+                    var bgData = ImageDataFactory.Create(Convert.FromBase64String(input.BackgroundImageContent!));
+                    var bgSize = new BackgroundSize();
+                    bgSize.SetBackgroundSizeToContain();
+                    div.SetBackgroundImage(new BackgroundImage.Builder()
+                        .SetImage(new PdfImageXObject(bgData))
+                        .SetBackgroundSize(bgSize)
+                        .Build());
+                }
+                else if (bgColor != null)
+                {
+                    div.SetBackgroundColor(bgColor);
+                }
+
+                var table = new Table(new float[] { 1, 2, 1 })
+                    .SetWidth(UnitValue.CreatePercentValue(100))
+                    .UseAllAvailableWidth();
+
+                // Left: signature image + company logo
+                var leftCell = new Cell().SetBorder(Border.NO_BORDER).SetVerticalAlignment(VerticalAlignment.MIDDLE);
+                if (hasSignImage)
+                {
+                    var img = new Image(ImageDataFactory.Create(Convert.FromBase64String(input.SignImageContent!)));
+                    img.SetAutoScale(true);
+                    leftCell.Add(img);
+                }
+                if (hasCompanyLogo)
+                {
+                    var logoImg = new Image(ImageDataFactory.Create(Convert.FromBase64String(input.CompanyLogoContent!)));
+                    logoImg.SetAutoScale(true);
+                    leftCell.Add(logoImg);
+                }
+                table.AddCell(leftCell);
+
+                // Center: text lines
+                var centerCell = new Cell().SetBorder(Border.NO_BORDER).SetVerticalAlignment(VerticalAlignment.MIDDLE);
+                var lines = BuildVisualSignTextLines(input, appearanceOptions);
+                foreach (var line in lines)
+                {
+                    var p = new Paragraph(line);
+                    if (font != null) p.SetFont(font);
+                    if (fgColor != null) p.SetFontColor(fgColor);
+                    if (fontSize.HasValue) p.SetFontSize(fontSize.Value);
+                    centerCell.Add(p);
+                }
+                table.AddCell(centerCell);
+
+                // Right: stamp image
+                var rightCell = new Cell().SetBorder(Border.NO_BORDER).SetVerticalAlignment(VerticalAlignment.MIDDLE);
+                if (hasStamp)
+                {
+                    var stampImg = new Image(ImageDataFactory.Create(Convert.FromBase64String(input.StampImageContent!)));
+                    stampImg.SetAutoScale(true);
+                    rightCell.Add(stampImg);
+                }
+                table.AddCell(rightCell);
+
+                div.Add(table);
+                canvas.Add(div);
+            }
+            else if (hasSignImage)
+            {
+                // Simple: just stamp the signature image
+                var imgData = ImageDataFactory.Create(Convert.FromBase64String(input.SignImageContent!));
+                var img = new Image(imgData);
+                img.ScaleToFit(width, height);
+                img.SetFixedPosition(x, y);
+
+                // Use absolute positioning on page
+                canvas.Close();
+                var layoutDoc = new iText.Layout.Document(pdfDoc);
+                layoutDoc.Add(img);
+                layoutDoc.Flush();
+                pdfDoc.Close();
+                return Convert.ToBase64String(msOut.ToArray());
+            }
+            else
+            {
+                // Text-only visual stamp
+                var lines = BuildVisualSignTextLines(input, appearanceOptions);
+                if (bgColor != null)
+                {
+                    var div = new Div()
+                        .SetWidth(UnitValue.CreatePercentValue(100))
+                        .SetHeight(UnitValue.CreatePercentValue(100))
+                        .SetBackgroundColor(bgColor);
+                    foreach (var line in lines)
+                    {
+                        var p = new Paragraph(line);
+                        if (font != null) p.SetFont(font);
+                        if (fgColor != null) p.SetFontColor(fgColor);
+                        if (fontSize.HasValue) p.SetFontSize(fontSize.Value);
+                        div.Add(p);
+                    }
+                    canvas.Add(div);
+                }
+                else
+                {
+                    foreach (var line in lines)
+                    {
+                        var p = new Paragraph(line);
+                        if (font != null) p.SetFont(font);
+                        if (fgColor != null) p.SetFontColor(fgColor);
+                        if (fontSize.HasValue) p.SetFontSize(fontSize.Value);
+                        canvas.Add(p);
+                    }
+                }
+            }
+
+            canvas.Close();
+            pdfDoc.Close();
+
+            return Convert.ToBase64String(msOut.ToArray());
+        }
+
+        private static List<string> BuildVisualSignTextLines(VisualSignInput input, SignatureAppearanceOptions appearance)
+        {
+            var lines = new List<string>();
+            if (appearance.ShowReason && !string.IsNullOrWhiteSpace(input.Reason))
+                lines.Add($"Reason: {input.Reason}");
+            if (appearance.ShowLocation && !string.IsNullOrWhiteSpace(input.Location))
+                lines.Add($"Location: {input.Location}");
+            if (appearance.ShowDate)
+                lines.Add($"Date: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+            if (!string.IsNullOrWhiteSpace(appearance.DescriptionText))
+                lines.Add(appearance.DescriptionText!);
+            return lines;
         }
 
         public string AddAttachment(AddAttachmentInput input)

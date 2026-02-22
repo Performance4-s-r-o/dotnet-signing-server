@@ -13,6 +13,7 @@ public class ApiAuthServiceTests : IDisposable
     private readonly ApplicationDbContext _dbContext;
     private readonly TokenService _tokenService;
     private readonly AllowedOriginService _allowedOriginService;
+    private readonly IpWhitelistService _ipWhitelistService;
     private readonly ApiAuthService _sut;
     private readonly string _dbName = Guid.NewGuid().ToString();
 
@@ -32,8 +33,9 @@ public class ApiAuthServiceTests : IDisposable
             Microsoft.EntityFrameworkCore.InMemoryDbContextOptionsExtensions.UseInMemoryDatabase(options, _dbName));
         var sp = services.BuildServiceProvider();
         _allowedOriginService = new AllowedOriginService(sp.GetRequiredService<IServiceScopeFactory>());
+        _ipWhitelistService = new IpWhitelistService();
 
-        _sut = new ApiAuthService(_dbContext, _tokenService, _allowedOriginService);
+        _sut = new ApiAuthService(_dbContext, _tokenService, _allowedOriginService, _ipWhitelistService);
     }
 
     public void Dispose()
@@ -44,6 +46,7 @@ public class ApiAuthServiceTests : IDisposable
     private (User User, string PlaintextToken, ApiToken ApiToken) SeedUserWithToken(
         bool isBrowserToken = false,
         string? allowedOrigins = null,
+        string? allowedIps = null,
         DateTimeOffset? expiresAt = null,
         DateTimeOffset? revokedAt = null)
     {
@@ -59,6 +62,7 @@ public class ApiAuthServiceTests : IDisposable
             TokenHash = hash,
             IsBrowserToken = isBrowserToken,
             AllowedOrigins = allowedOrigins,
+            AllowedIps = allowedIps,
             ExpiresAt = expiresAt,
             RevokedAt = revokedAt,
             CreatedAt = DateTimeOffset.UtcNow
@@ -212,5 +216,60 @@ public class ApiAuthServiceTests : IDisposable
         var result = await _sut.ValidateTokenAsync($"Bearer {trimmed}");
         Assert.NotNull(result);
         Assert.Equal(user.Id, result.Id);
+    }
+
+    // --- IP Whitelisting Tests ---
+
+    [Fact]
+    public async Task ValidateTokenAsync_ServerToken_NoAllowedIps_AnyIpAllowed()
+    {
+        var (user, token, _) = SeedUserWithToken(isBrowserToken: false, allowedIps: null);
+        var result = await _sut.ValidateTokenAsync($"Bearer {token}", null, System.Net.IPAddress.Parse("8.8.8.8"));
+        Assert.NotNull(result);
+        Assert.Equal(user.Id, result.Id);
+    }
+
+    [Fact]
+    public async Task ValidateTokenAsync_ServerToken_AllowedIp_Matches_ReturnsUser()
+    {
+        var (user, token, _) = SeedUserWithToken(isBrowserToken: false, allowedIps: "10.0.0.1");
+        var result = await _sut.ValidateTokenAsync($"Bearer {token}", null, System.Net.IPAddress.Parse("10.0.0.1"));
+        Assert.NotNull(result);
+        Assert.Equal(user.Id, result.Id);
+    }
+
+    [Fact]
+    public async Task ValidateTokenAsync_ServerToken_AllowedIp_NoMatch_ReturnsNull()
+    {
+        var (_, token, _) = SeedUserWithToken(isBrowserToken: false, allowedIps: "10.0.0.1");
+        var result = await _sut.ValidateTokenAsync($"Bearer {token}", null, System.Net.IPAddress.Parse("10.0.0.2"));
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task ValidateTokenAsync_ServerToken_CidrAllowed_ReturnsUser()
+    {
+        var (user, token, _) = SeedUserWithToken(isBrowserToken: false, allowedIps: "192.168.0.0/16");
+        var result = await _sut.ValidateTokenAsync($"Bearer {token}", null, System.Net.IPAddress.Parse("192.168.1.50"));
+        Assert.NotNull(result);
+        Assert.Equal(user.Id, result.Id);
+    }
+
+    [Fact]
+    public async Task ValidateTokenAsync_ServerToken_IPv4MappedIPv6_MatchesIPv4()
+    {
+        var (user, token, _) = SeedUserWithToken(isBrowserToken: false, allowedIps: "10.0.0.1");
+        var mappedIp = System.Net.IPAddress.Parse("10.0.0.1").MapToIPv6();
+        var result = await _sut.ValidateTokenAsync($"Bearer {token}", null, mappedIp);
+        Assert.NotNull(result);
+        Assert.Equal(user.Id, result.Id);
+    }
+
+    [Fact]
+    public async Task ValidateTokenAsync_ServerToken_AllowedIps_NullClientIp_ReturnsNull()
+    {
+        var (_, token, _) = SeedUserWithToken(isBrowserToken: false, allowedIps: "10.0.0.1");
+        var result = await _sut.ValidateTokenAsync($"Bearer {token}", null, null);
+        Assert.Null(result);
     }
 }

@@ -1,3 +1,4 @@
+using System.Net;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using Microsoft.EntityFrameworkCore;
@@ -10,15 +11,17 @@ public class ApiAuthService : IApiAuthService
     private readonly ApplicationDbContext _dbContext;
     private readonly ITokenService _tokenService;
     private readonly IAllowedOriginService _allowedOriginService;
+    private readonly IIpWhitelistService _ipWhitelistService;
 
-    public ApiAuthService(ApplicationDbContext dbContext, ITokenService tokenService, IAllowedOriginService allowedOriginService)
+    public ApiAuthService(ApplicationDbContext dbContext, ITokenService tokenService, IAllowedOriginService allowedOriginService, IIpWhitelistService ipWhitelistService)
     {
         _dbContext = dbContext;
         _tokenService = tokenService;
         _allowedOriginService = allowedOriginService;
+        _ipWhitelistService = ipWhitelistService;
     }
 
-    public async Task<User?> ValidateTokenAsync(string authorizationHeader, string? originHeader = null)
+    public async Task<User?> ValidateTokenAsync(string authorizationHeader, string? originHeader = null, IPAddress? clientIp = null)
     {
         if (string.IsNullOrWhiteSpace(authorizationHeader) ||
             !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
@@ -63,6 +66,12 @@ public class ApiAuthService : IApiAuthService
         else if (!string.IsNullOrWhiteSpace(originHeader) && !_allowedOriginService.IsLocalOrigin(originHeader))
         {
             // Server tokens must not be used from arbitrary browser origins.
+            return null;
+        }
+
+        // IP whitelist check (applies to all token types when configured)
+        if (!_ipWhitelistService.IsIpAllowedForToken(clientIp, apiToken))
+        {
             return null;
         }
 

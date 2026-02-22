@@ -44,6 +44,7 @@ builder.Services.AddScoped<PdfConversionService>();
 builder.Services.AddScoped<FlowPipelineService>();
 builder.Services.AddSingleton<ContentLimitGuard>();
 builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();
+builder.Services.AddSingleton<IIpWhitelistService, IpWhitelistService>();
 builder.Services.AddHttpClient<LokiClient>();
 builder.Services.AddHttpClient<TemplateAiService>();
 builder.Services.AddEndpointsApiExplorer();
@@ -250,6 +251,15 @@ app.MapControllers();
 // Health check endpoints
 app.MapHealthChecks("/health");
 app.MapHealthChecks("/healthz");
+
+// Loki test endpoint
+app.MapGet("/api/test-loki", async (LokiClient loki) =>
+{
+    await loki.LogAsync("info", "Loki test: info message from dotnet-signing-server");
+    await loki.LogAsync("warn", "Loki test: warning message from dotnet-signing-server");
+    await loki.LogAsync("error", "Loki test: error message from dotnet-signing-server");
+    return Results.Json(new { status = "ok", message = "Sent info, warn, and error to Loki" });
+});
 
 using (var scope = app.Services.CreateScope())
 {

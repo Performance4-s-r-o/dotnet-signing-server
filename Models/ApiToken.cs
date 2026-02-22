@@ -25,6 +25,8 @@ public class ApiToken
 
     public string? AllowedOrigins { get; set; }
 
+    public string? AllowedIps { get; set; }
+
     public DateTimeOffset? ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

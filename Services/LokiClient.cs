@@ -72,6 +72,11 @@ public class LokiClient
                 var bytes = Encoding.UTF8.GetBytes($"{_options.Username}:{_options.Password}");
                 req.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(bytes));
             }
+            else if (!string.IsNullOrWhiteSpace(_options.Password))
+            {
+                var bytes = Encoding.UTF8.GetBytes($":{_options.Password}");
+                req.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(bytes));
+            }
 
             using var response = await _httpClient.SendAsync(req);
             response.EnsureSuccessStatusCode();

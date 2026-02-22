@@ -37,6 +37,9 @@ namespace dotnetsigningserver.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AllowedIps")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("AllowedOrigins")
                         .HasColumnType("TEXT");
 

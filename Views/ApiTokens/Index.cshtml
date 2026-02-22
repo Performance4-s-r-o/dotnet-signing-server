@@ -26,7 +26,11 @@
             <div class="tokens-form-row">
                 <div class="tokens-form-group">
                     <label for="token-label" class="tokens-label">Label</label>
-                    <input type="text" id="token-label" name="label" class="tokens-input" placeholder="e.g., CI token">
+                    <input type="text" id="token-label" name="label" class="tokens-input" placeholder="e.g., CI token" required maxlength="128">
+                    @if (TempData["LabelError"] != null)
+                    {
+                        <span class="form-validation">@TempData["LabelError"]</span>
+                    }
                 </div>
 
                 <div class="tokens-form-group">
@@ -58,6 +62,15 @@
                     Localhost is always permitted for testing.</p>
             </div>
 
+            <div id="ip-block" class="tokens-form-group">
+                <label class="tokens-label">Allowed IPs (optional, one per line, max 20)</label>
+                <textarea name="allowedIps" rows="4"
+                    placeholder="203.0.113.10&#10;198.51.100.0/24&#10;2001:db8::1" class="tokens-input"></textarea>
+                <p class="muted" style="margin-bottom: 0.5rem;">Restrict this token to specific IP addresses or CIDR
+                    subnets.
+                    Leave empty to allow any IP.</p>
+            </div>
+
             <button type="submit" class="btn btn-primary">Create token</button>
             @Html.AntiForgeryToken()
         </form>
@@ -81,6 +94,7 @@
                             <th>Revoked</th>
                             <th>Type</th>
                             <th>Origins</th>
+                            <th>Allowed IPs</th>
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -94,6 +108,7 @@
                                 <td>@(token.RevokedAt?.ToLocalTime().ToString("g") ?? "-")</td>
                                 <td>@(token.IsBrowserToken ? "Browser" : "Server")</td>
                                 <td style="max-width:220px;white-space:pre-wrap;">@(token.AllowedOrigins ?? "-")</td>
+                                <td style="max-width:220px;white-space:pre-wrap;">@(token.AllowedIps ?? "-")</td>
                                 <td>
                                     @if (token.RevokedAt == null)
                                     {
@@ -136,12 +151,14 @@
             (function () {
                 const radios = document.querySelectorAll('input[name="usageType"]');
                 const originBlock = document.getElementById('origin-block');
-                function toggleOrigins() {
+                const ipBlock = document.getElementById('ip-block');
+                function toggleBlocks() {
                     const val = document.querySelector('input[name="usageType"]:checked')?.value;
                     originBlock.style.display = val === 'web' ? 'flex' : 'none';
+                    ipBlock.style.display = val === 'server' ? 'flex' : 'none';
                 }
-                radios.forEach(r => r.addEventListener('change', toggleOrigins));
-                toggleOrigins();
+                radios.forEach(r => r.addEventListener('change', toggleBlocks));
+                toggleBlocks();
             })();
         </script>
 }
