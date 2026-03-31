@@ -3,6 +3,9 @@ using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Tests.Helpers;
 using iText.Kernel.Pdf;
+using iText.Signatures;
+using Org.BouncyCastle.Cms;
+using Org.BouncyCastle.Pkcs;
 
 namespace DotNetSigningServer.Tests.Services;
 
@@ -13,7 +16,7 @@ public class PdfSigningServiceTests : IDisposable
 
     public PdfSigningServiceTests()
     {
-        _sut = new PdfSigningService(TestHelpers.WrapOptions(new TimestampAuthorityOptions()));
+        _sut = CreateSigningService();
     }
 
     public void Dispose()
@@ -216,6 +219,92 @@ public class PdfSigningServiceTests : IDisposable
     }
 
     [Fact]
+    public void AddAttachment_WithEvidenceEncryption_EncryptsPayload()
+    {
+        var pdfBase64 = TestHelpers.CreateMinimalPdfBase64();
+        var attachmentBytes = System.Text.Encoding.UTF8.GetBytes("{\"hello\":\"world\"}");
+        var attachmentContent = Convert.ToBase64String(attachmentBytes);
+        var (certPem, pfxBase64, password) = TestHelpers.CreateTestCertificate();
+        var sut = CreateSigningService(new EvidenceOptions
+        {
+            Enabled = true,
+            MimeType = "application/pkcs7-mime",
+            CompressBeforeEncrypt = true
+        });
+
+        var result = sut.AddAttachment(new AddAttachmentInput
+        {
+            PdfContent = pdfBase64,
+            AttachmentContent = attachmentContent,
+            FileName = "ses-evidence.p7m",
+            EncryptForCertificatePem = certPem,
+            CompressBeforeEncrypt = true
+        });
+
+        var pdfBytes = Convert.FromBase64String(result);
+        Assert.True(pdfBytes.AsSpan().IndexOf(attachmentBytes) < 0);
+
+        var encryptedAttachment = ExtractEmbeddedAttachmentBytes(pdfBytes, "ses-evidence.p7m");
+        Assert.NotNull(encryptedAttachment);
+        Assert.NotEqual(attachmentBytes, encryptedAttachment);
+
+        var decryptedAttachment = DecryptCmsAttachment(encryptedAttachment, pfxBase64, password, compressed: true);
+        Assert.Equal(attachmentBytes, decryptedAttachment);
+    }
+
+    [Fact]
+    public void AddAttachment_WithConfiguredEncryptionFlagButMissingCertificate_Throws()
+    {
+        var pdfBase64 = TestHelpers.CreateMinimalPdfBase64();
+        var sut = CreateSigningService(new EvidenceOptions
+        {
+            Enabled = true,
+            EncryptionCertificatePem = null
+        });
+
+        Assert.Throws<InvalidOperationException>(() =>
+            sut.AddAttachment(new AddAttachmentInput
+            {
+                PdfContent = pdfBase64,
+                AttachmentContent = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("evidence")),
+                FileName = "ses-evidence.p7m",
+                UseConfiguredEncryptionCertificate = true
+            }));
+    }
+
+    [Fact]
+    public void ApplySeal_WithConfiguredCertificate_ProducesValidPdf()
+    {
+        var pdfBase64 = TestHelpers.CreateMinimalPdfBase64();
+        var (_, pfxBase64, password) = TestHelpers.CreateTestCertificate();
+        var sut = CreateSigningService(
+            sealOptions: new SealOptions
+            {
+                Enabled = true,
+                PfxBase64 = pfxBase64,
+                PfxPassword = password,
+                Reason = "Corporate seal",
+                Location = "Unit Tests",
+                Visible = false
+            });
+
+        var result = sut.ApplySeal(new SealInput
+        {
+            PdfContent = pdfBase64,
+            Reason = "Corporate seal",
+            Location = "Unit Tests"
+        });
+
+        Assert.False(string.IsNullOrWhiteSpace(result));
+        var bytes = Convert.FromBase64String(result);
+        using var ms = new MemoryStream(bytes);
+        using var reader = new PdfReader(ms);
+        using var pdfDoc = new PdfDocument(reader);
+        Assert.True(pdfDoc.GetNumberOfPages() >= 1);
+        Assert.NotEmpty(new SignatureUtil(pdfDoc).GetSignatureNames());
+    }
+
+    [Fact]
     public void ApplyDocumentTimestamp_NoTsa_Throws()
     {
         var pdfBase64 = TestHelpers.CreateMinimalPdfBase64();
@@ -237,5 +326,59 @@ public class PdfSigningServiceTests : IDisposable
             bytes[i / 2] = Convert.ToByte(hex.Substring(i, 2), 16);
         }
         return bytes;
+    }
+
+    private static PdfSigningService CreateSigningService(
+        EvidenceOptions? evidenceOptions = null,
+        SealOptions? sealOptions = null)
+    {
+        return new PdfSigningService(
+            TestHelpers.WrapOptions(new TimestampAuthorityOptions()),
+            TestHelpers.WrapOptions(sealOptions ?? new SealOptions()),
+            TestHelpers.WrapOptions(evidenceOptions ?? new EvidenceOptions()));
+    }
+
+    private static byte[] ExtractEmbeddedAttachmentBytes(byte[] pdfBytes, string fileName)
+    {
+        using var ms = new MemoryStream(pdfBytes);
+        using var reader = new PdfReader(ms);
+        using var pdfDoc = new PdfDocument(reader);
+
+        var nameTree = pdfDoc.GetCatalog().GetNameTree(PdfName.EmbeddedFiles);
+        var entry = nameTree.GetNames()[new PdfString(fileName)];
+        var fileSpec = (PdfDictionary)entry;
+        var fileStream = fileSpec.GetAsDictionary(PdfName.EF)?.GetAsStream(PdfName.F)
+            ?? throw new InvalidOperationException($"Attachment '{fileName}' was not found in the PDF.");
+
+        return fileStream.GetBytes();
+    }
+
+    private static byte[] DecryptCmsAttachment(byte[] encryptedBytes, string pfxBase64, string password, bool compressed)
+    {
+        var cmsData = new CmsEnvelopedData(encryptedBytes);
+        var recipient = cmsData.GetRecipientInfos().GetRecipients().Cast<RecipientInformation>().Single();
+        var privateKey = LoadPrivateKeyFromPfx(pfxBase64, password);
+        var decryptedBytes = recipient.GetContent(privateKey);
+
+        return compressed ? DecompressGzip(decryptedBytes) : decryptedBytes;
+    }
+
+    private static Org.BouncyCastle.Crypto.ICipherParameters LoadPrivateKeyFromPfx(string pfxBase64, string password)
+    {
+        var pfxBytes = Convert.FromBase64String(pfxBase64);
+        using var pfxMs = new MemoryStream(pfxBytes);
+        var store = new Pkcs12StoreBuilder().Build();
+        store.Load(pfxMs, password.ToCharArray());
+        var alias = store.Aliases.Cast<string>().First(store.IsKeyEntry);
+        return store.GetKey(alias).Key;
+    }
+
+    private static byte[] DecompressGzip(byte[] bytes)
+    {
+        using var input = new MemoryStream(bytes);
+        using var gzip = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress);
+        using var output = new MemoryStream();
+        gzip.CopyTo(output);
+        return output.ToArray();
     }
 }

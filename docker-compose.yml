@@ -20,6 +20,7 @@ services:
       - TSA_URL=${TSA_URL:-}
       - TSA_USERNAME=${TSA_USERNAME:-}
       - TSA_PASSWORD=${TSA_PASSWORD:-}
+      - Token__Secret=${TOKEN_SECRET:-}
       # Stripe configuration
       - Stripe__ApiKey=${STRIPE_API_KEY:-}
       - Stripe__WebhookSecret=${STRIPE_WEBHOOK_SECRET:-}

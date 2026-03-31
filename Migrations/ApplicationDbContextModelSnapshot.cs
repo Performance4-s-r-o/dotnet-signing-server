@@ -255,7 +255,7 @@ namespace dotnetsigningserver.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid?>("UserId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 

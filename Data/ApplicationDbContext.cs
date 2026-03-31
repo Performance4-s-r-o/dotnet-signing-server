@@ -52,6 +52,10 @@ namespace DotNetSigningServer.Data
                 .WithMany(u => u.ApiTokens)
                 .HasForeignKey(t => t.UserId);
 
+            modelBuilder.Entity<SigningData>()
+                .Property(s => s.UserId)
+                .HasColumnType("uuid");
+
             modelBuilder.Entity<Document>()
                 .HasOne(d => d.User)
                 .WithMany(u => u.Documents)

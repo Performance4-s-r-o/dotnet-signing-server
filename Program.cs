@@ -67,6 +67,8 @@ builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection("Smtp")
 builder.Services.Configure<LokiOptions>(builder.Configuration.GetSection("Loki"));
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("AI"));
 builder.Services.Configure<LimitsOptions>(builder.Configuration.GetSection("Limits"));
+builder.Services.Configure<SealOptions>(builder.Configuration.GetSection("Seal"));
+builder.Services.Configure<EvidenceOptions>(builder.Configuration.GetSection("Evidence"));
 builder.Services.Configure<AppOptions>(builder.Configuration);
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -148,6 +150,29 @@ builder.Services.AddOptions<TimestampAuthorityOptions>()
         options.Url = builder.Configuration["TSA_URL"] ?? options.Url;
         options.Username = builder.Configuration["TSA_USERNAME"] ?? options.Username;
         options.Password = builder.Configuration["TSA_PASSWORD"] ?? options.Password;
+    });
+
+builder.Services.AddOptions<SealOptions>()
+    .Bind(builder.Configuration.GetSection("Seal"))
+    .PostConfigure(options =>
+    {
+        options.PfxPath = builder.Configuration["SEAL_PFX_PATH"] ?? options.PfxPath;
+        options.PfxBase64 = builder.Configuration["SEAL_PFX_BASE64"] ?? options.PfxBase64;
+        options.PfxPassword = builder.Configuration["SEAL_PFX_PASSWORD"] ?? options.PfxPassword;
+    });
+
+builder.Services.AddOptions<EvidenceOptions>()
+    .Bind(builder.Configuration.GetSection("Evidence"))
+    .PostConfigure(options =>
+    {
+        options.EncryptionCertificatePem = builder.Configuration["EVIDENCE_ENCRYPTION_CERTIFICATE_PEM"] ?? options.EncryptionCertificatePem;
+    });
+
+builder.Services.AddOptions<BillingOptions>()
+    .Bind(builder.Configuration.GetSection("Billing"))
+    .PostConfigure(options =>
+    {
+        options.AttachmentDebitBypassKey = builder.Configuration["ATTACHMENT_DEBIT_BYPASS_KEY"] ?? options.AttachmentDebitBypassKey;
     });
 
 

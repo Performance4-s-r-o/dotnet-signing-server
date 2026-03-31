@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
+using Testcontainers.PostgreSql;
 
 namespace DotNetSigningServer.Data
 {
@@ -23,9 +24,22 @@ namespace DotNetSigningServer.Data
 
             if (useLocalDb)
             {
-                // Use the project content root for the SQLite file to match the runtime location
-                var localDbPath = Path.Combine(Directory.GetCurrentDirectory(), "signing-local.db");
-                optionsBuilder.UseSqlite($"Data Source={localDbPath}");
+                var currentDirectory = Directory.GetCurrentDirectory();
+                var hostDataPath = Path.Combine(currentDirectory, "postgres-data");
+                Directory.CreateDirectory(hostDataPath);
+
+                var postgresContainer = new PostgreSqlBuilder()
+                    .WithImage("postgres:16-alpine")
+                    .WithDatabase("signing_local")
+                    .WithUsername("postgres")
+                    .WithPassword("postgres")
+                    .WithReuse(true)
+                    .WithAutoRemove(false)
+                    .WithBindMount(hostDataPath, "/var/lib/postgresql/data")
+                    .Build();
+
+                postgresContainer.StartAsync().GetAwaiter().GetResult();
+                optionsBuilder.UseNpgsql(postgresContainer.GetConnectionString());
             }
             else
             {

@@ -21,9 +21,11 @@ using Org.BouncyCastle.X509;
 using DotNetSigningServer.ExternalSignatures;
 using DotNetSigningServer.Options;
 using Microsoft.Extensions.Options;
+using Org.BouncyCastle.Cms;
 using Org.BouncyCastle.Pkcs;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Security;
+using System.IO.Compression;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -37,10 +39,17 @@ namespace DotNetSigningServer.Services
     {
         private const string DEFAULT_FIELD_NAME = "Signature1";
         private readonly TimestampAuthorityOptions _tsaOptions;
+        private readonly SealOptions _sealOptions;
+        private readonly EvidenceOptions _evidenceOptions;
 
-        public PdfSigningService(IOptions<TimestampAuthorityOptions> tsaOptions)
+        public PdfSigningService(
+            IOptions<TimestampAuthorityOptions> tsaOptions,
+            IOptions<SealOptions>? sealOptions = null,
+            IOptions<EvidenceOptions>? evidenceOptions = null)
         {
             _tsaOptions = tsaOptions?.Value ?? new TimestampAuthorityOptions();
+            _sealOptions = sealOptions?.Value ?? new SealOptions();
+            _evidenceOptions = evidenceOptions?.Value ?? new EvidenceOptions();
         }
         public (string PresignedPdfPath, string HashToSign) HandlePreSign(PreSignInput input, string fieldName)
         {
@@ -92,30 +101,25 @@ namespace DotNetSigningServer.Services
         public string SignWithPfx(PfxSignInput input)
         {
             var (chain, privateKey) = LoadFromPfx(input.PfxContent, input.PfxPassword);
-
             byte[] originalPdf = Convert.FromBase64String(input.PdfContent);
-            var preSignContainer = new DigestCalcBlankSigner(PdfName.Adobe_PPKLite, PdfName.Adbe_pkcs7_detached);
-            preSignContainer.SetChain(chain);
-            string fieldName = EnsureFieldName(input.FieldName, $"Signature_{Guid.NewGuid():N}");
-
-            byte[] pdfWithPlaceholder = CreatePreSignedPdf(
+            byte[] fullySignedPdf = SignPdfWithKeyPair(
                 originalPdf,
-                preSignContainer,
-                fieldName,
+                chain,
+                privateKey,
+                EnsureFieldName(input.FieldName, $"Signature_{Guid.NewGuid():N}"),
                 input.SignRect,
                 input.Reason,
                 input.Location,
                 input.SignPageNumber,
                 input.SignImageContent,
-                chain,
                 input.Appearance,
                 input.StampImageContent,
                 input.BackgroundImageContent,
-                input.CompanyLogoContent);
-
-            byte[] signatureBytes = SignAuthenticatedAttributes(preSignContainer.GetDocBytesHash(), privateKey);
-            ITSAClient? tsaClient = CreateTsaClient();
-            byte[] fullySignedPdf = InjectFinalSignature(pdfWithPlaceholder, signatureBytes, chain, fieldName, tsaClient);
+                input.CompanyLogoContent,
+                visible: true,
+                tsaUrl: null,
+                tsaUsername: null,
+                tsaPassword: null);
 
             return Convert.ToBase64String(fullySignedPdf);
         }
@@ -366,6 +370,128 @@ namespace DotNetSigningServer.Services
             return Convert.ToBase64String(msOut.ToArray());
         }
 
+        public string ApplySeal(SealInput input)
+        {
+            if (!_sealOptions.Enabled)
+            {
+                throw new InvalidOperationException("Server-side sealing is not enabled.");
+            }
+
+            string pdfContent = input.PdfContent;
+            if (ShouldApplyVisibleOverlay(input))
+            {
+                pdfContent = ApplyVisualSign(new VisualSignInput
+                {
+                    PdfContent = pdfContent,
+                    Location = input.Location,
+                    Reason = input.Reason,
+                    SignRect = input.SignRect,
+                    SignImageContent = input.SignImageContent,
+                    StampImageContent = input.StampImageContent,
+                    CompanyLogoContent = input.CompanyLogoContent,
+                    BackgroundImageContent = input.BackgroundImageContent,
+                    SignPageNumber = input.SignPageNumber,
+                    Appearance = input.Appearance,
+                    TemplateId = input.TemplateId,
+                    SignerName = input.SignerName,
+                });
+            }
+
+            var (chain, privateKey) = LoadSealCredentials();
+            byte[] originalPdf = Convert.FromBase64String(pdfContent);
+            byte[] fullySignedPdf = SignPdfWithKeyPair(
+                originalPdf,
+                chain,
+                privateKey,
+                EnsureFieldName(null, $"Seal_{Guid.NewGuid():N}"),
+                input.SignRect,
+                string.IsNullOrWhiteSpace(input.Reason) ? _sealOptions.Reason : input.Reason,
+                string.IsNullOrWhiteSpace(input.Location) ? _sealOptions.Location : input.Location,
+                input.SignPageNumber,
+                _sealOptions.Visible ? input.SignImageContent : null,
+                _sealOptions.Visible ? input.Appearance : null,
+                _sealOptions.Visible ? input.StampImageContent : null,
+                _sealOptions.Visible ? input.BackgroundImageContent : null,
+                _sealOptions.Visible ? input.CompanyLogoContent : null,
+                visible: _sealOptions.Visible,
+                tsaUrl: input.TsaUrl,
+                tsaUsername: input.TsaUsername,
+                tsaPassword: input.TsaPassword);
+
+            return Convert.ToBase64String(fullySignedPdf);
+        }
+
+        private static bool ShouldApplyVisibleOverlay(SealInput input)
+        {
+            return !string.IsNullOrWhiteSpace(input.SignImageContent)
+                || !string.IsNullOrWhiteSpace(input.StampImageContent)
+                || !string.IsNullOrWhiteSpace(input.CompanyLogoContent)
+                || !string.IsNullOrWhiteSpace(input.BackgroundImageContent)
+                || !string.IsNullOrWhiteSpace(input.SignerName);
+        }
+
+        private byte[] SignPdfWithKeyPair(
+            byte[] originalPdf,
+            IX509Certificate[] chain,
+            ICipherParameters privateKey,
+            string fieldName,
+            SignRect signRect,
+            string reason,
+            string location,
+            int pageNumber,
+            string? signImageContent,
+            SignatureAppearanceOptions? appearance,
+            string? stampImageContent,
+            string? backgroundImageContent,
+            string? companyLogoContent,
+            bool visible,
+            string? tsaUrl,
+            string? tsaUsername,
+            string? tsaPassword)
+        {
+            var preSignContainer = new DigestCalcBlankSigner(PdfName.Adobe_PPKLite, PdfName.Adbe_pkcs7_detached);
+            preSignContainer.SetChain(chain);
+
+            byte[] pdfWithPlaceholder = CreatePreSignedPdf(
+                originalPdf,
+                preSignContainer,
+                fieldName,
+                signRect,
+                reason,
+                location,
+                pageNumber,
+                signImageContent,
+                chain,
+                appearance,
+                stampImageContent,
+                backgroundImageContent,
+                companyLogoContent,
+                visible);
+
+            byte[] signatureBytes = SignAuthenticatedAttributes(preSignContainer.GetDocBytesHash(), privateKey);
+            ITSAClient? tsaClient = CreateTsaClient(tsaUrl, tsaUsername, tsaPassword);
+            return InjectFinalSignature(pdfWithPlaceholder, signatureBytes, chain, fieldName, tsaClient);
+        }
+
+        private (IX509Certificate[] Chain, ICipherParameters PrivateKey) LoadSealCredentials()
+        {
+            byte[] pfxBytes;
+            if (!string.IsNullOrWhiteSpace(_sealOptions.PfxBase64))
+            {
+                pfxBytes = Convert.FromBase64String(_sealOptions.PfxBase64);
+            }
+            else if (!string.IsNullOrWhiteSpace(_sealOptions.PfxPath) && File.Exists(_sealOptions.PfxPath))
+            {
+                pfxBytes = File.ReadAllBytes(_sealOptions.PfxPath);
+            }
+            else
+            {
+                throw new InvalidOperationException("Seal certificate is not configured.");
+            }
+
+            return LoadFromPfxBytes(pfxBytes, _sealOptions.PfxPassword);
+        }
+
         private static List<string> BuildVisualSignTextLines(VisualSignInput input, SignatureAppearanceOptions appearance)
         {
             var lines = new List<string>();
@@ -391,6 +517,30 @@ namespace DotNetSigningServer.Services
 
             byte[] pdfBytes = Convert.FromBase64String(input.PdfContent);
             byte[] attachmentBytes = Convert.FromBase64String(input.AttachmentContent);
+            string attachmentFileName = input.FileName;
+            string? attachmentMimeType = input.MimeType;
+            if (input.UseConfiguredEncryptionCertificate && string.IsNullOrWhiteSpace(_evidenceOptions.EncryptionCertificatePem))
+            {
+                throw new InvalidOperationException("Evidence encryption certificate is not configured.");
+            }
+
+            string? encryptionCertificatePem = !string.IsNullOrWhiteSpace(input.EncryptForCertificatePem)
+                ? input.EncryptForCertificatePem
+                : input.UseConfiguredEncryptionCertificate
+                    ? _evidenceOptions.EncryptionCertificatePem
+                    : null;
+
+            if (!string.IsNullOrWhiteSpace(encryptionCertificatePem))
+            {
+                attachmentBytes = EncryptAttachmentPayload(
+                    attachmentBytes,
+                    encryptionCertificatePem,
+                    input.CompressBeforeEncrypt);
+
+                attachmentMimeType = string.IsNullOrWhiteSpace(attachmentMimeType)
+                    ? _evidenceOptions.MimeType
+                    : attachmentMimeType;
+            }
 
             using var msIn = new MemoryStream(pdfBytes);
             using var msOut = new MemoryStream();
@@ -400,18 +550,18 @@ namespace DotNetSigningServer.Services
             var pdfDoc = new PdfDocument(reader, writer, new StampingProperties().UseAppendMode());
 
             var afRelationship = PdfName.Unspecified;
-            PdfFileSpec fileSpec = string.IsNullOrWhiteSpace(input.MimeType)
-                ? PdfFileSpec.CreateEmbeddedFileSpec(pdfDoc, attachmentBytes, input.Description, input.FileName, afRelationship)
+            PdfFileSpec fileSpec = string.IsNullOrWhiteSpace(attachmentMimeType)
+                ? PdfFileSpec.CreateEmbeddedFileSpec(pdfDoc, attachmentBytes, input.Description, attachmentFileName, afRelationship)
                 : PdfFileSpec.CreateEmbeddedFileSpec(
                     pdfDoc,
                     attachmentBytes,
                     input.Description,
-                    input.FileName,
-                    new PdfName(input.MimeType),
+                    attachmentFileName,
+                    new PdfName(attachmentMimeType),
                     null,
                     afRelationship);
 
-            pdfDoc.AddFileAttachment(input.FileName, fileSpec);
+            pdfDoc.AddFileAttachment(attachmentFileName, fileSpec);
             pdfDoc.Close();
 
             return Convert.ToBase64String(msOut.ToArray());
@@ -430,7 +580,8 @@ namespace DotNetSigningServer.Services
             SignatureAppearanceOptions? appearance = null,
             string? stampImageContent = null,
             string? backgroundImageContent = null,
-            string? companyLogoContent = null)
+            string? companyLogoContent = null,
+            bool visible = true)
         {
             using var msIn = new MemoryStream(originalPdf);
             using var msOut = new MemoryStream();
@@ -449,7 +600,8 @@ namespace DotNetSigningServer.Services
                 appearance,
                 stampImageContent,
                 backgroundImageContent,
-                companyLogoContent);
+                companyLogoContent,
+                visible);
 
             signer.SetSignerProperties(signerProperties);
             // Reserve extra space so the deferred signature can include TSA timestamp tokens when present.
@@ -498,9 +650,21 @@ namespace DotNetSigningServer.Services
             SignatureAppearanceOptions? appearanceOptions = null,
             string? stampImageContent = null,
             string? backgroundImageContent = null,
-            string? companyLogoContent = null)
+            string? companyLogoContent = null,
+            bool visible = true)
         {
             SignerProperties signerProperties = new SignerProperties().SetFieldName(fieldName);
+
+            signerProperties
+                .SetReason(reason)
+                .SetLocation(location)
+                .SetCertificationLevel(AccessPermissions.UNSPECIFIED)
+                .SetFieldName(fieldName);
+
+            if (!visible)
+            {
+                return signerProperties;
+            }
 
             var subjectDN = chain?.FirstOrDefault()?.GetSubjectDN()?.ToString();
             var cn = subjectDN?.Split(",").Select(p => p.Trim()).FirstOrDefault(p => p.StartsWith("CN="))?.Substring(3);
@@ -650,11 +814,7 @@ namespace DotNetSigningServer.Services
 
             signerProperties
                 .SetPageRect(new Rectangle(signRect.X, signRect.Y, signRect.Width, signRect.Height))
-                .SetReason(reason)
-                .SetLocation(location)
                 .SetPageNumber(pageNumber)
-                .SetCertificationLevel(AccessPermissions.UNSPECIFIED)
-                .SetFieldName(fieldName)
                 .SetSignatureAppearance(appearance);
 
             return signerProperties;
@@ -675,6 +835,11 @@ namespace DotNetSigningServer.Services
         private static (IX509Certificate[] Chain, ICipherParameters PrivateKey) LoadFromPfx(string pfxContent, string password)
         {
             byte[] pfxBytes = Convert.FromBase64String(pfxContent);
+            return LoadFromPfxBytes(pfxBytes, password);
+        }
+
+        private static (IX509Certificate[] Chain, ICipherParameters PrivateKey) LoadFromPfxBytes(byte[] pfxBytes, string? password)
+        {
             using var ms = new MemoryStream(pfxBytes);
             var store = new Pkcs12StoreBuilder().Build();
             store.Load(ms, (password ?? string.Empty).ToCharArray());
@@ -693,6 +858,45 @@ namespace DotNetSigningServer.Services
                 .ToArray();
 
             return (chain, keyEntry.Key);
+        }
+
+        private static byte[] EncryptAttachmentPayload(byte[] attachmentBytes, string recipientCertificatePem, bool compressBeforeEncrypt)
+        {
+            byte[] payloadBytes = compressBeforeEncrypt
+                ? CompressBytes(attachmentBytes)
+                : attachmentBytes;
+
+            var recipientCertificate = LoadFirstCertificateFromPemString(recipientCertificatePem);
+            var envelopeGenerator = new CmsEnvelopedDataGenerator();
+            envelopeGenerator.AddKeyTransRecipient(recipientCertificate);
+
+            var cmsData = envelopeGenerator.Generate(
+                new CmsProcessableByteArray(payloadBytes),
+                CmsEnvelopedDataGenerator.Aes256Cbc);
+
+            return cmsData.GetEncoded();
+        }
+
+        private static byte[] CompressBytes(byte[] bytes)
+        {
+            using var output = new MemoryStream();
+            using (var gzip = new GZipStream(output, CompressionLevel.SmallestSize, leaveOpen: true))
+            {
+                gzip.Write(bytes, 0, bytes.Length);
+            }
+
+            return output.ToArray();
+        }
+
+        private static X509Certificate LoadFirstCertificateFromPemString(string pem)
+        {
+            var certificates = LoadCertificatesFromPemString(pem);
+            if (certificates.Length == 0)
+            {
+                throw new InvalidOperationException("At least one recipient certificate is required for evidence encryption.");
+            }
+
+            return ((X509CertificateBC)certificates[0]).GetCertificate();
         }
 
         private static byte[] SignAuthenticatedAttributes(byte[] authenticatedAttributes, ICipherParameters privateKey)
@@ -728,7 +932,7 @@ namespace DotNetSigningServer.Services
                 while ((readObject = pemReader.ReadObject()) != null)
                 {
 
-                    IX509Certificate cert = new X509CertificateBC((X509Certificate)readObject);
+                    IX509Certificate cert = new X509CertificateBC((Org.BouncyCastle.X509.X509Certificate)readObject);
                     certs.Add(cert);
 
                 }

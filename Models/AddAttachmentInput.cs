@@ -7,5 +7,8 @@ namespace DotNetSigningServer.Models
         public string FileName { get; set; } = "";
         public string? Description { get; set; }
         public string? MimeType { get; set; }
+        public string? EncryptForCertificatePem { get; set; }
+        public bool UseConfiguredEncryptionCertificate { get; set; } = false;
+        public bool CompressBeforeEncrypt { get; set; } = true;
     }
 }

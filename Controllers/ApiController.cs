@@ -11,6 +11,8 @@ using Microsoft.Extensions.Options;
 using iText.Kernel.Pdf;
 using DotNetSigningServer.Options;
 using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace DotNetSigningServer.Controllers
 {
@@ -26,11 +28,13 @@ namespace DotNetSigningServer.Controllers
         private readonly TemplateAiService _templateAiService;
         private readonly ContentLimitGuard _limitGuard;
         private readonly LimitsOptions _limitOptions;
+        private readonly BillingOptions _billingOptions;
         private readonly PdfConversionService _pdfConversionService;
         private readonly FlowPipelineService _flowPipelineService;
         private readonly IWebHostEnvironment _env;
+        private const string AttachmentDebitBypassHeader = "X-P4PDF-Attachment-Billing-Bypass";
 
-        public ApiController(ApplicationDbContext dbContext, PdfSigningService signingService, PdfTemplateService pdfTemplateService, IApiAuthService apiAuthService, ILogger<ApiController> logger, TemplateAiService templateAiService, ContentLimitGuard limitGuard, IOptions<LimitsOptions> limitOptions, PdfConversionService pdfConversionService, FlowPipelineService flowPipelineService, IWebHostEnvironment env)
+        public ApiController(ApplicationDbContext dbContext, PdfSigningService signingService, PdfTemplateService pdfTemplateService, IApiAuthService apiAuthService, ILogger<ApiController> logger, TemplateAiService templateAiService, ContentLimitGuard limitGuard, IOptions<LimitsOptions> limitOptions, IOptions<BillingOptions> billingOptions, PdfConversionService pdfConversionService, FlowPipelineService flowPipelineService, IWebHostEnvironment env)
         {
             _dbContext = dbContext;
             _signingService = signingService;
@@ -40,6 +44,7 @@ namespace DotNetSigningServer.Controllers
             _templateAiService = templateAiService;
             _limitGuard = limitGuard;
             _limitOptions = limitOptions.Value;
+            _billingOptions = billingOptions.Value;
             _pdfConversionService = pdfConversionService;
             _flowPipelineService = flowPipelineService;
             _env = env;
@@ -418,11 +423,57 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
+        [HttpPost("/api/seal")]
+        public async Task<IActionResult> ApplySeal([FromBody] SealInput input)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            try
+            {
+                _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Seal");
+                _limitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature");
+                _limitGuard.EnsureImageWithinLimit(input.StampImageContent, "Stamp");
+                _limitGuard.EnsureImageWithinLimit(input.CompanyLogoContent, "Company logo");
+                _limitGuard.EnsureImageWithinLimit(input.BackgroundImageContent, "Background");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+
+            try
+            {
+                if (input.TemplateId.HasValue)
+                {
+                    var signatureField = await GetSignatureFieldAsync(input.TemplateId.Value, user.Id);
+                    input.SignRect = signatureField.Rect;
+                    input.SignPageNumber = signatureField.Page <= 0 ? 1 : signatureField.Page;
+                }
+
+                var result = _signingService.ApplySeal(input);
+                await DebitUserAsync(user);
+                return Ok(new { result });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Seal failed");
+                return SafeProblem("An error occurred while applying the seal", ex);
+            }
+        }
+
         [HttpPost("/api/attachment")]
         public async Task<IActionResult> AddAttachment([FromBody] AddAttachmentInput input)
         {
             var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
+
+            var bypassDebitRequested = Request.Headers.ContainsKey(AttachmentDebitBypassHeader);
+            if (bypassDebitRequested && !IsAttachmentDebitBypassAuthorized())
+            {
+                _logger.LogWarning("Attachment billing bypass rejected for user {UserId}", user.Id);
+                return Forbid();
+            }
 
             try
             {
@@ -437,7 +488,10 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 var result = _signingService.AddAttachment(input);
-                await DebitUserAsync(user);
+                if (!bypassDebitRequested)
+                {
+                    await DebitUserAsync(user);
+                }
                 return Ok(new { result });
             }
             catch (Exception ex)
@@ -929,6 +983,31 @@ namespace DotNetSigningServer.Controllers
             }
 
             return await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == tokenUser.Id);
+        }
+
+        private bool IsAttachmentDebitBypassAuthorized()
+        {
+            var configuredKey = _billingOptions.AttachmentDebitBypassKey?.Trim();
+            if (string.IsNullOrWhiteSpace(configuredKey))
+            {
+                return false;
+            }
+
+            var providedKey = Request.Headers[AttachmentDebitBypassHeader].ToString().Trim();
+            if (string.IsNullOrWhiteSpace(providedKey))
+            {
+                return false;
+            }
+
+            return FixedTimeEquals(providedKey, configuredKey);
+        }
+
+        private static bool FixedTimeEquals(string left, string right)
+        {
+            var leftBytes = Encoding.UTF8.GetBytes(left);
+            var rightBytes = Encoding.UTF8.GetBytes(right);
+            return leftBytes.Length == rightBytes.Length &&
+                   CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
         }
 
         private async Task<(User? user, ActionResult? error)> EnsureUserWithCreditsAsync(int requiredCredits = 1, string? originHeader = null)
