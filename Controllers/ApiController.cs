@@ -367,8 +367,21 @@ namespace DotNetSigningServer.Controllers
         [HttpPost("/api/visual-sign")]
         public async Task<IActionResult> ApplyVisualSign([FromBody] VisualSignInput input)
         {
+            _logger.LogInformation("[visual-sign] Received request: PdfContent length={PdfLen}, SignImage length={ImgLen}, Rect=({X},{Y},{W},{H}), Page={Page}, TemplateId={TemplateId}, HasAppearance={HasAppearance}",
+                input.PdfContent?.Length ?? 0,
+                input.SignImageContent?.Length ?? 0,
+                input.SignRect?.X, input.SignRect?.Y, input.SignRect?.Width, input.SignRect?.Height,
+                input.SignPageNumber,
+                input.TemplateId,
+                input.Appearance != null);
+
             var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
-            if (error != null || user == null) return error!;
+            if (error != null || user == null)
+            {
+                _logger.LogWarning("[visual-sign] Auth/credits check failed, user={User}, error type={ErrorType}", user?.Email, error?.GetType().Name);
+                return error!;
+            }
+            _logger.LogInformation("[visual-sign] Authenticated as {User}", user.Email);
 
             try
             {
@@ -377,6 +390,7 @@ namespace DotNetSigningServer.Controllers
             }
             catch (InvalidOperationException ex)
             {
+                _logger.LogWarning("[visual-sign] Limit check failed: {Message}", ex.Message);
                 return BadRequest(new { message = ex.Message });
             }
 
@@ -384,17 +398,22 @@ namespace DotNetSigningServer.Controllers
             {
                 if (input.TemplateId.HasValue)
                 {
+                    _logger.LogInformation("[visual-sign] Resolving template {TemplateId}", input.TemplateId.Value);
                     var signatureField = await GetSignatureFieldAsync(input.TemplateId.Value, user.Id);
                     input.SignRect = signatureField.Rect;
                     input.SignPageNumber = signatureField.Page <= 0 ? 1 : signatureField.Page;
+                    _logger.LogInformation("[visual-sign] Template resolved, Rect=({X},{Y},{W},{H}), Page={Page}",
+                        input.SignRect?.X, input.SignRect?.Y, input.SignRect?.Width, input.SignRect?.Height, input.SignPageNumber);
                 }
+                _logger.LogInformation("[visual-sign] Applying visual signature...");
                 var result = _signingService.ApplyVisualSign(input);
+                _logger.LogInformation("[visual-sign] Success, result length={Len}", result?.Length ?? 0);
                 await DebitUserAsync(user);
                 return Ok(new { result });
             }
             catch (Exception ex)
             {
-                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "Visual sign failed");
+                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "[visual-sign] Failed: {Message}", ex.Message);
                 return SafeProblem("An error occurred while applying the visual signature", ex);
             }
         }

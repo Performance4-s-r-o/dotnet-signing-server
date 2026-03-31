@@ -13,5 +13,6 @@ namespace DotNetSigningServer.Models
         public int SignPageNumber { get; set; } = 1;
         public SignatureAppearanceOptions? Appearance { get; set; }
         public Guid? TemplateId { get; set; }
+        public string? SignerName { get; set; }
     }
 }

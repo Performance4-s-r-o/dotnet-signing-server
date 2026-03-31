@@ -274,19 +274,58 @@ namespace DotNetSigningServer.Services
             }
             else if (hasSignImage)
             {
-                // Simple: just stamp the signature image
-                var imgData = ImageDataFactory.Create(Convert.FromBase64String(input.SignImageContent!));
-                var img = new Image(imgData);
-                img.ScaleToFit(width, height);
-                img.SetFixedPosition(x, y);
+                // Image + text layout matching digital signature appearance
+                var lines = BuildVisualSignTextLines(input, appearanceOptions);
 
-                // Use absolute positioning on page
-                canvas.Close();
-                var layoutDoc = new iText.Layout.Document(pdfDoc);
-                layoutDoc.Add(img);
-                layoutDoc.Flush();
-                pdfDoc.Close();
-                return Convert.ToBase64String(msOut.ToArray());
+                if (lines.Count > 0)
+                {
+                    // 2-column table: [signature image | text lines]
+                    var div = new Div()
+                        .SetWidth(UnitValue.CreatePercentValue(100))
+                        .SetHeight(UnitValue.CreatePercentValue(100));
+
+                    if (bgColor != null)
+                        div.SetBackgroundColor(bgColor);
+
+                    var table = new Table(new float[] { 1, 2 })
+                        .SetWidth(UnitValue.CreatePercentValue(100))
+                        .UseAllAvailableWidth();
+
+                    var imgCell = new Cell().SetBorder(Border.NO_BORDER).SetVerticalAlignment(VerticalAlignment.MIDDLE);
+                    var img = new Image(ImageDataFactory.Create(Convert.FromBase64String(input.SignImageContent!)));
+                    img.SetAutoScale(true);
+                    imgCell.Add(img);
+                    table.AddCell(imgCell);
+
+                    var textCell = new Cell().SetBorder(Border.NO_BORDER).SetVerticalAlignment(VerticalAlignment.MIDDLE);
+                    foreach (var line in lines)
+                    {
+                        var p = new Paragraph(line);
+                        if (font != null) p.SetFont(font);
+                        if (fgColor != null) p.SetFontColor(fgColor);
+                        if (fontSize.HasValue) p.SetFontSize(fontSize.Value);
+                        textCell.Add(p);
+                    }
+                    table.AddCell(textCell);
+
+                    div.Add(table);
+                    canvas.Add(div);
+                }
+                else
+                {
+                    // No text lines — just the image
+                    var imgData = ImageDataFactory.Create(Convert.FromBase64String(input.SignImageContent!));
+                    var img = new Image(imgData);
+                    img.ScaleToFit(width, height);
+                    img.SetFixedPosition(x, y);
+
+                    canvas.Close();
+                    var layoutDoc = new iText.Layout.Document(pdfDoc);
+                    layoutDoc.Add(img);
+                    layoutDoc.Flush();
+                    pdfDoc.Close();
+                    return Convert.ToBase64String(msOut.ToArray());
+                }
             }
             else
             {
@@ -330,6 +369,8 @@ namespace DotNetSigningServer.Services
         private static List<string> BuildVisualSignTextLines(VisualSignInput input, SignatureAppearanceOptions appearance)
         {
             var lines = new List<string>();
+            if (appearance.ShowSignerName && !string.IsNullOrWhiteSpace(input.SignerName))
+                lines.Add($"Signed by {input.SignerName}");
             if (appearance.ShowReason && !string.IsNullOrWhiteSpace(input.Reason))
                 lines.Add($"Reason: {input.Reason}");
             if (appearance.ShowLocation && !string.IsNullOrWhiteSpace(input.Location))
