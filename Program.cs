@@ -43,6 +43,7 @@ builder.Services.AddScoped<PdfTemplateService>();
 builder.Services.AddScoped<PdfConversionService>();
 builder.Services.AddScoped<FlowPipelineService>();
 builder.Services.AddSingleton<ContentLimitGuard>();
+builder.Services.AddHostedService<PresignCleanupService>();
 builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();
 builder.Services.AddSingleton<IIpWhitelistService, IpWhitelistService>();
 builder.Services.AddHttpClient<LokiClient>();
@@ -228,7 +229,7 @@ app.Use(async (context, next) =>
             }
             context.Response.Headers["Access-Control-Allow-Origin"] = origin;
             context.Response.Headers["Vary"] = "Origin";
-            context.Response.Headers["Access-Control-Allow-Headers"] = context.Request.Headers["Access-Control-Request-Headers"].ToString() ?? "Authorization,Content-Type";
+            context.Response.Headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type,X-P4PDF-Attachment-Billing-Bypass";
             context.Response.Headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS";
         }
 

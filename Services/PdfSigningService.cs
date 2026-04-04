@@ -28,6 +28,7 @@ using Org.BouncyCastle.Security;
 using System.IO.Compression;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
 using IOPath = System.IO.Path;
@@ -835,7 +836,14 @@ namespace DotNetSigningServer.Services
         private static (IX509Certificate[] Chain, ICipherParameters PrivateKey) LoadFromPfx(string pfxContent, string password)
         {
             byte[] pfxBytes = Convert.FromBase64String(pfxContent);
-            return LoadFromPfxBytes(pfxBytes, password);
+            try
+            {
+                return LoadFromPfxBytes(pfxBytes, password);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(pfxBytes);
+            }
         }
 
         private static (IX509Certificate[] Chain, ICipherParameters PrivateKey) LoadFromPfxBytes(byte[] pfxBytes, string? password)

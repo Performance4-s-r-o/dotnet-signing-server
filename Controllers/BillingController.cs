@@ -1,4 +1,5 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -214,6 +215,15 @@ public class BillingController : Controller
 
         try
         {
+            // Idempotency check: prevent replay of the same session_id
+            var alreadyProcessed = await _dbContext.WebhookEvents.AnyAsync(
+                w => w.EventId == sessionId && w.EventType == "checkout.confirm");
+            if (alreadyProcessed)
+            {
+                TempData["Info"] = "This payment has already been processed.";
+                return RedirectToAction(nameof(Index));
+            }
+
             var session = await _checkoutService.GetSessionAsync(sessionId);
             if (session == null || session.PaymentStatus != "paid")
             {
@@ -235,6 +245,16 @@ public class BillingController : Controller
                 TempData["Error"] = "User not found.";
                 return RedirectToAction(nameof(Index));
             }
+
+            // Record this session as processed before granting credits
+            _dbContext.WebhookEvents.Add(new WebhookEvent
+            {
+                EventId = sessionId,
+                EventType = "checkout.confirm",
+                PayloadJson = $"{{\"documents\":{documents},\"userId\":\"{userId.Value}\"}}",
+                ReceivedAt = DateTimeOffset.UtcNow,
+                ProcessedAt = DateTimeOffset.UtcNow
+            });
 
             user.CreditsRemaining += documents;
             if (string.IsNullOrWhiteSpace(user.StripeCustomerId) && !string.IsNullOrWhiteSpace(session.CustomerId))

@@ -13,6 +13,7 @@ using DotNetSigningServer.Options;
 using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace DotNetSigningServer.Controllers
 {
@@ -32,9 +33,10 @@ namespace DotNetSigningServer.Controllers
         private readonly PdfConversionService _pdfConversionService;
         private readonly FlowPipelineService _flowPipelineService;
         private readonly IWebHostEnvironment _env;
+        private readonly IDataProtector _dataProtector;
         private const string AttachmentDebitBypassHeader = "X-P4PDF-Attachment-Billing-Bypass";
 
-        public ApiController(ApplicationDbContext dbContext, PdfSigningService signingService, PdfTemplateService pdfTemplateService, IApiAuthService apiAuthService, ILogger<ApiController> logger, TemplateAiService templateAiService, ContentLimitGuard limitGuard, IOptions<LimitsOptions> limitOptions, IOptions<BillingOptions> billingOptions, PdfConversionService pdfConversionService, FlowPipelineService flowPipelineService, IWebHostEnvironment env)
+        public ApiController(ApplicationDbContext dbContext, PdfSigningService signingService, PdfTemplateService pdfTemplateService, IApiAuthService apiAuthService, ILogger<ApiController> logger, TemplateAiService templateAiService, ContentLimitGuard limitGuard, IOptions<LimitsOptions> limitOptions, IOptions<BillingOptions> billingOptions, PdfConversionService pdfConversionService, FlowPipelineService flowPipelineService, IWebHostEnvironment env, IDataProtectionProvider dataProtectionProvider)
         {
             _dbContext = dbContext;
             _signingService = signingService;
@@ -48,6 +50,7 @@ namespace DotNetSigningServer.Controllers
             _pdfConversionService = pdfConversionService;
             _flowPipelineService = flowPipelineService;
             _env = env;
+            _dataProtector = dataProtectionProvider.CreateProtector("SigningData.TsaCredentials");
         }
 
         /// <summary>
@@ -102,8 +105,10 @@ namespace DotNetSigningServer.Controllers
                 signingData.HashToSign = hashToSign;
                 signingData.CertificatePem = input.CertificatePem;
                 signingData.TsaUrl = input.TsaUrl;
-                signingData.TsaUsername = input.TsaUsername;
-                signingData.TsaPassword = input.TsaPassword;
+                signingData.TsaUsername = !string.IsNullOrEmpty(input.TsaUsername)
+                    ? _dataProtector.Protect(input.TsaUsername) : null;
+                signingData.TsaPassword = !string.IsNullOrEmpty(input.TsaPassword)
+                    ? _dataProtector.Protect(input.TsaPassword) : null;
 
                 signingData.UserId = user.Id;
 
@@ -271,14 +276,19 @@ namespace DotNetSigningServer.Controllers
 
             try
             {
+                var tsaUsername = !string.IsNullOrEmpty(signingData.TsaUsername)
+                    ? _dataProtector.Unprotect(signingData.TsaUsername) : null;
+                var tsaPassword = !string.IsNullOrEmpty(signingData.TsaPassword)
+                    ? _dataProtector.Unprotect(signingData.TsaPassword) : null;
+
                 var result = _signingService.HandleSign(
                     input,
                     signingData.PresignedPdfPath,
                     signingData.CertificatePem,
                     signingData.FieldName,
                     signingData.TsaUrl,
-                    signingData.TsaUsername,
-                    signingData.TsaPassword);
+                    tsaUsername,
+                    tsaPassword);
 
                 System.IO.File.Delete(signingData.PresignedPdfPath);
                 _dbContext.SigningData.Remove(signingData);
@@ -1004,10 +1014,10 @@ namespace DotNetSigningServer.Controllers
 
         private static bool FixedTimeEquals(string left, string right)
         {
-            var leftBytes = Encoding.UTF8.GetBytes(left);
-            var rightBytes = Encoding.UTF8.GetBytes(right);
-            return leftBytes.Length == rightBytes.Length &&
-                   CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
+            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes("comparison-key"));
+            var leftHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(left));
+            var rightHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(right));
+            return CryptographicOperations.FixedTimeEquals(leftHash, rightHash);
         }
 
         private async Task<(User? user, ActionResult? error)> EnsureUserWithCreditsAsync(int requiredCredits = 1, string? originHeader = null)
@@ -1028,16 +1038,25 @@ namespace DotNetSigningServer.Controllers
             return (user, null);
         }
 
-        private async Task DebitUserAsync(User user, int debit = 1)
+        private async Task<bool> DebitUserAsync(User user, int debit = 1)
         {
             if (debit <= 0)
             {
-                return;
+                return true;
             }
 
-            user.CreditsRemaining = Math.Max(0, user.CreditsRemaining - debit);
-            _dbContext.Users.Update(user);
-            await _dbContext.SaveChangesAsync();
+            var rowsAffected = await _dbContext.Database.ExecuteSqlRawAsync(
+                "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" - {0} WHERE \"Id\" = {1} AND \"CreditsRemaining\" >= {2}",
+                debit, user.Id, debit);
+
+            if (rowsAffected == 0)
+            {
+                return false;
+            }
+
+            // Refresh the in-memory entity to reflect the new value
+            await _dbContext.Entry(user).ReloadAsync();
+            return true;
         }
 
         private async Task<PdfFieldDefinition> GetSignatureFieldAsync(Guid templateId, Guid userId)

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -15,6 +16,7 @@ namespace DotNetSigningServer.Services
         private readonly ApplicationDbContext _dbContext;
         private readonly ContentLimitGuard _limitGuard;
         private readonly IServiceProvider _serviceProvider;
+        private readonly IDataProtector _dataProtector;
         private readonly string _root;
 
         public FlowPipelineService(
@@ -24,7 +26,8 @@ namespace DotNetSigningServer.Services
             PdfSigningService pdfSigningService,
             ApplicationDbContext dbContext,
             ContentLimitGuard limitGuard,
-            IServiceProvider serviceProvider)
+            IServiceProvider serviceProvider,
+            IDataProtectionProvider dataProtectionProvider)
         {
             _logger = logger;
             _pdfTemplateService = pdfTemplateService;
@@ -33,6 +36,7 @@ namespace DotNetSigningServer.Services
             _dbContext = dbContext;
             _limitGuard = limitGuard;
             _serviceProvider = serviceProvider;
+            _dataProtector = dataProtectionProvider.CreateProtector("SigningData.TsaCredentials");
             _root = Path.Combine(AppContext.BaseDirectory, "flow-runs");
             Directory.CreateDirectory(_root);
         }
@@ -110,14 +114,19 @@ namespace DotNetSigningServer.Services
                     SignedHash = signedHash
                 };
 
+                var tsaUsername = !string.IsNullOrEmpty(signingData.TsaUsername)
+                    ? _dataProtector.Unprotect(signingData.TsaUsername) : null;
+                var tsaPassword = !string.IsNullOrEmpty(signingData.TsaPassword)
+                    ? _dataProtector.Unprotect(signingData.TsaPassword) : null;
+
                 var result = _pdfSigningService.HandleSign(
                     signInput,
                     signingData.PresignedPdfPath,
                     signingData.CertificatePem,
                     signingData.FieldName,
                     signingData.TsaUrl,
-                    signingData.TsaUsername,
-                    signingData.TsaPassword);
+                    tsaUsername,
+                    tsaPassword);
 
                 if (File.Exists(signingData.PresignedPdfPath))
                 {
@@ -132,7 +141,7 @@ namespace DotNetSigningServer.Services
             state.PendingSignatures.Clear();
             state.CurrentPdfs = results;
             await _dbContext.SaveChangesAsync(cancellationToken);
-            await PersistAsync(state, cancellationToken);
+            DeleteStateFile(state.Id);
 
             return new FlowRunResponse
             {
@@ -190,7 +199,7 @@ namespace DotNetSigningServer.Services
                             }).ToList();
                             state.Status = FlowRunStatus.Done;
                             state.CurrentPdfs = pdfs;
-                            await PersistAsync(state, cancellationToken);
+                            DeleteStateFile(state.Id);
                             return;
                         case "presign":
                             var pending = new List<PendingSignatureState>();
@@ -218,8 +227,10 @@ namespace DotNetSigningServer.Services
                                     HashToSign = hashToSign,
                                     CertificatePem = pre.CertificatePem,
                                     TsaUrl = pre.TsaUrl,
-                                    TsaUsername = pre.TsaUsername,
-                                    TsaPassword = pre.TsaPassword,
+                                    TsaUsername = !string.IsNullOrEmpty(pre.TsaUsername)
+                                        ? _dataProtector.Protect(pre.TsaUsername) : null,
+                                    TsaPassword = !string.IsNullOrEmpty(pre.TsaPassword)
+                                        ? _dataProtector.Protect(pre.TsaPassword) : null,
                                     UserId = state.UserId,
                                     Id = Guid.NewGuid().ToString()
                                 };
@@ -243,14 +254,14 @@ namespace DotNetSigningServer.Services
 
                 state.Status = FlowRunStatus.Done;
                 state.CurrentPdfs = pdfs;
-                await PersistAsync(state, cancellationToken);
+                DeleteStateFile(state.Id);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Flow {FlowId} failed", flowId);
                 state.Status = FlowRunStatus.Error;
                 state.Error = ex.Message;
-                await PersistAsync(state, cancellationToken);
+                DeleteStateFile(state.Id);
             }
         }
 
@@ -291,6 +302,48 @@ namespace DotNetSigningServer.Services
             return fields.FirstOrDefault(f =>
                 f.Type == PdfFieldType.Signature
                 && (string.IsNullOrWhiteSpace(fieldName) || string.Equals(f.FieldName, fieldName, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        private void DeleteStateFile(Guid flowId)
+        {
+            var path = Path.Combine(_root, $"{flowId}.json");
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete flow state file for {FlowId}", flowId);
+            }
+        }
+
+        /// <summary>
+        /// Cleans up stale flow state files older than the specified max age.
+        /// Can be called periodically from a background service.
+        /// </summary>
+        public void CleanupStaleFlowFiles(TimeSpan maxAge)
+        {
+            if (!Directory.Exists(_root)) return;
+
+            foreach (var file in Directory.GetFiles(_root, "*.json"))
+            {
+                try
+                {
+                    var fileInfo = new FileInfo(file);
+                    if (fileInfo.LastWriteTimeUtc < DateTime.UtcNow - maxAge)
+                    {
+                        fileInfo.Delete();
+                        _logger.LogInformation("Cleaned up stale flow state file: {File}", file);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to clean up stale flow file: {File}", file);
+                }
+            }
         }
 
         private async Task PersistAsync(FlowRunState state, CancellationToken cancellationToken)

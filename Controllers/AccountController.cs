@@ -20,12 +20,33 @@ public class AccountController : Controller
     private readonly IEmailSender _emailSender;
     private readonly AppOptions _appOptions;
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int Count, DateTime WindowStart)> _loginAttempts = new();
+    private const int MaxAttemptsPerWindow = 5;
+    private static readonly TimeSpan RateLimitWindow = TimeSpan.FromMinutes(1);
+
     public AccountController(ApplicationDbContext dbContext, IAuthService authService, IEmailSender emailSender, IOptions<AppOptions> appOptions)
     {
         _dbContext = dbContext;
         _authService = authService;
         _emailSender = emailSender;
         _appOptions = appOptions.Value;
+    }
+
+    private bool IsRateLimited(string key)
+    {
+        var now = DateTime.UtcNow;
+        var entry = _loginAttempts.AddOrUpdate(
+            key,
+            _ => (1, now),
+            (_, existing) =>
+            {
+                if (now - existing.WindowStart > RateLimitWindow)
+                {
+                    return (1, now);
+                }
+                return (existing.Count + 1, existing.WindowStart);
+            });
+        return entry.Count > MaxAttemptsPerWindow;
     }
 
     [Authorize]
@@ -155,6 +176,13 @@ public class AccountController : Controller
         }
         if (!ModelState.IsValid) return View(model);
 
+        var rateLimitKey = $"signin:{(model.Email ?? "").ToLowerInvariant()}";
+        if (IsRateLimited(rateLimitKey))
+        {
+            ModelState.AddModelError(string.Empty, "Too many sign-in attempts. Please try again in a minute.");
+            return View(model);
+        }
+
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == model.Email);
         if (user == null || !_authService.VerifyPassword(model.Password, user.PasswordHash, user.PasswordSalt))
         {
@@ -281,6 +309,13 @@ public class AccountController : Controller
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(code))
         {
             TempData["Error"] = "Email and code are required.";
+            return RedirectToAction(nameof(SignIn));
+        }
+
+        var rateLimitKey = $"2fa:{email.ToLowerInvariant()}";
+        if (IsRateLimited(rateLimitKey))
+        {
+            TempData["Error"] = "Too many verification attempts. Please try again in a minute.";
             return RedirectToAction(nameof(SignIn));
         }
 
