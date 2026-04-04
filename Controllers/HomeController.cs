@@ -14,18 +14,23 @@ public class HomeController : Controller
     private readonly PdfTemplateService _templateService;
     private readonly AiOptions _aiOptions;
     private readonly AppOptions _appOptions;
+    private readonly IWebHostEnvironment _env;
 
-    public HomeController(ILogger<HomeController> logger, PdfTemplateService templateService, IOptions<AiOptions> aiOptions, IOptions<AppOptions> appOptions)
+    public HomeController(ILogger<HomeController> logger, PdfTemplateService templateService, IOptions<AiOptions> aiOptions, IOptions<AppOptions> appOptions, IWebHostEnvironment env)
     {
         _logger = logger;
         _templateService = templateService;
         _aiOptions = aiOptions.Value;
         _appOptions = appOptions.Value;
+        _env = env;
     }
 
     [HttpGet("/debug/request")]
     public IActionResult DebugRequest()
     {
+        if (!_env.IsDevelopment())
+            return NotFound();
+
         return Ok(new
         {
             Scheme = Request.Scheme,

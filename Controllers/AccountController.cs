@@ -190,6 +190,12 @@ public class AccountController : Controller
             return View(model);
         }
 
+        if (!user.IsActive)
+        {
+            ModelState.AddModelError("", "Your account has been deactivated.");
+            return View(new SignInViewModel { Email = model.Email });
+        }
+
         if (!user.EmailVerified)
         {
             ModelState.AddModelError(string.Empty, "Please verify your email before signing in.");
@@ -323,6 +329,12 @@ public class AccountController : Controller
         if (user == null || user.EmailOtpCode == null || user.EmailOtpExpiresAt == null)
         {
             TempData["Error"] = "Verification code is invalid or expired.";
+            return RedirectToAction(nameof(SignIn));
+        }
+
+        if (!user.IsActive)
+        {
+            TempData["Error"] = "Your account has been deactivated.";
             return RedirectToAction(nameof(SignIn));
         }
 

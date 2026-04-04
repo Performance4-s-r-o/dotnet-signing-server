@@ -75,6 +75,12 @@ public class ApiAuthService : IApiAuthService
             return null;
         }
 
+        // Reject tokens belonging to deactivated users
+        if (apiToken.User != null && !apiToken.User.IsActive)
+        {
+            return null;
+        }
+
         return apiToken.User;
     }
 

@@ -636,6 +636,17 @@ namespace DotNetSigningServer.Services
                 return null;
             }
 
+            // Validate user-provided TSA URLs: only allow HTTPS (or the configured default URL)
+            if (!string.IsNullOrWhiteSpace(urlOverride)
+                && !string.Equals(urlOverride, _tsaOptions?.Url, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!Uri.TryCreate(urlOverride, UriKind.Absolute, out var parsedUri)
+                    || !string.Equals(parsedUri.Scheme, "https", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException("User-provided TSA URL must use HTTPS.");
+                }
+            }
+
             return new TSAClientBouncyCastle(url, username, password);
         }
 

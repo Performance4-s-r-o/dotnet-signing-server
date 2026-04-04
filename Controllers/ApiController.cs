@@ -393,10 +393,10 @@ namespace DotNetSigningServer.Controllers
             var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null)
             {
-                _logger.LogWarning("[visual-sign] Auth/credits check failed, user={User}, error type={ErrorType}", user?.Email, error?.GetType().Name);
+                _logger.LogWarning("[visual-sign] Auth/credits check failed, user={UserId}, error type={ErrorType}", user?.Id, error?.GetType().Name);
                 return error!;
             }
-            _logger.LogInformation("[visual-sign] Authenticated as {User}", user.Email);
+            _logger.LogInformation("[visual-sign] Authenticated as {UserId}", user.Id);
 
             try
             {
@@ -980,7 +980,11 @@ namespace DotNetSigningServer.Controllers
                 if (Guid.TryParse(userIdClaim, out var guid))
                 {
                     var cookieUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == guid);
-                    if (cookieUser != null) return cookieUser;
+                    if (cookieUser != null)
+                    {
+                        if (!cookieUser.IsActive) return null;
+                        return cookieUser;
+                    }
                 }
             }
 
@@ -992,7 +996,9 @@ namespace DotNetSigningServer.Controllers
                 return null;
             }
 
-            return await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == tokenUser.Id);
+            var dbUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == tokenUser.Id);
+            if (dbUser != null && !dbUser.IsActive) return null;
+            return dbUser;
         }
 
         private bool IsAttachmentDebitBypassAuthorized()

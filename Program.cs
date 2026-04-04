@@ -278,14 +278,17 @@ app.MapControllers();
 app.MapHealthChecks("/health");
 app.MapHealthChecks("/healthz");
 
-// Loki test endpoint
-app.MapGet("/api/test-loki", async (LokiClient loki) =>
+// Loki test endpoint (non-production only)
+if (!app.Environment.IsProduction())
 {
-    await loki.LogAsync("info", "Loki test: info message from dotnet-signing-server");
-    await loki.LogAsync("warn", "Loki test: warning message from dotnet-signing-server");
-    await loki.LogAsync("error", "Loki test: error message from dotnet-signing-server");
-    return Results.Json(new { status = "ok", message = "Sent info, warn, and error to Loki" });
-});
+    app.MapGet("/api/test-loki", async (LokiClient loki) =>
+    {
+        await loki.LogAsync("info", "Loki test: info message from dotnet-signing-server");
+        await loki.LogAsync("warn", "Loki test: warning message from dotnet-signing-server");
+        await loki.LogAsync("error", "Loki test: error message from dotnet-signing-server");
+        return Results.Json(new { status = "ok", message = "Sent info, warn, and error to Loki" });
+    });
+}
 
 using (var scope = app.Services.CreateScope())
 {

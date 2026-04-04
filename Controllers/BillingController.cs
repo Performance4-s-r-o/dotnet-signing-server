@@ -231,6 +231,14 @@ public class BillingController : Controller
                 return RedirectToAction(nameof(Index));
             }
 
+            // Verify the checkout session belongs to the currently authenticated user
+            if (session.Metadata.TryGetValue("userId", out var metaUserId)
+                && metaUserId != userId.Value.ToString())
+            {
+                TempData["Error"] = "This payment session does not belong to your account.";
+                return RedirectToAction(nameof(Index));
+            }
+
             if (!session.Metadata.TryGetValue("documents", out var documentsValue) ||
                 !int.TryParse(documentsValue, out var documents) ||
                 documents <= 0)
@@ -256,7 +264,12 @@ public class BillingController : Controller
                 ProcessedAt = DateTimeOffset.UtcNow
             });
 
-            user.CreditsRemaining += documents;
+            // Atomic credit increment to prevent race conditions
+            await _dbContext.Database.ExecuteSqlRawAsync(
+                "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" + {0} WHERE \"Id\" = {1}",
+                documents, user.Id);
+            await _dbContext.Entry(user).ReloadAsync();
+
             if (string.IsNullOrWhiteSpace(user.StripeCustomerId) && !string.IsNullOrWhiteSpace(session.CustomerId))
             {
                 user.StripeCustomerId = session.CustomerId;

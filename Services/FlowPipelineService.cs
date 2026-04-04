@@ -108,6 +108,11 @@ namespace DotNetSigningServer.Services
                     throw new InvalidOperationException($"Signing data not found: {pending.SigningDataId}");
                 }
 
+                if (signingData.UserId != userId)
+                {
+                    throw new InvalidOperationException($"Signing data {pending.SigningDataId} does not belong to user {userId}");
+                }
+
                 var signInput = new SignInput
                 {
                     Id = pending.SigningDataId,
