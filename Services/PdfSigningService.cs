@@ -567,19 +567,39 @@ namespace DotNetSigningServer.Services
             var writer = new PdfWriter(msOut);
             var pdfDoc = new PdfDocument(reader, writer, new StampingProperties().UseAppendMode());
 
+            // Ensure unique attachment name — if a file with the same name already
+            // exists (e.g. multiple signers each adding evidence), append a suffix.
+            var catalog = pdfDoc.GetCatalog();
+            var existingNames = catalog.GetNameTree(PdfName.EmbeddedFiles);
+            string uniqueFileName = attachmentFileName;
+            if (existingNames != null)
+            {
+                var existingKeys = new HashSet<string>(
+                    existingNames.GetKeys().Select(k => k.ToString()));
+                if (existingKeys.Contains(uniqueFileName))
+                {
+                    var baseName = System.IO.Path.GetFileNameWithoutExtension(uniqueFileName);
+                    var ext = System.IO.Path.GetExtension(uniqueFileName);
+                    int counter = 2;
+                    while (existingKeys.Contains($"{baseName}-{counter}{ext}"))
+                        counter++;
+                    uniqueFileName = $"{baseName}-{counter}{ext}";
+                }
+            }
+
             var afRelationship = PdfName.Unspecified;
             PdfFileSpec fileSpec = string.IsNullOrWhiteSpace(attachmentMimeType)
-                ? PdfFileSpec.CreateEmbeddedFileSpec(pdfDoc, attachmentBytes, input.Description, attachmentFileName, afRelationship)
+                ? PdfFileSpec.CreateEmbeddedFileSpec(pdfDoc, attachmentBytes, input.Description, uniqueFileName, afRelationship)
                 : PdfFileSpec.CreateEmbeddedFileSpec(
                     pdfDoc,
                     attachmentBytes,
                     input.Description,
-                    attachmentFileName,
+                    uniqueFileName,
                     new PdfName(attachmentMimeType),
                     null,
                     afRelationship);
 
-            pdfDoc.AddFileAttachment(attachmentFileName, fileSpec);
+            pdfDoc.AddFileAttachment(uniqueFileName, fileSpec);
             pdfDoc.Close();
 
             return Convert.ToBase64String(msOut.ToArray());
