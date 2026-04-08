@@ -226,11 +226,9 @@ namespace DotNetSigningServer.Services
                 if (hasBgImage)
                 {
                     var bgData = ImageDataFactory.Create(Convert.FromBase64String(input.BackgroundImageContent!));
-                    var bgSize = new BackgroundSize();
-                    bgSize.SetBackgroundSizeToContain();
                     div.SetBackgroundImage(new BackgroundImage.Builder()
                         .SetImage(new PdfImageXObject(bgData))
-                        .SetBackgroundSize(bgSize)
+                        .SetBackgroundRepeat(new BackgroundRepeat(BackgroundRepeat.BackgroundRepeatValue.REPEAT))
                         .Build());
                 }
                 else if (bgColor != null)
