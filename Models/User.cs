@@ -31,6 +31,8 @@ public class User
 
     public int CreditsRemaining { get; set; } = 10;
 
+    public bool EmailNotificationsEnabled { get; set; } = true;
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 

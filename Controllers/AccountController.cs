@@ -114,8 +114,9 @@ public class AccountController : Controller
         _dbContext.Users.Add(user);
         await _dbContext.SaveChangesAsync();
 
-        // Send verification email
+        // Send verification email (critical — user cannot complete signup without it)
         var verificationLink = BuildAbsoluteUrl($"/Account/Verify?token={Uri.EscapeDataString(verificationToken)}");
+        var settingsUrl = BuildAbsoluteUrl("/Account/Settings");
         var subject = "Verify your email for P4PDF by Performance4 s.r.o.";
         var body = $@"<p>Hello,</p>
 <p>Please verify your email to activate your account.</p>
@@ -124,7 +125,7 @@ public class AccountController : Controller
 
         try
         {
-            await _emailSender.SendAsync(user.Email, subject, body);
+            await _emailSender.SendAsync(user.Email, subject, body, settingsUrl, isCritical: true);
             TempData["Info"] = "Please check your email for a verification link.";
         }
         catch
@@ -208,11 +209,13 @@ public class AccountController : Controller
         user.EmailOtpExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
         await _dbContext.SaveChangesAsync();
 
+        var otpSettingsUrl = BuildAbsoluteUrl("/Account/Settings");
         var subject = "Your 2FA code";
         var body = $"<p>Your verification code is: <strong>{otp}</strong></p><p>This code expires in 10 minutes.</p>";
         try
         {
-            await _emailSender.SendAsync(user.Email, subject, body);
+            // 2FA codes are critical security emails — always sent regardless of notification preferences
+            await _emailSender.SendAsync(user.Email, subject, body, otpSettingsUrl, isCritical: true);
             TempData["Info"] = "We sent a 6-digit code to your email.";
         }
         catch
@@ -359,6 +362,38 @@ public class AccountController : Controller
         return RedirectToAction("Index", "Home");
     }
 
+    [Authorize]
+    [HttpGet("/Account/Settings")]
+    public async Task<IActionResult> Settings()
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction(nameof(SignIn));
+
+        var user = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null) return RedirectToAction(nameof(SignIn));
+
+        return View(user);
+    }
+
+    [Authorize]
+    [HttpPost("/Account/Settings")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Settings(bool emailNotificationsEnabled)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction(nameof(SignIn));
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null) return RedirectToAction(nameof(SignIn));
+
+        user.EmailNotificationsEnabled = emailNotificationsEnabled;
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        await _dbContext.SaveChangesAsync();
+
+        TempData["Info"] = "Settings saved.";
+        return RedirectToAction(nameof(Settings));
+    }
+
     private async Task SignInUser(User user, bool rememberMe)
     {
         var claims = new List<Claim>
@@ -378,6 +413,22 @@ public class AccountController : Controller
                 IsPersistent = rememberMe,
                 AllowRefresh = true
             });
+    }
+
+    /// <summary>
+    /// Sends an email respecting the user's notification preference.
+    /// Critical emails (2FA, verification) are always sent regardless of the preference.
+    /// </summary>
+    private async Task<bool> SendEmailIfAllowed(Models.User user, string subject, string htmlBody, bool isCritical)
+    {
+        if (!isCritical && !user.EmailNotificationsEnabled)
+        {
+            return false;
+        }
+
+        var settingsUrl = BuildAbsoluteUrl("/Account/Settings");
+        await _emailSender.SendAsync(user.Email, subject, htmlBody, settingsUrl, isCritical);
+        return true;
     }
 
     private Guid? GetCurrentUserId()

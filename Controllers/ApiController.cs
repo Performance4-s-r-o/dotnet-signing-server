@@ -217,6 +217,48 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
+        [HttpPost("/api/ai/extract-data")]
+        public async Task<IActionResult> ExtractData([FromBody] AiExtractDataInput input)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            if (!_templateAiService.IsEnabled)
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "AI extraction is not configured." });
+            }
+
+            if (string.IsNullOrWhiteSpace(input.PdfContent))
+            {
+                return BadRequest(new { message = "PdfContent is required." });
+            }
+
+            if (input.Columns == null || input.Columns.Count == 0)
+            {
+                return BadRequest(new { message = "At least one column definition is required." });
+            }
+
+            try
+            {
+                _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "AI extract-data");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+
+            try
+            {
+                var values = await _templateAiService.ExtractDataAsync(input.PdfContent, input.Columns, HttpContext.RequestAborted);
+                return Ok(new AiExtractDataResponse { Values = values.ToList() });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(Logging.LoggingEvents.ApiError, ex, "AI data extraction failed");
+                return Problem("AI data extraction failed. Check AI configuration and try again.");
+            }
+        }
+
         [HttpPut("/api/pdf-template/{templateId:guid}")]
         public async Task<IActionResult> UpdatePdfTemplate(Guid templateId, [FromBody] UpdateTemplateInput input)
         {

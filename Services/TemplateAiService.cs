@@ -113,6 +113,112 @@ Rules:
         }
     }
 
+    public async Task<IReadOnlyList<AiExtractedValue>> ExtractDataAsync(
+        string pdfBase64,
+        IReadOnlyList<AiExtractColumnDefinition> columns,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsEnabled)
+        {
+            throw new InvalidOperationException("AI extraction is not configured.");
+        }
+
+        if (string.IsNullOrWhiteSpace(pdfBase64) || columns.Count == 0)
+        {
+            return columns.Select(c => new AiExtractedValue { Key = c.Key, Result = null }).ToList();
+        }
+
+        var apiKey = _options.Google.ApiKey!;
+        var model = _options.Google.Model ?? "gemini-2.5-flash";
+        var endpointBase = _options.Google.Endpoint?.TrimEnd('/') ?? "https://generativelanguage.googleapis.com/v1beta";
+        var url = $"{endpointBase}/models/{model}:generateContent?key={apiKey}";
+
+        var columnDefs = string.Join("\n", columns.Select(c =>
+        {
+            var desc = string.IsNullOrWhiteSpace(c.Description) ? "" : $" — {c.Description}";
+            return $"- key=\"{c.Key}\" ({c.Title}){desc}";
+        }));
+
+        var prompt = $@"Extract these fields from the PDF. Use null when uncertain. Numbers without currency/separators. Dates as YYYY-MM-DD.
+
+{columnDefs}";
+
+        // Build JSON schema for structured output — each column becomes a property
+        var schemaProperties = new Dictionary<string, object>();
+        foreach (var col in columns)
+        {
+            schemaProperties[col.Key] = new { type = "string", description = col.Title, nullable = true };
+        }
+
+        var request = new
+        {
+            contents = new[]
+            {
+                new
+                {
+                    parts = new object[]
+                    {
+                        new { text = prompt },
+                        new
+                        {
+                            inline_data = new
+                            {
+                                mime_type = "application/pdf",
+                                data = pdfBase64
+                            }
+                        }
+                    }
+                }
+            },
+            generationConfig = new
+            {
+                responseMimeType = "application/json",
+                responseSchema = new
+                {
+                    type = "object",
+                    properties = schemaProperties
+                },
+                temperature = 0.0
+            }
+        };
+
+        try
+        {
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json")
+            };
+
+            using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            var payload = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cancellationToken);
+            var text = ExtractTextResponse(payload);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                _logger.LogWarning("AI extract-data response contained no text payload.");
+                return columns.Select(c => new AiExtractedValue { Key = c.Key, Result = null }).ToList();
+            }
+
+            // Response is guaranteed JSON thanks to responseMimeType — parse directly
+            var parsed = JsonSerializer.Deserialize<Dictionary<string, string?>>(text, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            }) ?? new();
+
+            return columns.Select(c => new AiExtractedValue
+            {
+                Key = c.Key,
+                Result = parsed.GetValueOrDefault(c.Key)
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AI data extraction failed");
+            throw;
+        }
+    }
+
     private static string? ExtractTextResponse(JsonElement payload)
     {
         if (!payload.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0)
