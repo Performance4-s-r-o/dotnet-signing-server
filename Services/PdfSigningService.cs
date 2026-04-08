@@ -55,6 +55,13 @@ namespace DotNetSigningServer.Services
         public (string PresignedPdfPath, string HashToSign) HandlePreSign(PreSignInput input, string fieldName)
         {
             byte[] originalPdf = Convert.FromBase64String(input.PdfContent);
+
+            // Add verification metadata/QR page before signing
+            if (!string.IsNullOrWhiteSpace(input.VerificationUrl) && input.VerificationMode != "disabled")
+            {
+                originalPdf = PdfVerificationService.AddVerification(
+                    originalPdf, input.VerificationUrl, input.VerificationMode ?? "disabled");
+            }
             var preSignContainer = new DigestCalcBlankSigner(PdfName.Adobe_PPKLite, PdfName.Adbe_pkcs7_detached);
             var chain = LoadCertificatesFromPemString(input.CertificatePem);
             preSignContainer.SetChain(chain);
@@ -379,6 +386,16 @@ namespace DotNetSigningServer.Services
             }
 
             string pdfContent = input.PdfContent;
+
+            // Add verification metadata/QR page before sealing
+            if (!string.IsNullOrWhiteSpace(input.VerificationUrl) && input.VerificationMode != "disabled")
+            {
+                byte[] pdfBytes = Convert.FromBase64String(pdfContent);
+                pdfBytes = PdfVerificationService.AddVerification(
+                    pdfBytes, input.VerificationUrl, input.VerificationMode ?? "disabled", input.SignerName);
+                pdfContent = Convert.ToBase64String(pdfBytes);
+            }
+
             if (ShouldApplyVisibleOverlay(input))
             {
                 pdfContent = ApplyVisualSign(new VisualSignInput
