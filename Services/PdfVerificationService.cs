@@ -61,33 +61,36 @@ namespace DotNetSigningServer.Services
         private static void AddQrPage(PdfDocument pdfDoc, string verificationUrl, string? signerName)
         {
             var pageSize = PageSize.A4;
-            pdfDoc.AddNewPage(pageSize);
+            var newPage = pdfDoc.AddNewPage(pageSize);
             var lastPageNum = pdfDoc.GetNumberOfPages();
-            var page = pdfDoc.GetPage(lastPageNum);
-
-            using var doc = new Document(pdfDoc, pageSize, false);
-            doc.SetRenderer(new iText.Layout.Renderer.DocumentRenderer(doc));
 
             var font = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
             var fontBold = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
 
+            // Use PdfCanvas to write directly on the new page (avoids Document
+            // writing to page 1 when the PDF already has content).
+            var canvas = new iText.Kernel.Pdf.Canvas.PdfCanvas(newPage);
+            var rootArea = new Rectangle(
+                pageSize.GetLeft() + 50, pageSize.GetBottom() + 50,
+                pageSize.GetWidth() - 100, pageSize.GetHeight() - 100);
+
+            using var layoutCanvas = new iText.Layout.Canvas(canvas, rootArea);
+
             // Title
-            var title = new Paragraph("Document Verification")
+            layoutCanvas.Add(new Paragraph("Document Verification")
                 .SetFont(fontBold)
                 .SetFontSize(18)
                 .SetTextAlignment(TextAlignment.CENTER)
-                .SetMarginTop(60);
-            doc.Add(title);
+                .SetMarginTop(40));
 
             // Description
-            var description = new Paragraph("This document was signed using P4PDF. " +
+            layoutCanvas.Add(new Paragraph("This document was signed using P4PDF. " +
                 "Scan the QR code below or visit the verification URL to verify the document's integrity.")
                 .SetFont(font)
                 .SetFontSize(10)
                 .SetTextAlignment(TextAlignment.CENTER)
                 .SetMarginTop(10)
-                .SetFontColor(iText.Kernel.Colors.ColorConstants.DARK_GRAY);
-            doc.Add(description);
+                .SetFontColor(iText.Kernel.Colors.ColorConstants.DARK_GRAY));
 
             // QR Code
             var qrCode = new BarcodeQRCode(verificationUrl);
@@ -96,37 +99,32 @@ namespace DotNetSigningServer.Services
                 .SetHeight(150)
                 .SetHorizontalAlignment(HorizontalAlignment.CENTER)
                 .SetMarginTop(30);
-            doc.Add(qrImage);
+            layoutCanvas.Add(qrImage);
 
             // Verification URL
-            var urlParagraph = new Paragraph(verificationUrl)
+            layoutCanvas.Add(new Paragraph(verificationUrl)
                 .SetFont(font)
                 .SetFontSize(9)
                 .SetTextAlignment(TextAlignment.CENTER)
                 .SetMarginTop(10)
-                .SetFontColor(iText.Kernel.Colors.ColorConstants.DARK_GRAY);
-            doc.Add(urlParagraph);
+                .SetFontColor(iText.Kernel.Colors.ColorConstants.DARK_GRAY));
 
             // Signer info
             if (!string.IsNullOrWhiteSpace(signerName))
             {
-                var signerParagraph = new Paragraph($"Signed by: {signerName}")
+                layoutCanvas.Add(new Paragraph($"Signed by: {signerName}")
                     .SetFont(font)
                     .SetFontSize(10)
                     .SetTextAlignment(TextAlignment.CENTER)
-                    .SetMarginTop(20);
-                doc.Add(signerParagraph);
+                    .SetMarginTop(20));
             }
 
             // Date
-            var dateParagraph = new Paragraph($"Date: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC")
+            layoutCanvas.Add(new Paragraph($"Date: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC")
                 .SetFont(font)
                 .SetFontSize(10)
                 .SetTextAlignment(TextAlignment.CENTER)
-                .SetMarginTop(5);
-            doc.Add(dateParagraph);
-
-            doc.Flush();
+                .SetMarginTop(5));
         }
     }
 }
