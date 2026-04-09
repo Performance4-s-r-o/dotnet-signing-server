@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+
+  <!-- Account -->
+  <data name="EmailAlreadyRegistered" xml:space="preserve"><value>Email already registered.</value></data>
+  <data name="CheckEmailVerification" xml:space="preserve"><value>Please check your email for a verification link.</value></data>
+  <data name="VerificationEmailFailed" xml:space="preserve"><value>We could not send a verification email. Please contact support or try again later.</value></data>
+  <data name="TooManySignInAttempts" xml:space="preserve"><value>Too many sign-in attempts. Please try again in a minute.</value></data>
+  <data name="InvalidCredentials" xml:space="preserve"><value>Invalid credentials.</value></data>
+  <data name="AccountDeactivated" xml:space="preserve"><value>Your account has been deactivated.</value></data>
+  <data name="VerifyEmailFirst" xml:space="preserve"><value>Please verify your email before signing in.</value></data>
+  <data name="TwoFactorCodeSent" xml:space="preserve"><value>We sent a 6-digit code to your email.</value></data>
+  <data name="TwoFactorCodeFailed" xml:space="preserve"><value>We could not send the verification code. Please try again.</value></data>
+  <data name="AccessDenied" xml:space="preserve"><value>Access denied</value></data>
+  <data name="EmailVerified" xml:space="preserve"><value>Email verified. You are now signed in.</value></data>
+  <data name="InvalidVerificationToken" xml:space="preserve"><value>Invalid or expired verification token.</value></data>
+  <data name="VerificationTokenRequired" xml:space="preserve"><value>Verification token is required.</value></data>
+  <data name="EmailAndCodeRequired" xml:space="preserve"><value>Email and code are required.</value></data>
+  <data name="TooManyVerificationAttempts" xml:space="preserve"><value>Too many verification attempts. Please try again in a minute.</value></data>
+  <data name="VerificationCodeInvalid" xml:space="preserve"><value>Verification code is invalid or expired.</value></data>
+  <data name="SettingsSaved" xml:space="preserve"><value>Settings saved.</value></data>
+
+  <!-- API Tokens -->
+  <data name="LabelRequired" xml:space="preserve"><value>Label is required.</value></data>
+  <data name="LabelTooLong" xml:space="preserve"><value>Label must be 128 characters or fewer.</value></data>
+  <data name="ExpirationMustBeFuture" xml:space="preserve"><value>Expiration must be in the future.</value></data>
+  <data name="UserNotFound" xml:space="preserve"><value>User not found.</value></data>
+  <data name="OriginsRequired" xml:space="preserve"><value>At least one valid origin (https or localhost) is required for browser tokens.</value></data>
+  <data name="InvalidIpAddresses" xml:space="preserve"><value>Invalid IP address(es): {0}</value></data>
+  <data name="MaxIpEntries" xml:space="preserve"><value>Maximum 20 IP entries allowed.</value></data>
+  <data name="TokenNotFound" xml:space="preserve"><value>Token not found.</value></data>
+  <data name="TokenDeleted" xml:space="preserve"><value>Token deleted.</value></data>
+  <data name="TokenCreated" xml:space="preserve"><value>Token created.</value></data>
+
+  <!-- Billing -->
+  <data name="StripeInvoicesError" xml:space="preserve"><value>Could not load Stripe invoices.</value></data>
+  <data name="StripeCustomerError" xml:space="preserve"><value>Could not create Stripe customer. Please try again.</value></data>
+  <data name="SelectAtLeastOneDocument" xml:space="preserve"><value>Select at least 1 document to purchase credits.</value></data>
+  <data name="InvalidDocumentBundle" xml:space="preserve"><value>Invalid document bundle selected.</value></data>
+  <data name="CheckoutStartFailed" xml:space="preserve"><value>Unable to start checkout.</value></data>
+  <data name="PaymentStartFailed" xml:space="preserve"><value>Payment could not be started. Please try again.</value></data>
+  <data name="MissingStripeSession" xml:space="preserve"><value>Missing Stripe session id.</value></data>
+  <data name="PaymentAlreadyProcessed" xml:space="preserve"><value>This payment has already been processed.</value></data>
+  <data name="PaymentNotCompleted" xml:space="preserve"><value>Payment not completed.</value></data>
+  <data name="PaymentSessionMismatch" xml:space="preserve"><value>This payment session does not belong to your account.</value></data>
+  <data name="CouldNotDetermineCredits" xml:space="preserve"><value>Could not determine purchased credits.</value></data>
+  <data name="CreditsAdded" xml:space="preserve"><value>Added {0} document credits to your account. You can find invoice in the list below in few moments.</value></data>
+  <data name="PaymentConfirmFailed" xml:space="preserve"><value>Could not confirm payment.</value></data>
+
+  <!-- API Errors -->
+  <data name="PresignError" xml:space="preserve"><value>An error occurred during the presign process</value></data>
+  <data name="FieldsRequired" xml:space="preserve"><value>At least one field definition is required.</value></data>
+  <data name="PdfContentRequired" xml:space="preserve"><value>PdfContent is required.</value></data>
+  <data name="TemplateCreateError" xml:space="preserve"><value>An error occurred while creating the template</value></data>
+  <data name="TemplateRetrieveError" xml:space="preserve"><value>An error occurred while retrieving the template</value></data>
+  <data name="AiNotConfigured" xml:space="preserve"><value>AI detection is not configured.</value></data>
+  <data name="AiDetectionFailed" xml:space="preserve"><value>AI detection failed. Check AI configuration and try again.</value></data>
+  <data name="AiExtractionNotConfigured" xml:space="preserve"><value>AI extraction is not configured.</value></data>
+  <data name="ColumnsRequired" xml:space="preserve"><value>At least one column definition is required.</value></data>
+  <data name="AiExtractionFailed" xml:space="preserve"><value>AI data extraction failed. Check AI configuration and try again.</value></data>
+  <data name="ProvideAtLeastOneChange" xml:space="preserve"><value>Provide at least one change (fields, pdfContent, or templateName).</value></data>
+  <data name="TemplateUpdateError" xml:space="preserve"><value>An error occurred while updating the template</value></data>
+  <data name="TemplateDeleteError" xml:space="preserve"><value>An error occurred while deleting the template</value></data>
+  <data name="SigningDataNotFound" xml:space="preserve"><value>Signing data not found for the provided ID.</value></data>
+  <data name="SignError" xml:space="preserve"><value>An error occurred during the final signing process</value></data>
+  <data name="PfxSignError" xml:space="preserve"><value>An error occurred during the PFX signing process</value></data>
+  <data name="TimestampError" xml:space="preserve"><value>An error occurred while applying the timestamp</value></data>
+  <data name="VisualSignError" xml:space="preserve"><value>An error occurred while applying the visual signature</value></data>
+  <data name="SealError" xml:space="preserve"><value>An error occurred while applying the seal</value></data>
+  <data name="AttachmentError" xml:space="preserve"><value>An error occurred while adding the attachment</value></data>
+  <data name="ProvidePdfOrFillPdf" xml:space="preserve"><value>Provide PdfContents or FillPdf.</value></data>
+  <data name="FlowRequired" xml:space="preserve"><value>Flow is required.</value></data>
+  <data name="UnsupportedFlowAction" xml:space="preserve"><value>Unsupported flow action '{0}'.</value></data>
+  <data name="OnlyOneSigningAction" xml:space="preserve"><value>Only one of presign, timestamp, sign-pfx is allowed in the flow.</value></data>
+  <data name="FlowStartError" xml:space="preserve"><value>An error occurred while starting the flow</value></data>
+  <data name="FlowSignaturesError" xml:space="preserve"><value>An error occurred while completing the flow signatures</value></data>
+  <data name="SignaturesRequired" xml:space="preserve"><value>Signatures are required.</value></data>
+  <data name="PdfaConversionError" xml:space="preserve"><value>An error occurred while converting the document to PDF/A</value></data>
+  <data name="ProvideTemplateOrPdf" xml:space="preserve"><value>Provide either TemplateId or PdfContent (but not both).</value></data>
+  <data name="FieldsRequiredForDirectPdf" xml:space="preserve"><value>Fields are required when using PdfContent directly.</value></data>
+  <data name="DataSetRequired" xml:space="preserve"><value>At least one data set is required.</value></data>
+  <data name="FillPdfError" xml:space="preserve"><value>An error occurred while filling the PDF</value></data>
+  <data name="ScanCodesError" xml:space="preserve"><value>An error occurred while scanning codes</value></data>
+  <data name="InvalidBase64" xml:space="preserve"><value>PdfContent is not valid base64.</value></data>
+  <data name="NoCreditsRemaining" xml:space="preserve"><value>No credits remaining. Please purchase more to continue.</value></data>
+  <data name="NotEnoughCredits" xml:space="preserve"><value>Not enough credits. {0} credit(s) required.</value></data>
+
+  <!-- Middleware -->
+  <data name="TooManyRequests" xml:space="preserve"><value>Too many concurrent requests. Please slow down.</value></data>
+  <data name="RequestExceededLimit" xml:space="preserve"><value>Request exceeded limit.</value></data>
+  <data name="InternalError" xml:space="preserve"><value>An internal error occurred.</value></data>
+  <data name="UnexpectedError" xml:space="preserve"><value>We hit an unexpected error while processing your request.</value></data>
+</root>
