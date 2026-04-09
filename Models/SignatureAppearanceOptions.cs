@@ -12,5 +12,6 @@ namespace DotNetSigningServer.Models
         public bool ShowDate { get; set; } = true;
         public bool ShowSignerName { get; set; } = true;
         public bool ShowCompanyName { get; set; } = true;
+        public bool BackgroundRepeat { get; set; } = true;
     }
 }

@@ -226,10 +226,24 @@ namespace DotNetSigningServer.Services
                 if (hasBgImage)
                 {
                     var bgData = ImageDataFactory.Create(Convert.FromBase64String(input.BackgroundImageContent!));
-                    div.SetBackgroundImage(new BackgroundImage.Builder()
-                        .SetImage(new PdfImageXObject(bgData))
-                        .SetBackgroundRepeat(new BackgroundRepeat(BackgroundRepeat.BackgroundRepeatValue.REPEAT))
-                        .Build());
+                    var shouldRepeat = appearanceOptions?.BackgroundRepeat ?? true;
+                    var builder = new BackgroundImage.Builder()
+                        .SetImage(new PdfImageXObject(bgData));
+
+                    if (shouldRepeat)
+                    {
+                        builder.SetBackgroundRepeat(new BackgroundRepeat(BackgroundRepeat.BackgroundRepeatValue.REPEAT));
+                    }
+                    else
+                    {
+                        var bgSize = new BackgroundSize();
+                        bgSize.SetBackgroundSizeToContain();
+                        builder.SetBackgroundSize(bgSize)
+                            .SetBackgroundRepeat(new BackgroundRepeat(BackgroundRepeat.BackgroundRepeatValue.NO_REPEAT))
+                            .SetBackgroundPosition(new BackgroundPosition().SetPositionX(BackgroundPosition.PositionX.CENTER).SetPositionY(BackgroundPosition.PositionY.CENTER));
+                    }
+
+                    div.SetBackgroundImage(builder.Build());
                 }
                 else if (bgColor != null)
                 {
