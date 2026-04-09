@@ -59,7 +59,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         if (apiDesc.ActionDescriptor is ControllerActionDescriptor cad)
         {
-            return cad.ControllerTypeInfo.AsType() == typeof(DotNetSigningServer.Controllers.ApiController);
+            return typeof(DotNetSigningServer.Controllers.ApiControllerBase).IsAssignableFrom(cad.ControllerTypeInfo.AsType());
         }
         return false;
     });
