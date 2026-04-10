@@ -1,10 +1,12 @@
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Resources;
 using DotNetSigningServer.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using Stripe.Checkout;
@@ -20,19 +22,22 @@ public class BillingController : Controller
     private readonly BillingOptions _billingOptions;
     private readonly IStripeCheckoutService _checkoutService;
     private readonly ILogger<BillingController> _logger;
+    private readonly IStringLocalizer<SharedStrings> _localizer;
 
     public BillingController(
         ApplicationDbContext dbContext,
         IBillingService billingService,
         IOptions<BillingOptions> billingOptions,
         IStripeCheckoutService checkoutService,
-        ILogger<BillingController> logger)
+        ILogger<BillingController> logger,
+        IStringLocalizer<SharedStrings> localizer)
     {
         _dbContext = dbContext;
         _billingService = billingService;
         _billingOptions = billingOptions.Value;
         _checkoutService = checkoutService;
         _logger = logger;
+        _localizer = localizer;
     }
 
     [HttpGet("/Billing")]
@@ -71,7 +76,7 @@ public class BillingController : Controller
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to fetch Stripe invoices for user {UserId}", user.Id);
-                TempData["Error"] = TempData["Error"] ?? "Could not load Stripe invoices.";
+                TempData["Error"] = TempData["Error"] ?? _localizer["StripeInvoicesError"].Value;
             }
         }
 
@@ -103,7 +108,7 @@ public class BillingController : Controller
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
         if (user == null)
         {
-            TempData["Error"] = "User not found.";
+            TempData["Error"] = _localizer["UserNotFound"].Value;
             return RedirectToAction(nameof(Index));
         }
 
@@ -127,21 +132,21 @@ public class BillingController : Controller
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to create Stripe customer for user {UserId}", user.Id);
-                TempData["Error"] = "Could not create Stripe customer. Please try again.";
+                TempData["Error"] = _localizer["StripeCustomerError"].Value;
                 return RedirectToAction(nameof(Index));
             }
         }
 
         if (documentsToBuy <= 0)
         {
-            TempData["Error"] = "Select at least 1 document to purchase credits.";
+            TempData["Error"] = _localizer["SelectAtLeastOneDocument"].Value;
             return RedirectToAction(nameof(Index));
         }
 
         var allowedDocuments = new[] { 100, 300, 500, 1000 };
         if (!allowedDocuments.Contains(documentsToBuy))
         {
-            TempData["Error"] = "Invalid document bundle selected.";
+            TempData["Error"] = _localizer["InvalidDocumentBundle"].Value;
             return RedirectToAction(nameof(Index));
         }
 
@@ -184,7 +189,7 @@ public class BillingController : Controller
 
             if (string.IsNullOrWhiteSpace(checkoutUrl))
             {
-                TempData["Error"] = "Unable to start checkout.";
+                TempData["Error"] = _localizer["CheckoutStartFailed"].Value;
                 return RedirectToAction(nameof(Index));
             }
 
@@ -193,7 +198,7 @@ public class BillingController : Controller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Stripe checkout creation failed for user {UserId}", user.Id);
-            TempData["Error"] = "Payment could not be started. Please try again.";
+            TempData["Error"] = _localizer["PaymentStartFailed"].Value;
             return RedirectToAction(nameof(Index));
         }
     }
@@ -209,7 +214,7 @@ public class BillingController : Controller
 
         if (string.IsNullOrWhiteSpace(sessionId))
         {
-            TempData["Error"] = "Missing Stripe session id.";
+            TempData["Error"] = _localizer["MissingStripeSession"].Value;
             return RedirectToAction(nameof(Index));
         }
 
@@ -220,14 +225,14 @@ public class BillingController : Controller
                 w => w.EventId == sessionId && w.EventType == "checkout.confirm");
             if (alreadyProcessed)
             {
-                TempData["Info"] = "This payment has already been processed.";
+                TempData["Info"] = _localizer["PaymentAlreadyProcessed"].Value;
                 return RedirectToAction(nameof(Index));
             }
 
             var session = await _checkoutService.GetSessionAsync(sessionId);
             if (session == null || session.PaymentStatus != "paid")
             {
-                TempData["Error"] = "Payment not completed.";
+                TempData["Error"] = _localizer["PaymentNotCompleted"].Value;
                 return RedirectToAction(nameof(Index));
             }
 
@@ -235,7 +240,7 @@ public class BillingController : Controller
             if (session.Metadata.TryGetValue("userId", out var metaUserId)
                 && metaUserId != userId.Value.ToString())
             {
-                TempData["Error"] = "This payment session does not belong to your account.";
+                TempData["Error"] = _localizer["PaymentSessionMismatch"].Value;
                 return RedirectToAction(nameof(Index));
             }
 
@@ -243,14 +248,14 @@ public class BillingController : Controller
                 !int.TryParse(documentsValue, out var documents) ||
                 documents <= 0)
             {
-                TempData["Error"] = "Could not determine purchased credits.";
+                TempData["Error"] = _localizer["CouldNotDetermineCredits"].Value;
                 return RedirectToAction(nameof(Index));
             }
 
             var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
             if (user == null)
             {
-                TempData["Error"] = "User not found.";
+                TempData["Error"] = _localizer["UserNotFound"].Value;
                 return RedirectToAction(nameof(Index));
             }
 
@@ -276,12 +281,12 @@ public class BillingController : Controller
             }
 
             await _dbContext.SaveChangesAsync();
-            TempData["Info"] = $"Added {documents} document credits to your account. You can find invoice in the list below in few moments.";
+            TempData["Info"] = _localizer["CreditsAdded", documents].Value;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to confirm Stripe checkout for session {SessionId}", sessionId);
-            TempData["Error"] = "Could not confirm payment.";
+            TempData["Error"] = _localizer["PaymentConfirmFailed"].Value;
         }
 
         return RedirectToAction(nameof(Index));

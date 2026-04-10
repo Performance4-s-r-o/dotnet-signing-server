@@ -1,4 +1,6 @@
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Resources;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Http.Features;
 
@@ -32,7 +34,9 @@ public class BodySizeLimitMiddleware
         {
             context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
             _logger.LogWarning("Body size limit exceeded: {ContentLength} > {Limit} for {Path}", contentLength.Value, limit, context.Request.Path);
-            await context.Response.WriteAsJsonAsync(new { message = "Request exceeded limit." });
+            var factory = context.RequestServices.GetRequiredService<IStringLocalizerFactory>();
+            var localizer = factory.Create(typeof(SharedStrings));
+            await context.Response.WriteAsJsonAsync(new { message = localizer["RequestExceededLimit"].Value });
             return;
         }
 

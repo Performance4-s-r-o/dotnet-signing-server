@@ -1,9 +1,11 @@
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
+using DotNetSigningServer.Resources;
 using DotNetSigningServer.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Localization;
 using System.Security.Claims;
 
 namespace DotNetSigningServer.Controllers;
@@ -15,13 +17,15 @@ public class ApiTokensController : Controller
     private readonly ITokenService _tokenService;
     private readonly IIpWhitelistService _ipWhitelistService;
     private readonly ILogger<ApiTokensController> _logger;
+    private readonly IStringLocalizer<SharedStrings> _localizer;
 
-    public ApiTokensController(ApplicationDbContext dbContext, ITokenService tokenService, IIpWhitelistService ipWhitelistService, ILogger<ApiTokensController> logger)
+    public ApiTokensController(ApplicationDbContext dbContext, ITokenService tokenService, IIpWhitelistService ipWhitelistService, ILogger<ApiTokensController> logger, IStringLocalizer<SharedStrings> localizer)
     {
         _dbContext = dbContext;
         _tokenService = tokenService;
         _ipWhitelistService = ipWhitelistService;
         _logger = logger;
+        _localizer = localizer;
     }
 
     [HttpGet("/ApiTokens")]
@@ -55,14 +59,14 @@ public class ApiTokensController : Controller
 
         if (string.IsNullOrWhiteSpace(label))
         {
-            TempData["LabelError"] = "Label is required.";
+            TempData["LabelError"] = _localizer["LabelRequired"].Value;
             return RedirectToAction(nameof(Index));
         }
 
         label = label.Trim();
         if (label.Length > 128)
         {
-            TempData["LabelError"] = "Label must be 128 characters or fewer.";
+            TempData["LabelError"] = _localizer["LabelTooLong"].Value;
             return RedirectToAction(nameof(Index));
         }
 
@@ -70,14 +74,14 @@ public class ApiTokensController : Controller
         var expiresUtc = expiresAt?.ToUniversalTime();
         if (expiresUtc.HasValue && expiresUtc.Value <= nowUtc)
         {
-            TempData["Error"] = "Expiration must be in the future.";
+            TempData["Error"] = _localizer["ExpirationMustBeFuture"].Value;
             return RedirectToAction(nameof(Index));
         }
 
         var user = await _dbContext.Users.FindAsync(userId.Value);
         if (user == null)
         {
-            TempData["Error"] = "User not found.";
+            TempData["Error"] = _localizer["UserNotFound"].Value;
             return RedirectToAction(nameof(Index));
         }
 
@@ -89,7 +93,7 @@ public class ApiTokensController : Controller
 
         if (isBrowser && normalizedOrigins.Count == 0)
         {
-            TempData["Error"] = "At least one valid origin (https or localhost) is required for browser tokens.";
+            TempData["Error"] = _localizer["OriginsRequired"].Value;
             return RedirectToAction(nameof(Index));
         }
 
@@ -100,12 +104,12 @@ public class ApiTokensController : Controller
             var (validIps, invalidIps) = _ipWhitelistService.ParseAndValidateIps(allowedIps);
             if (invalidIps.Count > 0)
             {
-                TempData["Error"] = $"Invalid IP address(es): {string.Join(", ", invalidIps)}";
+                TempData["Error"] = _localizer["InvalidIpAddresses", string.Join(", ", invalidIps)].Value;
                 return RedirectToAction(nameof(Index));
             }
             if (validIps.Count > 20)
             {
-                TempData["Error"] = "Maximum 20 IP entries allowed.";
+                TempData["Error"] = _localizer["MaxIpEntries"].Value;
                 return RedirectToAction(nameof(Index));
             }
             if (validIps.Count > 0)
@@ -148,7 +152,7 @@ public class ApiTokensController : Controller
         var token = await _dbContext.ApiTokens.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId.Value);
         if (token == null)
         {
-            TempData["Error"] = "Token not found.";
+            TempData["Error"] = _localizer["TokenNotFound"].Value;
             return RedirectToAction(nameof(Index));
         }
 
@@ -171,14 +175,14 @@ public class ApiTokensController : Controller
         var token = await _dbContext.ApiTokens.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId.Value);
         if (token == null)
         {
-            TempData["Error"] = "Token not found.";
+            TempData["Error"] = _localizer["TokenNotFound"].Value;
             return RedirectToAction(nameof(Index));
         }
 
         _dbContext.ApiTokens.Remove(token);
         await _dbContext.SaveChangesAsync();
         _logger.LogInformation(DotNetSigningServer.Logging.LoggingEvents.TokenDeleted, "Token {TokenId} deleted for user {UserId}", id, userId);
-        TempData["Info"] = "Token deleted.";
+        TempData["Info"] = _localizer["TokenDeleted"].Value;
         return RedirectToAction(nameof(Index));
     }
 

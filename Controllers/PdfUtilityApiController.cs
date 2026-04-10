@@ -2,8 +2,10 @@ using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Resources;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using ImageMagick;
 using ZXing;
@@ -26,8 +28,9 @@ namespace DotNetSigningServer.Controllers
             IWebHostEnvironment env,
             PdfTemplateService pdfTemplateService,
             PdfConversionService pdfConversionService,
-            FlowPipelineService flowPipelineService)
-            : base(dbContext, apiAuthService, logger, limitGuard, billingOptions, env, pdfTemplateService)
+            FlowPipelineService flowPipelineService,
+            IStringLocalizer<SharedStrings> localizer)
+            : base(dbContext, apiAuthService, logger, limitGuard, billingOptions, env, pdfTemplateService, localizer)
         {
             _pdfConversionService = pdfConversionService;
             _flowPipelineService = flowPipelineService;
@@ -41,7 +44,7 @@ namespace DotNetSigningServer.Controllers
 
             if (string.IsNullOrWhiteSpace(input.PdfContent))
             {
-                return BadRequest(new { message = "PdfContent is required." });
+                return BadRequest(new { message = Localizer["PdfContentRequired"].Value });
             }
 
             try
@@ -74,7 +77,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "PDF/A conversion failed");
-                return SafeProblem("An error occurred while converting the document to PDF/A", ex);
+                return SafeProblem(Localizer["PdfaConversionError"], ex);
             }
         }
 
@@ -89,15 +92,15 @@ namespace DotNetSigningServer.Controllers
 
             if (hasTemplate == hasContent)
             {
-                return BadRequest(new { message = "Provide either TemplateId or PdfContent (but not both)." });
+                return BadRequest(new { message = Localizer["ProvideTemplateOrPdf"].Value });
             }
             if (!hasTemplate && (input.Fields == null || input.Fields.Count == 0))
             {
-                return BadRequest(new { message = "Fields are required when using PdfContent directly." });
+                return BadRequest(new { message = Localizer["FieldsRequiredForDirectPdf"].Value });
             }
             if (input.Data == null || input.Data.Count == 0)
             {
-                return BadRequest(new { message = "At least one data set is required." });
+                return BadRequest(new { message = Localizer["DataSetRequired"].Value });
             }
 
             try
@@ -131,7 +134,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Fill PDF failed");
-                return SafeProblem("An error occurred while filling the PDF", ex);
+                return SafeProblem(Localizer["FillPdfError"], ex);
             }
         }
 
@@ -143,7 +146,7 @@ namespace DotNetSigningServer.Controllers
 
             if (string.IsNullOrWhiteSpace(input.PdfContent))
             {
-                return BadRequest(new { message = "PdfContent is required." });
+                return BadRequest(new { message = Localizer["PdfContentRequired"].Value });
             }
 
             try
@@ -172,7 +175,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Barcode scan failed");
-                return SafeProblem("An error occurred while scanning codes", ex);
+                return SafeProblem(Localizer["ScanCodesError"], ex);
             }
         }
 
@@ -184,12 +187,12 @@ namespace DotNetSigningServer.Controllers
 
             if ((input.PdfContents == null || input.PdfContents.Count == 0) && input.FillPdf == null)
             {
-                return BadRequest(new { message = "Provide PdfContents or FillPdf." });
+                return BadRequest(new { message = Localizer["ProvidePdfOrFillPdf"].Value });
             }
 
             if (input.Flow == null || input.Flow.Count == 0)
             {
-                return BadRequest(new { message = "Flow is required." });
+                return BadRequest(new { message = Localizer["FlowRequired"].Value });
             }
 
             var invalid = input.Flow.FirstOrDefault(f =>
@@ -197,13 +200,13 @@ namespace DotNetSigningServer.Controllers
                 !IsAllowedFlowAction(f.Action));
             if (invalid != null)
             {
-                return BadRequest(new { message = $"Unsupported flow action '{invalid.Action}'." });
+                return BadRequest(new { message = Localizer["UnsupportedFlowAction", invalid.Action ?? ""].Value });
             }
 
             var terminalActions = input.Flow.Count(f => IsTerminalAction(f.Action));
             if (terminalActions > 1)
             {
-                return BadRequest(new { message = "Only one of presign, timestamp, sign-pfx is allowed in the flow." });
+                return BadRequest(new { message = Localizer["OnlyOneSigningAction"].Value });
             }
 
             int requiredCredits;
@@ -233,7 +236,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Flow start failed");
-                return SafeProblem("An error occurred while starting the flow", ex);
+                return SafeProblem(Localizer["FlowStartError"], ex);
             }
         }
 
@@ -262,7 +265,7 @@ namespace DotNetSigningServer.Controllers
 
             if (request.Signatures == null || request.Signatures.Count == 0)
             {
-                return BadRequest(new { message = "Signatures are required." });
+                return BadRequest(new { message = Localizer["SignaturesRequired"].Value });
             }
 
             try
@@ -273,7 +276,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Flow sign failed");
-                return SafeProblem("An error occurred while completing the flow signatures", ex);
+                return SafeProblem(Localizer["FlowSignaturesError"], ex);
             }
         }
 
@@ -325,7 +328,7 @@ namespace DotNetSigningServer.Controllers
             }
             catch
             {
-                throw new InvalidOperationException("PdfContent is not valid base64.");
+                throw new InvalidOperationException(Localizer["InvalidBase64"].Value);
             }
 
             var results = new List<object>();

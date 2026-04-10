@@ -2,11 +2,13 @@ using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Resources;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -19,17 +21,19 @@ public class AccountController : Controller
     private readonly IAuthService _authService;
     private readonly IEmailSender _emailSender;
     private readonly AppOptions _appOptions;
+    private readonly IStringLocalizer<SharedStrings> _localizer;
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int Count, DateTime WindowStart)> _loginAttempts = new();
     private const int MaxAttemptsPerWindow = 5;
     private static readonly TimeSpan RateLimitWindow = TimeSpan.FromMinutes(1);
 
-    public AccountController(ApplicationDbContext dbContext, IAuthService authService, IEmailSender emailSender, IOptions<AppOptions> appOptions)
+    public AccountController(ApplicationDbContext dbContext, IAuthService authService, IEmailSender emailSender, IOptions<AppOptions> appOptions, IStringLocalizer<SharedStrings> localizer)
     {
         _dbContext = dbContext;
         _authService = authService;
         _emailSender = emailSender;
         _appOptions = appOptions.Value;
+        _localizer = localizer;
     }
 
     private bool IsRateLimited(string key)
@@ -92,7 +96,7 @@ public class AccountController : Controller
         bool exists = await _dbContext.Users.AnyAsync(u => u.Email == model.Email);
         if (exists)
         {
-            ModelState.AddModelError(string.Empty, "Email already registered.");
+            ModelState.AddModelError(string.Empty, _localizer["EmailAlreadyRegistered"]);
             return View(model);
         }
 
@@ -126,11 +130,11 @@ public class AccountController : Controller
         try
         {
             await _emailSender.SendAsync(user.Email, subject, body, settingsUrl, isCritical: true);
-            TempData["Info"] = "Please check your email for a verification link.";
+            TempData["Info"] = _localizer["CheckEmailVerification"].Value;
         }
         catch
         {
-            TempData["Error"] = "We could not send a verification email. Please contact support or try again later.";
+            TempData["Error"] = _localizer["VerificationEmailFailed"].Value;
         }
 
         return RedirectToAction(nameof(Verify));
@@ -180,26 +184,26 @@ public class AccountController : Controller
         var rateLimitKey = $"signin:{(model.Email ?? "").ToLowerInvariant()}";
         if (IsRateLimited(rateLimitKey))
         {
-            ModelState.AddModelError(string.Empty, "Too many sign-in attempts. Please try again in a minute.");
+            ModelState.AddModelError(string.Empty, _localizer["TooManySignInAttempts"]);
             return View(model);
         }
 
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == model.Email);
         if (user == null || !_authService.VerifyPassword(model.Password, user.PasswordHash, user.PasswordSalt))
         {
-            ModelState.AddModelError(string.Empty, "Invalid credentials.");
+            ModelState.AddModelError(string.Empty, _localizer["InvalidCredentials"]);
             return View(model);
         }
 
         if (!user.IsActive)
         {
-            ModelState.AddModelError("", "Your account has been deactivated.");
+            ModelState.AddModelError("", _localizer["AccountDeactivated"]);
             return View(new SignInViewModel { Email = model.Email });
         }
 
         if (!user.EmailVerified)
         {
-            ModelState.AddModelError(string.Empty, "Please verify your email before signing in.");
+            ModelState.AddModelError(string.Empty, _localizer["VerifyEmailFirst"]);
             return View(model);
         }
 
@@ -216,11 +220,11 @@ public class AccountController : Controller
         {
             // 2FA codes are critical security emails — always sent regardless of notification preferences
             await _emailSender.SendAsync(user.Email, subject, body, otpSettingsUrl, isCritical: true);
-            TempData["Info"] = "We sent a 6-digit code to your email.";
+            TempData["Info"] = _localizer["TwoFactorCodeSent"].Value;
         }
         catch
         {
-            TempData["Error"] = "We could not send the verification code. Please try again.";
+            TempData["Error"] = _localizer["TwoFactorCodeFailed"].Value;
             return View(model);
         }
 
@@ -238,7 +242,7 @@ public class AccountController : Controller
     }
 
     [HttpGet("/Account/Denied")]
-    public IActionResult Denied() => Content("Access denied");
+    public IActionResult Denied() => Content(_localizer["AccessDenied"].Value);
 
     [HttpGet("/Account/Verify")]
     public async Task<IActionResult> Verify(string? token = null)
@@ -254,11 +258,11 @@ public class AccountController : Controller
                 await _dbContext.SaveChangesAsync();
 
                 await SignInUser(user, rememberMe: false);
-                TempData["Info"] = "Email verified. You are now signed in.";
+                TempData["Info"] = _localizer["EmailVerified"].Value;
                 return RedirectToAction("Index", "Home", new { signup = "success" });
             }
 
-            TempData["Error"] = "Invalid or expired verification token.";
+            TempData["Error"] = _localizer["InvalidVerificationToken"].Value;
         }
 
         return View();
@@ -270,14 +274,14 @@ public class AccountController : Controller
     {
         if (string.IsNullOrWhiteSpace(token))
         {
-            TempData["Error"] = "Verification token is required.";
+            TempData["Error"] = _localizer["VerificationTokenRequired"].Value;
             return RedirectToAction(nameof(Verify));
         }
 
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.EmailVerificationToken == token);
         if (user == null)
         {
-            TempData["Error"] = "Invalid or expired verification token.";
+            TempData["Error"] = _localizer["InvalidVerificationToken"].Value;
             return View("Verify");
         }
 
@@ -287,7 +291,7 @@ public class AccountController : Controller
         await _dbContext.SaveChangesAsync();
 
         await SignInUser(user, rememberMe: false);
-        TempData["Info"] = "Email verified. You are now signed in.";
+        TempData["Info"] = _localizer["EmailVerified"].Value;
         return RedirectToAction("Index", "Home", new { signup = "success" });
     }
 
@@ -317,33 +321,33 @@ public class AccountController : Controller
         }
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(code))
         {
-            TempData["Error"] = "Email and code are required.";
+            TempData["Error"] = _localizer["EmailAndCodeRequired"].Value;
             return RedirectToAction(nameof(SignIn));
         }
 
         var rateLimitKey = $"2fa:{email.ToLowerInvariant()}";
         if (IsRateLimited(rateLimitKey))
         {
-            TempData["Error"] = "Too many verification attempts. Please try again in a minute.";
+            TempData["Error"] = _localizer["TooManyVerificationAttempts"].Value;
             return RedirectToAction(nameof(SignIn));
         }
 
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == email);
         if (user == null || user.EmailOtpCode == null || user.EmailOtpExpiresAt == null)
         {
-            TempData["Error"] = "Verification code is invalid or expired.";
+            TempData["Error"] = _localizer["VerificationCodeInvalid"].Value;
             return RedirectToAction(nameof(SignIn));
         }
 
         if (!user.IsActive)
         {
-            TempData["Error"] = "Your account has been deactivated.";
+            TempData["Error"] = _localizer["AccountDeactivated"].Value;
             return RedirectToAction(nameof(SignIn));
         }
 
         if (user.EmailOtpExpiresAt < DateTimeOffset.UtcNow || !string.Equals(user.EmailOtpCode, code.Trim(), StringComparison.Ordinal))
         {
-            TempData["Error"] = "Verification code is invalid or expired.";
+            TempData["Error"] = _localizer["VerificationCodeInvalid"].Value;
             return RedirectToAction(nameof(SignIn));
         }
 
@@ -390,7 +394,7 @@ public class AccountController : Controller
         user.UpdatedAt = DateTimeOffset.UtcNow;
         await _dbContext.SaveChangesAsync();
 
-        TempData["Info"] = "Settings saved.";
+        TempData["Info"] = _localizer["SettingsSaved"].Value;
         return RedirectToAction(nameof(Settings));
     }
 

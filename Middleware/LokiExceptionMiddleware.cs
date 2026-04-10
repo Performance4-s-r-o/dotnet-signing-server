@@ -1,6 +1,8 @@
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Models;
+using DotNetSigningServer.Resources;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Localization;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.Razor;
@@ -48,10 +50,13 @@ public class LokiExceptionMiddleware
             var isApi = context.Request.Path.HasValue &&
                         context.Request.Path.Value!.StartsWith("/api", StringComparison.OrdinalIgnoreCase);
 
+            var factory = context.RequestServices.GetRequiredService<IStringLocalizerFactory>();
+            var localizer = factory.Create(typeof(SharedStrings));
+
             if (isApi)
             {
                 context.Response.ContentType = "application/json";
-                var payload = new { error = true, errorMessage = "An internal error occurred.", traceId };
+                var payload = new { error = true, errorMessage = localizer["InternalError"].Value, traceId };
                 await context.Response.WriteAsJsonAsync(payload);
                 return;
             }
@@ -60,7 +65,7 @@ public class LokiExceptionMiddleware
             await RenderViewAsync(context, "Shared/Error", new ErrorViewModel
             {
                 TraceId = traceId,
-                ErrorMessage = "We hit an unexpected error while processing your request."
+                ErrorMessage = localizer["UnexpectedError"].Value
             });
         }
     }

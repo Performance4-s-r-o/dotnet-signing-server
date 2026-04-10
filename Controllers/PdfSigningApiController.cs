@@ -2,9 +2,11 @@ using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Resources;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 
 namespace DotNetSigningServer.Controllers
@@ -27,8 +29,9 @@ namespace DotNetSigningServer.Controllers
             IOptions<BillingOptions> billingOptions,
             IWebHostEnvironment env,
             PdfTemplateService pdfTemplateService,
-            IDataProtectionProvider dataProtectionProvider)
-            : base(dbContext, apiAuthService, logger, limitGuard, billingOptions, env, pdfTemplateService)
+            IDataProtectionProvider dataProtectionProvider,
+            IStringLocalizer<SharedStrings> localizer)
+            : base(dbContext, apiAuthService, logger, limitGuard, billingOptions, env, pdfTemplateService, localizer)
         {
             _signingService = signingService;
             _sealingService = sealingService;
@@ -89,7 +92,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Presign failed");
-                return SafeProblem("An error occurred during the presign process", ex);
+                return SafeProblem(Localizer["PresignError"], ex);
             }
         }
 
@@ -102,7 +105,7 @@ namespace DotNetSigningServer.Controllers
             var signingData = await DbContext.SigningData.FindAsync(input.Id);
             if (signingData == null)
             {
-                return NotFound(new { message = "Signing data not found for the provided ID." });
+                return NotFound(new { message = Localizer["SigningDataNotFound"].Value });
             }
             if (signingData.UserId != user.Id)
             {
@@ -134,7 +137,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Sign failed");
-                return SafeProblem("An error occurred during the final signing process", ex);
+                return SafeProblem(Localizer["SignError"], ex);
             }
         }
 
@@ -172,7 +175,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "PFX sign failed");
-                return SafeProblem("An error occurred during the PFX signing process", ex);
+                return SafeProblem(Localizer["PfxSignError"], ex);
             }
         }
 
@@ -210,7 +213,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Timestamp failed");
-                return SafeProblem("An error occurred while applying the timestamp", ex);
+                return SafeProblem(Localizer["TimestampError"], ex);
             }
         }
 
@@ -264,7 +267,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "[visual-sign] Failed: {Message}", ex.Message);
-                return SafeProblem("An error occurred while applying the visual signature", ex);
+                return SafeProblem(Localizer["VisualSignError"], ex);
             }
         }
 
@@ -303,7 +306,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Seal failed");
-                return SafeProblem("An error occurred while applying the seal", ex);
+                return SafeProblem(Localizer["SealError"], ex);
             }
         }
 
@@ -342,7 +345,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Add attachment failed");
-                return SafeProblem("An error occurred while adding the attachment", ex);
+                return SafeProblem(Localizer["AttachmentError"], ex);
             }
         }
 

@@ -2,9 +2,11 @@ using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Resources;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using iText.Kernel.Pdf;
 
@@ -25,6 +27,7 @@ namespace DotNetSigningServer.Controllers
         protected readonly BillingOptions BillingOptions;
         protected readonly IWebHostEnvironment Env;
         protected readonly PdfTemplateService PdfTemplateService;
+        protected readonly IStringLocalizer<SharedStrings> Localizer;
 
         protected ApiControllerBase(
             ApplicationDbContext dbContext,
@@ -33,7 +36,8 @@ namespace DotNetSigningServer.Controllers
             ContentLimitGuard limitGuard,
             IOptions<BillingOptions> billingOptions,
             IWebHostEnvironment env,
-            PdfTemplateService pdfTemplateService)
+            PdfTemplateService pdfTemplateService,
+            IStringLocalizer<SharedStrings> localizer)
         {
             DbContext = dbContext;
             ApiAuthService = apiAuthService;
@@ -42,6 +46,7 @@ namespace DotNetSigningServer.Controllers
             BillingOptions = billingOptions.Value;
             Env = env;
             PdfTemplateService = pdfTemplateService;
+            Localizer = localizer;
         }
 
         /// <summary>
@@ -100,7 +105,7 @@ namespace DotNetSigningServer.Controllers
             if (requiredCredits > 0 && user.CreditsRemaining < requiredCredits)
             {
                 Logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Credits insufficient for user {UserId}", user.Id);
-                return (null, StatusCode(StatusCodes.Status402PaymentRequired, new { message = "No credits remaining. Please purchase more to continue." }));
+                return (null, StatusCode(StatusCodes.Status402PaymentRequired, new { message = Localizer["NoCreditsRemaining"].Value }));
             }
 
             return (user, null);
@@ -141,7 +146,7 @@ namespace DotNetSigningServer.Controllers
         protected IActionResult PaymentRequired(User user, int requiredCredits)
         {
             Logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Credits insufficient for user {UserId}", user.Id);
-            return StatusCode(StatusCodes.Status402PaymentRequired, new { message = $"Not enough credits. {requiredCredits} credit(s) required." });
+            return StatusCode(StatusCodes.Status402PaymentRequired, new { message = Localizer["NotEnoughCredits", requiredCredits].Value });
         }
 
         protected static int CalculateCreditsForPages(int pageCount)

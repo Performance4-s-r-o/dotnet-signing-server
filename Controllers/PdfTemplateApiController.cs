@@ -2,8 +2,10 @@ using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Resources;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 
 namespace DotNetSigningServer.Controllers
@@ -21,8 +23,9 @@ namespace DotNetSigningServer.Controllers
             IOptions<BillingOptions> billingOptions,
             IWebHostEnvironment env,
             PdfTemplateService pdfTemplateService,
-            TemplateAiService templateAiService)
-            : base(dbContext, apiAuthService, logger, limitGuard, billingOptions, env, pdfTemplateService)
+            TemplateAiService templateAiService,
+            IStringLocalizer<SharedStrings> localizer)
+            : base(dbContext, apiAuthService, logger, limitGuard, billingOptions, env, pdfTemplateService, localizer)
         {
             _templateAiService = templateAiService;
         }
@@ -35,11 +38,11 @@ namespace DotNetSigningServer.Controllers
 
             if (input.Fields == null || input.Fields.Count == 0)
             {
-                return BadRequest(new { message = "At least one field definition is required." });
+                return BadRequest(new { message = Localizer["FieldsRequired"].Value });
             }
             if (string.IsNullOrWhiteSpace(input.PdfContent))
             {
-                return BadRequest(new { message = "PdfContent is required." });
+                return BadRequest(new { message = Localizer["PdfContentRequired"].Value });
             }
 
             try
@@ -50,7 +53,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Create template failed");
-                return SafeProblem("An error occurred while creating the template", ex);
+                return SafeProblem(Localizer["TemplateCreateError"], ex);
             }
         }
 
@@ -79,7 +82,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Get template failed");
-                return SafeProblem("An error occurred while retrieving the template", ex);
+                return SafeProblem(Localizer["TemplateRetrieveError"], ex);
             }
         }
 
@@ -91,7 +94,7 @@ namespace DotNetSigningServer.Controllers
 
             if (input.Fields != null && input.Fields.Count == 0 && string.IsNullOrWhiteSpace(input.PdfContent) && input.TemplateName == null)
             {
-                return BadRequest(new { message = "Provide at least one change (fields, pdfContent, or templateName)." });
+                return BadRequest(new { message = Localizer["ProvideAtLeastOneChange"].Value });
             }
 
             try
@@ -102,7 +105,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Update template failed");
-                return SafeProblem("An error occurred while updating the template", ex);
+                return SafeProblem(Localizer["TemplateUpdateError"], ex);
             }
         }
 
@@ -120,7 +123,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Delete template failed");
-                return SafeProblem("An error occurred while deleting the template", ex);
+                return SafeProblem(Localizer["TemplateDeleteError"], ex);
             }
         }
 
@@ -132,12 +135,12 @@ namespace DotNetSigningServer.Controllers
 
             if (!_templateAiService.IsEnabled)
             {
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "AI detection is not configured." });
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = Localizer["AiNotConfigured"].Value });
             }
 
             if (string.IsNullOrWhiteSpace(input.PdfContent))
             {
-                return BadRequest(new { message = "PdfContent is required." });
+                return BadRequest(new { message = Localizer["PdfContentRequired"].Value });
             }
 
             try
@@ -157,7 +160,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "AI detect fields failed");
-                return Problem("AI detection failed. Check AI configuration and try again.");
+                return Problem(Localizer["AiDetectionFailed"].Value);
             }
         }
 
@@ -169,17 +172,17 @@ namespace DotNetSigningServer.Controllers
 
             if (!_templateAiService.IsEnabled)
             {
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "AI extraction is not configured." });
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = Localizer["AiExtractionNotConfigured"].Value });
             }
 
             if (string.IsNullOrWhiteSpace(input.PdfContent))
             {
-                return BadRequest(new { message = "PdfContent is required." });
+                return BadRequest(new { message = Localizer["PdfContentRequired"].Value });
             }
 
             if (input.Columns == null || input.Columns.Count == 0)
             {
-                return BadRequest(new { message = "At least one column definition is required." });
+                return BadRequest(new { message = Localizer["ColumnsRequired"].Value });
             }
 
             try
@@ -199,7 +202,7 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "AI data extraction failed");
-                return Problem("AI data extraction failed. Check AI configuration and try again.");
+                return Problem(Localizer["AiExtractionFailed"].Value);
             }
         }
     }

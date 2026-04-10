@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Resources;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 
 namespace DotNetSigningServer.Middleware;
@@ -36,7 +38,9 @@ public class RequestThrottlingMiddleware
             InFlightCounts.AddOrUpdate(key, 0, (_, val) => Math.Max(0, val - 1));
             _logger.LogWarning("Too many concurrent requests for key {Key} ({Count}/{Max})", key, current, _options.MaxConcurrentRequestsPerKey);
             context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-            await context.Response.WriteAsJsonAsync(new { message = "Too many concurrent requests. Please slow down." });
+            var factory = context.RequestServices.GetRequiredService<IStringLocalizerFactory>();
+            var localizer = factory.Create(typeof(SharedStrings));
+            await context.Response.WriteAsJsonAsync(new { message = localizer["TooManyRequests"].Value });
             return;
         }
 
