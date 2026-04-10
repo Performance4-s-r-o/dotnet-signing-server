@@ -29,9 +29,23 @@ public class User
     public string? EmailOtpCode { get; set; }
     public DateTimeOffset? EmailOtpExpiresAt { get; set; }
 
+    [MaxLength(128)]
+    public string? PasswordResetToken { get; set; }
+    public DateTimeOffset? PasswordResetExpiresAt { get; set; }
+
     public int CreditsRemaining { get; set; } = 10;
 
+    public bool AutoRechargeEnabled { get; set; } = false;
+    public int AutoRechargeQuantity { get; set; } = 0;
+    public decimal AutoRechargePricePer100 { get; set; } = 0m;
+    [MaxLength(128)]
+    public string? AutoRechargeCancelToken { get; set; }
+    public DateTimeOffset? PriceChangeNotifiedAt { get; set; }
+
     public bool EmailNotificationsEnabled { get; set; } = true;
+
+    /// <summary>Max parallel API operations. NULL = use default (3).</summary>
+    public int? MaxConcurrentOperations { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;

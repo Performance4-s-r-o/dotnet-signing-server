@@ -48,7 +48,9 @@ builder.Services.AddScoped<PdfTemplateService>();
 builder.Services.AddScoped<PdfConversionService>();
 builder.Services.AddScoped<FlowPipelineService>();
 builder.Services.AddSingleton<ContentLimitGuard>();
+builder.Services.AddScoped<IAutoRechargeService, AutoRechargeService>();
 builder.Services.AddHostedService<PresignCleanupService>();
+builder.Services.AddHostedService<PriceChangeMonitorService>();
 builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();
 builder.Services.AddSingleton<IIpWhitelistService, IpWhitelistService>();
 builder.Services.AddHttpClient<LokiClient>();
@@ -204,6 +206,7 @@ app.UseForwardedHeaders();
 app.UseMiddleware<LokiExceptionMiddleware>();
 app.UseMiddleware<BodySizeLimitMiddleware>();
 app.UseMiddleware<RequestThrottlingMiddleware>();
+app.UseMiddleware<UserConcurrencyMiddleware>();
 
 // Swagger only in non-production environments
 if (!app.Environment.IsProduction())
