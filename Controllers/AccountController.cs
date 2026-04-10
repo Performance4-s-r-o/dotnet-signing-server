@@ -366,6 +366,115 @@ public class AccountController : Controller
         return RedirectToAction("Index", "Home");
     }
 
+    [HttpGet("/Account/ForgotPassword")]
+    public IActionResult ForgotPassword()
+    {
+        if (User?.Identity?.IsAuthenticated == true)
+        {
+            return RedirectToAction("Index", "Home");
+        }
+        return View(new ForgotPasswordViewModel());
+    }
+
+    [HttpPost("/Account/ForgotPassword")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
+    {
+        if (User?.Identity?.IsAuthenticated == true)
+        {
+            return RedirectToAction("Index", "Home");
+        }
+        if (!ModelState.IsValid) return View(model);
+
+        var rateLimitKey = $"forgot:{(model.Email ?? "").ToLowerInvariant()}";
+        if (IsRateLimited(rateLimitKey))
+        {
+            // Always show success to prevent email enumeration
+            TempData["Info"] = _localizer["PasswordResetEmailSent"].Value;
+            return View(new ForgotPasswordViewModel());
+        }
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == model.Email);
+        if (user != null && user.IsActive && user.EmailVerified)
+        {
+            var token = Guid.NewGuid().ToString("N");
+            user.PasswordResetToken = token;
+            user.PasswordResetExpiresAt = DateTimeOffset.UtcNow.AddHours(1);
+            user.UpdatedAt = DateTimeOffset.UtcNow;
+            await _dbContext.SaveChangesAsync();
+
+            var resetLink = BuildAbsoluteUrl($"/Account/ResetPassword?token={Uri.EscapeDataString(token)}");
+            var settingsUrl = BuildAbsoluteUrl("/Account/Settings");
+            var subject = "Reset your P4PDF password";
+            var body = $@"<p>Hello,</p>
+<p>We received a request to reset your password.</p>
+<p><a href=""{resetLink}"">Click here to reset your password</a></p>
+<p>If the link does not work, copy and paste this URL into your browser:<br/>{resetLink}</p>
+<p>This link expires in 1 hour. If you did not request a password reset, you can safely ignore this email.</p>";
+
+            try
+            {
+                await _emailSender.SendAsync(user.Email, subject, body, settingsUrl, isCritical: true);
+            }
+            catch
+            {
+                // Log but don't reveal failure to prevent enumeration
+            }
+        }
+
+        // Always show success message to prevent email enumeration
+        TempData["Info"] = _localizer["PasswordResetEmailSent"].Value;
+        return View(new ForgotPasswordViewModel());
+    }
+
+    [HttpGet("/Account/ResetPassword")]
+    public IActionResult ResetPassword(string? token = null)
+    {
+        if (User?.Identity?.IsAuthenticated == true)
+        {
+            return RedirectToAction("Index", "Home");
+        }
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            TempData["Error"] = _localizer["InvalidResetToken"].Value;
+            return RedirectToAction(nameof(ForgotPassword));
+        }
+        return View(new ResetPasswordViewModel { Token = token });
+    }
+
+    [HttpPost("/Account/ResetPassword")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
+    {
+        if (User?.Identity?.IsAuthenticated == true)
+        {
+            return RedirectToAction("Index", "Home");
+        }
+        if (!ModelState.IsValid) return View(model);
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u =>
+            u.PasswordResetToken == model.Token &&
+            u.PasswordResetExpiresAt != null &&
+            u.PasswordResetExpiresAt > DateTimeOffset.UtcNow);
+
+        if (user == null)
+        {
+            TempData["Error"] = _localizer["InvalidResetToken"].Value;
+            return RedirectToAction(nameof(ForgotPassword));
+        }
+
+        var (hash, salt) = _authService.HashPassword(model.Password);
+        user.PasswordHash = hash;
+        user.PasswordSalt = salt;
+        user.PasswordResetToken = null;
+        user.PasswordResetExpiresAt = null;
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        await _dbContext.SaveChangesAsync();
+
+        TempData["Info"] = _localizer["PasswordResetSuccess"].Value;
+        return RedirectToAction(nameof(SignIn));
+    }
+
     [Authorize]
     [HttpGet("/Account/Settings")]
     public async Task<IActionResult> Settings()

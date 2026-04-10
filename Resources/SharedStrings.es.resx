@@ -36,6 +36,9 @@
   <data name="TooManyVerificationAttempts" xml:space="preserve"><value>Demasiados intentos de verificación. Por favor, inténtelo de nuevo en un minuto.</value></data>
   <data name="VerificationCodeInvalid" xml:space="preserve"><value>El código de verificación no es válido o ha caducado.</value></data>
   <data name="SettingsSaved" xml:space="preserve"><value>Configuración guardada.</value></data>
+  <data name="PasswordResetEmailSent" xml:space="preserve"><value>Si existe una cuenta con ese correo electrónico, le hemos enviado un enlace para restablecer la contraseña.</value></data>
+  <data name="InvalidResetToken" xml:space="preserve"><value>Enlace para restablecer la contraseña no válido o caducado.</value></data>
+  <data name="PasswordResetSuccess" xml:space="preserve"><value>Su contraseña ha sido restablecida. Ya puede iniciar sesión.</value></data>
 
   <!-- API Tokens -->
   <data name="LabelRequired" xml:space="preserve"><value>La etiqueta es obligatoria.</value></data>
@@ -63,6 +66,10 @@
   <data name="CouldNotDetermineCredits" xml:space="preserve"><value>No se pudieron determinar los créditos adquiridos.</value></data>
   <data name="CreditsAdded" xml:space="preserve"><value>Se han añadido {0} créditos de documentos a su cuenta. Encontrará la factura en la lista a continuación en unos momentos.</value></data>
   <data name="PaymentConfirmFailed" xml:space="preserve"><value>No se pudo confirmar el pago.</value></data>
+  <data name="AutoRechargeEnabled" xml:space="preserve"><value>La recarga automática ha sido activada.</value></data>
+  <data name="AutoRechargeDisabled" xml:space="preserve"><value>La recarga automática ha sido desactivada.</value></data>
+  <data name="AutoRechargeRequiresPayment" xml:space="preserve"><value>Primero realice una compra para que podamos guardar su método de pago para la recarga automática.</value></data>
+  <data name="InvalidCancelToken" xml:space="preserve"><value>Enlace de cancelación no válido o caducado.</value></data>
 
   <!-- API Errors -->
   <data name="PresignError" xml:space="preserve"><value>Se produjo un error durante el proceso de prefirma</value></data>

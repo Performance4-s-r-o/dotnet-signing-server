@@ -129,6 +129,32 @@ namespace DotNetSigningServer.Controllers
 
             // Refresh the in-memory entity to reflect the new value
             await DbContext.Entry(user).ReloadAsync();
+
+            // Check auto-recharge threshold (fire-and-forget to not block the API response)
+            if (user.AutoRechargeEnabled && user.AutoRechargeQuantity > 0)
+            {
+                var threshold = (int)Math.Ceiling(user.AutoRechargeQuantity * 0.10);
+                if (user.CreditsRemaining < threshold)
+                {
+                    var userId = user.Id;
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            using var scope = HttpContext.RequestServices.CreateScope();
+                            var rechargeService = scope.ServiceProvider.GetRequiredService<IAutoRechargeService>();
+                            await rechargeService.TryAutoRechargeAsync(userId);
+                        }
+                        catch (Exception ex)
+                        {
+                            var loggerFactory = HttpContext.RequestServices.GetService<ILoggerFactory>();
+                            loggerFactory?.CreateLogger("AutoRecharge")
+                                .LogError(ex, "Background auto-recharge failed for user {UserId}", userId);
+                        }
+                    });
+                }
+            }
+
             return true;
         }
 

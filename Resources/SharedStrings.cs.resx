@@ -36,6 +36,9 @@
   <data name="TooManyVerificationAttempts" xml:space="preserve"><value>Příliš mnoho pokusů o ověření. Zkuste to prosím znovu za minutu.</value></data>
   <data name="VerificationCodeInvalid" xml:space="preserve"><value>Ověřovací kód je neplatný nebo vypršel.</value></data>
   <data name="SettingsSaved" xml:space="preserve"><value>Nastavení uloženo.</value></data>
+  <data name="PasswordResetEmailSent" xml:space="preserve"><value>Pokud účet s tímto e-mailem existuje, odeslali jsme odkaz pro obnovení hesla.</value></data>
+  <data name="InvalidResetToken" xml:space="preserve"><value>Neplatný nebo vypršený odkaz pro obnovení hesla.</value></data>
+  <data name="PasswordResetSuccess" xml:space="preserve"><value>Vaše heslo bylo obnoveno. Nyní se můžete přihlásit.</value></data>
 
   <!-- API Tokens -->
   <data name="LabelRequired" xml:space="preserve"><value>Štítek je povinný.</value></data>
@@ -63,6 +66,10 @@
   <data name="CouldNotDetermineCredits" xml:space="preserve"><value>Nepodařilo se určit zakoupené kredity.</value></data>
   <data name="CreditsAdded" xml:space="preserve"><value>Na váš účet bylo přidáno {0} dokumentových kreditů. Fakturu naleznete v seznamu níže za několik okamžiků.</value></data>
   <data name="PaymentConfirmFailed" xml:space="preserve"><value>Nepodařilo se potvrdit platbu.</value></data>
+  <data name="AutoRechargeEnabled" xml:space="preserve"><value>Automatické dobíjení bylo aktivováno.</value></data>
+  <data name="AutoRechargeDisabled" xml:space="preserve"><value>Automatické dobíjení bylo deaktivováno.</value></data>
+  <data name="AutoRechargeRequiresPayment" xml:space="preserve"><value>Nejprve proveďte nákup, abychom mohli uložit vaši platební metodu pro automatické dobíjení.</value></data>
+  <data name="InvalidCancelToken" xml:space="preserve"><value>Neplatný nebo expirovaný odkaz pro zrušení.</value></data>
 
   <!-- API Errors -->
   <data name="PresignError" xml:space="preserve"><value>Během přípravy podpisu došlo k chybě</value></data>

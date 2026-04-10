@@ -21,6 +21,7 @@ public class BillingController : Controller
     private readonly IBillingService _billingService;
     private readonly BillingOptions _billingOptions;
     private readonly IStripeCheckoutService _checkoutService;
+    private readonly IAutoRechargeService _autoRechargeService;
     private readonly ILogger<BillingController> _logger;
     private readonly IStringLocalizer<SharedStrings> _localizer;
 
@@ -29,6 +30,7 @@ public class BillingController : Controller
         IBillingService billingService,
         IOptions<BillingOptions> billingOptions,
         IStripeCheckoutService checkoutService,
+        IAutoRechargeService autoRechargeService,
         ILogger<BillingController> logger,
         IStringLocalizer<SharedStrings> localizer)
     {
@@ -36,6 +38,7 @@ public class BillingController : Controller
         _billingService = billingService;
         _billingOptions = billingOptions.Value;
         _checkoutService = checkoutService;
+        _autoRechargeService = autoRechargeService;
         _logger = logger;
         _localizer = localizer;
     }
@@ -80,6 +83,27 @@ public class BillingController : Controller
             }
         }
 
+        // Find last purchase quantity from webhook events
+        int lastPurchaseQuantity = 0;
+        var lastCheckout = await _dbContext.WebhookEvents
+            .Where(w => w.EventType == "checkout.confirm")
+            .OrderByDescending(w => w.ReceivedAt)
+            .FirstOrDefaultAsync();
+        if (lastCheckout != null)
+        {
+            // PayloadJson format: {"documents":100,"userId":"..."}
+            try
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(
+                    lastCheckout.PayloadJson, @"""documents""\s*:\s*(\d+)");
+                if (match.Success)
+                {
+                    lastPurchaseQuantity = int.Parse(match.Groups[1].Value);
+                }
+            }
+            catch { }
+        }
+
         var model = new BillingViewModel
         {
             Invoices = invoices,
@@ -89,7 +113,11 @@ public class BillingController : Controller
             StripeInvoices = stripeInvoices,
             Discount300 = _billingOptions.Discount300,
             Discount500 = _billingOptions.Discount500,
-            Discount1000 = _billingOptions.Discount1000
+            Discount1000 = _billingOptions.Discount1000,
+            AutoRechargeEnabled = user.AutoRechargeEnabled,
+            AutoRechargeQuantity = user.AutoRechargeQuantity,
+            AutoRechargePricePer100 = user.AutoRechargePricePer100,
+            LastPurchaseQuantity = lastPurchaseQuantity
         };
 
         return View(model);
@@ -97,7 +125,7 @@ public class BillingController : Controller
 
     [HttpPost("/Billing/Checkout")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Checkout(int documentsToBuy)
+    public async Task<IActionResult> Checkout(int documentsToBuy, bool autoRecharge = false)
     {
         var userId = GetCurrentUserId();
         if (userId == null)
@@ -184,7 +212,8 @@ public class BillingController : Controller
                 new Dictionary<string, string>
                 {
                     { "userId", user.Id.ToString() },
-                    { "documents", documentsToBuy.ToString() }
+                    { "documents", documentsToBuy.ToString() },
+                    { "autoRecharge", autoRecharge.ToString() }
                 });
 
             if (string.IsNullOrWhiteSpace(checkoutUrl))
@@ -280,6 +309,14 @@ public class BillingController : Controller
                 user.StripeCustomerId = session.CustomerId;
             }
 
+            // Enable auto-recharge if the user opted in during checkout
+            if (session.Metadata.TryGetValue("autoRecharge", out var autoRechargeValue)
+                && bool.TryParse(autoRechargeValue, out var autoRecharge)
+                && autoRecharge)
+            {
+                await _autoRechargeService.EnableAsync(user, documents, _billingOptions.PricePer100);
+            }
+
             await _dbContext.SaveChangesAsync();
             TempData["Info"] = _localizer["CreditsAdded", documents].Value;
         }
@@ -302,6 +339,91 @@ public class BillingController : Controller
         public decimal Discount300 { get; set; }
         public decimal Discount500 { get; set; }
         public decimal Discount1000 { get; set; }
+        public bool AutoRechargeEnabled { get; set; }
+        public int AutoRechargeQuantity { get; set; }
+        public decimal AutoRechargePricePer100 { get; set; }
+        public int LastPurchaseQuantity { get; set; }
+    }
+
+    [HttpPost("/Billing/AutoRecharge/Enable")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EnableAutoRecharge(int quantity)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction("SignIn", "Account");
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null) return RedirectToAction("SignIn", "Account");
+
+        var allowedQuantities = new[] { 100, 300, 500, 1000 };
+        if (!allowedQuantities.Contains(quantity))
+        {
+            TempData["Error"] = _localizer["InvalidDocumentBundle"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (string.IsNullOrWhiteSpace(user.StripeCustomerId))
+        {
+            TempData["Error"] = _localizer["AutoRechargeRequiresPayment"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+
+        // Verify the customer actually has a saved payment method
+        try
+        {
+            var pmService = new Stripe.PaymentMethodService();
+            var methods = await pmService.ListAsync(new Stripe.PaymentMethodListOptions
+            {
+                Customer = user.StripeCustomerId,
+                Type = "card",
+                Limit = 1
+            });
+            if (methods.Data.Count == 0)
+            {
+                TempData["Error"] = _localizer["AutoRechargeRequiresPayment"].Value;
+                return RedirectToAction(nameof(Index));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to verify payment methods for user {UserId}", user.Id);
+            TempData["Error"] = _localizer["AutoRechargeRequiresPayment"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+
+        await _autoRechargeService.EnableAsync(user, quantity, _billingOptions.PricePer100);
+        TempData["Info"] = _localizer["AutoRechargeEnabled"].Value;
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost("/Billing/AutoRecharge/Disable")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DisableAutoRecharge()
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction("SignIn", "Account");
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null) return RedirectToAction("SignIn", "Account");
+
+        await _autoRechargeService.DisableAsync(user);
+        TempData["Info"] = _localizer["AutoRechargeDisabled"].Value;
+        return RedirectToAction(nameof(Index));
+    }
+
+    [AllowAnonymous]
+    [HttpGet("/Billing/AutoRecharge/Cancel")]
+    public async Task<IActionResult> CancelAutoRechargeByToken([FromQuery] string token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            TempData["Error"] = _localizer["InvalidCancelToken"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+
+        await _autoRechargeService.DisableByTokenAsync(token);
+        TempData["Info"] = _localizer["AutoRechargeDisabled"].Value;
+        return RedirectToAction(nameof(Index));
     }
 
     private Guid? GetCurrentUserId()

@@ -35,6 +35,56 @@
             <p class="billing-pricing-item">1000 credits: @money(price1000) @currency <span class="discount">(15%
                     off)</span></p>
         </div>
+
+        <hr style="border:none;border-top:1px solid var(--color-card-border,#e5e7eb);margin:1.25rem 0" />
+
+        <h3 class="billing-pricing-title">Auto-recharge</h3>
+        @if (Model.AutoRechargeEnabled)
+        {
+            <p style="margin-bottom:0.5rem">
+                <span class="billing-status billing-status--active">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#16a34a;margin-right:6px"></span>Active
+                </span>
+            </p>
+            <p class="muted" style="font-size:0.875rem;margin-bottom:0.25rem">
+                <strong>@Model.AutoRechargeQuantity credits</strong> will be purchased automatically when your balance drops below
+                <strong>@((int)Math.Ceiling(Model.AutoRechargeQuantity * 0.10))</strong> credits (10%).
+            </p>
+            @if (Model.PricePer100 != Model.AutoRechargePricePer100)
+            {
+                <p style="font-size:0.875rem;color:#dc2626;margin-bottom:0.5rem">
+                    Price has changed since enrollment (@Model.AutoRechargePricePer100.ToString("0.##") @Model.Currency &rarr; @Model.PricePer100.ToString("0.##") @Model.Currency / 100 credits).
+                </p>
+            }
+            <form method="post" action="/Billing/AutoRecharge/Disable" style="margin-top:0.5rem">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn-small btn-secondary" style="color:#dc2626;border-color:#fca5a5;background:transparent"
+                    onclick="return confirm('Are you sure you want to disable auto-recharge?')">
+                    Disable auto-recharge
+                </button>
+            </form>
+        }
+        else if (Model.LastPurchaseQuantity > 0)
+        {
+            <p class="muted" style="font-size:0.875rem;margin-bottom:0.75rem">
+                Automatically purchase <strong>@Model.LastPurchaseQuantity credits</strong> when your balance drops below 10%.
+                Based on your last purchase.
+            </p>
+            <form method="post" action="/Billing/AutoRecharge/Enable">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="quantity" value="@Model.LastPurchaseQuantity" />
+                <button type="submit" class="btn-small btn-secondary">
+                    Enable auto-recharge
+                </button>
+            </form>
+        }
+        else
+        {
+            <p class="muted" style="font-size:0.875rem">
+                Purchase credits first, then you can enable automatic recharging.
+                You can also enable it during checkout.
+            </p>
+        }
     </div>
 
     <div class="card">

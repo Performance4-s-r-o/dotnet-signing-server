@@ -36,6 +36,9 @@
   <data name="TooManyVerificationAttempts" xml:space="preserve"><value>Zu viele Bestätigungsversuche. Bitte versuchen Sie es in einer Minute erneut.</value></data>
   <data name="VerificationCodeInvalid" xml:space="preserve"><value>Der Bestätigungscode ist ungültig oder abgelaufen.</value></data>
   <data name="SettingsSaved" xml:space="preserve"><value>Einstellungen gespeichert.</value></data>
+  <data name="PasswordResetEmailSent" xml:space="preserve"><value>Falls ein Konto mit dieser E-Mail-Adresse existiert, haben wir einen Link zum Zurücksetzen des Passworts gesendet.</value></data>
+  <data name="InvalidResetToken" xml:space="preserve"><value>Ungültiger oder abgelaufener Link zum Zurücksetzen des Passworts.</value></data>
+  <data name="PasswordResetSuccess" xml:space="preserve"><value>Ihr Passwort wurde zurückgesetzt. Sie können sich jetzt anmelden.</value></data>
 
   <!-- API Tokens -->
   <data name="LabelRequired" xml:space="preserve"><value>Bezeichnung ist erforderlich.</value></data>
@@ -63,6 +66,10 @@
   <data name="CouldNotDetermineCredits" xml:space="preserve"><value>Die erworbenen Credits konnten nicht ermittelt werden.</value></data>
   <data name="CreditsAdded" xml:space="preserve"><value>{0} Dokument-Credits wurden Ihrem Konto gutgeschrieben. Die Rechnung finden Sie in Kürze in der folgenden Liste.</value></data>
   <data name="PaymentConfirmFailed" xml:space="preserve"><value>Die Zahlung konnte nicht bestätigt werden.</value></data>
+  <data name="AutoRechargeEnabled" xml:space="preserve"><value>Die automatische Aufladung wurde aktiviert.</value></data>
+  <data name="AutoRechargeDisabled" xml:space="preserve"><value>Die automatische Aufladung wurde deaktiviert.</value></data>
+  <data name="AutoRechargeRequiresPayment" xml:space="preserve"><value>Bitte tätigen Sie zuerst einen Kauf, damit wir Ihre Zahlungsmethode für die automatische Aufladung speichern können.</value></data>
+  <data name="InvalidCancelToken" xml:space="preserve"><value>Ungültiger oder abgelaufener Kündigungslink.</value></data>
 
   <!-- API Errors -->
   <data name="PresignError" xml:space="preserve"><value>Beim Presign-Vorgang ist ein Fehler aufgetreten</value></data>

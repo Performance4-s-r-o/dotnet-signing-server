@@ -45,6 +45,10 @@ public class StripeCheckoutService : IStripeCheckoutService
             AutomaticTax = _options.EnableAutomaticTax
                 ? new SessionAutomaticTaxOptions { Enabled = true }
                 : null,
+            PaymentIntentData = new SessionPaymentIntentDataOptions
+            {
+                SetupFutureUsage = "off_session"
+            },
             InvoiceCreation = new SessionInvoiceCreationOptions
             {
                 Enabled = true

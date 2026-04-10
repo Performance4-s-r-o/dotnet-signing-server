@@ -36,6 +36,9 @@
   <data name="TooManyVerificationAttempts" xml:space="preserve"><value>Too many verification attempts. Please try again in a minute.</value></data>
   <data name="VerificationCodeInvalid" xml:space="preserve"><value>Verification code is invalid or expired.</value></data>
   <data name="SettingsSaved" xml:space="preserve"><value>Settings saved.</value></data>
+  <data name="PasswordResetEmailSent" xml:space="preserve"><value>If an account with that email exists, we sent a password reset link.</value></data>
+  <data name="InvalidResetToken" xml:space="preserve"><value>Invalid or expired password reset link.</value></data>
+  <data name="PasswordResetSuccess" xml:space="preserve"><value>Your password has been reset. You can now sign in.</value></data>
 
   <!-- API Tokens -->
   <data name="LabelRequired" xml:space="preserve"><value>Label is required.</value></data>
@@ -63,6 +66,10 @@
   <data name="CouldNotDetermineCredits" xml:space="preserve"><value>Could not determine purchased credits.</value></data>
   <data name="CreditsAdded" xml:space="preserve"><value>Added {0} document credits to your account. You can find invoice in the list below in few moments.</value></data>
   <data name="PaymentConfirmFailed" xml:space="preserve"><value>Could not confirm payment.</value></data>
+  <data name="AutoRechargeEnabled" xml:space="preserve"><value>Auto-recharge has been enabled.</value></data>
+  <data name="AutoRechargeDisabled" xml:space="preserve"><value>Auto-recharge has been disabled.</value></data>
+  <data name="AutoRechargeRequiresPayment" xml:space="preserve"><value>Please make a purchase first so we can save your payment method for auto-recharge.</value></data>
+  <data name="InvalidCancelToken" xml:space="preserve"><value>Invalid or expired cancellation link.</value></data>
 
   <!-- API Errors -->
   <data name="PresignError" xml:space="preserve"><value>An error occurred during the presign process</value></data>

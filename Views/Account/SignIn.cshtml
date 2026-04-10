@@ -34,9 +34,12 @@
         <span asp-validation-for="Password" class="form-validation"></span>
     </div>
 
-    <label class="form-check">
-        <input asp-for="RememberMe" type="checkbox" /> Remember me
-    </label>
+    <div class="form-group" style="display:flex;justify-content:space-between;align-items:center;">
+        <label class="form-check" style="margin:0;">
+            <input asp-for="RememberMe" type="checkbox" /> Remember me
+        </label>
+        <a href="/Account/ForgotPassword" class="text-small">Forgot password?</a>
+    </div>
 
     <button type="submit" class="btn btn-primary">Sign in</button>
 </form>
