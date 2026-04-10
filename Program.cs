@@ -35,6 +35,8 @@ builder.Services.AddLocalization(options => options.ResourcesPath = "Resources")
 builder.Services.AddControllersWithViews()
     .AddViewLocalization()
     .AddDataAnnotationsLocalization();
+builder.Services.AddScoped<PdfVisualSigningService>();
+builder.Services.AddScoped<PdfSealingService>();
 builder.Services.AddScoped<PdfSigningService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IBillingService, BillingService>();

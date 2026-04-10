@@ -13,12 +13,14 @@ namespace DotNetSigningServer.Controllers
     public class PdfSigningApiController : ApiControllerBase
     {
         private readonly PdfSigningService _signingService;
+        private readonly PdfSealingService _sealingService;
         private readonly IDataProtector _dataProtector;
         private const string AttachmentDebitBypassHeader = "X-P4PDF-Attachment-Billing-Bypass";
 
         public PdfSigningApiController(
             ApplicationDbContext dbContext,
             PdfSigningService signingService,
+            PdfSealingService sealingService,
             IApiAuthService apiAuthService,
             ILogger<PdfSigningApiController> logger,
             ContentLimitGuard limitGuard,
@@ -29,6 +31,7 @@ namespace DotNetSigningServer.Controllers
             : base(dbContext, apiAuthService, logger, limitGuard, billingOptions, env, pdfTemplateService)
         {
             _signingService = signingService;
+            _sealingService = sealingService;
             _dataProtector = dataProtectionProvider.CreateProtector("SigningData.TsaCredentials");
         }
 
@@ -293,7 +296,7 @@ namespace DotNetSigningServer.Controllers
                     input.SignPageNumber = signatureField.Page <= 0 ? 1 : signatureField.Page;
                 }
 
-                var result = _signingService.ApplySeal(input);
+                var result = _sealingService.ApplySeal(input);
                 await DebitUserAsync(user);
                 return Ok(new { result });
             }

@@ -277,7 +277,7 @@ public class PdfSigningServiceTests : IDisposable
     {
         var pdfBase64 = TestHelpers.CreateMinimalPdfBase64();
         var (_, pfxBase64, password) = TestHelpers.CreateTestCertificate();
-        var sut = CreateSigningService(
+        var sut = CreateSealingService(
             sealOptions: new SealOptions
             {
                 Enabled = true,
@@ -335,7 +335,18 @@ public class PdfSigningServiceTests : IDisposable
         return new PdfSigningService(
             TestHelpers.WrapOptions(new TimestampAuthorityOptions()),
             TestHelpers.WrapOptions(sealOptions ?? new SealOptions()),
-            TestHelpers.WrapOptions(evidenceOptions ?? new EvidenceOptions()));
+            TestHelpers.WrapOptions(evidenceOptions ?? new EvidenceOptions()),
+            new PdfVisualSigningService());
+    }
+
+    private static PdfSealingService CreateSealingService(
+        SealOptions? sealOptions = null)
+    {
+        var signingService = CreateSigningService(sealOptions: sealOptions);
+        return new PdfSealingService(
+            TestHelpers.WrapOptions(sealOptions ?? new SealOptions()),
+            signingService,
+            new PdfVisualSigningService());
     }
 
     private static byte[] ExtractEmbeddedAttachmentBytes(byte[] pdfBytes, string fileName)
