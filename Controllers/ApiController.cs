@@ -137,18 +137,20 @@ namespace DotNetSigningServer.Controllers
                 if (user.CreditsRemaining < threshold)
                 {
                     var userId = user.Id;
+                    var serviceScopeFactory = HttpContext.RequestServices.GetRequiredService<IServiceScopeFactory>();
                     _ = Task.Run(async () =>
                     {
                         try
                         {
-                            using var scope = HttpContext.RequestServices.CreateScope();
+                            using var scope = serviceScopeFactory.CreateScope();
                             var rechargeService = scope.ServiceProvider.GetRequiredService<IAutoRechargeService>();
                             await rechargeService.TryAutoRechargeAsync(userId);
                         }
                         catch (Exception ex)
                         {
-                            var loggerFactory = HttpContext.RequestServices.GetService<ILoggerFactory>();
-                            loggerFactory?.CreateLogger("AutoRecharge")
+                            using var scope = serviceScopeFactory.CreateScope();
+                            scope.ServiceProvider.GetService<ILoggerFactory>()
+                                ?.CreateLogger("AutoRecharge")
                                 .LogError(ex, "Background auto-recharge failed for user {UserId}", userId);
                         }
                     });

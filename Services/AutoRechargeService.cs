@@ -16,6 +16,9 @@ public class AutoRechargeService : IAutoRechargeService
     private readonly ILogger<AutoRechargeService> _logger;
     private readonly AppOptions _appOptions;
 
+    /// <summary>Tracks last failed auto-recharge attempt per user to implement cooldown.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, DateTimeOffset> _failedAttempts = new();
+
     public AutoRechargeService(
         ApplicationDbContext dbContext,
         IBillingService billingService,
@@ -55,6 +58,14 @@ public class AutoRechargeService : IAutoRechargeService
         if (user.CreditsRemaining >= threshold)
         {
             return new AutoRechargeResult { Success = false, Error = "Credits above threshold" };
+        }
+
+        // Cooldown: don't retry if the last attempt failed less than 15 minutes ago
+        if (_failedAttempts.TryGetValue(userId, out var lastFailed)
+            && DateTimeOffset.UtcNow - lastFailed < TimeSpan.FromMinutes(15))
+        {
+            _logger.LogDebug("Auto-recharge cooldown active for user {UserId}, last failure at {LastFailed}", userId, lastFailed);
+            return new AutoRechargeResult { Success = false, Error = "Cooldown active after previous failure" };
         }
 
         // Find a saved payment method
@@ -124,6 +135,9 @@ public class AutoRechargeService : IAutoRechargeService
 
             await _dbContext.SaveChangesAsync();
 
+            // Clear cooldown on success
+            _failedAttempts.TryRemove(userId, out _);
+
             _logger.LogInformation("Auto-recharge succeeded for user {UserId}: +{Credits} credits",
                 userId, user.AutoRechargeQuantity);
 
@@ -131,6 +145,9 @@ public class AutoRechargeService : IAutoRechargeService
         }
         catch (StripeException ex)
         {
+            // Record failure timestamp for cooldown
+            _failedAttempts[userId] = DateTimeOffset.UtcNow;
+
             _logger.LogError(ex, "Auto-recharge Stripe error for user {UserId}", userId);
             await SendRechargeFailedEmailAsync(user, $"Payment failed: {ex.Message}");
             return new AutoRechargeResult { Success = false, Error = ex.Message };

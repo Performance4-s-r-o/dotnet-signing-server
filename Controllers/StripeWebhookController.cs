@@ -175,7 +175,9 @@ public class StripeWebhookController : ControllerBase
             return;
         }
 
-        // Record the session as processed (same key as ConfirmCheckout uses)
+        // Record the session as processed — save immediately to claim the
+        // idempotency key before granting credits (prevents double-grant race
+        // with ConfirmCheckout).
         _dbContext.WebhookEvents.Add(new WebhookEvent
         {
             EventId = session.Id,
@@ -185,7 +187,17 @@ public class StripeWebhookController : ControllerBase
             ProcessedAt = DateTimeOffset.UtcNow
         });
 
-        // Atomic credit increment
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        {
+            _logger.LogDebug("checkout.session.completed: already processed by ConfirmCheckout for {SessionId}", session.Id);
+            return;
+        }
+
+        // Now safe to grant credits — we own the idempotency key
         await _dbContext.Database.ExecuteSqlRawAsync(
             "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" + {0} WHERE \"Id\" = {1}",
             documents, user.Id);
@@ -269,7 +281,8 @@ public class StripeWebhookController : ControllerBase
             return;
         }
 
-        // Record and grant credits
+        // Record idempotency key first — save immediately to prevent
+        // double-grant race with AutoRechargeService.
         _dbContext.WebhookEvents.Add(new WebhookEvent
         {
             EventId = autoRechargeKey,
@@ -279,6 +292,17 @@ public class StripeWebhookController : ControllerBase
             ProcessedAt = DateTimeOffset.UtcNow
         });
 
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        {
+            _logger.LogDebug("payment_intent.succeeded: auto-recharge {PaymentIntentId} already recorded by service", paymentIntent.Id);
+            return;
+        }
+
+        // Now safe to grant credits
         await _dbContext.Database.ExecuteSqlRawAsync(
             "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" + {0} WHERE \"Id\" = {1}",
             documents, user.Id);

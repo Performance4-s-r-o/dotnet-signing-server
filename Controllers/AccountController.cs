@@ -26,6 +26,7 @@ public class AccountController : Controller
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int Count, DateTime WindowStart)> _loginAttempts = new();
     private const int MaxAttemptsPerWindow = 5;
     private static readonly TimeSpan RateLimitWindow = TimeSpan.FromMinutes(1);
+    private static DateTime _lastCleanup = DateTime.UtcNow;
 
     public AccountController(ApplicationDbContext dbContext, IAuthService authService, IEmailSender emailSender, IOptions<AppOptions> appOptions, IStringLocalizer<SharedStrings> localizer)
     {
@@ -39,6 +40,21 @@ public class AccountController : Controller
     private bool IsRateLimited(string key)
     {
         var now = DateTime.UtcNow;
+
+        // Periodic cleanup of stale entries to prevent memory leak
+        if (now - _lastCleanup > TimeSpan.FromMinutes(5))
+        {
+            _lastCleanup = now;
+            var staleKeys = _loginAttempts
+                .Where(kv => now - kv.Value.WindowStart > TimeSpan.FromMinutes(10))
+                .Select(kv => kv.Key)
+                .ToList();
+            foreach (var staleKey in staleKeys)
+            {
+                _loginAttempts.TryRemove(staleKey, out _);
+            }
+        }
+
         var entry = _loginAttempts.AddOrUpdate(
             key,
             _ => (1, now),
@@ -229,7 +245,9 @@ public class AccountController : Controller
         }
 
         TempData["ReturnUrl"] = returnUrl;
-        return RedirectToAction(nameof(TwoFactor), new { email = user.Email, rememberMe = model.RememberMe });
+        TempData["2FA_Email"] = user.Email;
+        TempData["2FA_RememberMe"] = model.RememberMe.ToString();
+        return RedirectToAction(nameof(TwoFactor));
     }
 
     [Authorize]
@@ -296,16 +314,21 @@ public class AccountController : Controller
     }
 
     [HttpGet("/Account/TwoFactor")]
-    public IActionResult TwoFactor(string email, bool rememberMe = false)
+    public IActionResult TwoFactor()
     {
         if (User?.Identity?.IsAuthenticated == true)
         {
             return RedirectToAction("Index", "Home");
         }
+        var email = TempData["2FA_Email"] as string;
+        var rememberMe = bool.TryParse(TempData["2FA_RememberMe"] as string, out var rm) && rm;
         if (string.IsNullOrWhiteSpace(email))
         {
             return RedirectToAction(nameof(SignIn));
         }
+        // Keep TempData alive for the POST handler
+        TempData["2FA_Email"] = email;
+        TempData["2FA_RememberMe"] = rememberMe.ToString();
         ViewData["Email"] = email;
         ViewData["RememberMe"] = rememberMe;
         return View();
@@ -512,7 +535,8 @@ public class AccountController : Controller
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Name, user.Email)
+            new Claim(ClaimTypes.Name, user.Email),
+            new Claim("SecurityStamp", user.UpdatedAt.Ticks.ToString())
         };
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);

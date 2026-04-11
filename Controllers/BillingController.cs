@@ -83,10 +83,11 @@ public class BillingController : Controller
             }
         }
 
-        // Find last purchase quantity from webhook events
+        // Find last purchase quantity from this user's webhook events
         int lastPurchaseQuantity = 0;
+        var userIdString = userId.Value.ToString();
         var lastCheckout = await _dbContext.WebhookEvents
-            .Where(w => w.EventType == "checkout.confirm")
+            .Where(w => w.EventType == "checkout.confirm" && w.PayloadJson.Contains(userIdString))
             .OrderByDescending(w => w.ReceivedAt)
             .FirstOrDefaultAsync();
         if (lastCheckout != null)
@@ -288,7 +289,10 @@ public class BillingController : Controller
                 return RedirectToAction(nameof(Index));
             }
 
-            // Record this session as processed before granting credits
+            // Record this session as processed — save immediately to claim the
+            // idempotency key before granting credits.  If a concurrent webhook
+            // tries to process the same session_id, the unique constraint will
+            // reject it and prevent double-granting.
             _dbContext.WebhookEvents.Add(new WebhookEvent
             {
                 EventId = sessionId,
@@ -298,7 +302,18 @@ public class BillingController : Controller
                 ProcessedAt = DateTimeOffset.UtcNow
             });
 
-            // Atomic credit increment to prevent race conditions
+            try
+            {
+                await _dbContext.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+            {
+                // Another handler (webhook) already processed this session
+                TempData["Info"] = _localizer["PaymentAlreadyProcessed"].Value;
+                return RedirectToAction(nameof(Index));
+            }
+
+            // Now safe to grant credits — we own the idempotency key
             await _dbContext.Database.ExecuteSqlRawAsync(
                 "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" + {0} WHERE \"Id\" = {1}",
                 documents, user.Id);
@@ -413,7 +428,21 @@ public class BillingController : Controller
 
     [AllowAnonymous]
     [HttpGet("/Billing/AutoRecharge/Cancel")]
-    public async Task<IActionResult> CancelAutoRechargeByToken([FromQuery] string token)
+    public IActionResult ConfirmCancelAutoRecharge([FromQuery] string token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            TempData["Error"] = _localizer["InvalidCancelToken"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+        ViewBag.Token = token;
+        return View("ConfirmCancelAutoRecharge");
+    }
+
+    [AllowAnonymous]
+    [HttpPost("/Billing/AutoRecharge/Cancel")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CancelAutoRechargeByToken([FromForm] string token)
     {
         if (string.IsNullOrWhiteSpace(token))
         {
@@ -430,5 +459,12 @@ public class BillingController : Controller
     {
         var id = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return Guid.TryParse(id, out var guid) ? guid : null;
+    }
+
+    private static bool IsUniqueViolation(DbUpdateException ex)
+    {
+        // PostgreSQL unique violation = 23505
+        return ex.InnerException?.Message.Contains("23505") == true
+            || ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) == true;
     }
 }

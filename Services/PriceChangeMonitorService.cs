@@ -79,7 +79,8 @@ public class PriceChangeMonitorService : BackgroundService
         {
             if (!user.EmailNotificationsEnabled)
             {
-                // Still update the stored price after the notice window since they can't be notified
+                // Can't notify, but mark as notified so the price updates after 30 days
+                user.PriceChangeNotifiedAt = DateTimeOffset.UtcNow;
                 continue;
             }
 

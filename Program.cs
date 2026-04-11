@@ -86,6 +86,27 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.SlidingExpiration = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        // Invalidate sessions when password changes (UpdatedAt is used as a security stamp)
+        options.Events.OnValidatePrincipal = async context =>
+        {
+            var stamp = context.Principal?.FindFirst("SecurityStamp")?.Value;
+            var userId = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (stamp != null && Guid.TryParse(userId, out var uid))
+            {
+                var db = context.HttpContext.RequestServices
+                    .GetRequiredService<DotNetSigningServer.Data.ApplicationDbContext>();
+                var user = await db.Users.AsNoTracking()
+                    .Where(u => u.Id == uid)
+                    .Select(u => new { u.UpdatedAt })
+                    .FirstOrDefaultAsync();
+                if (user == null || user.UpdatedAt.Ticks.ToString() != stamp)
+                {
+                    context.RejectPrincipal();
+                    await context.HttpContext.SignOutAsync(
+                        Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
+                }
+            }
+        };
     });
 builder.Services.AddAuthorization();
 
