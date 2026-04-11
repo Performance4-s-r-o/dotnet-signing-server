@@ -27,6 +27,10 @@ public class ApiToken
 
     public string? AllowedIps { get; set; }
 
+    /// <summary>First 8 chars of the plaintext token, used for fast prefix-based lookup.</summary>
+    [MaxLength(8)]
+    public string? TokenPrefix { get; set; }
+
     public DateTimeOffset? ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

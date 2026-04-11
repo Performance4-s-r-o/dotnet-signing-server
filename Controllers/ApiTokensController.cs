@@ -124,6 +124,7 @@ public class ApiTokensController : Controller
             UserId = user.Id,
             Label = label,
             TokenHash = hash,
+            TokenPrefix = plaintext.Length >= 8 ? plaintext[..8] : plaintext,
             ExpiresAt = expiresUtc,
             IsBrowserToken = isBrowser,
             AllowedOrigins = isBrowser ? string.Join("\n", normalizedOrigins) : null,

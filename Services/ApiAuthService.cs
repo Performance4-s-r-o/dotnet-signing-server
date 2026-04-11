@@ -36,12 +36,15 @@ public class ApiAuthService : IApiAuthService
         }
 
         token = NormalizeToken(token);
+        var prefix = token.Length >= 8 ? token[..8] : token;
 
         var now = DateTimeOffset.UtcNow;
 
+        // Filter by TokenPrefix for O(1) lookup; tokens without prefix (legacy) are always included
         var candidates = await _dbContext.ApiTokens
             .Include(t => t.User)
             .Where(t => t.RevokedAt == null && (t.ExpiresAt == null || t.ExpiresAt > now))
+            .Where(t => t.TokenPrefix == null || t.TokenPrefix == prefix)
             .ToListAsync();
 
         var apiToken = candidates.FirstOrDefault(t => _tokenService.VerifyToken(token, t.TokenHash));

@@ -48,6 +48,9 @@ namespace DotNetSigningServer.Data
                 .HasIndex(t => t.TokenHash);
 
             modelBuilder.Entity<ApiToken>()
+                .HasIndex(t => t.TokenPrefix);
+
+            modelBuilder.Entity<ApiToken>()
                 .HasOne(t => t.User)
                 .WithMany(u => u.ApiTokens)
                 .HasForeignKey(t => t.UserId);
