@@ -102,7 +102,8 @@ namespace DotNetSigningServer.Controllers
                 return (null, Unauthorized());
             }
 
-            if (requiredCredits > 0 && user.CreditsRemaining < requiredCredits)
+            // Enterprise users bypass the credits check (billed manually based on tracked usage)
+            if (requiredCredits > 0 && !user.IsEnterprise && user.CreditsRemaining < requiredCredits)
             {
                 Logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Credits insufficient for user {UserId}", user.Id);
                 return (null, StatusCode(StatusCodes.Status402PaymentRequired, new { message = Localizer["NoCreditsRemaining"].Value }));
@@ -126,17 +127,21 @@ namespace DotNetSigningServer.Controllers
             var tier = Math.Max(1, Math.Min(BillingOptions.MaxConcurrencyTier, (slotIndex / tierSize) + 1));
             var effectiveDebit = debit * tier;
 
-            var rowsAffected = await DbContext.Database.ExecuteSqlRawAsync(
-                "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" - {0} WHERE \"Id\" = {1} AND \"CreditsRemaining\" >= {2}",
-                effectiveDebit, user.Id, effectiveDebit);
-
-            if (rowsAffected == 0)
+            // Enterprise users: skip the credits decrement but still record usage for billing
+            if (!user.IsEnterprise)
             {
-                return false;
-            }
+                var rowsAffected = await DbContext.Database.ExecuteSqlRawAsync(
+                    "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" - {0} WHERE \"Id\" = {1} AND \"CreditsRemaining\" >= {2}",
+                    effectiveDebit, user.Id, effectiveDebit);
 
-            // Refresh the in-memory entity to reflect the new value
-            await DbContext.Entry(user).ReloadAsync();
+                if (rowsAffected == 0)
+                {
+                    return false;
+                }
+
+                // Refresh the in-memory entity to reflect the new value
+                await DbContext.Entry(user).ReloadAsync();
+            }
 
             // Track usage for reporting (base cost, tier, effective debit)
             try
@@ -160,7 +165,8 @@ namespace DotNetSigningServer.Controllers
             }
 
             // Check auto-recharge threshold (fire-and-forget to not block the API response)
-            if (user.AutoRechargeEnabled && user.AutoRechargeQuantity > 0)
+            // Skip for Enterprise users — they're billed manually
+            if (!user.IsEnterprise && user.AutoRechargeEnabled && user.AutoRechargeQuantity > 0)
             {
                 var threshold = (int)Math.Ceiling(user.AutoRechargeQuantity * 0.10);
                 if (user.CreditsRemaining < threshold)

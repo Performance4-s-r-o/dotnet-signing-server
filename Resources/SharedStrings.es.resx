@@ -95,6 +95,45 @@
   <data name="ConcurrencyTier4" xml:space="preserve"><value>Slots 16+: cada 5 slots adicionales = +1× multiplicador</value></data>
   <data name="ConfigureConcurrencyLink" xml:space="preserve"><value>Configurar máximo paralelismo en ajustes de tokens API →</value></data>
 
+  <!-- Admin -->
+  <data name="AdminTitle" xml:space="preserve"><value>Admin — Usuarios</value></data>
+  <data name="SearchByEmail" xml:space="preserve"><value>Buscar por email…</value></data>
+  <data name="Search" xml:space="preserve"><value>Buscar</value></data>
+  <data name="Clear" xml:space="preserve"><value>Limpiar</value></data>
+  <data name="Users" xml:space="preserve"><value>Usuarios</value></data>
+  <data name="NoUsersFound" xml:space="preserve"><value>No se encontraron usuarios.</value></data>
+  <data name="Email" xml:space="preserve"><value>Email</value></data>
+  <data name="Credits" xml:space="preserve"><value>Créditos</value></data>
+  <data name="Plan" xml:space="preserve"><value>Plan</value></data>
+  <data name="Active" xml:space="preserve"><value>Activo</value></data>
+  <data name="Created" xml:space="preserve"><value>Creado</value></data>
+  <data name="Detail" xml:space="preserve"><value>Detalle</value></data>
+  <data name="BackToUsers" xml:space="preserve"><value>Volver a usuarios</value></data>
+  <data name="AccountStatus" xml:space="preserve"><value>Estado de la cuenta</value></data>
+  <data name="EmailVerified" xml:space="preserve"><value>Email verificado</value></data>
+  <data name="Admin" xml:space="preserve"><value>Admin</value></data>
+  <data name="Enterprise" xml:space="preserve"><value>Enterprise</value></data>
+  <data name="AutoRecharge" xml:space="preserve"><value>Recarga automática</value></data>
+  <data name="CreatedAt" xml:space="preserve"><value>Creado el</value></data>
+  <data name="EnterpriseMode" xml:space="preserve"><value>Modo Enterprise</value></data>
+  <data name="EnterpriseModeDescription" xml:space="preserve"><value>Los usuarios Enterprise omiten las comprobaciones de créditos y se facturan manualmente según el uso registrado. Activar esto desactiva la recarga automática y elimina los métodos de pago guardados.</value></data>
+  <data name="EnableEnterprise" xml:space="preserve"><value>Activar modo Enterprise</value></data>
+  <data name="DisableEnterprise" xml:space="preserve"><value>Desactivar modo Enterprise</value></data>
+  <data name="ConfirmEnableEnterprise" xml:space="preserve"><value>Esto desactivará la recarga automática y eliminará la tarjeta guardada. ¿Continuar?</value></data>
+  <data name="ConfirmDisableEnterprise" xml:space="preserve"><value>El usuario volverá a facturarse por créditos. ¿Continuar?</value></data>
+  <data name="EnterpriseEnabled" xml:space="preserve"><value>Modo Enterprise activado. Recarga automática desactivada y tarjetas eliminadas.</value></data>
+  <data name="EnterpriseDisabled" xml:space="preserve"><value>Modo Enterprise desactivado.</value></data>
+  <data name="UsageThisMonth" xml:space="preserve"><value>Uso este mes</value></data>
+  <data name="CreditsUsedInMonth" xml:space="preserve"><value>créditos usados en {0}</value></data>
+  <data name="ByOperation" xml:space="preserve"><value>Por operación</value></data>
+  <data name="Operation" xml:space="preserve"><value>Operación</value></data>
+  <data name="Count" xml:space="preserve"><value>Cantidad</value></data>
+  <data name="MonthlyHistory" xml:space="preserve"><value>Historial mensual (últimos 6 meses)</value></data>
+  <data name="NoUsageYet" xml:space="preserve"><value>Sin uso registrado aún.</value></data>
+  <data name="Month" xml:space="preserve"><value>Mes</value></data>
+  <data name="OperationCount" xml:space="preserve"><value>Operaciones</value></data>
+  <data name="TotalCredits" xml:space="preserve"><value>Total de créditos</value></data>
+
   <!-- API Errors -->
   <data name="PresignError" xml:space="preserve"><value>Se produjo un error durante el proceso de prefirma</value></data>
   <data name="FieldsRequired" xml:space="preserve"><value>Se requiere al menos una definición de campo.</value></data>

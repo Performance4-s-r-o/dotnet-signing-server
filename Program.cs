@@ -114,7 +114,10 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             }
         };
     });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+});
 
 // Health checks
 builder.Services.AddHealthChecks();

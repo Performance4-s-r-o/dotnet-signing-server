@@ -95,6 +95,45 @@
   <data name="ConcurrencyTier4" xml:space="preserve"><value>Slots 16+: alle weiteren 5 Slots = +1× Multiplikator</value></data>
   <data name="ConfigureConcurrencyLink" xml:space="preserve"><value>Max. Parallelität in den API-Token-Einstellungen konfigurieren →</value></data>
 
+  <!-- Admin -->
+  <data name="AdminTitle" xml:space="preserve"><value>Admin — Benutzer</value></data>
+  <data name="SearchByEmail" xml:space="preserve"><value>Nach E-Mail suchen…</value></data>
+  <data name="Search" xml:space="preserve"><value>Suchen</value></data>
+  <data name="Clear" xml:space="preserve"><value>Löschen</value></data>
+  <data name="Users" xml:space="preserve"><value>Benutzer</value></data>
+  <data name="NoUsersFound" xml:space="preserve"><value>Keine Benutzer gefunden.</value></data>
+  <data name="Email" xml:space="preserve"><value>E-Mail</value></data>
+  <data name="Credits" xml:space="preserve"><value>Credits</value></data>
+  <data name="Plan" xml:space="preserve"><value>Tarif</value></data>
+  <data name="Active" xml:space="preserve"><value>Aktiv</value></data>
+  <data name="Created" xml:space="preserve"><value>Erstellt</value></data>
+  <data name="Detail" xml:space="preserve"><value>Detail</value></data>
+  <data name="BackToUsers" xml:space="preserve"><value>Zurück zu Benutzern</value></data>
+  <data name="AccountStatus" xml:space="preserve"><value>Kontostatus</value></data>
+  <data name="EmailVerified" xml:space="preserve"><value>E-Mail bestätigt</value></data>
+  <data name="Admin" xml:space="preserve"><value>Admin</value></data>
+  <data name="Enterprise" xml:space="preserve"><value>Enterprise</value></data>
+  <data name="AutoRecharge" xml:space="preserve"><value>Auto-Aufladung</value></data>
+  <data name="CreatedAt" xml:space="preserve"><value>Erstellt am</value></data>
+  <data name="EnterpriseMode" xml:space="preserve"><value>Enterprise-Modus</value></data>
+  <data name="EnterpriseModeDescription" xml:space="preserve"><value>Enterprise-Benutzer umgehen Credit-Prüfungen und werden manuell basierend auf der verfolgten Nutzung abgerechnet. Aktivierung deaktiviert Auto-Aufladung und entfernt gespeicherte Zahlungsmethoden.</value></data>
+  <data name="EnableEnterprise" xml:space="preserve"><value>Enterprise-Modus aktivieren</value></data>
+  <data name="DisableEnterprise" xml:space="preserve"><value>Enterprise-Modus deaktivieren</value></data>
+  <data name="ConfirmEnableEnterprise" xml:space="preserve"><value>Dadurch wird die Auto-Aufladung deaktiviert und die Karte entfernt. Fortfahren?</value></data>
+  <data name="ConfirmDisableEnterprise" xml:space="preserve"><value>Der Benutzer wird wieder mit Credits abgerechnet. Fortfahren?</value></data>
+  <data name="EnterpriseEnabled" xml:space="preserve"><value>Enterprise-Modus aktiviert. Auto-Aufladung deaktiviert, Karten entfernt.</value></data>
+  <data name="EnterpriseDisabled" xml:space="preserve"><value>Enterprise-Modus deaktiviert.</value></data>
+  <data name="UsageThisMonth" xml:space="preserve"><value>Nutzung diesen Monat</value></data>
+  <data name="CreditsUsedInMonth" xml:space="preserve"><value>Credits verbraucht in {0}</value></data>
+  <data name="ByOperation" xml:space="preserve"><value>Nach Operation</value></data>
+  <data name="Operation" xml:space="preserve"><value>Operation</value></data>
+  <data name="Count" xml:space="preserve"><value>Anzahl</value></data>
+  <data name="MonthlyHistory" xml:space="preserve"><value>Monatliche Historie (letzte 6 Monate)</value></data>
+  <data name="NoUsageYet" xml:space="preserve"><value>Noch keine Nutzung aufgezeichnet.</value></data>
+  <data name="Month" xml:space="preserve"><value>Monat</value></data>
+  <data name="OperationCount" xml:space="preserve"><value>Operationen</value></data>
+  <data name="TotalCredits" xml:space="preserve"><value>Gesamt-Credits</value></data>
+
   <!-- API Errors -->
   <data name="PresignError" xml:space="preserve"><value>Beim Presign-Vorgang ist ein Fehler aufgetreten</value></data>
   <data name="FieldsRequired" xml:space="preserve"><value>Mindestens eine Felddefinition ist erforderlich.</value></data>

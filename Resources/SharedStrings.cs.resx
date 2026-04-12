@@ -95,6 +95,45 @@
   <data name="ConcurrencyTier4" xml:space="preserve"><value>Sloty 16+: každých dalších 5 slotů = +1× násobek</value></data>
   <data name="ConfigureConcurrencyLink" xml:space="preserve"><value>Nastavit max paralelizaci v sekci API Tokeny →</value></data>
 
+  <!-- Admin -->
+  <data name="AdminTitle" xml:space="preserve"><value>Admin — Uživatelé</value></data>
+  <data name="SearchByEmail" xml:space="preserve"><value>Hledat podle e-mailu…</value></data>
+  <data name="Search" xml:space="preserve"><value>Hledat</value></data>
+  <data name="Clear" xml:space="preserve"><value>Vymazat</value></data>
+  <data name="Users" xml:space="preserve"><value>Uživatelé</value></data>
+  <data name="NoUsersFound" xml:space="preserve"><value>Žádní uživatelé neodpovídají hledání.</value></data>
+  <data name="Email" xml:space="preserve"><value>E-mail</value></data>
+  <data name="Credits" xml:space="preserve"><value>Kredity</value></data>
+  <data name="Plan" xml:space="preserve"><value>Tarif</value></data>
+  <data name="Active" xml:space="preserve"><value>Aktivní</value></data>
+  <data name="Created" xml:space="preserve"><value>Vytvořeno</value></data>
+  <data name="Detail" xml:space="preserve"><value>Detail</value></data>
+  <data name="BackToUsers" xml:space="preserve"><value>Zpět na uživatele</value></data>
+  <data name="AccountStatus" xml:space="preserve"><value>Stav účtu</value></data>
+  <data name="EmailVerified" xml:space="preserve"><value>E-mail ověřen</value></data>
+  <data name="Admin" xml:space="preserve"><value>Admin</value></data>
+  <data name="Enterprise" xml:space="preserve"><value>Enterprise</value></data>
+  <data name="AutoRecharge" xml:space="preserve"><value>Auto-dobíjení</value></data>
+  <data name="CreatedAt" xml:space="preserve"><value>Vytvořeno</value></data>
+  <data name="EnterpriseMode" xml:space="preserve"><value>Enterprise režim</value></data>
+  <data name="EnterpriseModeDescription" xml:space="preserve"><value>Enterprise uživatelé obcházejí kontrolu kreditů a jsou fakturováni manuálně podle reálné spotřeby. Aktivace vypne auto-dobíjení a odpojí uložené platební metody.</value></data>
+  <data name="EnableEnterprise" xml:space="preserve"><value>Aktivovat Enterprise režim</value></data>
+  <data name="DisableEnterprise" xml:space="preserve"><value>Deaktivovat Enterprise režim</value></data>
+  <data name="ConfirmEnableEnterprise" xml:space="preserve"><value>Tím se vypne auto-dobíjení a odpojí uložená platební metoda. Pokračovat?</value></data>
+  <data name="ConfirmDisableEnterprise" xml:space="preserve"><value>Uživatel bude znovu placen kredity. Pokračovat?</value></data>
+  <data name="EnterpriseEnabled" xml:space="preserve"><value>Enterprise režim aktivován. Auto-dobíjení vypnuto, platební metody odpojeny.</value></data>
+  <data name="EnterpriseDisabled" xml:space="preserve"><value>Enterprise režim deaktivován.</value></data>
+  <data name="UsageThisMonth" xml:space="preserve"><value>Spotřeba tento měsíc</value></data>
+  <data name="CreditsUsedInMonth" xml:space="preserve"><value>kreditů spotřebováno v {0}</value></data>
+  <data name="ByOperation" xml:space="preserve"><value>Podle operace</value></data>
+  <data name="Operation" xml:space="preserve"><value>Operace</value></data>
+  <data name="Count" xml:space="preserve"><value>Počet</value></data>
+  <data name="MonthlyHistory" xml:space="preserve"><value>Měsíční historie (posledních 6 měsíců)</value></data>
+  <data name="NoUsageYet" xml:space="preserve"><value>Zatím žádná spotřeba.</value></data>
+  <data name="Month" xml:space="preserve"><value>Měsíc</value></data>
+  <data name="OperationCount" xml:space="preserve"><value>Operace</value></data>
+  <data name="TotalCredits" xml:space="preserve"><value>Celkem kreditů</value></data>
+
   <!-- API Errors -->
   <data name="PresignError" xml:space="preserve"><value>Během přípravy podpisu došlo k chybě</value></data>
   <data name="FieldsRequired" xml:space="preserve"><value>Je vyžadována alespoň jedna definice pole.</value></data>

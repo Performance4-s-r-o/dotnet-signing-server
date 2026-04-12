@@ -538,6 +538,10 @@ public class AccountController : Controller
             new Claim(ClaimTypes.Name, user.Email),
             new Claim("SecurityStamp", user.UpdatedAt.Ticks.ToString())
         };
+        if (user.IsAdmin)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, "Admin"));
+        }
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal = new ClaimsPrincipal(identity);

@@ -95,6 +95,45 @@
   <data name="ConcurrencyTier4" xml:space="preserve"><value>Slots 16+: each additional 5 slots = +1× multiplier</value></data>
   <data name="ConfigureConcurrencyLink" xml:space="preserve"><value>Configure max parallelism in API Tokens settings →</value></data>
 
+  <!-- Admin -->
+  <data name="AdminTitle" xml:space="preserve"><value>Admin — Users</value></data>
+  <data name="SearchByEmail" xml:space="preserve"><value>Search by email…</value></data>
+  <data name="Search" xml:space="preserve"><value>Search</value></data>
+  <data name="Clear" xml:space="preserve"><value>Clear</value></data>
+  <data name="Users" xml:space="preserve"><value>Users</value></data>
+  <data name="NoUsersFound" xml:space="preserve"><value>No users match your search.</value></data>
+  <data name="Email" xml:space="preserve"><value>Email</value></data>
+  <data name="Credits" xml:space="preserve"><value>Credits</value></data>
+  <data name="Plan" xml:space="preserve"><value>Plan</value></data>
+  <data name="Active" xml:space="preserve"><value>Active</value></data>
+  <data name="Created" xml:space="preserve"><value>Created</value></data>
+  <data name="Detail" xml:space="preserve"><value>Detail</value></data>
+  <data name="BackToUsers" xml:space="preserve"><value>Back to users</value></data>
+  <data name="AccountStatus" xml:space="preserve"><value>Account status</value></data>
+  <data name="EmailVerified" xml:space="preserve"><value>Email verified</value></data>
+  <data name="Admin" xml:space="preserve"><value>Admin</value></data>
+  <data name="Enterprise" xml:space="preserve"><value>Enterprise</value></data>
+  <data name="AutoRecharge" xml:space="preserve"><value>Auto-recharge</value></data>
+  <data name="CreatedAt" xml:space="preserve"><value>Created at</value></data>
+  <data name="EnterpriseMode" xml:space="preserve"><value>Enterprise mode</value></data>
+  <data name="EnterpriseModeDescription" xml:space="preserve"><value>Enterprise users bypass credit checks and are billed manually based on tracked usage. Enabling this disables auto-recharge and detaches saved payment methods.</value></data>
+  <data name="EnableEnterprise" xml:space="preserve"><value>Enable enterprise mode</value></data>
+  <data name="DisableEnterprise" xml:space="preserve"><value>Disable enterprise mode</value></data>
+  <data name="ConfirmEnableEnterprise" xml:space="preserve"><value>This will disable auto-recharge and detach the saved payment method. Continue?</value></data>
+  <data name="ConfirmDisableEnterprise" xml:space="preserve"><value>The user will be billed by credits again. Continue?</value></data>
+  <data name="EnterpriseEnabled" xml:space="preserve"><value>Enterprise mode enabled. Auto-recharge disabled and payment methods detached.</value></data>
+  <data name="EnterpriseDisabled" xml:space="preserve"><value>Enterprise mode disabled.</value></data>
+  <data name="UsageThisMonth" xml:space="preserve"><value>Usage this month</value></data>
+  <data name="CreditsUsedInMonth" xml:space="preserve"><value>credits used in {0}</value></data>
+  <data name="ByOperation" xml:space="preserve"><value>By operation</value></data>
+  <data name="Operation" xml:space="preserve"><value>Operation</value></data>
+  <data name="Count" xml:space="preserve"><value>Count</value></data>
+  <data name="MonthlyHistory" xml:space="preserve"><value>Monthly history (last 6 months)</value></data>
+  <data name="NoUsageYet" xml:space="preserve"><value>No usage recorded yet.</value></data>
+  <data name="Month" xml:space="preserve"><value>Month</value></data>
+  <data name="OperationCount" xml:space="preserve"><value>Operations</value></data>
+  <data name="TotalCredits" xml:space="preserve"><value>Total credits</value></data>
+
   <!-- API Errors -->
   <data name="PresignError" xml:space="preserve"><value>An error occurred during the presign process</value></data>
   <data name="FieldsRequired" xml:space="preserve"><value>At least one field definition is required.</value></data>

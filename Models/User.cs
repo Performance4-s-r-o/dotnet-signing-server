@@ -47,6 +47,15 @@ public class User
     /// <summary>Max parallel API operations. NULL = use default (3).</summary>
     public int? MaxConcurrentOperations { get; set; }
 
+    /// <summary>Admin users can access /Admin pages (user management, enterprise toggle).</summary>
+    public bool IsAdmin { get; set; } = false;
+
+    /// <summary>
+    /// Enterprise users bypass credit checks and are billed manually based on tracked usage.
+    /// When enabled: auto-recharge is disabled, saved cards are detached, CreditsRemaining is ignored.
+    /// </summary>
+    public bool IsEnterprise { get; set; } = false;
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 

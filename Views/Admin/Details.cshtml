@@ -1,0 +1,116 @@
+@model DotNetSigningServer.Controllers.AdminController.AdminUserDetailViewModel
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
+@{
+    ViewData["Title"] = Model.User.Email;
+    string monthName(int y, int m) => new DateTime(y, m, 1).ToString("MMMM yyyy");
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="flash error">@TempData["Error"]</div>
+}
+@if (TempData["Info"] != null)
+{
+    <div class="flash info">@TempData["Info"]</div>
+}
+
+<main>
+    <p><a href="/Admin">← @L["BackToUsers"]</a></p>
+    <h1 class="content-box-title">@Model.User.Email</h1>
+
+    <div class="billing-grid">
+        <div class="card">
+            <h2 class="card-title">@L["AccountStatus"]</h2>
+            <table class="table" style="width:100%">
+                <tr><td class="muted">@L["Active"]</td><td>@(Model.User.IsActive ? "✓" : "✗")</td></tr>
+                <tr><td class="muted">@L["EmailVerified"]</td><td>@(Model.User.EmailVerified ? "✓" : "✗")</td></tr>
+                <tr><td class="muted">@L["Admin"]</td><td>@(Model.User.IsAdmin ? "✓" : "—")</td></tr>
+                <tr><td class="muted">@L["Enterprise"]</td><td>@(Model.User.IsEnterprise ? "✓" : "—")</td></tr>
+                <tr><td class="muted">@L["Credits"]</td><td>@(Model.User.IsEnterprise ? "∞" : Model.User.CreditsRemaining.ToString())</td></tr>
+                <tr><td class="muted">@L["AutoRecharge"]</td><td>@(Model.User.AutoRechargeEnabled ? $"{Model.User.AutoRechargeQuantity} credits" : "—")</td></tr>
+                <tr><td class="muted">@L["MaxParallelRequests"]</td><td>@(Model.User.MaxConcurrentOperations?.ToString() ?? L["ConcurrencyDefault"].Value)</td></tr>
+                <tr><td class="muted">@L["CreatedAt"]</td><td>@Model.User.CreatedAt.ToLocalTime().ToString("g")</td></tr>
+            </table>
+
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:1.25rem 0" />
+
+            <h3 class="billing-pricing-title">@L["EnterpriseMode"]</h3>
+            <p class="muted" style="font-size:0.875rem;margin-bottom:0.75rem">@L["EnterpriseModeDescription"]</p>
+            <form method="post" action="/Admin/Users/@Model.User.Id/ToggleEnterprise">
+                @Html.AntiForgeryToken()
+                @if (Model.User.IsEnterprise)
+                {
+                    <button type="submit" class="btn-small btn-secondary" style="color:#dc2626;border-color:#fca5a5"
+                            onclick="return confirm('@L["ConfirmDisableEnterprise"]')">
+                        @L["DisableEnterprise"]
+                    </button>
+                }
+                else
+                {
+                    <button type="submit" class="btn-small btn-secondary"
+                            onclick="return confirm('@L["ConfirmEnableEnterprise"]')">
+                        @L["EnableEnterprise"]
+                    </button>
+                }
+            </form>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">@L["UsageThisMonth"]</h2>
+            <p style="font-size:2rem;font-weight:600;margin:0.5rem 0">@Model.UsageThisMonth</p>
+            <p class="muted">@L["CreditsUsedInMonth", DateTime.UtcNow.ToString("MMMM yyyy")]</p>
+
+            @if (Model.ByOperation.Any())
+            {
+                <h3 class="billing-pricing-title" style="margin-top:1.25rem">@L["ByOperation"]</h3>
+                <table class="table" style="width:100%">
+                    <thead>
+                        <tr><th>@L["Operation"]</th><th style="text-align:right">@L["Count"]</th><th style="text-align:right">@L["Credits"]</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var op in Model.ByOperation)
+                        {
+                            <tr>
+                                <td>@op.Operation</td>
+                                <td style="text-align:right">@op.Count</td>
+                                <td style="text-align:right">@op.TotalCredits</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+
+    <section class="billing-invoices">
+        <h2 class="billing-invoices-title">@L["MonthlyHistory"]</h2>
+        <div class="table-wrapper">
+            @if (!Model.MonthlyBreakdown.Any())
+            {
+                <p class="muted p-4">@L["NoUsageYet"]</p>
+            }
+            else
+            {
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>@L["Month"]</th>
+                            <th style="text-align:right">@L["OperationCount"]</th>
+                            <th style="text-align:right">@L["TotalCredits"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var m in Model.MonthlyBreakdown)
+                        {
+                            <tr>
+                                <td>@monthName(m.Year, m.Month)</td>
+                                <td style="text-align:right">@m.OperationCount</td>
+                                <td style="text-align:right">@m.TotalCredits</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </section>
+</main>

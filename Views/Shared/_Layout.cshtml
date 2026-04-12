@@ -58,6 +58,10 @@
                             <a href="/Templates">PDF Templates</a>
                             <a href="/ApiTokens">API Tokens</a>
                             <a href="/api/docs">Docs</a>
+                            @if (User.IsInRole("Admin"))
+                            {
+                                <a href="/Admin">Admin</a>
+                            }
                         </nav>
 
                         <div class="user-menu" style="margin-left:0.5rem;">
