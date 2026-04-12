@@ -78,6 +78,23 @@
   <data name="NoCardOnFile" xml:space="preserve"><value>Keine Karte hinterlegt. Speichern Sie eine beim nächsten Kauf.</value></data>
   <data name="InvalidCancelToken" xml:space="preserve"><value>Ungültiger oder abgelaufener Kündigungslink.</value></data>
 
+  <!-- Concurrency limit + tier pricing -->
+  <data name="ConcurrencyLimitTitle" xml:space="preserve"><value>Maximale Parallelität</value></data>
+  <data name="ConcurrencyLimitDescription" xml:space="preserve"><value>Begrenzen Sie, wie viele API-Anfragen parallel für Ihr Konto ausgeführt werden können. Höhere Werte verwenden gestaffelte Credit-Preise.</value></data>
+  <data name="MaxParallelRequests" xml:space="preserve"><value>Max. parallele Anfragen</value></data>
+  <data name="ConcurrencyDefault" xml:space="preserve"><value>Standard</value></data>
+  <data name="SaveLimit" xml:space="preserve"><value>Speichern</value></data>
+  <data name="SeePricing" xml:space="preserve"><value>Preisliste anzeigen</value></data>
+  <data name="InvalidConcurrencyLimit" xml:space="preserve"><value>Parallelitätslimit muss zwischen 1 und 50 liegen (leer = Standard).</value></data>
+  <data name="ConcurrencyLimitUpdated" xml:space="preserve"><value>Parallelitätslimit aktualisiert.</value></data>
+  <data name="ConcurrencyPricingTitle" xml:space="preserve"><value>Preise für parallele Verarbeitung</value></data>
+  <data name="ConcurrencyPricingDescription" xml:space="preserve"><value>Parallele Operationen verwenden gestaffelte Credit-Preise:</value></data>
+  <data name="ConcurrencyTier1" xml:space="preserve"><value>Slots 1–5: Grundpreis (1× Credits)</value></data>
+  <data name="ConcurrencyTier2" xml:space="preserve"><value>Slots 6–10: 2× Credits pro Vorgang</value></data>
+  <data name="ConcurrencyTier3" xml:space="preserve"><value>Slots 11–15: 3× Credits pro Vorgang</value></data>
+  <data name="ConcurrencyTier4" xml:space="preserve"><value>Slots 16+: alle weiteren 5 Slots = +1× Multiplikator</value></data>
+  <data name="ConfigureConcurrencyLink" xml:space="preserve"><value>Max. Parallelität in den API-Token-Einstellungen konfigurieren →</value></data>
+
   <!-- API Errors -->
   <data name="PresignError" xml:space="preserve"><value>Beim Presign-Vorgang ist ein Fehler aufgetreten</value></data>
   <data name="FieldsRequired" xml:space="preserve"><value>Mindestens eine Felddefinition ist erforderlich.</value></data>

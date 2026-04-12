@@ -44,7 +44,38 @@ public class ApiTokensController : Controller
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync();
 
+        var user = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId.Value);
+        ViewBag.MaxConcurrentOperations = user?.MaxConcurrentOperations;
+
         return View(tokens);
+    }
+
+    [HttpPost("/ApiTokens/MaxConcurrent")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateMaxConcurrent(int? maxConcurrent)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction("SignIn", "Account");
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null) return RedirectToAction("SignIn", "Account");
+
+        // Clamp to a sane range; NULL = use plan default
+        if (maxConcurrent.HasValue)
+        {
+            if (maxConcurrent.Value < 1 || maxConcurrent.Value > 50)
+            {
+                TempData["Error"] = _localizer["InvalidConcurrencyLimit"].Value;
+                return RedirectToAction(nameof(Index));
+            }
+        }
+
+        user.MaxConcurrentOperations = maxConcurrent;
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        await _dbContext.SaveChangesAsync();
+
+        TempData["Info"] = _localizer["ConcurrencyLimitUpdated"].Value;
+        return RedirectToAction(nameof(Index));
     }
 
     [HttpPost("/ApiTokens")]

@@ -27,7 +27,7 @@
         <p class="billing-credits-remaining"><strong>Remaining:</strong> @Model.CreditsRemaining</p>
         <p class="billing-credits-note">Includes the first 10 free credits on your account.</p>
 
-        <h3 class="billing-pricing-title">Pricing</h3>
+        <h3 class="billing-pricing-title" id="pricing">Pricing</h3>
         <div class="billing-pricing-list">
             <p class="billing-pricing-item">100 credits: @money(price100) @currency</p>
             <p class="billing-pricing-item">300 credits: @money(price300) @currency <span class="discount">(5%
@@ -37,6 +37,18 @@
             <p class="billing-pricing-item">1000 credits: @money(price1000) @currency <span class="discount">(15%
                     off)</span></p>
         </div>
+
+        <h3 class="billing-pricing-title" style="margin-top:1.25rem">@L["ConcurrencyPricingTitle"]</h3>
+        <p class="muted" style="font-size:0.875rem;margin-bottom:0.5rem">@L["ConcurrencyPricingDescription"]</p>
+        <ul class="billing-pricing-list" style="padding-left:1.25rem;margin:0">
+            <li class="billing-pricing-item">@L["ConcurrencyTier1"]</li>
+            <li class="billing-pricing-item">@L["ConcurrencyTier2"]</li>
+            <li class="billing-pricing-item">@L["ConcurrencyTier3"]</li>
+            <li class="billing-pricing-item">@L["ConcurrencyTier4"]</li>
+        </ul>
+        <p class="muted" style="font-size:0.875rem;margin-top:0.5rem">
+            <a href="/ApiTokens">@L["ConfigureConcurrencyLink"]</a>
+        </p>
 
         <hr style="border:none;border-top:1px solid var(--color-card-border,#e5e7eb);margin:1.25rem 0" />
 

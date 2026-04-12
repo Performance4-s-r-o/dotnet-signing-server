@@ -1,11 +1,17 @@
 @model IEnumerable<DotNetSigningServer.Models.ApiToken>
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
     ViewData["Title"] = "API Tokens";
+    int? maxConcurrent = ViewBag.MaxConcurrentOperations as int?;
 }
 
 @if (TempData["Error"] != null)
 {
     <div class="flash error">@TempData["Error"]</div>
+}
+@if (TempData["Info"] != null)
+{
+    <div class="flash info">@TempData["Info"]</div>
 }
 @if (TempData["NewToken"] != null)
 {
@@ -17,6 +23,25 @@
 
 <main>
     <h1 class="content-box-title">API Tokens</h1>
+
+    <!-- Concurrency limit (per-user) -->
+    <div class="tokens-form" style="margin-bottom:1.5rem">
+        <h2 class="tokens-form-title">@L["ConcurrencyLimitTitle"]</h2>
+        <p class="muted" style="margin-bottom:0.75rem">
+            @L["ConcurrencyLimitDescription"]
+            <a href="/Billing#pricing">@L["SeePricing"]</a>
+        </p>
+        <form method="post" action="/ApiTokens/MaxConcurrent" style="display:flex;gap:0.75rem;align-items:flex-end;flex-wrap:wrap">
+            @Html.AntiForgeryToken()
+            <div class="tokens-form-group" style="flex:0 0 auto">
+                <label for="max-concurrent" class="tokens-label">@L["MaxParallelRequests"]</label>
+                <input type="number" id="max-concurrent" name="maxConcurrent" class="tokens-input"
+                       min="1" max="50" placeholder="@L["ConcurrencyDefault"]"
+                       value="@(maxConcurrent?.ToString() ?? "")" style="width:120px" />
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-bottom:0.125rem">@L["SaveLimit"]</button>
+        </form>
+    </div>
 
     <!-- Issue New Token Form -->
     <div class="tokens-form">

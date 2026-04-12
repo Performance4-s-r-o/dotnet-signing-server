@@ -78,6 +78,23 @@
   <data name="NoCardOnFile" xml:space="preserve"><value>No card on file. Save one during your next purchase.</value></data>
   <data name="InvalidCancelToken" xml:space="preserve"><value>Invalid or expired cancellation link.</value></data>
 
+  <!-- Concurrency limit + tier pricing -->
+  <data name="ConcurrencyLimitTitle" xml:space="preserve"><value>Max parallel requests</value></data>
+  <data name="ConcurrencyLimitDescription" xml:space="preserve"><value>Limit how many API requests can run in parallel for your account. Higher values use tiered credit pricing.</value></data>
+  <data name="MaxParallelRequests" xml:space="preserve"><value>Max parallel requests</value></data>
+  <data name="ConcurrencyDefault" xml:space="preserve"><value>Default</value></data>
+  <data name="SaveLimit" xml:space="preserve"><value>Save</value></data>
+  <data name="SeePricing" xml:space="preserve"><value>See pricing</value></data>
+  <data name="InvalidConcurrencyLimit" xml:space="preserve"><value>Concurrency limit must be between 1 and 50 (leave empty for default).</value></data>
+  <data name="ConcurrencyLimitUpdated" xml:space="preserve"><value>Concurrency limit updated.</value></data>
+  <data name="ConcurrencyPricingTitle" xml:space="preserve"><value>Parallel processing pricing</value></data>
+  <data name="ConcurrencyPricingDescription" xml:space="preserve"><value>Running more operations in parallel uses tiered credit pricing:</value></data>
+  <data name="ConcurrencyTier1" xml:space="preserve"><value>Slots 1–5: base cost (1× credits)</value></data>
+  <data name="ConcurrencyTier2" xml:space="preserve"><value>Slots 6–10: 2× credits per operation</value></data>
+  <data name="ConcurrencyTier3" xml:space="preserve"><value>Slots 11–15: 3× credits per operation</value></data>
+  <data name="ConcurrencyTier4" xml:space="preserve"><value>Slots 16+: each additional 5 slots = +1× multiplier</value></data>
+  <data name="ConfigureConcurrencyLink" xml:space="preserve"><value>Configure max parallelism in API Tokens settings →</value></data>
+
   <!-- API Errors -->
   <data name="PresignError" xml:space="preserve"><value>An error occurred during the presign process</value></data>
   <data name="FieldsRequired" xml:space="preserve"><value>At least one field definition is required.</value></data>

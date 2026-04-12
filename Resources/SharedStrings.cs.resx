@@ -78,6 +78,23 @@
   <data name="NoCardOnFile" xml:space="preserve"><value>Žádná karta není uložena. Uložte ji při dalším nákupu.</value></data>
   <data name="InvalidCancelToken" xml:space="preserve"><value>Neplatný nebo expirovaný odkaz pro zrušení.</value></data>
 
+  <!-- Concurrency limit + tier pricing -->
+  <data name="ConcurrencyLimitTitle" xml:space="preserve"><value>Maximální paralelizace</value></data>
+  <data name="ConcurrencyLimitDescription" xml:space="preserve"><value>Omezte, kolik API požadavků může běžet paralelně pro váš účet. Vyšší hodnoty používají stupňované ceny kreditů.</value></data>
+  <data name="MaxParallelRequests" xml:space="preserve"><value>Max paralelních požadavků</value></data>
+  <data name="ConcurrencyDefault" xml:space="preserve"><value>Výchozí</value></data>
+  <data name="SaveLimit" xml:space="preserve"><value>Uložit</value></data>
+  <data name="SeePricing" xml:space="preserve"><value>Zobrazit ceník</value></data>
+  <data name="InvalidConcurrencyLimit" xml:space="preserve"><value>Limit paralelizace musí být mezi 1 a 50 (prázdné = výchozí).</value></data>
+  <data name="ConcurrencyLimitUpdated" xml:space="preserve"><value>Limit paralelizace uložen.</value></data>
+  <data name="ConcurrencyPricingTitle" xml:space="preserve"><value>Cena za paralelní zpracování</value></data>
+  <data name="ConcurrencyPricingDescription" xml:space="preserve"><value>Souběžné operace používají stupňované ceny kreditů:</value></data>
+  <data name="ConcurrencyTier1" xml:space="preserve"><value>Sloty 1–5: základní cena (1× kredity)</value></data>
+  <data name="ConcurrencyTier2" xml:space="preserve"><value>Sloty 6–10: 2× kredity za operaci</value></data>
+  <data name="ConcurrencyTier3" xml:space="preserve"><value>Sloty 11–15: 3× kredity za operaci</value></data>
+  <data name="ConcurrencyTier4" xml:space="preserve"><value>Sloty 16+: každých dalších 5 slotů = +1× násobek</value></data>
+  <data name="ConfigureConcurrencyLink" xml:space="preserve"><value>Nastavit max paralelizaci v sekci API Tokeny →</value></data>
+
   <!-- API Errors -->
   <data name="PresignError" xml:space="preserve"><value>Během přípravy podpisu došlo k chybě</value></data>
   <data name="FieldsRequired" xml:space="preserve"><value>Je vyžadována alespoň jedna definice pole.</value></data>

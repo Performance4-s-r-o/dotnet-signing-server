@@ -111,16 +111,24 @@ namespace DotNetSigningServer.Controllers
             return (user, null);
         }
 
-        protected async Task<bool> DebitUserAsync(User user, int debit = 1)
+        protected async Task<bool> DebitUserAsync(User user, int debit = 1, string? operation = null, Guid? documentId = null)
         {
             if (debit <= 0)
             {
                 return true;
             }
 
+            // Compute concurrency tier based on in-flight requests for this user
+            var inFlight = DotNetSigningServer.Middleware.UserConcurrencyMiddleware.GetInFlightCount(user.Id);
+            var tierSize = Math.Max(1, BillingOptions.ConcurrencyTierSize);
+            // inFlight includes the current request; slot index is inFlight-1 (0-based)
+            var slotIndex = Math.Max(0, inFlight - 1);
+            var tier = Math.Max(1, Math.Min(BillingOptions.MaxConcurrencyTier, (slotIndex / tierSize) + 1));
+            var effectiveDebit = debit * tier;
+
             var rowsAffected = await DbContext.Database.ExecuteSqlRawAsync(
                 "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" - {0} WHERE \"Id\" = {1} AND \"CreditsRemaining\" >= {2}",
-                debit, user.Id, debit);
+                effectiveDebit, user.Id, effectiveDebit);
 
             if (rowsAffected == 0)
             {
@@ -129,6 +137,27 @@ namespace DotNetSigningServer.Controllers
 
             // Refresh the in-memory entity to reflect the new value
             await DbContext.Entry(user).ReloadAsync();
+
+            // Track usage for reporting (base cost, tier, effective debit)
+            try
+            {
+                DbContext.UsageRecords.Add(new UsageRecord
+                {
+                    UserId = user.Id,
+                    DocumentId = documentId,
+                    Count = effectiveDebit,
+                    BaseCost = debit,
+                    Tier = tier,
+                    Operation = operation,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                });
+                await DbContext.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                // Usage tracking is best-effort — never fail the request because of it
+                Logger.LogWarning(ex, "Failed to write UsageRecord for user {UserId}", user.Id);
+            }
 
             // Check auto-recharge threshold (fire-and-forget to not block the API response)
             if (user.AutoRechargeEnabled && user.AutoRechargeQuantity > 0)

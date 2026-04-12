@@ -1,14 +1,16 @@
 using System.Collections.Concurrent;
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Options;
 
 namespace DotNetSigningServer.Middleware;
 
 /// <summary>
 /// Limits the number of concurrent API operations per authenticated user.
-/// Default: 3 concurrent. Configurable per user via MaxConcurrentOperations.
+/// Default: BillingOptions.ConcurrencyDefaultLimit (3). Configurable per user via User.MaxConcurrentOperations.
 /// When limit is exceeded, returns 429 Too Many Requests.
 /// </summary>
 public class UserConcurrencyMiddleware
@@ -16,9 +18,22 @@ public class UserConcurrencyMiddleware
     private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> Semaphores = new();
     private static readonly ConcurrentDictionary<Guid, int> Limits = new();
 
-    private const int DefaultLimit = 3;
     private const int LimitCacheDurationSeconds = 60;
     private static readonly ConcurrentDictionary<Guid, DateTimeOffset> LimitCacheExpiry = new();
+
+    /// <summary>
+    /// Returns the number of in-flight requests for the given user (includes the currently executing one).
+    /// Used by credit debit logic to determine the concurrency tier.
+    /// </summary>
+    public static int GetInFlightCount(Guid userId)
+    {
+        if (!Semaphores.TryGetValue(userId, out var sem) || !Limits.TryGetValue(userId, out var limit))
+        {
+            return 0;
+        }
+        var inFlight = limit - sem.CurrentCount;
+        return inFlight < 0 ? 0 : inFlight;
+    }
 
     private readonly RequestDelegate _next;
     private readonly ILogger<UserConcurrencyMiddleware> _logger;
@@ -101,6 +116,8 @@ public class UserConcurrencyMiddleware
             return cached;
         }
 
+        var defaultLimit = services.GetService<IOptions<BillingOptions>>()?.Value.ConcurrencyDefaultLimit ?? 3;
+
         // Fetch from DB
         try
         {
@@ -112,14 +129,14 @@ public class UserConcurrencyMiddleware
                 .Select(u => u.MaxConcurrentOperations)
                 .FirstOrDefaultAsync();
 
-            var limit = user ?? DefaultLimit;
+            var limit = user ?? defaultLimit;
             Limits[userId] = limit;
             LimitCacheExpiry[userId] = DateTimeOffset.UtcNow.AddSeconds(LimitCacheDurationSeconds);
             return limit;
         }
         catch
         {
-            return DefaultLimit;
+            return defaultLimit;
         }
     }
 }

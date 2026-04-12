@@ -78,6 +78,23 @@
   <data name="NoCardOnFile" xml:space="preserve"><value>No hay tarjeta guardada. Guarde una en su próxima compra.</value></data>
   <data name="InvalidCancelToken" xml:space="preserve"><value>Enlace de cancelación no válido o caducado.</value></data>
 
+  <!-- Concurrency limit + tier pricing -->
+  <data name="ConcurrencyLimitTitle" xml:space="preserve"><value>Máximo paralelismo</value></data>
+  <data name="ConcurrencyLimitDescription" xml:space="preserve"><value>Limite cuántas solicitudes API pueden ejecutarse en paralelo para su cuenta. Valores más altos usan precios de créditos escalonados.</value></data>
+  <data name="MaxParallelRequests" xml:space="preserve"><value>Máx. solicitudes paralelas</value></data>
+  <data name="ConcurrencyDefault" xml:space="preserve"><value>Predeterminado</value></data>
+  <data name="SaveLimit" xml:space="preserve"><value>Guardar</value></data>
+  <data name="SeePricing" xml:space="preserve"><value>Ver precios</value></data>
+  <data name="InvalidConcurrencyLimit" xml:space="preserve"><value>El límite de paralelismo debe estar entre 1 y 50 (vacío = predeterminado).</value></data>
+  <data name="ConcurrencyLimitUpdated" xml:space="preserve"><value>Límite de paralelismo actualizado.</value></data>
+  <data name="ConcurrencyPricingTitle" xml:space="preserve"><value>Precio del procesamiento paralelo</value></data>
+  <data name="ConcurrencyPricingDescription" xml:space="preserve"><value>Las operaciones en paralelo usan precios de créditos escalonados:</value></data>
+  <data name="ConcurrencyTier1" xml:space="preserve"><value>Slots 1–5: coste base (1× créditos)</value></data>
+  <data name="ConcurrencyTier2" xml:space="preserve"><value>Slots 6–10: 2× créditos por operación</value></data>
+  <data name="ConcurrencyTier3" xml:space="preserve"><value>Slots 11–15: 3× créditos por operación</value></data>
+  <data name="ConcurrencyTier4" xml:space="preserve"><value>Slots 16+: cada 5 slots adicionales = +1× multiplicador</value></data>
+  <data name="ConfigureConcurrencyLink" xml:space="preserve"><value>Configurar máximo paralelismo en ajustes de tokens API →</value></data>
+
   <!-- API Errors -->
   <data name="PresignError" xml:space="preserve"><value>Se produjo un error durante el proceso de prefirma</value></data>
   <data name="FieldsRequired" xml:space="preserve"><value>Se requiere al menos una definición de campo.</value></data>
