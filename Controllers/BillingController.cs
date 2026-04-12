@@ -105,6 +105,19 @@ public class BillingController : Controller
             catch { }
         }
 
+        // Fetch saved payment method (brand + last4) if available
+        string? cardBrand = null, cardLast4 = null, cardExpiry = null;
+        if (!string.IsNullOrWhiteSpace(user.StripeCustomerId))
+        {
+            var pm = await _checkoutService.GetDefaultPaymentMethodAsync(user.StripeCustomerId);
+            if (pm != null)
+            {
+                cardBrand = pm.Value.Brand;
+                cardLast4 = pm.Value.Last4;
+                cardExpiry = $"{pm.Value.ExpMonth:D2}/{pm.Value.ExpYear % 100:D2}";
+            }
+        }
+
         var model = new BillingViewModel
         {
             Invoices = invoices,
@@ -118,15 +131,51 @@ public class BillingController : Controller
             AutoRechargeEnabled = user.AutoRechargeEnabled,
             AutoRechargeQuantity = user.AutoRechargeQuantity,
             AutoRechargePricePer100 = user.AutoRechargePricePer100,
-            LastPurchaseQuantity = lastPurchaseQuantity
+            LastPurchaseQuantity = lastPurchaseQuantity,
+            SavedCardBrand = cardBrand,
+            SavedCardLast4 = cardLast4,
+            SavedCardExpiry = cardExpiry,
         };
 
         return View(model);
     }
 
+    [HttpPost("/Billing/ManagePaymentMethod")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ManagePaymentMethod()
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction("SignIn", "Account");
+
+        var user = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null || string.IsNullOrWhiteSpace(user.StripeCustomerId))
+        {
+            TempData["Error"] = _localizer["NoSavedPaymentMethod"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+
+        try
+        {
+            var returnUrl = Url.Action(nameof(Index), "Billing", null, Request.Scheme) ?? "/";
+            var portalUrl = await _checkoutService.CreateBillingPortalSessionAsync(user.StripeCustomerId, returnUrl);
+            if (string.IsNullOrWhiteSpace(portalUrl))
+            {
+                TempData["Error"] = _localizer["PaymentStartFailed"].Value;
+                return RedirectToAction(nameof(Index));
+            }
+            return Redirect(portalUrl);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create Stripe billing portal session for user {UserId}", user.Id);
+            TempData["Error"] = _localizer["PaymentStartFailed"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+    }
+
     [HttpPost("/Billing/Checkout")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Checkout(int documentsToBuy, bool autoRecharge = false)
+    public async Task<IActionResult> Checkout(int documentsToBuy, bool autoRecharge = false, bool saveCard = false)
     {
         var userId = GetCurrentUserId();
         if (userId == null)
@@ -204,6 +253,9 @@ public class BillingController : Controller
 
         try
         {
+            // Auto-recharge opt-in implies the card must be saved
+            var effectiveSaveCard = saveCard || autoRecharge;
+
             var checkoutUrl = await _checkoutService.CreateCheckoutSessionAsync(
                 user,
                 amountCents,
@@ -215,7 +267,8 @@ public class BillingController : Controller
                     { "userId", user.Id.ToString() },
                     { "documents", documentsToBuy.ToString() },
                     { "autoRecharge", autoRecharge.ToString() }
-                });
+                },
+                saveCard: effectiveSaveCard);
 
             if (string.IsNullOrWhiteSpace(checkoutUrl))
             {
@@ -358,6 +411,11 @@ public class BillingController : Controller
         public int AutoRechargeQuantity { get; set; }
         public decimal AutoRechargePricePer100 { get; set; }
         public int LastPurchaseQuantity { get; set; }
+
+        // Saved payment method details (null if no card on file)
+        public string? SavedCardBrand { get; set; }
+        public string? SavedCardLast4 { get; set; }
+        public string? SavedCardExpiry { get; set; }
     }
 
     [HttpPost("/Billing/AutoRecharge/Enable")]

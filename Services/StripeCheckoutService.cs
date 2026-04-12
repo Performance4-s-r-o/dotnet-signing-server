@@ -26,7 +26,8 @@ public class StripeCheckoutService : IStripeCheckoutService
         string currency,
         string successUrl,
         string cancelUrl,
-        IDictionary<string, string>? metadata = null)
+        IDictionary<string, string>? metadata = null,
+        bool saveCard = false)
     {
         var taxIdCollection = _options.EnableTaxIdCollection
             ? new SessionTaxIdCollectionOptions { Enabled = true }
@@ -45,10 +46,11 @@ public class StripeCheckoutService : IStripeCheckoutService
             AutomaticTax = _options.EnableAutomaticTax
                 ? new SessionAutomaticTaxOptions { Enabled = true }
                 : null,
-            PaymentIntentData = new SessionPaymentIntentDataOptions
-            {
-                SetupFutureUsage = "off_session"
-            },
+            // Only save the payment method when the user has explicitly opted in
+            // (e.g. checked the "save card for auto-recharge" checkbox).
+            PaymentIntentData = saveCard
+                ? new SessionPaymentIntentDataOptions { SetupFutureUsage = "off_session" }
+                : null,
             InvoiceCreation = new SessionInvoiceCreationOptions
             {
                 Enabled = true
@@ -110,5 +112,52 @@ public class StripeCheckoutService : IStripeCheckoutService
 
         var result = await invoiceService.ListAsync(options);
         return result.Data;
+    }
+
+    public async Task<string> CreateBillingPortalSessionAsync(string customerId, string returnUrl)
+    {
+        var portalService = new Stripe.BillingPortal.SessionService();
+        var session = await portalService.CreateAsync(new Stripe.BillingPortal.SessionCreateOptions
+        {
+            Customer = customerId,
+            ReturnUrl = returnUrl,
+        });
+        return session.Url ?? string.Empty;
+    }
+
+    public async Task<(string Brand, string Last4, long ExpMonth, long ExpYear)?> GetDefaultPaymentMethodAsync(string customerId)
+    {
+        try
+        {
+            // Prefer invoice-settings default, then list card payment methods
+            var customerService = new CustomerService();
+            var customer = await customerService.GetAsync(customerId);
+            string? defaultPmId = customer.InvoiceSettings?.DefaultPaymentMethodId;
+
+            PaymentMethod? pm = null;
+            var pmService = new PaymentMethodService();
+
+            if (!string.IsNullOrWhiteSpace(defaultPmId))
+            {
+                pm = await pmService.GetAsync(defaultPmId);
+            }
+            else
+            {
+                var list = await pmService.ListAsync(new PaymentMethodListOptions
+                {
+                    Customer = customerId,
+                    Type = "card",
+                    Limit = 1,
+                });
+                pm = list.Data.FirstOrDefault();
+            }
+
+            if (pm?.Card == null) return null;
+            return (pm.Card.Brand, pm.Card.Last4, pm.Card.ExpMonth, pm.Card.ExpYear);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

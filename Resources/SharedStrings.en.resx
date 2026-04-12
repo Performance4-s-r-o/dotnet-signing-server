@@ -69,6 +69,13 @@
   <data name="AutoRechargeEnabled" xml:space="preserve"><value>Auto-recharge has been enabled.</value></data>
   <data name="AutoRechargeDisabled" xml:space="preserve"><value>Auto-recharge has been disabled.</value></data>
   <data name="AutoRechargeRequiresPayment" xml:space="preserve"><value>Please make a purchase first so we can save your payment method for auto-recharge.</value></data>
+  <data name="NoSavedPaymentMethod" xml:space="preserve"><value>No saved payment method found. Please buy credits with "Save card" checked first.</value></data>
+  <data name="SavedPaymentMethod" xml:space="preserve"><value>Saved payment method</value></data>
+  <data name="ManagePaymentMethod" xml:space="preserve"><value>Manage payment method</value></data>
+  <data name="ManagePaymentMethodDescription" xml:space="preserve"><value>Update, replace or remove your saved card via secure Stripe portal.</value></data>
+  <data name="SaveCardLabel" xml:space="preserve"><value>Save my card for future purchases and auto-recharge</value></data>
+  <data name="SaveCardHint" xml:space="preserve"><value>Your card will be stored securely by Stripe. You can remove it anytime.</value></data>
+  <data name="NoCardOnFile" xml:space="preserve"><value>No card on file. Save one during your next purchase.</value></data>
   <data name="InvalidCancelToken" xml:space="preserve"><value>Invalid or expired cancellation link.</value></data>
 
   <!-- API Errors -->

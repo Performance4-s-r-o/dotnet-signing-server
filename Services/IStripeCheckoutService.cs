@@ -10,9 +10,14 @@ public interface IStripeCheckoutService
         string currency,
         string successUrl,
         string cancelUrl,
-        IDictionary<string, string>? metadata = null);
+        IDictionary<string, string>? metadata = null,
+        bool saveCard = false);
 
     Task<Stripe.Checkout.Session?> GetSessionAsync(string sessionId);
 
     Task<IReadOnlyList<global::Stripe.Invoice>> GetInvoicesAsync(string customerId, int limit = 10);
+
+    Task<string> CreateBillingPortalSessionAsync(string customerId, string returnUrl);
+
+    Task<(string Brand, string Last4, long ExpMonth, long ExpYear)?> GetDefaultPaymentMethodAsync(string customerId);
 }
