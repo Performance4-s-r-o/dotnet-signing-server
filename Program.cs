@@ -30,7 +30,12 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.ForwardLimit = 1; // Only trust the immediate reverse proxy
 });
 
-builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
+// NOTE: Don't set ResourcesPath — SharedStrings.cs lives in DotNetSigningServer.Resources
+// namespace, so the default baseName "{RootNamespace}.{TypeFullName-without-rootNS}" =
+// "DotNetSigningServer.Resources.SharedStrings" matches the embedded .resx files directly.
+// Adding ResourcesPath="Resources" would result in the wrong baseName
+// "DotNetSigningServer.Resources.Resources.SharedStrings" and break all translations.
+builder.Services.AddLocalization();
 builder.Services.AddControllersWithViews()
     .AddViewLocalization()
     .AddDataAnnotationsLocalization();
