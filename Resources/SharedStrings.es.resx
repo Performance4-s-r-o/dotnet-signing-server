@@ -68,7 +68,6 @@
   <data name="PaymentConfirmFailed" xml:space="preserve"><value>No se pudo confirmar el pago.</value></data>
   <data name="AutoRechargeEnabled" xml:space="preserve"><value>La recarga automática ha sido activada.</value></data>
   <data name="AutoRechargeDisabled" xml:space="preserve"><value>La recarga automática ha sido desactivada.</value></data>
-  <data name="AutoRechargeRequiresPayment" xml:space="preserve"><value>Primero realice una compra para que podamos guardar su método de pago para la recarga automática.</value></data>
   <data name="NoSavedPaymentMethod" xml:space="preserve"><value>No se encontró ningún método de pago guardado. Marque "Guardar tarjeta" en su próxima compra.</value></data>
   <data name="SavedPaymentMethod" xml:space="preserve"><value>Método de pago guardado</value></data>
   <data name="ManagePaymentMethod" xml:space="preserve"><value>Administrar método de pago</value></data>

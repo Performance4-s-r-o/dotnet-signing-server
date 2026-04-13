@@ -125,6 +125,33 @@ public class StripeCheckoutService : IStripeCheckoutService
         return session.Url ?? string.Empty;
     }
 
+    public async Task<string> CreateSetupSessionAsync(
+        string customerId,
+        string successUrl,
+        string cancelUrl,
+        IDictionary<string, string>? metadata = null)
+    {
+        var sessionOptions = new SessionCreateOptions
+        {
+            Mode = "setup",
+            Customer = customerId,
+            SuccessUrl = successUrl,
+            CancelUrl = cancelUrl,
+            PaymentMethodTypes = new List<string> { "card" },
+            Metadata = metadata != null ? new Dictionary<string, string>(metadata) : null,
+            SetupIntentData = metadata != null
+                ? new SessionSetupIntentDataOptions
+                {
+                    Metadata = new Dictionary<string, string>(metadata)
+                }
+                : null,
+        };
+
+        var sessionService = new SessionService();
+        var session = await sessionService.CreateAsync(sessionOptions);
+        return session.Url ?? string.Empty;
+    }
+
     public async Task<(string Brand, string Last4, long ExpMonth, long ExpYear)?> GetDefaultPaymentMethodAsync(string customerId)
     {
         try

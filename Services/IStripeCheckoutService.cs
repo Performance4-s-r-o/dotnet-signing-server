@@ -19,5 +19,11 @@ public interface IStripeCheckoutService
 
     Task<string> CreateBillingPortalSessionAsync(string customerId, string returnUrl);
 
+    Task<string> CreateSetupSessionAsync(
+        string customerId,
+        string successUrl,
+        string cancelUrl,
+        IDictionary<string, string>? metadata = null);
+
     Task<(string Brand, string Last4, long ExpMonth, long ExpYear)?> GetDefaultPaymentMethodAsync(string customerId);
 }

@@ -435,13 +435,33 @@ public class BillingController : Controller
             return RedirectToAction(nameof(Index));
         }
 
+        // Ensure user has a Stripe customer
         if (string.IsNullOrWhiteSpace(user.StripeCustomerId))
         {
-            TempData["Error"] = _localizer["AutoRechargeRequiresPayment"].Value;
-            return RedirectToAction(nameof(Index));
+            try
+            {
+                var customerService = new Stripe.CustomerService();
+                var customer = await customerService.CreateAsync(new Stripe.CustomerCreateOptions
+                {
+                    Email = user.Email,
+                    Metadata = new Dictionary<string, string>
+                    {
+                        { "app_user_id", user.Id.ToString() }
+                    }
+                });
+                user.StripeCustomerId = customer.Id;
+                await _dbContext.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create Stripe customer for user {UserId}", user.Id);
+                TempData["Error"] = _localizer["StripeCustomerError"].Value;
+                return RedirectToAction(nameof(Index));
+            }
         }
 
-        // Verify the customer actually has a saved payment method
+        // Check if the customer already has a saved payment method
+        bool hasCard = false;
         try
         {
             var pmService = new Stripe.PaymentMethodService();
@@ -451,21 +471,107 @@ public class BillingController : Controller
                 Type = "card",
                 Limit = 1
             });
-            if (methods.Data.Count == 0)
-            {
-                TempData["Error"] = _localizer["AutoRechargeRequiresPayment"].Value;
-                return RedirectToAction(nameof(Index));
-            }
+            hasCard = methods.Data.Count > 0;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to verify payment methods for user {UserId}", user.Id);
-            TempData["Error"] = _localizer["AutoRechargeRequiresPayment"].Value;
-            return RedirectToAction(nameof(Index));
+        }
+
+        // No saved card → redirect to Stripe Checkout in setup mode to collect a card
+        if (!hasCard)
+        {
+            var successUrl = Url.Action(nameof(ConfirmAutoRechargeSetup), "Billing", null, Request.Scheme) ?? "/";
+            successUrl += successUrl.Contains('?') ? "&session_id={CHECKOUT_SESSION_ID}" : "?session_id={CHECKOUT_SESSION_ID}";
+            var cancelUrl = Url.Action(nameof(Index), "Billing", null, Request.Scheme) ?? "/";
+
+            try
+            {
+                var setupUrl = await _checkoutService.CreateSetupSessionAsync(
+                    user.StripeCustomerId!,
+                    successUrl,
+                    cancelUrl,
+                    new Dictionary<string, string>
+                    {
+                        { "userId", user.Id.ToString() },
+                        { "autoRechargeQuantity", quantity.ToString() }
+                    });
+
+                if (string.IsNullOrWhiteSpace(setupUrl))
+                {
+                    TempData["Error"] = _localizer["PaymentStartFailed"].Value;
+                    return RedirectToAction(nameof(Index));
+                }
+
+                return Redirect(setupUrl);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create Stripe setup session for user {UserId}", user.Id);
+                TempData["Error"] = _localizer["PaymentStartFailed"].Value;
+                return RedirectToAction(nameof(Index));
+            }
         }
 
         await _autoRechargeService.EnableAsync(user, quantity, _billingOptions.PricePer100);
         TempData["Info"] = _localizer["AutoRechargeEnabled"].Value;
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpGet("/Billing/AutoRecharge/Setup/Confirm")]
+    public async Task<IActionResult> ConfirmAutoRechargeSetup([FromQuery(Name = "session_id")] string sessionId)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction("SignIn", "Account");
+
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            TempData["Error"] = _localizer["MissingStripeSession"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+
+        try
+        {
+            var session = await _checkoutService.GetSessionAsync(sessionId);
+            if (session == null || session.Mode != "setup" || session.Status != "complete")
+            {
+                TempData["Error"] = _localizer["PaymentNotCompleted"].Value;
+                return RedirectToAction(nameof(Index));
+            }
+
+            if (session.Metadata.TryGetValue("userId", out var metaUserId)
+                && metaUserId != userId.Value.ToString())
+            {
+                TempData["Error"] = _localizer["PaymentSessionMismatch"].Value;
+                return RedirectToAction(nameof(Index));
+            }
+
+            if (!session.Metadata.TryGetValue("autoRechargeQuantity", out var qtyValue)
+                || !int.TryParse(qtyValue, out var quantity)
+                || !new[] { 100, 300, 500, 1000 }.Contains(quantity))
+            {
+                TempData["Error"] = _localizer["InvalidDocumentBundle"].Value;
+                return RedirectToAction(nameof(Index));
+            }
+
+            var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+            if (user == null) return RedirectToAction("SignIn", "Account");
+
+            if (string.IsNullOrWhiteSpace(user.StripeCustomerId) && !string.IsNullOrWhiteSpace(session.CustomerId))
+            {
+                user.StripeCustomerId = session.CustomerId;
+                await _dbContext.SaveChangesAsync();
+            }
+
+            await _autoRechargeService.EnableAsync(user, quantity, _billingOptions.PricePer100);
+            TempData["Info"] = _localizer["AutoRechargeEnabled"].Value;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to confirm auto-recharge setup for session {SessionId}", sessionId);
+            TempData["Error"] = _localizer["PaymentConfirmFailed"].Value;
+        }
+
         return RedirectToAction(nameof(Index));
     }
 

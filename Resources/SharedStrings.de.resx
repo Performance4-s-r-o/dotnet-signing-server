@@ -68,7 +68,6 @@
   <data name="PaymentConfirmFailed" xml:space="preserve"><value>Die Zahlung konnte nicht bestätigt werden.</value></data>
   <data name="AutoRechargeEnabled" xml:space="preserve"><value>Die automatische Aufladung wurde aktiviert.</value></data>
   <data name="AutoRechargeDisabled" xml:space="preserve"><value>Die automatische Aufladung wurde deaktiviert.</value></data>
-  <data name="AutoRechargeRequiresPayment" xml:space="preserve"><value>Bitte tätigen Sie zuerst einen Kauf, damit wir Ihre Zahlungsmethode für die automatische Aufladung speichern können.</value></data>
   <data name="NoSavedPaymentMethod" xml:space="preserve"><value>Keine gespeicherte Zahlungsmethode gefunden. Bitte aktivieren Sie "Karte speichern" beim nächsten Kauf.</value></data>
   <data name="SavedPaymentMethod" xml:space="preserve"><value>Gespeicherte Zahlungsmethode</value></data>
   <data name="ManagePaymentMethod" xml:space="preserve"><value>Zahlungsmethode verwalten</value></data>

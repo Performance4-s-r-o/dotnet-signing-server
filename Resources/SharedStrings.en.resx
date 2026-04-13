@@ -68,7 +68,6 @@
   <data name="PaymentConfirmFailed" xml:space="preserve"><value>Could not confirm payment.</value></data>
   <data name="AutoRechargeEnabled" xml:space="preserve"><value>Auto-recharge has been enabled.</value></data>
   <data name="AutoRechargeDisabled" xml:space="preserve"><value>Auto-recharge has been disabled.</value></data>
-  <data name="AutoRechargeRequiresPayment" xml:space="preserve"><value>Please make a purchase first so we can save your payment method for auto-recharge.</value></data>
   <data name="NoSavedPaymentMethod" xml:space="preserve"><value>No saved payment method found. Please buy credits with "Save card" checked first.</value></data>
   <data name="SavedPaymentMethod" xml:space="preserve"><value>Saved payment method</value></data>
   <data name="ManagePaymentMethod" xml:space="preserve"><value>Manage payment method</value></data>

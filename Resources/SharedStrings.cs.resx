@@ -68,7 +68,6 @@
   <data name="PaymentConfirmFailed" xml:space="preserve"><value>Nepodařilo se potvrdit platbu.</value></data>
   <data name="AutoRechargeEnabled" xml:space="preserve"><value>Automatické dobíjení bylo aktivováno.</value></data>
   <data name="AutoRechargeDisabled" xml:space="preserve"><value>Automatické dobíjení bylo deaktivováno.</value></data>
-  <data name="AutoRechargeRequiresPayment" xml:space="preserve"><value>Nejprve proveďte nákup, abychom mohli uložit vaši platební metodu pro automatické dobíjení.</value></data>
   <data name="NoSavedPaymentMethod" xml:space="preserve"><value>Nemáte uloženou platební metodu. Při dalším nákupu zaškrtněte "Uložit kartu".</value></data>
   <data name="SavedPaymentMethod" xml:space="preserve"><value>Uložená platební metoda</value></data>
   <data name="ManagePaymentMethod" xml:space="preserve"><value>Spravovat platební metodu</value></data>
