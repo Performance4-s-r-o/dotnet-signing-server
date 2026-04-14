@@ -1,5 +1,6 @@
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Services.Email;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -50,6 +51,7 @@ public class PriceChangeMonitorService : BackgroundService
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var billingOptions = scope.ServiceProvider.GetRequiredService<IOptions<BillingOptions>>().Value;
         var emailSender = scope.ServiceProvider.GetRequiredService<IEmailSender>();
+        var emailTemplates = scope.ServiceProvider.GetRequiredService<IEmailTemplateRenderer>();
         var appOptions = scope.ServiceProvider.GetRequiredService<IOptions<AppOptions>>().Value;
 
         var currentPrice = billingOptions.PricePer100;
@@ -87,37 +89,24 @@ public class PriceChangeMonitorService : BackgroundService
             var cancelUrl = $"{baseUrl}/Billing/AutoRecharge/Cancel?token={user.AutoRechargeCancelToken}";
             var oldAmount = GetFormattedAmount(user.AutoRechargePricePer100, user.AutoRechargeQuantity, billingOptions);
             var newAmount = GetFormattedAmount(currentPrice, user.AutoRechargeQuantity, billingOptions);
-
-            var body = $@"
-<div style=""font-family:sans-serif;max-width:600px;margin:0 auto"">
-    <h2>Auto-recharge price change notice</h2>
-    <p>The price for document signing credits will change in <strong>30 days</strong>.</p>
-    <table style=""border-collapse:collapse;margin:16px 0"">
-        <tr>
-            <td style=""padding:8px 16px;border:1px solid #ddd"">Auto-recharge quantity</td>
-            <td style=""padding:8px 16px;border:1px solid #ddd""><strong>{user.AutoRechargeQuantity} credits</strong></td>
-        </tr>
-        <tr>
-            <td style=""padding:8px 16px;border:1px solid #ddd"">Current price</td>
-            <td style=""padding:8px 16px;border:1px solid #ddd"">{oldAmount} {billingOptions.Currency}</td>
-        </tr>
-        <tr>
-            <td style=""padding:8px 16px;border:1px solid #ddd"">New price (effective in 30 days)</td>
-            <td style=""padding:8px 16px;border:1px solid #ddd""><strong>{newAmount} {billingOptions.Currency}</strong></td>
-        </tr>
-    </table>
-    <p>If you do not wish to continue with auto-recharge at the new price, you can cancel it before the change takes effect:</p>
-    <p><a href=""{cancelUrl}"" style=""display:inline-block;padding:12px 24px;background:#dc3545;color:#fff;text-decoration:none;border-radius:4px"">Cancel auto-recharge</a></p>
-    <p>You can also manage auto-recharge from your <a href=""{baseUrl}/Billing"">billing page</a>.</p>
-    <p style=""color:#666;font-size:13px"">If you take no action, your auto-recharge will continue at the new price after 30 days.</p>
-</div>";
+            var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+            var rendered = emailTemplates.Render(EmailTemplateId.PriceChangeNotice, locale, new Dictionary<string, string?>
+            {
+                ["daysNotice"] = "30",
+                ["quantity"] = user.AutoRechargeQuantity.ToString(),
+                ["oldPrice"] = oldAmount,
+                ["newPrice"] = newAmount,
+                ["currency"] = billingOptions.Currency,
+                ["cancelUrl"] = cancelUrl,
+                ["billingUrl"] = $"{baseUrl}/Billing",
+            });
 
             try
             {
                 await emailSender.SendAsync(
                     user.Email,
-                    "Auto-recharge price change – 30 day notice",
-                    body,
+                    rendered.Subject,
+                    rendered.HtmlBody,
                     $"{baseUrl}/Account/Settings",
                     isCritical: true);
 

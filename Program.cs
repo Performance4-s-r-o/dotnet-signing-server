@@ -52,6 +52,7 @@ builder.Services.AddHttpClient("resend", client =>
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 builder.Services.AddScoped<IEmailSender, ResendEmailSender>();
+builder.Services.AddSingleton<DotNetSigningServer.Services.Email.IEmailTemplateRenderer, DotNetSigningServer.Services.Email.EmailTemplateRenderer>();
 builder.Services.AddScoped<PdfTemplateService>();
 builder.Services.AddScoped<PdfConversionService>();
 builder.Services.AddScoped<FlowPipelineService>();

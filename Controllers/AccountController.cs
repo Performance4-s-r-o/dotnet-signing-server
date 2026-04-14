@@ -1,8 +1,10 @@
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Services.Email;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
+using System.Globalization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -20,6 +22,7 @@ public class AccountController : Controller
     private readonly ApplicationDbContext _dbContext;
     private readonly IAuthService _authService;
     private readonly IEmailSender _emailSender;
+    private readonly IEmailTemplateRenderer _emailTemplates;
     private readonly AppOptions _appOptions;
     private readonly IStringLocalizer<SharedStrings> _localizer;
 
@@ -28,14 +31,23 @@ public class AccountController : Controller
     private static readonly TimeSpan RateLimitWindow = TimeSpan.FromMinutes(1);
     private static DateTime _lastCleanup = DateTime.UtcNow;
 
-    public AccountController(ApplicationDbContext dbContext, IAuthService authService, IEmailSender emailSender, IOptions<AppOptions> appOptions, IStringLocalizer<SharedStrings> localizer)
+    public AccountController(
+        ApplicationDbContext dbContext,
+        IAuthService authService,
+        IEmailSender emailSender,
+        IEmailTemplateRenderer emailTemplates,
+        IOptions<AppOptions> appOptions,
+        IStringLocalizer<SharedStrings> localizer)
     {
         _dbContext = dbContext;
         _authService = authService;
         _emailSender = emailSender;
+        _emailTemplates = emailTemplates;
         _appOptions = appOptions.Value;
         _localizer = localizer;
     }
+
+    private string CurrentLocale => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
 
     private bool IsRateLimited(string key)
     {
@@ -137,15 +149,14 @@ public class AccountController : Controller
         // Send verification email (critical — user cannot complete signup without it)
         var verificationLink = BuildAbsoluteUrl($"/Account/Verify?token={Uri.EscapeDataString(verificationToken)}");
         var settingsUrl = BuildAbsoluteUrl("/Account/Settings");
-        var subject = "Verify your email for P4PDF by Performance4 s.r.o.";
-        var body = $@"<p>Hello,</p>
-<p>Please verify your email to activate your account.</p>
-<p><a href=""{verificationLink}"">Click here to verify</a></p>
-<p>If the link does not work, copy and paste this URL into your browser:<br/>{verificationLink}</p>";
+        var rendered = _emailTemplates.Render(EmailTemplateId.EmailVerification, CurrentLocale, new Dictionary<string, string?>
+        {
+            ["verificationUrl"] = verificationLink,
+        });
 
         try
         {
-            await _emailSender.SendAsync(user.Email, subject, body, settingsUrl, isCritical: true);
+            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody, settingsUrl, isCritical: true);
             TempData["Info"] = _localizer["CheckEmailVerification"].Value;
         }
         catch
@@ -230,12 +241,15 @@ public class AccountController : Controller
         await _dbContext.SaveChangesAsync();
 
         var otpSettingsUrl = BuildAbsoluteUrl("/Account/Settings");
-        var subject = "Your 2FA code";
-        var body = $"<p>Your verification code is: <strong>{otp}</strong></p><p>This code expires in 10 minutes.</p>";
+        var rendered = _emailTemplates.Render(EmailTemplateId.TwoFactorCode, CurrentLocale, new Dictionary<string, string?>
+        {
+            ["otpCode"] = otp,
+            ["expiryMinutes"] = "10",
+        });
         try
         {
             // 2FA codes are critical security emails — always sent regardless of notification preferences
-            await _emailSender.SendAsync(user.Email, subject, body, otpSettingsUrl, isCritical: true);
+            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody, otpSettingsUrl, isCritical: true);
             TempData["Info"] = _localizer["TwoFactorCodeSent"].Value;
         }
         catch
@@ -428,16 +442,15 @@ public class AccountController : Controller
 
             var resetLink = BuildAbsoluteUrl($"/Account/ResetPassword?token={Uri.EscapeDataString(token)}");
             var settingsUrl = BuildAbsoluteUrl("/Account/Settings");
-            var subject = "Reset your P4PDF password";
-            var body = $@"<p>Hello,</p>
-<p>We received a request to reset your password.</p>
-<p><a href=""{resetLink}"">Click here to reset your password</a></p>
-<p>If the link does not work, copy and paste this URL into your browser:<br/>{resetLink}</p>
-<p>This link expires in 1 hour. If you did not request a password reset, you can safely ignore this email.</p>";
+            var rendered = _emailTemplates.Render(EmailTemplateId.PasswordReset, CurrentLocale, new Dictionary<string, string?>
+            {
+                ["resetUrl"] = resetLink,
+                ["expiryMinutes"] = "60",
+            });
 
             try
             {
-                await _emailSender.SendAsync(user.Email, subject, body, settingsUrl, isCritical: true);
+                await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody, settingsUrl, isCritical: true);
             }
             catch
             {

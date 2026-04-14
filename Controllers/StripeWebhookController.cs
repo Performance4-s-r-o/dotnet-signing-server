@@ -2,6 +2,7 @@ using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Services.Email;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +21,7 @@ public class StripeWebhookController : ControllerBase
     private readonly BillingOptions _billingOptions;
     private readonly IAutoRechargeService _autoRechargeService;
     private readonly IEmailSender _emailSender;
+    private readonly IEmailTemplateRenderer _emailTemplates;
     private readonly AppOptions _appOptions;
     private readonly ILogger<StripeWebhookController> _logger;
 
@@ -29,6 +31,7 @@ public class StripeWebhookController : ControllerBase
         IOptions<BillingOptions> billingOptions,
         IAutoRechargeService autoRechargeService,
         IEmailSender emailSender,
+        IEmailTemplateRenderer emailTemplates,
         IOptions<AppOptions> appOptions,
         ILogger<StripeWebhookController> logger)
     {
@@ -37,6 +40,7 @@ public class StripeWebhookController : ControllerBase
         _billingOptions = billingOptions.Value;
         _autoRechargeService = autoRechargeService;
         _emailSender = emailSender;
+        _emailTemplates = emailTemplates;
         _appOptions = appOptions.Value;
         _logger = logger;
     }
@@ -365,21 +369,22 @@ public class StripeWebhookController : ControllerBase
 
         var paymentType = paymentIntent.Metadata.TryGetValue("type", out var t) ? t : "purchase";
         var baseUrl = _appOptions.FqdnServerName?.TrimEnd('/') ?? "https://app.p4pdf.com";
-
-        var body = $@"
-<div style=""font-family:sans-serif;max-width:600px;margin:0 auto"">
-    <h2>Payment failed</h2>
-    <p>A {paymentType.Replace("_", " ")} payment of <strong>{paymentIntent.Amount / 100.0m:0.00} {paymentIntent.Currency?.ToUpper()}</strong> could not be processed.</p>
-    <p><strong>Reason:</strong> {failureMessage}</p>
-    <p>Please <a href=""{baseUrl}/Billing"">visit your billing page</a> to update your payment method or purchase credits manually.</p>
-</div>";
+        var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        var rendered = _emailTemplates.Render(EmailTemplateId.PaymentFailed, locale, new Dictionary<string, string?>
+        {
+            ["paymentType"] = paymentType.Replace("_", " "),
+            ["amount"] = (paymentIntent.Amount / 100.0m).ToString("0.00"),
+            ["currency"] = paymentIntent.Currency?.ToUpperInvariant() ?? _billingOptions.Currency,
+            ["failureReason"] = failureMessage,
+            ["billingUrl"] = $"{baseUrl}/Billing",
+        });
 
         try
         {
             await _emailSender.SendAsync(
                 user.Email,
-                "Payment failed – action required",
-                body,
+                rendered.Subject,
+                rendered.HtmlBody,
                 $"{baseUrl}/Account/Settings",
                 isCritical: false);
         }

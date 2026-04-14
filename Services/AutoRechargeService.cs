@@ -1,6 +1,7 @@
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Services.Email;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Stripe;
@@ -13,6 +14,7 @@ public class AutoRechargeService : IAutoRechargeService
     private readonly IBillingService _billingService;
     private readonly BillingOptions _billingOptions;
     private readonly IEmailSender _emailSender;
+    private readonly IEmailTemplateRenderer _emailTemplates;
     private readonly ILogger<AutoRechargeService> _logger;
     private readonly AppOptions _appOptions;
 
@@ -24,6 +26,7 @@ public class AutoRechargeService : IAutoRechargeService
         IBillingService billingService,
         IOptions<BillingOptions> billingOptions,
         IEmailSender emailSender,
+        IEmailTemplateRenderer emailTemplates,
         ILogger<AutoRechargeService> logger,
         IOptions<AppOptions> appOptions)
     {
@@ -31,6 +34,7 @@ public class AutoRechargeService : IAutoRechargeService
         _billingService = billingService;
         _billingOptions = billingOptions.Value;
         _emailSender = emailSender;
+        _emailTemplates = emailTemplates;
         _logger = logger;
         _appOptions = appOptions.Value;
     }
@@ -236,22 +240,21 @@ public class AutoRechargeService : IAutoRechargeService
 
         var baseUrl = _appOptions.FqdnServerName?.TrimEnd('/') ?? "https://app.p4pdf.com";
         var billingUrl = $"{baseUrl}/Billing";
-
-        var body = $@"
-<div style=""font-family:sans-serif;max-width:600px;margin:0 auto"">
-    <h2>Auto-recharge failed</h2>
-    <p>We tried to automatically recharge your account with <strong>{user.AutoRechargeQuantity} credits</strong>, but the payment could not be processed.</p>
-    <p><strong>Reason:</strong> {reason}</p>
-    <p>Your current balance is <strong>{user.CreditsRemaining} credits</strong>.</p>
-    <p>Please <a href=""{billingUrl}"">visit your billing page</a> to update your payment method or purchase credits manually.</p>
-</div>";
+        var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        var rendered = _emailTemplates.Render(EmailTemplateId.AutoRechargeFailed, locale, new Dictionary<string, string?>
+        {
+            ["quantity"] = user.AutoRechargeQuantity.ToString(),
+            ["failureReason"] = reason,
+            ["currentBalance"] = user.CreditsRemaining.ToString(),
+            ["billingUrl"] = billingUrl,
+        });
 
         try
         {
             await _emailSender.SendAsync(
                 user.Email,
-                "Auto-recharge failed – action required",
-                body,
+                rendered.Subject,
+                rendered.HtmlBody,
                 $"{baseUrl}/Account/Settings",
                 isCritical: false);
         }
