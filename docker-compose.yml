@@ -28,14 +28,10 @@ services:
       - Stripe__EnableTaxIdCollection=${STRIPE_ENABLE_TAX_ID_COLLECTION:-true}
       - Stripe__RequireBillingAddress=${STRIPE_REQUIRE_BILLING_ADDRESS:-true}
       - Stripe__EnableAutomaticTax=${STRIPE_ENABLE_AUTOMATIC_TAX:-true}
-      # SMTP configuration
-      - Smtp__Host=${SMTP_HOST:-smtp.example.com}
-      - Smtp__Port=${SMTP_PORT:-587}
-      - Smtp__UseSsl=${SMTP_USE_SSL:-true}
-      - Smtp__FromAddress=${SMTP_FROM_ADDRESS:-no-reply@performance4.cz}
-      - Smtp__FromName=${SMTP_FROM_NAME:-P4PDF by Performance4 s.r.o.}
-      - Smtp__Username=${SMTP_USERNAME:-}
-      - Smtp__Password=${SMTP_PASSWORD:-}
+      # Resend (transactional email) — replaces legacy SMTP
+      - Resend__ApiKey=${RESEND_API_KEY:-}
+      - Resend__From=${EMAIL_FROM:-P4PDF <noreply@send.p4pdf.cz>}
+      - Resend__ReplyTo=${EMAIL_REPLY_TO:-}
       # Loki logging
       - Loki__Url=${LOKI_URL:-}
       - Loki__Username=${LOKI_USERNAME:-}

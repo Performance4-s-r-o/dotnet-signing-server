@@ -47,7 +47,11 @@ builder.Services.AddScoped<IBillingService, BillingService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IStripeCheckoutService, StripeCheckoutService>();
 builder.Services.AddScoped<IApiAuthService, ApiAuthService>();
-builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+builder.Services.AddHttpClient("resend", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+builder.Services.AddScoped<IEmailSender, ResendEmailSender>();
 builder.Services.AddScoped<PdfTemplateService>();
 builder.Services.AddScoped<PdfConversionService>();
 builder.Services.AddScoped<FlowPipelineService>();
@@ -76,6 +80,7 @@ builder.Services.Configure<BillingOptions>(builder.Configuration.GetSection("Bil
 builder.Services.Configure<StripeOptions>(builder.Configuration.GetSection("Stripe"));
 builder.Services.Configure<TokenOptions>(builder.Configuration.GetSection("Token"));
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection("Smtp"));
+builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection("Resend"));
 builder.Services.Configure<LokiOptions>(builder.Configuration.GetSection("Loki"));
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("AI"));
 builder.Services.Configure<LimitsOptions>(builder.Configuration.GetSection("Limits"));
