@@ -31,4 +31,13 @@
     <ProjectReference Include="../../dotnet-signing-server.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Production templates are copied into the test bin so EmailTemplateRenderer
+         finds them via its default AssemblyLocation/Resources/EmailTemplates path. -->
+    <Content Include="../../Resources/EmailTemplates/**/*.html"
+             Link="Resources/EmailTemplates/%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
