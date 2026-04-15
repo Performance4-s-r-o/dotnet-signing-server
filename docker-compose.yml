@@ -45,6 +45,14 @@ services:
       - AI__Google__ApiKey=${AI_GOOGLE_API_KEY:-}
       - AI__Google__Model=${AI_GOOGLE_MODEL:-gemini-1.5-flash}
       - AI__Google__Endpoint=${AI_GOOGLE_ENDPOINT:-https://generativelanguage.googleapis.com/v1beta}
+      # osTicket (support tickets). Without ApiKey /support/ticket falls back to console logging.
+      - OsTicket__Url=${OSTICKET_URL:-}
+      - OsTicket__ApiKey=${OSTICKET_API_KEY:-}
+      - OsTicket__Topic__signing=${OSTICKET_TOPIC_SIGNING:-1}
+      - OsTicket__Topic__templates=${OSTICKET_TOPIC_TEMPLATES:-2}
+      - OsTicket__Topic__billing=${OSTICKET_TOPIC_BILLING:-3}
+      - OsTicket__Topic__account=${OSTICKET_TOPIC_ACCOUNT:-4}
+      - OsTicket__Topic__other=${OSTICKET_TOPIC_OTHER:-5}
       # Size limits
       - Limits__PdfMaxBytes=${PDF_MAX_BYTES:-20971520}
       - Limits__ImageMaxBytes=${IMAGE_MAX_BYTES:-1048576}
