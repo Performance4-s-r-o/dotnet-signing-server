@@ -360,14 +360,17 @@ if (!app.Environment.IsProduction())
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     try
     {
         dbContext.Database.Migrate();
     }
     catch (Exception ex)
     {
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while migrating the database.");
+        // Fail fast so Coolify / the orchestrator sees a failed deploy.
+        // Serving against a half-migrated database silently breaks runtime queries.
+        logger.LogCritical(ex, "Database migration failed — aborting startup.");
+        throw;
     }
 }
 
