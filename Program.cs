@@ -267,7 +267,9 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
 }
-app.UseHttpsRedirection();
+// HTTPS redirect is handled by the reverse proxy (Caddy/Coolify). The
+// container only speaks HTTP internally, so UseHttpsRedirection would
+// just log "Failed to determine the https port" on every request.
 
 app.UseMiddleware<LokiExceptionMiddleware>();
 app.UseMiddleware<BodySizeLimitMiddleware>();
