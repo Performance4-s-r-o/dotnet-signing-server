@@ -5,20 +5,26 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
 namespace dotnetsigningserver.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251124090256_AddUserAndBilling")]
-    partial class AddUserAndBilling
+    [Migration("20260419085537_InitialSchema")]
+    partial class InitialSchema
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "8.0.6");
+            modelBuilder
+                .HasDefaultSchema("dotnet_signing")
+                .HasAnnotation("ProductVersion", "8.0.24")
+                .HasAnnotation("Relational:MaxIdentifierLength", 63);
+
+            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("DotNetSigningServer.Models.ApiToken", b =>
                 {
@@ -26,23 +32,36 @@ namespace dotnetsigningserver.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AllowedIps")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AllowedOrigins")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset?>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("IsBrowserToken")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Label")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(128)");
 
                     b.Property<DateTimeOffset?>("RevokedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<byte[]>("TokenHash")
                         .IsRequired()
-                        .HasColumnType("BYTEA");
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("TokenPrefix")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
@@ -51,9 +70,11 @@ namespace dotnetsigningserver.Migrations
 
                     b.HasIndex("TokenHash");
 
+                    b.HasIndex("TokenPrefix");
+
                     b.HasIndex("UserId");
 
-                    b.ToTable("ApiTokens");
+                    b.ToTable("ApiTokens", "dotnet_signing");
                 });
 
             modelBuilder.Entity("DotNetSigningServer.Models.Document", b =>
@@ -69,7 +90,7 @@ namespace dotnetsigningserver.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
@@ -78,7 +99,7 @@ namespace dotnetsigningserver.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Documents");
+                    b.ToTable("Documents", "dotnet_signing");
                 });
 
             modelBuilder.Entity("DotNetSigningServer.Models.Invoice", b =>
@@ -88,7 +109,7 @@ namespace dotnetsigningserver.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<int>("AmountCents")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -96,7 +117,7 @@ namespace dotnetsigningserver.Migrations
                     b.Property<string>("Currency")
                         .IsRequired()
                         .HasMaxLength(8)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(8)");
 
                     b.Property<DateTimeOffset>("PeriodEnd")
                         .HasColumnType("timestamp with time zone");
@@ -107,11 +128,11 @@ namespace dotnetsigningserver.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("StripeInvoiceId")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(128)");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
@@ -122,7 +143,7 @@ namespace dotnetsigningserver.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Invoices");
+                    b.ToTable("Invoices", "dotnet_signing");
                 });
 
             modelBuilder.Entity("DotNetSigningServer.Models.Payment", b =>
@@ -132,7 +153,7 @@ namespace dotnetsigningserver.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<int>("AmountCents")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -140,7 +161,7 @@ namespace dotnetsigningserver.Migrations
                     b.Property<string>("Currency")
                         .IsRequired()
                         .HasMaxLength(8)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(8)");
 
                     b.Property<Guid?>("InvoiceId")
                         .HasColumnType("uuid");
@@ -148,11 +169,11 @@ namespace dotnetsigningserver.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("StripePaymentIntentId")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(128)");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
@@ -165,14 +186,16 @@ namespace dotnetsigningserver.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Payments");
+                    b.ToTable("Payments", "dotnet_signing");
                 });
 
             modelBuilder.Entity("DotNetSigningServer.Models.PricingPlan", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
@@ -180,49 +203,83 @@ namespace dotnetsigningserver.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)");
 
                     b.Property<decimal>("PricePer100")
                         .HasColumnType("numeric");
 
                     b.HasKey("Id");
 
-                    b.ToTable("PricingPlans");
+                    b.ToTable("PricingPlans", "dotnet_signing");
                 });
 
             modelBuilder.Entity("DotNetSigningServer.Models.SigningData", b =>
                 {
                     b.Property<string>("Id")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<string>("CertificatePem")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("FieldName")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<string>("HashToSign")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<string>("PresignedPdfPath")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<string>("TsaPassword")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<string>("TsaUrl")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<string>("TsaUsername")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.ToTable("SigningData");
+                    b.ToTable("SigningData", "dotnet_signing");
+                });
+
+            modelBuilder.Entity("DotNetSigningServer.Models.StoredPdfTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Base64Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FieldsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("StoredPdfTemplates", "dotnet_signing");
                 });
 
             modelBuilder.Entity("DotNetSigningServer.Models.UsageRecord", b =>
@@ -231,14 +288,24 @@ namespace dotnetsigningserver.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int>("BaseCost")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Count")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("DocumentId")
+                    b.Property<Guid?>("DocumentId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Operation")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("Tier")
+                        .HasColumnType("integer");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
@@ -249,7 +316,7 @@ namespace dotnetsigningserver.Migrations
 
                     b.HasIndex("UserId", "CreatedAt");
 
-                    b.ToTable("UsageRecords");
+                    b.ToTable("UsageRecords", "dotnet_signing");
                 });
 
             modelBuilder.Entity("DotNetSigningServer.Models.User", b =>
@@ -258,28 +325,80 @@ namespace dotnetsigningserver.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AutoRechargeCancelToken")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("AutoRechargeEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("AutoRechargePricePer100")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("AutoRechargeQuantity")
+                        .HasColumnType("integer");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CreditsRemaining")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<bool>("EmailNotificationsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("EmailOtpCode")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTimeOffset?>("EmailOtpExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EmailVerificationToken")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("EmailVerified")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsAdmin")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsEnterprise")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("MaxConcurrentOperations")
+                        .HasColumnType("integer");
+
                     b.Property<byte[]>("PasswordHash")
                         .IsRequired()
-                        .HasColumnType("BYTEA");
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset?>("PasswordResetExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PasswordResetToken")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<byte[]>("PasswordSalt")
                         .IsRequired()
-                        .HasColumnType("BYTEA");
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset?>("PriceChangeNotifiedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("StripeCustomerId")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(128)");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -289,7 +408,7 @@ namespace dotnetsigningserver.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", "dotnet_signing");
                 });
 
             modelBuilder.Entity("DotNetSigningServer.Models.WebhookEvent", b =>
@@ -300,21 +419,21 @@ namespace dotnetsigningserver.Migrations
 
                     b.Property<string>("Error")
                         .HasMaxLength(512)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(512)");
 
                     b.Property<string>("EventId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("EventType")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("PayloadJson")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset?>("ProcessedAt")
                         .HasColumnType("timestamp with time zone");
@@ -327,7 +446,7 @@ namespace dotnetsigningserver.Migrations
                     b.HasIndex("EventId")
                         .IsUnique();
 
-                    b.ToTable("WebhookEvents");
+                    b.ToTable("WebhookEvents", "dotnet_signing");
                 });
 
             modelBuilder.Entity("DotNetSigningServer.Models.ApiToken", b =>
@@ -385,9 +504,7 @@ namespace dotnetsigningserver.Migrations
                 {
                     b.HasOne("DotNetSigningServer.Models.Document", "Document")
                         .WithMany("UsageRecords")
-                        .HasForeignKey("DocumentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("DocumentId");
 
                     b.HasOne("DotNetSigningServer.Models.User", "User")
                         .WithMany("UsageRecords")

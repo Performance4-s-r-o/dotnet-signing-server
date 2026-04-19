@@ -23,6 +23,11 @@ namespace DotNetSigningServer.Data
         {
             base.OnModelCreating(modelBuilder);
 
+            if (Database.IsNpgsql())
+            {
+                modelBuilder.HasDefaultSchema("dotnet_signing");
+            }
+
             if (Database.IsSqlite())
             {
                 var dateTimeOffsetConverter = new DateTimeOffsetToBinaryConverter();
