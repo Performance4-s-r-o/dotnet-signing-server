@@ -183,6 +183,8 @@ else
                 maxRetryDelay: TimeSpan.FromSeconds(5),
                 errorCodesToAdd: null);
             npgsqlOptions.CommandTimeout(30);
+            // dotnet_user has no CREATE on public; keep migration history in its own schema.
+            npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "dotnet_signing");
         }));
 }
 
