@@ -200,7 +200,8 @@ builder.Services.AddOptions<SealOptions>()
     .PostConfigure(options =>
     {
         options.PfxPath = builder.Configuration["SEAL_PFX_PATH"] ?? options.PfxPath;
-        options.PfxBase64 = builder.Configuration["SEAL_PFX_BASE64"] ?? options.PfxBase64;
+        var pfx = builder.Configuration["SEAL_PFX_BASE64"] ?? options.PfxBase64;
+        options.PfxBase64 = string.IsNullOrEmpty(pfx) ? pfx : new string(pfx.Where(c => !char.IsWhiteSpace(c)).ToArray());
         options.PfxPassword = builder.Configuration["SEAL_PFX_PASSWORD"] ?? options.PfxPassword;
     });
 
@@ -208,7 +209,19 @@ builder.Services.AddOptions<EvidenceOptions>()
     .Bind(builder.Configuration.GetSection("Evidence"))
     .PostConfigure(options =>
     {
-        options.EncryptionCertificatePem = builder.Configuration["EVIDENCE_ENCRYPTION_CERTIFICATE_PEM"] ?? options.EncryptionCertificatePem;
+        // Accept either raw PEM or a single-line base64 of the PEM (Coolify's
+        // .env export mangles multi-line values, so base64 is the safe path).
+        var pem = builder.Configuration["EVIDENCE_ENCRYPTION_CERTIFICATE_PEM"];
+        var pemB64 = builder.Configuration["EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64"];
+        if (!string.IsNullOrEmpty(pemB64))
+        {
+            var cleaned = new string(pemB64.Where(c => !char.IsWhiteSpace(c)).ToArray());
+            options.EncryptionCertificatePem = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(cleaned));
+        }
+        else if (!string.IsNullOrEmpty(pem))
+        {
+            options.EncryptionCertificatePem = pem;
+        }
     });
 
 builder.Services.AddOptions<BillingOptions>()
