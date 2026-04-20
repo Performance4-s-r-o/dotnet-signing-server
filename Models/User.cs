@@ -47,6 +47,12 @@ public class User
     /// <summary>Max parallel API operations. NULL = use default (3).</summary>
     public int? MaxConcurrentOperations { get; set; }
 
+    /// <summary>
+    /// Seconds to wait for a free concurrency slot when the limit is reached.
+    /// 0 = reject immediately with 429. NULL = use BillingOptions.ConcurrencyQueueTimeoutSeconds.
+    /// </summary>
+    public int? ConcurrencyQueueTimeoutSeconds { get; set; }
+
     /// <summary>Admin users can access /Admin pages (user management, enterprise toggle).</summary>
     public bool IsAdmin { get; set; } = false;
 

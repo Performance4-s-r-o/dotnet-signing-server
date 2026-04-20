@@ -1,4 +1,5 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Middleware;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Resources;
 using DotNetSigningServer.Services;
@@ -191,6 +192,25 @@ public class AdminController : Controller
             TempData["Info"] = _localizer["EnterpriseDisabled"].Value;
         }
 
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost("/Admin/Users/{id:guid}/SetConcurrencyQueueTimeout")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetConcurrencyQueueTimeout(Guid id, [FromForm] int? queueTimeoutSeconds)
+    {
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (user == null)
+        {
+            TempData["Error"] = _localizer["UserNotFound"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+
+        user.ConcurrencyQueueTimeoutSeconds = queueTimeoutSeconds < 0 ? null : queueTimeoutSeconds;
+        await _dbContext.SaveChangesAsync();
+
+        UserConcurrencyMiddleware.InvalidateLimitCache(id);
+        TempData["Info"] = _localizer["ConcurrencyQueueTimeoutUpdated"].Value;
         return RedirectToAction(nameof(Details), new { id });
     }
 

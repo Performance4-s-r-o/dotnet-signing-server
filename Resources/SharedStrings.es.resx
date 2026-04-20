@@ -82,6 +82,12 @@
   <data name="ConcurrencyLimitDescription" xml:space="preserve"><value>Limite cuántas solicitudes API pueden ejecutarse en paralelo para su cuenta. Valores más altos usan precios de créditos escalonados.</value></data>
   <data name="MaxParallelRequests" xml:space="preserve"><value>Máx. solicitudes paralelas</value></data>
   <data name="ConcurrencyDefault" xml:space="preserve"><value>Predeterminado</value></data>
+  <data name="ConcurrencyQueueTimeout" xml:space="preserve"><value>Tiempo de espera en cola (s)</value></data>
+  <data name="ConcurrencyQueueTimeoutDescription" xml:space="preserve"><value>0 = rechazar inmediatamente (429). Mayor que 0 = esperar hasta N segundos por un slot libre.</value></data>
+  <data name="ConcurrencyQueueTimeoutUpdated" xml:space="preserve"><value>Tiempo de espera en cola actualizado.</value></data>
+  <data name="ConcurrencyQueueDefault" xml:space="preserve"><value>predeterminado global</value></data>
+  <data name="UseGlobalDefault" xml:space="preserve"><value>Usar predeterminado global</value></data>
+  <data name="ServerAtCapacity" xml:space="preserve"><value>El servidor está a plena capacidad. Por favor, inténtelo de nuevo en unos segundos.</value></data>
   <data name="SaveLimit" xml:space="preserve"><value>Guardar</value></data>
   <data name="SeePricing" xml:space="preserve"><value>Ver precios</value></data>
   <data name="InvalidConcurrencyLimit" xml:space="preserve"><value>El límite de paralelismo debe estar entre 1 y 50 (vacío = predeterminado).</value></data>

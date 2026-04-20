@@ -1,4 +1,5 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Middleware;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Resources;
 using DotNetSigningServer.Services;
@@ -48,6 +49,7 @@ public class ApiTokensController : Controller
 
         var user = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId.Value);
         ViewBag.MaxConcurrentOperations = user?.MaxConcurrentOperations;
+        ViewBag.ConcurrencyQueueTimeoutSeconds = user?.ConcurrencyQueueTimeoutSeconds;
 
         return View(tokens);
     }
@@ -76,8 +78,27 @@ public class ApiTokensController : Controller
         // Intentionally NOT touching UpdatedAt — it's used as the cookie security stamp
         // (see Program.cs cookie OnValidatePrincipal). Bumping it here would sign the user out.
         await _dbContext.SaveChangesAsync();
+        UserConcurrencyMiddleware.InvalidateLimitCache(user.Id);
 
         TempData["Info"] = _localizer["ConcurrencyLimitUpdated"].Value;
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost("/ApiTokens/QueueTimeout")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateQueueTimeout(int? queueTimeoutSeconds)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction("SignIn", "Account");
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null) return RedirectToAction("SignIn", "Account");
+
+        user.ConcurrencyQueueTimeoutSeconds = queueTimeoutSeconds < 0 ? null : queueTimeoutSeconds;
+        await _dbContext.SaveChangesAsync();
+        UserConcurrencyMiddleware.InvalidateLimitCache(user.Id);
+
+        TempData["Info"] = _localizer["ConcurrencyQueueTimeoutUpdated"].Value;
         return RedirectToAction(nameof(Index));
     }
 

@@ -380,9 +380,7 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Throttling runs AFTER authentication so ClaimsPrincipal carries the user id
-// (set by ApiKeyAuthenticationHandler for Bearer tokens or the cookie handler).
-app.UseMiddleware<RequestThrottlingMiddleware>();
+// Concurrency limiting runs AFTER authentication so ClaimsPrincipal carries the user id.
 app.UseMiddleware<UserConcurrencyMiddleware>();
 
 app.MapControllers();

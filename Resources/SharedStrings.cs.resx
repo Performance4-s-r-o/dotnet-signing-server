@@ -82,6 +82,12 @@
   <data name="ConcurrencyLimitDescription" xml:space="preserve"><value>Omezte, kolik API požadavků může běžet paralelně pro váš účet. Vyšší hodnoty používají stupňované ceny kreditů.</value></data>
   <data name="MaxParallelRequests" xml:space="preserve"><value>Max paralelních požadavků</value></data>
   <data name="ConcurrencyDefault" xml:space="preserve"><value>Výchozí</value></data>
+  <data name="ConcurrencyQueueTimeout" xml:space="preserve"><value>Timeout fronty (s)</value></data>
+  <data name="ConcurrencyQueueTimeoutDescription" xml:space="preserve"><value>0 = okamžité zamítnutí (429). Více než 0 = čekat až N sekund na volný slot.</value></data>
+  <data name="ConcurrencyQueueTimeoutUpdated" xml:space="preserve"><value>Timeout fronty aktualizován.</value></data>
+  <data name="ConcurrencyQueueDefault" xml:space="preserve"><value>globální výchozí</value></data>
+  <data name="UseGlobalDefault" xml:space="preserve"><value>Použít globální výchozí</value></data>
+  <data name="ServerAtCapacity" xml:space="preserve"><value>Server je plně vytížen. Zkuste to prosím za chvíli.</value></data>
   <data name="SaveLimit" xml:space="preserve"><value>Uložit</value></data>
   <data name="SeePricing" xml:space="preserve"><value>Zobrazit ceník</value></data>
   <data name="InvalidConcurrencyLimit" xml:space="preserve"><value>Limit paralelizace musí být mezi 1 a 50 (prázdné = výchozí).</value></data>

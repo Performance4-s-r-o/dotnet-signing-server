@@ -82,6 +82,12 @@
   <data name="ConcurrencyLimitDescription" xml:space="preserve"><value>Limit how many API requests can run in parallel for your account. Higher values use tiered credit pricing.</value></data>
   <data name="MaxParallelRequests" xml:space="preserve"><value>Max parallel requests</value></data>
   <data name="ConcurrencyDefault" xml:space="preserve"><value>Default</value></data>
+  <data name="ConcurrencyQueueTimeout" xml:space="preserve"><value>Queue timeout (s)</value></data>
+  <data name="ConcurrencyQueueTimeoutDescription" xml:space="preserve"><value>0 = reject immediately (429). Greater than 0 = wait up to N seconds for a free slot before returning 429.</value></data>
+  <data name="ConcurrencyQueueTimeoutUpdated" xml:space="preserve"><value>Queue timeout updated.</value></data>
+  <data name="ConcurrencyQueueDefault" xml:space="preserve"><value>global default</value></data>
+  <data name="UseGlobalDefault" xml:space="preserve"><value>Use global default</value></data>
+  <data name="ServerAtCapacity" xml:space="preserve"><value>Server is at full capacity. Please retry in a few seconds.</value></data>
   <data name="SaveLimit" xml:space="preserve"><value>Save</value></data>
   <data name="SeePricing" xml:space="preserve"><value>See pricing</value></data>
   <data name="InvalidConcurrencyLimit" xml:space="preserve"><value>Concurrency limit must be between 1 and 50 (leave empty for default).</value></data>

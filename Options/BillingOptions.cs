@@ -25,4 +25,17 @@ public class BillingOptions
     /// Example: MaxConcurrencyTier=10 caps at 10× base cost.
     /// </summary>
     public int MaxConcurrencyTier { get; set; } = 10;
+
+    /// <summary>
+    /// Global default queue timeout in seconds when User.ConcurrencyQueueTimeoutSeconds is null.
+    /// 0 = reject immediately with 429 (default behaviour).
+    /// </summary>
+    public int ConcurrencyQueueTimeoutSeconds { get; set; } = 0;
+
+    /// <summary>
+    /// Hard cap on total concurrent operations across all users. 0 = disabled.
+    /// When exceeded, server returns 503 immediately. Set via appsettings to protect the server
+    /// under unexpected load spikes without code changes.
+    /// </summary>
+    public int GlobalConcurrencyLimit { get; set; } = 0;
 }
