@@ -17,7 +17,6 @@ namespace DotNetSigningServer.Controllers
     public class PdfUtilityApiController : ApiControllerBase
     {
         private readonly PdfConversionService _pdfConversionService;
-        private readonly FlowPipelineService _flowPipelineService;
 
         public PdfUtilityApiController(
             ApplicationDbContext dbContext,
@@ -28,12 +27,10 @@ namespace DotNetSigningServer.Controllers
             IWebHostEnvironment env,
             PdfTemplateService pdfTemplateService,
             PdfConversionService pdfConversionService,
-            FlowPipelineService flowPipelineService,
             IStringLocalizer<SharedStrings> localizer)
             : base(dbContext, apiAuthService, logger, limitGuard, billingOptions, env, pdfTemplateService, localizer)
         {
             _pdfConversionService = pdfConversionService;
-            _flowPipelineService = flowPipelineService;
         }
 
         [HttpPost("/api/convert/pdfa")]
@@ -179,107 +176,6 @@ namespace DotNetSigningServer.Controllers
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Barcode scan failed");
                 return SafeProblem(Localizer["ScanCodesError"], ex);
-            }
-        }
-
-        [HttpPost("/api/flow")]
-        public async Task<IActionResult> StartFlow([FromBody] FlowPipelineInput input)
-        {
-            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
-            if (error != null || user == null) return error!;
-
-            if ((input.PdfContents == null || input.PdfContents.Count == 0) && input.FillPdf == null)
-            {
-                return BadRequest(new { message = Localizer["ProvidePdfOrFillPdf"].Value });
-            }
-
-            if (input.Flow == null || input.Flow.Count == 0)
-            {
-                return BadRequest(new { message = Localizer["FlowRequired"].Value });
-            }
-
-            var invalid = input.Flow.FirstOrDefault(f =>
-                string.IsNullOrWhiteSpace(f.Action) ||
-                !IsAllowedFlowAction(f.Action));
-            if (invalid != null)
-            {
-                return BadRequest(new { message = Localizer["UnsupportedFlowAction", invalid.Action ?? ""].Value });
-            }
-
-            var terminalActions = input.Flow.Count(f => IsTerminalAction(f.Action));
-            if (terminalActions > 1)
-            {
-                return BadRequest(new { message = Localizer["OnlyOneSigningAction"].Value });
-            }
-
-            int requiredCredits;
-            try
-            {
-                requiredCredits = await CalculateCreditsForFlowAsync(input, user.Id);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-
-            if (requiredCredits > 0 && user.CreditsRemaining < requiredCredits)
-            {
-                return PaymentRequired(user, requiredCredits);
-            }
-
-            try
-            {
-                var flowId = await _flowPipelineService.StartFlowAsync(user.Id, input, HttpContext.RequestAborted);
-                if (requiredCredits > 0)
-                {
-                    await DebitUserAsync(user, requiredCredits);
-                }
-                return Ok(new { id = flowId, status = "inprogress" });
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Flow start failed");
-                return SafeProblem(Localizer["FlowStartError"], ex);
-            }
-        }
-
-        [HttpGet("/api/flow/{flowId:guid}")]
-        public async Task<IActionResult> GetFlowStatus(Guid flowId)
-        {
-            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
-            if (error != null || user == null) return error!;
-
-            try
-            {
-                var status = await _flowPipelineService.GetStatusAsync(flowId, user.Id, HttpContext.RequestAborted);
-                return Ok(status);
-            }
-            catch (Exception ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
-        }
-
-        [HttpPost("/api/flow-sign")]
-        public async Task<IActionResult> CompleteFlowSignatures([FromBody] FlowSignRequest request)
-        {
-            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
-            if (error != null || user == null) return error!;
-
-            if (request.Signatures == null || request.Signatures.Count == 0)
-            {
-                return BadRequest(new { message = Localizer["SignaturesRequired"].Value });
-            }
-
-            try
-            {
-                var status = await _flowPipelineService.CompleteSignaturesAsync(request.FlowId, user.Id, request.Signatures, HttpContext.RequestAborted);
-                return Ok(status);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Flow sign failed");
-                return SafeProblem(Localizer["FlowSignaturesError"], ex);
             }
         }
 
@@ -475,47 +371,6 @@ namespace DotNetSigningServer.Controllers
 
             var single = reader.Decode(luminance);
             return single != null ? new List<Result> { single } : new List<Result>();
-        }
-
-        private static bool IsAllowedFlowAction(string action)
-        {
-            var a = (action ?? string.Empty).Trim().ToLowerInvariant();
-            return a is "pdfa" or "attachment" or "presign" or "timestamp" or "sign-pfx";
-        }
-
-        private static bool IsTerminalAction(string action)
-        {
-            var a = (action ?? string.Empty).Trim().ToLowerInvariant();
-            return a is "presign" or "timestamp" or "sign-pfx";
-        }
-
-        private async Task<int> CalculateCreditsForFlowAsync(FlowPipelineInput input, Guid userId)
-        {
-            var flowCredits = input.Flow?.Count ?? 0;
-
-            var fillCredits = 0;
-            if (input.FillPdf != null)
-            {
-                int pageCount;
-                if (input.FillPdf.TemplateId != null)
-                {
-                    var template = await PdfTemplateService.GetTemplateAsync(input.FillPdf.TemplateId.Value, userId);
-                    pageCount = CountPagesFromBase64(template.PdfContent);
-                }
-                else if (!string.IsNullOrWhiteSpace(input.FillPdf.PdfContent))
-                {
-                    pageCount = CountPagesFromBase64(input.FillPdf.PdfContent);
-                }
-                else
-                {
-                    throw new InvalidOperationException("FillPdf requires TemplateId or PdfContent.");
-                }
-
-                var dataSets = input.FillPdf.Data?.Count ?? 0;
-                fillCredits = CalculateCreditsForPages(pageCount) * Math.Max(1, dataSets);
-            }
-
-            return flowCredits + fillCredits;
         }
 
         private async Task<(string pdfBase64, int pageCount)> ResolvePdfForFillAsync(FillPdfInput input, Guid userId)

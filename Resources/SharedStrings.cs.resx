@@ -155,11 +155,6 @@
   <data name="SealError" xml:space="preserve"><value>Při aplikaci pečeti došlo k chybě</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>Při přidávání přílohy došlo k chybě</value></data>
   <data name="ProvidePdfOrFillPdf" xml:space="preserve"><value>Zadejte PdfContents nebo FillPdf.</value></data>
-  <data name="FlowRequired" xml:space="preserve"><value>Flow je povinný.</value></data>
-  <data name="UnsupportedFlowAction" xml:space="preserve"><value>Nepodporovaná akce flow '{0}'.</value></data>
-  <data name="OnlyOneSigningAction" xml:space="preserve"><value>Ve flow je povolena pouze jedna z akcí presign, timestamp nebo sign-pfx.</value></data>
-  <data name="FlowStartError" xml:space="preserve"><value>Při spouštění flow došlo k chybě</value></data>
-  <data name="FlowSignaturesError" xml:space="preserve"><value>Při dokončování podpisů flow došlo k chybě</value></data>
   <data name="SignaturesRequired" xml:space="preserve"><value>Podpisy jsou povinné.</value></data>
   <data name="PdfaConversionError" xml:space="preserve"><value>Při převodu dokumentu na PDF/A došlo k chybě</value></data>
   <data name="ProvideTemplateOrPdf" xml:space="preserve"><value>Zadejte buď TemplateId, nebo PdfContent (ne obojí).</value></data>

@@ -155,11 +155,6 @@
   <data name="SealError" xml:space="preserve"><value>An error occurred while applying the seal</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>An error occurred while adding the attachment</value></data>
   <data name="ProvidePdfOrFillPdf" xml:space="preserve"><value>Provide PdfContents or FillPdf.</value></data>
-  <data name="FlowRequired" xml:space="preserve"><value>Flow is required.</value></data>
-  <data name="UnsupportedFlowAction" xml:space="preserve"><value>Unsupported flow action '{0}'.</value></data>
-  <data name="OnlyOneSigningAction" xml:space="preserve"><value>Only one of presign, timestamp, sign-pfx is allowed in the flow.</value></data>
-  <data name="FlowStartError" xml:space="preserve"><value>An error occurred while starting the flow</value></data>
-  <data name="FlowSignaturesError" xml:space="preserve"><value>An error occurred while completing the flow signatures</value></data>
   <data name="SignaturesRequired" xml:space="preserve"><value>Signatures are required.</value></data>
   <data name="PdfaConversionError" xml:space="preserve"><value>An error occurred while converting the document to PDF/A</value></data>
   <data name="ProvideTemplateOrPdf" xml:space="preserve"><value>Provide either TemplateId or PdfContent (but not both).</value></data>

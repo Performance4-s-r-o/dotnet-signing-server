@@ -155,11 +155,6 @@
   <data name="SealError" xml:space="preserve"><value>Beim Anbringen des Siegels ist ein Fehler aufgetreten</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>Beim Hinzufügen des Anhangs ist ein Fehler aufgetreten</value></data>
   <data name="ProvidePdfOrFillPdf" xml:space="preserve"><value>Geben Sie PdfContents oder FillPdf an.</value></data>
-  <data name="FlowRequired" xml:space="preserve"><value>Flow ist erforderlich.</value></data>
-  <data name="UnsupportedFlowAction" xml:space="preserve"><value>Nicht unterstützte Flow-Aktion '{0}'.</value></data>
-  <data name="OnlyOneSigningAction" xml:space="preserve"><value>Im Flow ist nur eine der Aktionen presign, timestamp oder sign-pfx erlaubt.</value></data>
-  <data name="FlowStartError" xml:space="preserve"><value>Beim Starten des Flows ist ein Fehler aufgetreten</value></data>
-  <data name="FlowSignaturesError" xml:space="preserve"><value>Beim Abschließen der Flow-Signaturen ist ein Fehler aufgetreten</value></data>
   <data name="SignaturesRequired" xml:space="preserve"><value>Signaturen sind erforderlich.</value></data>
   <data name="PdfaConversionError" xml:space="preserve"><value>Beim Konvertieren des Dokuments in PDF/A ist ein Fehler aufgetreten</value></data>
   <data name="ProvideTemplateOrPdf" xml:space="preserve"><value>Geben Sie entweder TemplateId oder PdfContent an (nicht beides).</value></data>

@@ -6,7 +6,6 @@ namespace DotNetSigningServer.Services;
 /// <summary>
 /// Background service that periodically cleans up abandoned presign data
 /// (SigningData records and their temp PDF files) older than 30 minutes.
-/// Also cleans up stale flow pipeline state files.
 /// </summary>
 public class PresignCleanupService : BackgroundService
 {
@@ -14,7 +13,6 @@ public class PresignCleanupService : BackgroundService
     private readonly ILogger<PresignCleanupService> _logger;
     private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan MaxPresignAge = TimeSpan.FromMinutes(30);
-    private static readonly TimeSpan MaxFlowAge = TimeSpan.FromHours(2);
 
     public PresignCleanupService(IServiceProvider serviceProvider, ILogger<PresignCleanupService> logger)
     {
@@ -29,11 +27,10 @@ public class PresignCleanupService : BackgroundService
             try
             {
                 await CleanupAbandonedPresignsAsync(stoppingToken);
-                CleanupStaleFlowFiles();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during presign/flow cleanup");
+                _logger.LogError(ex, "Error during presign cleanup");
             }
 
             await Task.Delay(CleanupInterval, stoppingToken);
@@ -74,10 +71,4 @@ public class PresignCleanupService : BackgroundService
         _logger.LogInformation("Cleaned up {Count} abandoned presign record(s)", staleRecords.Count);
     }
 
-    private void CleanupStaleFlowFiles()
-    {
-        using var scope = _serviceProvider.CreateScope();
-        var flowService = scope.ServiceProvider.GetRequiredService<FlowPipelineService>();
-        flowService.CleanupStaleFlowFiles(MaxFlowAge);
-    }
 }

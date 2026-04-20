@@ -56,7 +56,6 @@ builder.Services.AddScoped<IEmailSender, ResendEmailSender>();
 builder.Services.AddSingleton<DotNetSigningServer.Services.Email.IEmailTemplateRenderer, DotNetSigningServer.Services.Email.EmailTemplateRenderer>();
 builder.Services.AddScoped<PdfTemplateService>();
 builder.Services.AddScoped<PdfConversionService>();
-builder.Services.AddScoped<FlowPipelineService>();
 builder.Services.AddSingleton<ContentLimitGuard>();
 builder.Services.AddScoped<IAutoRechargeService, AutoRechargeService>();
 builder.Services.AddHostedService<PresignCleanupService>();
