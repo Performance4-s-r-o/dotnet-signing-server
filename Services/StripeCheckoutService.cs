@@ -152,11 +152,10 @@ public class StripeCheckoutService : IStripeCheckoutService
         return session.Url ?? string.Empty;
     }
 
-    public async Task<(string Brand, string Last4, long ExpMonth, long ExpYear)?> GetDefaultPaymentMethodAsync(string customerId)
+    public async Task<SavedPaymentMethod?> GetDefaultPaymentMethodAsync(string customerId)
     {
         try
         {
-            // Prefer invoice-settings default, then list card payment methods
             var customerService = new CustomerService();
             var customer = await customerService.GetAsync(customerId);
             string? defaultPmId = customer.InvoiceSettings?.DefaultPaymentMethodId;
@@ -170,17 +169,37 @@ public class StripeCheckoutService : IStripeCheckoutService
             }
             else
             {
-                var list = await pmService.ListAsync(new PaymentMethodListOptions
+                // Prefer card, fall back to any other type (e.g. Link)
+                var cards = await pmService.ListAsync(new PaymentMethodListOptions
                 {
                     Customer = customerId,
                     Type = "card",
                     Limit = 1,
                 });
-                pm = list.Data.FirstOrDefault();
+                pm = cards.Data.FirstOrDefault();
+
+                if (pm == null)
+                {
+                    var any = await pmService.ListAsync(new PaymentMethodListOptions
+                    {
+                        Customer = customerId,
+                        Limit = 1,
+                    });
+                    pm = any.Data.FirstOrDefault();
+                }
             }
 
-            if (pm?.Card == null) return null;
-            return (pm.Card.Brand, pm.Card.Last4, pm.Card.ExpMonth, pm.Card.ExpYear);
+            if (pm == null) return null;
+
+            if (pm.Type == "card" && pm.Card != null)
+            {
+                return new SavedPaymentMethod("card", pm.Card.Brand, pm.Card.Last4, pm.Card.ExpMonth, pm.Card.ExpYear);
+            }
+            if (pm.Type == "link" && pm.Link != null)
+            {
+                return new SavedPaymentMethod("link", LinkEmail: pm.Link.Email);
+            }
+            return new SavedPaymentMethod(pm.Type);
         }
         catch
         {

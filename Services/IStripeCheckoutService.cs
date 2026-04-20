@@ -2,6 +2,14 @@ using DotNetSigningServer.Models;
 
 namespace DotNetSigningServer.Services;
 
+public record SavedPaymentMethod(
+    string Type,
+    string? Brand = null,
+    string? Last4 = null,
+    long? ExpMonth = null,
+    long? ExpYear = null,
+    string? LinkEmail = null);
+
 public interface IStripeCheckoutService
 {
     Task<string> CreateCheckoutSessionAsync(
@@ -25,5 +33,5 @@ public interface IStripeCheckoutService
         string cancelUrl,
         IDictionary<string, string>? metadata = null);
 
-    Task<(string Brand, string Last4, long ExpMonth, long ExpYear)?> GetDefaultPaymentMethodAsync(string customerId);
+    Task<SavedPaymentMethod?> GetDefaultPaymentMethodAsync(string customerId);
 }

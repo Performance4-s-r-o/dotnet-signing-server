@@ -93,6 +93,10 @@ public class StripeWebhookController : ControllerBase
                     await HandlePaymentIntentFailedAsync(stripeEvent);
                     break;
 
+                case "payment_method.detached":
+                    await HandlePaymentMethodDetachedAsync(stripeEvent);
+                    break;
+
                 default:
                     _logger.LogDebug("Unhandled Stripe event type: {EventType}", stripeEvent.Type);
                     break;
@@ -392,6 +396,68 @@ public class StripeWebhookController : ControllerBase
         {
             _logger.LogError(ex, "Failed to send payment failure email to {Email}", user.Email);
         }
+    }
+
+    /// <summary>
+    /// When a customer's last saved payment method is removed, auto-recharge can no longer run —
+    /// disable it so the user isn't left in a state that only fails at runtime.
+    /// </summary>
+    private async Task HandlePaymentMethodDetachedAsync(Event stripeEvent)
+    {
+        var pm = stripeEvent.Data.Object as PaymentMethod;
+        if (pm == null)
+        {
+            _logger.LogWarning("payment_method.detached: could not deserialize payment method");
+            return;
+        }
+
+        // After detach, pm.CustomerId is null. The previous customer is in previous_attributes.customer.
+        string? customerId = pm.CustomerId;
+        if (string.IsNullOrWhiteSpace(customerId) && stripeEvent.Data.PreviousAttributes != null)
+        {
+            try
+            {
+                var prevJson = Newtonsoft.Json.JsonConvert.SerializeObject(stripeEvent.Data.PreviousAttributes);
+                using var doc = System.Text.Json.JsonDocument.Parse(prevJson);
+                if (doc.RootElement.TryGetProperty("customer", out System.Text.Json.JsonElement cust)
+                    && cust.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    customerId = cust.GetString();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "payment_method.detached: failed to parse previous_attributes");
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(customerId))
+        {
+            _logger.LogDebug("payment_method.detached: no customer id resolved, skipping");
+            return;
+        }
+
+        // Are there any saved payment methods left for this customer?
+        var pmService = new PaymentMethodService();
+        var remaining = await pmService.ListAsync(new PaymentMethodListOptions
+        {
+            Customer = customerId,
+            Limit = 1,
+        });
+        if (remaining.Data.Count > 0)
+        {
+            return;
+        }
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.StripeCustomerId == customerId);
+        if (user == null || !user.AutoRechargeEnabled)
+        {
+            return;
+        }
+
+        await _autoRechargeService.DisableAsync(user);
+        _logger.LogInformation("payment_method.detached: auto-recharge disabled for user {UserId} — no payment methods remaining",
+            user.Id);
     }
 
     private static bool IsUniqueViolation(DbUpdateException ex)
