@@ -173,14 +173,19 @@ public class AdminController : Controller
             }
 
             user.IsEnterprise = true;
+            user.EnterpriseEnabledAt = DateTimeOffset.UtcNow;
             user.UpdatedAt = DateTimeOffset.UtcNow;
             await _dbContext.SaveChangesAsync();
             TempData["Info"] = _localizer["EnterpriseEnabled"].Value;
         }
         else
         {
-            // Disabling enterprise mode — user goes back to pay-as-you-go
+            // Disabling enterprise mode — user goes back to pay-as-you-go with zero credits.
+            // The enterprise-tracked usage is billed separately (manual invoice), so any
+            // credits that remain from pre-enterprise purchases are discarded at switch-off.
             user.IsEnterprise = false;
+            user.EnterpriseEnabledAt = null;
+            user.CreditsRemaining = 0;
             user.UpdatedAt = DateTimeOffset.UtcNow;
             await _dbContext.SaveChangesAsync();
             TempData["Info"] = _localizer["EnterpriseDisabled"].Value;

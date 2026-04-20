@@ -1,24 +1,40 @@
+using System.Collections.Concurrent;
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Cryptography;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace DotNetSigningServer.Services;
 
 public class ApiAuthService : IApiAuthService
 {
+    private static readonly TimeSpan PositiveTtl = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan NegativeTtl = TimeSpan.FromSeconds(5);
+
+    // Reverse index: tokenId -> cache keys, used to purge all entries for a token on revoke.
+    private static readonly ConcurrentDictionary<Guid, ConcurrentBag<string>> _keysByTokenId = new();
+
     private readonly ApplicationDbContext _dbContext;
     private readonly ITokenService _tokenService;
     private readonly IAllowedOriginService _allowedOriginService;
     private readonly IIpWhitelistService _ipWhitelistService;
+    private readonly IMemoryCache _cache;
 
-    public ApiAuthService(ApplicationDbContext dbContext, ITokenService tokenService, IAllowedOriginService allowedOriginService, IIpWhitelistService ipWhitelistService)
+    public ApiAuthService(
+        ApplicationDbContext dbContext,
+        ITokenService tokenService,
+        IAllowedOriginService allowedOriginService,
+        IIpWhitelistService ipWhitelistService,
+        IMemoryCache cache)
     {
         _dbContext = dbContext;
         _tokenService = tokenService;
         _allowedOriginService = allowedOriginService;
         _ipWhitelistService = ipWhitelistService;
+        _cache = cache;
     }
 
     public async Task<User?> ValidateTokenAsync(string authorizationHeader, string? originHeader = null, IPAddress? clientIp = null)
@@ -36,12 +52,44 @@ public class ApiAuthService : IApiAuthService
         }
 
         token = NormalizeToken(token);
-        var prefix = token.Length >= 8 ? token[..8] : token;
 
+        var cacheKey = BuildCacheKey(token, originHeader, clientIp);
+        if (_cache.TryGetValue<CachedValidation>(cacheKey, out var cached))
+        {
+            return cached?.User;
+        }
+
+        var result = await ValidateFromDatabaseAsync(token, originHeader, clientIp);
+
+        _cache.Set(cacheKey, result, result?.User != null ? PositiveTtl : NegativeTtl);
+
+        if (result?.TokenId is Guid id)
+        {
+            _keysByTokenId.GetOrAdd(id, _ => new ConcurrentBag<string>()).Add(cacheKey);
+        }
+
+        return result?.User;
+    }
+
+    public void InvalidateTokenCache(Guid tokenId)
+    {
+        if (_keysByTokenId.TryRemove(tokenId, out var keys))
+        {
+            foreach (var key in keys)
+            {
+                _cache.Remove(key);
+            }
+        }
+    }
+
+    private async Task<CachedValidation?> ValidateFromDatabaseAsync(string token, string? originHeader, IPAddress? clientIp)
+    {
+        var prefix = token.Length >= 8 ? token[..8] : token;
         var now = DateTimeOffset.UtcNow;
 
-        // Filter by TokenPrefix for O(1) lookup; tokens without prefix (legacy) are always included
+        // AsNoTracking — result is cached in a singleton IMemoryCache across requests/scopes.
         var candidates = await _dbContext.ApiTokens
+            .AsNoTracking()
             .Include(t => t.User)
             .Where(t => t.RevokedAt == null && (t.ExpiresAt == null || t.ExpiresAt > now))
             .Where(t => t.TokenPrefix == null || t.TokenPrefix == prefix)
@@ -68,36 +116,45 @@ public class ApiAuthService : IApiAuthService
         }
         else if (!string.IsNullOrWhiteSpace(originHeader) && !_allowedOriginService.IsLocalOrigin(originHeader))
         {
-            // Server tokens must not be used from arbitrary browser origins.
             return null;
         }
 
-        // IP whitelist check (applies to all token types when configured)
         if (!_ipWhitelistService.IsIpAllowedForToken(clientIp, apiToken))
         {
             return null;
         }
 
-        // Reject tokens belonging to deactivated users
         if (apiToken.User != null && !apiToken.User.IsActive)
         {
             return null;
         }
 
-        return apiToken.User;
+        return new CachedValidation { User = apiToken.User, TokenId = apiToken.Id };
+    }
+
+    private static string BuildCacheKey(string token, string? originHeader, IPAddress? clientIp)
+    {
+        var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+        var origin = originHeader?.Trim().ToLowerInvariant() ?? string.Empty;
+        var ip = clientIp?.ToString() ?? string.Empty;
+        return $"apiauth:{tokenHash}:{origin}:{ip}";
     }
 
     private static string NormalizeToken(string token)
     {
         var trimmed = token.Trim().Trim('"');
-        // Replace common copy/paste issues where + becomes space
         trimmed = trimmed.Replace(' ', '+');
-        // Base64 padding fixup if user trimmed it
         int mod4 = trimmed.Length % 4;
         if (mod4 != 0)
         {
             trimmed = trimmed.PadRight(trimmed.Length + (4 - mod4), '=');
         }
         return trimmed;
+    }
+
+    private sealed class CachedValidation
+    {
+        public User? User { get; init; }
+        public Guid? TokenId { get; init; }
     }
 }

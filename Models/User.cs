@@ -56,6 +56,14 @@ public class User
     /// </summary>
     public bool IsEnterprise { get; set; } = false;
 
+    /// <summary>
+    /// Timestamp when enterprise mode was last enabled. Usage shown in the enterprise billing
+    /// view is filtered to records created at or after this time — usage before the switch is
+    /// considered separately (pay-as-you-go credits). NULL = enterprise was never enabled, or
+    /// the flag predates this tracking (treated as "since account creation").
+    /// </summary>
+    public DateTimeOffset? EnterpriseEnabledAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 

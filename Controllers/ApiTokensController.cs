@@ -16,14 +16,16 @@ public class ApiTokensController : Controller
     private readonly ApplicationDbContext _dbContext;
     private readonly ITokenService _tokenService;
     private readonly IIpWhitelistService _ipWhitelistService;
+    private readonly IApiAuthService _apiAuth;
     private readonly ILogger<ApiTokensController> _logger;
     private readonly IStringLocalizer<SharedStrings> _localizer;
 
-    public ApiTokensController(ApplicationDbContext dbContext, ITokenService tokenService, IIpWhitelistService ipWhitelistService, ILogger<ApiTokensController> logger, IStringLocalizer<SharedStrings> localizer)
+    public ApiTokensController(ApplicationDbContext dbContext, ITokenService tokenService, IIpWhitelistService ipWhitelistService, IApiAuthService apiAuth, ILogger<ApiTokensController> logger, IStringLocalizer<SharedStrings> localizer)
     {
         _dbContext = dbContext;
         _tokenService = tokenService;
         _ipWhitelistService = ipWhitelistService;
+        _apiAuth = apiAuth;
         _logger = logger;
         _localizer = localizer;
     }
@@ -71,7 +73,8 @@ public class ApiTokensController : Controller
         }
 
         user.MaxConcurrentOperations = maxConcurrent;
-        user.UpdatedAt = DateTimeOffset.UtcNow;
+        // Intentionally NOT touching UpdatedAt — it's used as the cookie security stamp
+        // (see Program.cs cookie OnValidatePrincipal). Bumping it here would sign the user out.
         await _dbContext.SaveChangesAsync();
 
         TempData["Info"] = _localizer["ConcurrencyLimitUpdated"].Value;
@@ -190,6 +193,7 @@ public class ApiTokensController : Controller
 
         token.RevokedAt = DateTimeOffset.UtcNow;
         await _dbContext.SaveChangesAsync();
+        _apiAuth.InvalidateTokenCache(token.Id);
         _logger.LogInformation(DotNetSigningServer.Logging.LoggingEvents.TokenRevoked, "Token {TokenId} revoked for user {UserId}", id, userId);
         return RedirectToAction(nameof(Index));
     }
@@ -213,6 +217,7 @@ public class ApiTokensController : Controller
 
         _dbContext.ApiTokens.Remove(token);
         await _dbContext.SaveChangesAsync();
+        _apiAuth.InvalidateTokenCache(token.Id);
         _logger.LogInformation(DotNetSigningServer.Logging.LoggingEvents.TokenDeleted, "Token {TokenId} deleted for user {UserId}", id, userId);
         TempData["Info"] = _localizer["TokenDeleted"].Value;
         return RedirectToAction(nameof(Index));

@@ -176,6 +176,7 @@ public class EmailTemplateRendererTests
             EmailTemplateId.PasswordReset,
             EmailTemplateId.PaymentFailed,
             EmailTemplateId.AutoRechargeFailed,
+            EmailTemplateId.AutoRechargeSuccess,
             EmailTemplateId.PriceChangeNotice,
         };
 

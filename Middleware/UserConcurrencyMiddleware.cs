@@ -12,41 +12,75 @@ namespace DotNetSigningServer.Middleware;
 /// Limits the number of concurrent API operations per authenticated user.
 /// Default: BillingOptions.ConcurrencyDefaultLimit (3). Configurable per user via User.MaxConcurrentOperations.
 /// When limit is exceeded, returns 429 Too Many Requests.
+///
+/// Also computes the concurrency tier atomically at semaphore acquisition and stores it in
+/// HttpContext.Items[TierItemKey], so the billing debit in ApiController sees a deterministic
+/// slot index — not a value that drifts due to Release races while the request processes.
 /// </summary>
 public class UserConcurrencyMiddleware
 {
-    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> Semaphores = new();
-    private static readonly ConcurrentDictionary<Guid, int> Limits = new();
+    public const string TierItemKey = "ConcurrencyTier";
+
+    private sealed class SemaphoreEntry
+    {
+        public int Capacity { get; }
+        public SemaphoreSlim Semaphore { get; }
+        public int InFlight; // mutated via Interlocked
+
+        public SemaphoreEntry(int capacity)
+        {
+            Capacity = capacity;
+            Semaphore = new SemaphoreSlim(capacity, capacity);
+        }
+    }
+
+    private static readonly ConcurrentDictionary<Guid, SemaphoreEntry> Semaphores = new();
 
     private const int LimitCacheDurationSeconds = 60;
-    private static readonly ConcurrentDictionary<Guid, DateTimeOffset> LimitCacheExpiry = new();
+    private static readonly ConcurrentDictionary<Guid, (int Limit, DateTimeOffset ExpiresAt)> LimitCache = new();
 
     /// <summary>
-    /// Returns the number of in-flight requests for the given user (includes the currently executing one).
-    /// Used by credit debit logic to determine the concurrency tier.
+    /// Returns the number of in-flight requests for the given user. Kept for diagnostics.
+    /// Billing should read the tier from HttpContext.Items[TierItemKey] instead — it is atomic
+    /// with semaphore acquisition, unlike this live counter which drifts during request processing.
     /// </summary>
     public static int GetInFlightCount(Guid userId)
     {
-        if (!Semaphores.TryGetValue(userId, out var sem) || !Limits.TryGetValue(userId, out var limit))
+        if (!Semaphores.TryGetValue(userId, out var entry))
         {
             return 0;
         }
-        var inFlight = limit - sem.CurrentCount;
-        return inFlight < 0 ? 0 : inFlight;
+        return Math.Max(0, Volatile.Read(ref entry.InFlight));
+    }
+
+    /// <summary>
+    /// Computes the tier multiplier for a given 1-based slot (1 = first in, N = Nth in).
+    /// Exposed so tests can verify the same formula used by the middleware.
+    /// </summary>
+    public static int ComputeTier(int slot, int tierSize, int maxTier)
+    {
+        tierSize = Math.Max(1, tierSize);
+        maxTier = Math.Max(1, maxTier);
+        var slotIndex = Math.Max(0, slot - 1);
+        return Math.Max(1, Math.Min(maxTier, (slotIndex / tierSize) + 1));
     }
 
     private readonly RequestDelegate _next;
     private readonly ILogger<UserConcurrencyMiddleware> _logger;
+    private readonly BillingOptions _billingOptions;
 
-    public UserConcurrencyMiddleware(RequestDelegate next, ILogger<UserConcurrencyMiddleware> logger)
+    public UserConcurrencyMiddleware(
+        RequestDelegate next,
+        ILogger<UserConcurrencyMiddleware> logger,
+        IOptions<BillingOptions> billingOptions)
     {
         _next = next;
         _logger = logger;
+        _billingOptions = billingOptions.Value;
     }
 
     public async Task InvokeAsync(HttpContext context)
     {
-        // Only apply to API routes
         if (!context.Request.Path.HasValue ||
             !context.Request.Path.Value!.StartsWith("/api", StringComparison.OrdinalIgnoreCase))
         {
@@ -62,18 +96,13 @@ public class UserConcurrencyMiddleware
         }
 
         var limit = await GetUserLimit(userId.Value, context.RequestServices);
-        var semaphore = Semaphores.GetOrAdd(userId.Value, _ => new SemaphoreSlim(limit, limit));
 
-        // If limit changed, recreate semaphore
-        if (Limits.TryGetValue(userId.Value, out var cachedLimit) && cachedLimit != limit)
-        {
-            semaphore = new SemaphoreSlim(limit, limit);
-            Semaphores[userId.Value] = semaphore;
-            Limits[userId.Value] = limit;
-        }
-        Limits.TryAdd(userId.Value, limit);
+        var entry = Semaphores.AddOrUpdate(
+            userId.Value,
+            _ => new SemaphoreEntry(limit),
+            (_, existing) => existing.Capacity == limit ? existing : new SemaphoreEntry(limit));
 
-        if (!await semaphore.WaitAsync(TimeSpan.Zero))
+        if (!await entry.Semaphore.WaitAsync(TimeSpan.Zero))
         {
             _logger.LogWarning("User {UserId} exceeded concurrency limit ({Limit})", userId.Value, limit);
             context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
@@ -89,13 +118,19 @@ public class UserConcurrencyMiddleware
             return;
         }
 
+        // Atomic: this request's slot is determined right here, not later at debit time.
+        var slot = Interlocked.Increment(ref entry.InFlight);
+        var tier = ComputeTier(slot, _billingOptions.ConcurrencyTierSize, _billingOptions.MaxConcurrencyTier);
+        context.Items[TierItemKey] = tier;
+
         try
         {
             await _next(context);
         }
         finally
         {
-            semaphore.Release();
+            Interlocked.Decrement(ref entry.InFlight);
+            entry.Semaphore.Release();
         }
     }
 
@@ -108,17 +143,13 @@ public class UserConcurrencyMiddleware
 
     private static async Task<int> GetUserLimit(Guid userId, IServiceProvider services)
     {
-        // Check cache
-        if (LimitCacheExpiry.TryGetValue(userId, out var expiry) &&
-            expiry > DateTimeOffset.UtcNow &&
-            Limits.TryGetValue(userId, out var cached))
+        if (LimitCache.TryGetValue(userId, out var cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
         {
-            return cached;
+            return cached.Limit;
         }
 
         var defaultLimit = services.GetService<IOptions<BillingOptions>>()?.Value.ConcurrencyDefaultLimit ?? 3;
 
-        // Fetch from DB
         try
         {
             using var scope = services.CreateScope();
@@ -130,8 +161,7 @@ public class UserConcurrencyMiddleware
                 .FirstOrDefaultAsync();
 
             var limit = user ?? defaultLimit;
-            Limits[userId] = limit;
-            LimitCacheExpiry[userId] = DateTimeOffset.UtcNow.AddSeconds(LimitCacheDurationSeconds);
+            LimitCache[userId] = (limit, DateTimeOffset.UtcNow.AddSeconds(LimitCacheDurationSeconds));
             return limit;
         }
         catch

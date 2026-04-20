@@ -132,7 +132,7 @@ namespace DotNetSigningServer.Controllers
                 DbContext.SigningData.Remove(signingData);
                 await DebitUserAsync(user);
 
-                return Ok(new { result });
+                return PdfOrJsonResult(result);
             }
             catch (Exception ex)
             {
@@ -170,7 +170,7 @@ namespace DotNetSigningServer.Controllers
                 }
                 var result = _signingService.SignWithPfx(input);
                 await DebitUserAsync(user);
-                return Ok(new { result });
+                return PdfOrJsonResult(result);
             }
             catch (Exception ex)
             {
@@ -208,7 +208,7 @@ namespace DotNetSigningServer.Controllers
                 }
                 var result = _signingService.ApplyDocumentTimestamp(input);
                 await DebitUserAsync(user);
-                return Ok(new { result });
+                return PdfOrJsonResult(result);
             }
             catch (Exception ex)
             {
@@ -262,7 +262,7 @@ namespace DotNetSigningServer.Controllers
                 var result = _signingService.ApplyVisualSign(input);
                 Logger.LogInformation("[visual-sign] Success, result length={Len}", result?.Length ?? 0);
                 await DebitUserAsync(user);
-                return Ok(new { result });
+                return PdfOrJsonResult(result);
             }
             catch (Exception ex)
             {
@@ -301,7 +301,7 @@ namespace DotNetSigningServer.Controllers
 
                 var result = _sealingService.ApplySeal(input);
                 await DebitUserAsync(user);
-                return Ok(new { result });
+                return PdfOrJsonResult(result);
             }
             catch (Exception ex)
             {
@@ -340,7 +340,7 @@ namespace DotNetSigningServer.Controllers
                 {
                     await DebitUserAsync(user);
                 }
-                return Ok(new { result });
+                return PdfOrJsonResult(result);
             }
             catch (Exception ex)
             {

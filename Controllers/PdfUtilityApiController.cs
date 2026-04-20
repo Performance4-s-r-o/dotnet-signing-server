@@ -59,20 +59,23 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 var pageCount = CountPagesFromBase64(input.PdfContent);
-                var requiredCredits = 1;
+                var requiredCredits = CalculateCreditsForPages(pageCount);
                 if (requiredCredits > 0 && user.CreditsRemaining < requiredCredits)
                 {
                     return PaymentRequired(user, requiredCredits);
                 }
 
-                var result = _pdfConversionService.ConvertToPdfA(input);
+                var pdfaResult = _pdfConversionService.ConvertToPdfA(input);
                 if (requiredCredits > 0)
                 {
                     await DebitUserAsync(user, requiredCredits);
                 }
 
                 var conformance = PdfConversionService.FormatConformance(input.Conformance);
-                return Ok(new { result, conformance });
+                return PdfOrJsonResult(
+                    pdfaResult,
+                    jsonBody: new { result = pdfaResult, conformance },
+                    onPdfResponse: resp => resp.Headers["X-PDF-Conformance"] = conformance);
             }
             catch (Exception ex)
             {

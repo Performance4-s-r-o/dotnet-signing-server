@@ -47,6 +47,7 @@ builder.Services.AddScoped<IBillingService, BillingService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IStripeCheckoutService, StripeCheckoutService>();
 builder.Services.AddScoped<IApiAuthService, ApiAuthService>();
+builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient("resend", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(15);
@@ -87,7 +88,27 @@ builder.Services.Configure<LimitsOptions>(builder.Configuration.GetSection("Limi
 builder.Services.Configure<SealOptions>(builder.Configuration.GetSection("Seal"));
 builder.Services.Configure<EvidenceOptions>(builder.Configuration.GetSection("Evidence"));
 builder.Services.Configure<AppOptions>(builder.Configuration);
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultScheme = "SmartAuth";
+        options.DefaultAuthenticateScheme = "SmartAuth";
+        options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+    })
+    .AddPolicyScheme("SmartAuth", "SmartAuth", options =>
+    {
+        options.ForwardDefaultSelector = context =>
+        {
+            var authHeader = context.Request.Headers["Authorization"].ToString();
+            if (!string.IsNullOrWhiteSpace(authHeader) &&
+                authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                return DotNetSigningServer.Services.ApiKeyAuthenticationHandler.SchemeName;
+            }
+            return CookieAuthenticationDefaults.AuthenticationScheme;
+        };
+    })
+    .AddScheme<AuthenticationSchemeOptions, DotNetSigningServer.Services.ApiKeyAuthenticationHandler>(
+        DotNetSigningServer.Services.ApiKeyAuthenticationHandler.SchemeName, _ => { })
     .AddCookie(options =>
     {
         options.LoginPath = "/Account/SignIn";
@@ -160,10 +181,13 @@ if (useLocalDb)
 
     await postgresContainer.StartAsync();
 
-    var localConnectionString = postgresContainer.GetConnectionString();
+    var localConnectionString = EnsureSearchPath(postgresContainer.GetConnectionString(), "dotnet_signing");
 
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseNpgsql(localConnectionString));
+        options.UseNpgsql(localConnectionString, npgsqlOptions =>
+        {
+            npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "dotnet_signing");
+        }));
 }
 else
 {
@@ -174,6 +198,8 @@ else
     {
         throw new InvalidOperationException("A database connection string is required when UseLocalDb is false. Set 'ConnectionStrings__DefaultConnection' or the DB_* environment variables.");
     }
+
+    connectionString = EnsureSearchPath(connectionString, "dotnet_signing");
 
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseNpgsql(connectionString, npgsqlOptions =>
@@ -273,8 +299,6 @@ if (!app.Environment.IsDevelopment())
 
 app.UseMiddleware<LokiExceptionMiddleware>();
 app.UseMiddleware<BodySizeLimitMiddleware>();
-app.UseMiddleware<RequestThrottlingMiddleware>();
-app.UseMiddleware<UserConcurrencyMiddleware>();
 
 // Swagger only in non-production environments
 if (!app.Environment.IsProduction())
@@ -356,6 +380,12 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Throttling runs AFTER authentication so ClaimsPrincipal carries the user id
+// (set by ApiKeyAuthenticationHandler for Bearer tokens or the cookie handler).
+app.UseMiddleware<RequestThrottlingMiddleware>();
+app.UseMiddleware<UserConcurrencyMiddleware>();
+
 app.MapControllers();
 
 // Health check endpoints
@@ -380,6 +410,14 @@ using (var scope = app.Services.CreateScope())
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     try
     {
+        // Ensure the target schema exists before EF Core looks up __EFMigrationsHistory.
+        // Npgsql's SET search_path at connection open silently ignores missing schemas,
+        // so on a fresh database the history lookup would fail with 42P01.
+        if (dbContext.Database.IsNpgsql())
+        {
+            dbContext.Database.ExecuteSqlRaw("CREATE SCHEMA IF NOT EXISTS dotnet_signing");
+        }
+
         dbContext.Database.Migrate();
     }
     catch (Exception ex)
@@ -410,4 +448,13 @@ string? BuildConnectionStringFromConfiguration(ConfigurationManager configuratio
     }
 
     return $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPassword}";
+}
+
+static string EnsureSearchPath(string connectionString, string schema)
+{
+    var builder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString)
+    {
+        SearchPath = schema
+    };
+    return builder.ConnectionString;
 }

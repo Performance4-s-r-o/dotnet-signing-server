@@ -4,6 +4,7 @@ using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DotNetSigningServer.Tests.Services;
@@ -35,7 +36,7 @@ public class ApiAuthServiceTests : IDisposable
         _allowedOriginService = new AllowedOriginService(sp.GetRequiredService<IServiceScopeFactory>());
         _ipWhitelistService = new IpWhitelistService();
 
-        _sut = new ApiAuthService(_dbContext, _tokenService, _allowedOriginService, _ipWhitelistService);
+        _sut = new ApiAuthService(_dbContext, _tokenService, _allowedOriginService, _ipWhitelistService, new MemoryCache(new MemoryCacheOptions()));
     }
 
     public void Dispose()

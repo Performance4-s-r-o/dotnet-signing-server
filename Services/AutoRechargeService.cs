@@ -10,6 +10,8 @@ namespace DotNetSigningServer.Services;
 
 public class AutoRechargeService : IAutoRechargeService
 {
+    public const int ThresholdCredits = 10;
+
     private readonly ApplicationDbContext _dbContext;
     private readonly IBillingService _billingService;
     private readonly BillingOptions _billingOptions;
@@ -57,9 +59,8 @@ public class AutoRechargeService : IAutoRechargeService
             return new AutoRechargeResult { Success = false, Error = "No Stripe customer" };
         }
 
-        // Check threshold: trigger when below 10% of the auto-recharge quantity
-        var threshold = (int)Math.Ceiling(user.AutoRechargeQuantity * 0.10);
-        if (user.CreditsRemaining >= threshold)
+        // Trigger when balance drops below the fixed threshold (10 credits)
+        if (user.CreditsRemaining >= ThresholdCredits)
         {
             return new AutoRechargeResult { Success = false, Error = "Credits above threshold" };
         }
@@ -145,6 +146,8 @@ public class AutoRechargeService : IAutoRechargeService
             _logger.LogInformation("Auto-recharge succeeded for user {UserId}: +{Credits} credits",
                 userId, user.AutoRechargeQuantity);
 
+            await SendRechargeSuccessEmailAsync(user, user.AutoRechargeQuantity, amount);
+
             return new AutoRechargeResult { Success = true, CreditsAdded = user.AutoRechargeQuantity };
         }
         catch (StripeException ex)
@@ -228,6 +231,40 @@ public class AutoRechargeService : IAutoRechargeService
         {
             _logger.LogError(ex, "Failed to resolve payment method for customer {CustomerId}", customerId);
             return null;
+        }
+    }
+
+    private async Task SendRechargeSuccessEmailAsync(User user, int creditsAdded, decimal amount)
+    {
+        if (!user.EmailNotificationsEnabled)
+        {
+            return;
+        }
+
+        var baseUrl = _appOptions.FqdnServerName?.TrimEnd('/') ?? "https://app.p4pdf.com";
+        var billingUrl = $"{baseUrl}/Billing";
+        var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        var rendered = _emailTemplates.Render(EmailTemplateId.AutoRechargeSuccess, locale, new Dictionary<string, string?>
+        {
+            ["quantity"] = creditsAdded.ToString(),
+            ["amount"] = amount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+            ["currency"] = _billingOptions.Currency,
+            ["newBalance"] = (user.CreditsRemaining + creditsAdded).ToString(),
+            ["billingUrl"] = billingUrl,
+        });
+
+        try
+        {
+            await _emailSender.SendAsync(
+                user.Email,
+                rendered.Subject,
+                rendered.HtmlBody,
+                $"{baseUrl}/Account/Settings",
+                isCritical: false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send auto-recharge success email to {Email}", user.Email);
         }
     }
 

@@ -176,4 +176,14 @@
   <data name="RequestExceededLimit" xml:space="preserve"><value>Požadavek překročil limit.</value></data>
   <data name="InternalError" xml:space="preserve"><value>Došlo k interní chybě.</value></data>
   <data name="UnexpectedError" xml:space="preserve"><value>Při zpracování vašeho požadavku došlo k neočekávané chybě.</value></data>
+  <data name="EnterpriseBillingManaged" xml:space="preserve"><value>Váš účet je v Enterprise režimu — nákup kreditů a automatické dobíjení spravuje váš account manager.</value></data>
+  <data name="EnterpriseBillingHeading" xml:space="preserve"><value>Enterprise fakturace</value></data>
+  <data name="EnterpriseBillingDescription" xml:space="preserve"><value>Váš účet je fakturován podle sledované spotřeby. Nákup kreditů a automatické dobíjení jsou vypnuty.</value></data>
+  <data name="UsageToday" xml:space="preserve"><value>Dnes</value></data>
+  <data name="UsageLast7Days" xml:space="preserve"><value>Posledních 7 dní</value></data>
+  <data name="UsageLast30Days" xml:space="preserve"><value>Posledních 30 dní</value></data>
+  <data name="DailyBreakdown" xml:space="preserve"><value>Denní přehled (posledních 14 dní)</value></data>
+  <data name="MonthlyBreakdown" xml:space="preserve"><value>Měsíční přehled (posledních 12 měsíců)</value></data>
+  <data name="Date" xml:space="preserve"><value>Datum</value></data>
+  <data name="Credits" xml:space="preserve"><value>Kredity</value></data>
 </root>

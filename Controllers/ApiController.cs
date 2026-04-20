@@ -119,12 +119,10 @@ namespace DotNetSigningServer.Controllers
                 return true;
             }
 
-            // Compute concurrency tier based on in-flight requests for this user
-            var inFlight = DotNetSigningServer.Middleware.UserConcurrencyMiddleware.GetInFlightCount(user.Id);
-            var tierSize = Math.Max(1, BillingOptions.ConcurrencyTierSize);
-            // inFlight includes the current request; slot index is inFlight-1 (0-based)
-            var slotIndex = Math.Max(0, inFlight - 1);
-            var tier = Math.Max(1, Math.Min(BillingOptions.MaxConcurrencyTier, (slotIndex / tierSize) + 1));
+            // Tier is computed by UserConcurrencyMiddleware at semaphore acquisition (atomic with
+            // WaitAsync success). Reading it from HttpContext.Items avoids the SemaphoreSlim.CurrentCount
+            // race where multiple requests can observe the same drifting inFlight value near tier boundaries.
+            var tier = HttpContext?.Items[DotNetSigningServer.Middleware.UserConcurrencyMiddleware.TierItemKey] is int t ? t : 1;
             var effectiveDebit = debit * tier;
 
             // Enterprise users: skip the credits decrement but still record usage for billing
@@ -168,8 +166,7 @@ namespace DotNetSigningServer.Controllers
             // Skip for Enterprise users — they're billed manually
             if (!user.IsEnterprise && user.AutoRechargeEnabled && user.AutoRechargeQuantity > 0)
             {
-                var threshold = (int)Math.Ceiling(user.AutoRechargeQuantity * 0.10);
-                if (user.CreditsRemaining < threshold)
+                if (user.CreditsRemaining < AutoRechargeService.ThresholdCredits)
                 {
                     var userId = user.Id;
                     var serviceScopeFactory = HttpContext.RequestServices.GetRequiredService<IServiceScopeFactory>();
@@ -204,6 +201,47 @@ namespace DotNetSigningServer.Controllers
                 throw new InvalidOperationException("Template does not contain a signature field.");
             }
             return signatureField;
+        }
+
+        /// <summary>
+        /// Returns a base64 PDF either as JSON (default) or as raw application/pdf bytes when
+        /// the client explicitly sets Accept: application/pdf.
+        /// </summary>
+        /// <param name="base64Pdf">Base64-encoded PDF content.</param>
+        /// <param name="jsonBody">Optional custom JSON body; defaults to { result = base64Pdf }.</param>
+        /// <param name="onPdfResponse">Optional hook to set response headers when returning raw PDF.</param>
+        protected IActionResult PdfOrJsonResult(string base64Pdf, object? jsonBody = null, Action<HttpResponse>? onPdfResponse = null)
+        {
+            if (ClientPrefersPdf(Request.Headers["Accept"].ToString()))
+            {
+                try
+                {
+                    var bytes = Convert.FromBase64String(base64Pdf);
+                    onPdfResponse?.Invoke(Response);
+                    return File(bytes, "application/pdf");
+                }
+                catch (FormatException)
+                {
+                    // Malformed base64 from the service — fall through to JSON so the client still sees the payload.
+                }
+            }
+            return Ok(jsonBody ?? new { result = base64Pdf });
+        }
+
+        private static bool ClientPrefersPdf(string acceptHeader)
+        {
+            if (string.IsNullOrWhiteSpace(acceptHeader)) return false;
+            foreach (var raw in acceptHeader.Split(','))
+            {
+                var type = raw.Trim();
+                var sep = type.IndexOf(';');
+                if (sep >= 0) type = type[..sep].Trim();
+                if (string.Equals(type, "application/pdf", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         protected IActionResult PaymentRequired(User user, int requiredCredits)

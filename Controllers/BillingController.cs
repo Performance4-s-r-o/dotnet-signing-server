@@ -105,17 +105,10 @@ public class BillingController : Controller
             catch { }
         }
 
-        // Fetch saved payment method (brand + last4) if available
-        string? cardBrand = null, cardLast4 = null, cardExpiry = null;
+        SavedPaymentMethod? savedPm = null;
         if (!string.IsNullOrWhiteSpace(user.StripeCustomerId))
         {
-            var pm = await _checkoutService.GetDefaultPaymentMethodAsync(user.StripeCustomerId);
-            if (pm != null)
-            {
-                cardBrand = pm.Value.Brand;
-                cardLast4 = pm.Value.Last4;
-                cardExpiry = $"{pm.Value.ExpMonth:D2}/{pm.Value.ExpYear % 100:D2}";
-            }
+            savedPm = await _checkoutService.GetDefaultPaymentMethodAsync(user.StripeCustomerId);
         }
 
         var model = new BillingViewModel
@@ -132,12 +125,59 @@ public class BillingController : Controller
             AutoRechargeQuantity = user.AutoRechargeQuantity,
             AutoRechargePricePer100 = user.AutoRechargePricePer100,
             LastPurchaseQuantity = lastPurchaseQuantity,
-            SavedCardBrand = cardBrand,
-            SavedCardLast4 = cardLast4,
-            SavedCardExpiry = cardExpiry,
+            SavedPaymentMethod = savedPm,
+            IsEnterprise = user.IsEnterprise,
         };
 
+        if (user.IsEnterprise)
+        {
+            await PopulateEnterpriseUsageAsync(model, user.Id, user.EnterpriseEnabledAt);
+        }
+
         return View(model);
+    }
+
+    private async Task PopulateEnterpriseUsageAsync(BillingViewModel model, Guid userId, DateTimeOffset? enterpriseEnabledAt)
+    {
+        var today = DateTime.UtcNow.Date;
+        var windowStart = new DateTimeOffset(today.AddMonths(-11), TimeSpan.Zero); // 12 months including current
+        // Usage before enterprise was enabled was paid via credits — exclude it.
+        var since = enterpriseEnabledAt.HasValue && enterpriseEnabledAt.Value > windowStart
+            ? enterpriseEnabledAt.Value
+            : windowStart;
+
+        var records = await _dbContext.UsageRecords
+            .AsNoTracking()
+            .Where(u => u.UserId == userId && u.CreatedAt >= since)
+            .Select(u => new { u.Count, u.CreatedAt })
+            .ToListAsync();
+
+        var byDay = records.ToLookup(r => r.CreatedAt.UtcDateTime.Date, r => r.Count);
+
+        model.UsageToday = byDay[today].Sum();
+        model.UsageLast7Days = Enumerable.Range(0, 7).Sum(i => byDay[today.AddDays(-i)].Sum());
+        model.UsageLast30Days = Enumerable.Range(0, 30).Sum(i => byDay[today.AddDays(-i)].Sum());
+
+        model.DailyUsage = Enumerable.Range(0, 14)
+            .Select(i => today.AddDays(-i))
+            .Select(d => new UsageBucket { PeriodStart = d, Credits = byDay[d].Sum() })
+            .ToList();
+
+        var firstOfMonth = new DateTime(today.Year, today.Month, 1);
+        model.MonthlyUsage = Enumerable.Range(0, 12)
+            .Select(i => firstOfMonth.AddMonths(-i))
+            .Select(m => new UsageBucket
+            {
+                PeriodStart = m,
+                Credits = records
+                    .Where(r =>
+                    {
+                        var d = r.CreatedAt.UtcDateTime;
+                        return d.Year == m.Year && d.Month == m.Month;
+                    })
+                    .Sum(r => r.Count),
+            })
+            .ToList();
     }
 
     [HttpPost("/Billing/ManagePaymentMethod")]
@@ -187,6 +227,12 @@ public class BillingController : Controller
         if (user == null)
         {
             TempData["Error"] = _localizer["UserNotFound"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (user.IsEnterprise)
+        {
+            TempData["Error"] = _localizer["EnterpriseBillingManaged"].Value;
             return RedirectToAction(nameof(Index));
         }
 
@@ -412,10 +458,23 @@ public class BillingController : Controller
         public decimal AutoRechargePricePer100 { get; set; }
         public int LastPurchaseQuantity { get; set; }
 
-        // Saved payment method details (null if no card on file)
-        public string? SavedCardBrand { get; set; }
-        public string? SavedCardLast4 { get; set; }
-        public string? SavedCardExpiry { get; set; }
+        // Saved payment method (card or link) — null if none on file
+        public SavedPaymentMethod? SavedPaymentMethod { get; set; }
+
+        // Enterprise mode: credits are billed manually based on tracked usage. UI swaps
+        // "remaining credits" for "used credits per period", and hides checkout/auto-recharge controls.
+        public bool IsEnterprise { get; set; }
+        public int UsageToday { get; set; }
+        public int UsageLast7Days { get; set; }
+        public int UsageLast30Days { get; set; }
+        public IReadOnlyList<UsageBucket> DailyUsage { get; set; } = Array.Empty<UsageBucket>();
+        public IReadOnlyList<UsageBucket> MonthlyUsage { get; set; } = Array.Empty<UsageBucket>();
+    }
+
+    public class UsageBucket
+    {
+        public DateTime PeriodStart { get; set; }
+        public int Credits { get; set; }
     }
 
     [HttpPost("/Billing/AutoRecharge/Enable")]
@@ -427,6 +486,12 @@ public class BillingController : Controller
 
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
         if (user == null) return RedirectToAction("SignIn", "Account");
+
+        if (user.IsEnterprise)
+        {
+            TempData["Error"] = _localizer["EnterpriseBillingManaged"].Value;
+            return RedirectToAction(nameof(Index));
+        }
 
         var allowedQuantities = new[] { 100, 300, 500, 1000 };
         if (!allowedQuantities.Contains(quantity))
@@ -584,6 +649,12 @@ public class BillingController : Controller
 
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
         if (user == null) return RedirectToAction("SignIn", "Account");
+
+        if (user.IsEnterprise)
+        {
+            TempData["Error"] = _localizer["EnterpriseBillingManaged"].Value;
+            return RedirectToAction(nameof(Index));
+        }
 
         await _autoRechargeService.DisableAsync(user);
         TempData["Info"] = _localizer["AutoRechargeDisabled"].Value;
