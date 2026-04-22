@@ -13,5 +13,16 @@ namespace DotNetSigningServer.Models
         public bool ShowSignerName { get; set; } = true;
         public bool ShowCompanyName { get; set; } = true;
         public bool BackgroundRepeat { get; set; } = true;
+        public bool? AutoFontSize { get; set; }
+        public SignatureLabels? Labels { get; set; }
+    }
+
+    public class SignatureLabels
+    {
+        public string? Reason { get; set; }
+        public string? Location { get; set; }
+        public string? Date { get; set; }
+        public string? Signer { get; set; }
+        public string? Company { get; set; }
     }
 }
