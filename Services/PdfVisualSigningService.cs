@@ -1,4 +1,5 @@
 using DotNetSigningServer.Models;
+using DotNetSigningServer.Services.SignatureLayout;
 using iText.Commons.Bouncycastle.Cert;
 using iText.Forms.Fields.Properties;
 using iText.Forms.Form.Element;
@@ -15,6 +16,7 @@ using iText.Layout;
 using iText.Layout.Element;
 using iText.Layout.Properties;
 using iText.Layout.Borders;
+using LayoutModule = DotNetSigningServer.Services.SignatureLayout;
 
 namespace DotNetSigningServer.Services
 {
@@ -33,212 +35,57 @@ namespace DotNetSigningServer.Services
 
             int pageNumber = input.SignPageNumber <= 0 ? 1 : input.SignPageNumber;
             var page = pdfDoc.GetPage(pageNumber);
-            var pageSize = page.GetPageSize();
+
+            var appearanceOptions = input.Appearance ?? new SignatureAppearanceOptions();
+
+            var layoutInput = BuildLayoutInput(
+                signRect: input.SignRect,
+                designWidth: input.DesignWidth,
+                designHeight: input.DesignHeight,
+                autoHeight: input.AutoHeight,
+                appearance: appearanceOptions,
+                signImage: input.SignImageContent,
+                logoImage: input.CompanyLogoContent,
+                stampImage: input.StampImageContent,
+                reason: input.Reason,
+                location: input.Location,
+                signerName: input.SignerName,
+                companyName: null,
+                description: appearanceOptions.DescriptionText,
+                dateUtcNow: DateTime.UtcNow);
+
+            var layout = SignatureLayoutCalculator.ComputeLayout(layoutInput);
 
             float x = input.SignRect.X;
             float y = input.SignRect.Y;
-            float width = input.SignRect.Width;
-            float height = input.SignRect.Height;
+            float width = layout.BoxWidthPt;
+            float height = layout.BoxHeightPt;
 
-            var hasSignImage = !string.IsNullOrEmpty(input.SignImageContent);
-            var hasCompanyLogo = !string.IsNullOrEmpty(input.CompanyLogoContent);
-            var hasStamp = !string.IsNullOrEmpty(input.StampImageContent);
-            var hasBgImage = !string.IsNullOrEmpty(input.BackgroundImageContent);
-
-            var appearanceOptions = input.Appearance ?? new SignatureAppearanceOptions();
-            var showReason = appearanceOptions.ShowReason;
-            var showDate = appearanceOptions.ShowDate;
-
-            DeviceRgb? fgColor = !string.IsNullOrWhiteSpace(appearanceOptions.ForegroundColor)
-                ? PdfCryptoHelper.ParseHexColor(appearanceOptions.ForegroundColor!) : null;
-            DeviceRgb? bgColor = !string.IsNullOrWhiteSpace(appearanceOptions.BackgroundColor)
-                ? PdfCryptoHelper.ParseHexColor(appearanceOptions.BackgroundColor!) : null;
-
-            PdfFont? font = null;
-            if (!string.IsNullOrWhiteSpace(appearanceOptions.FontFamily))
+            // When AutoHeight grew the box, shift Y down so the new height stays anchored at the original top edge.
+            if (layout.BoxHeightPt != input.SignRect.Height)
             {
-                var fontName = appearanceOptions.FontFamily switch
-                {
-                    "Times" => StandardFonts.TIMES_ROMAN,
-                    "Courier" => StandardFonts.COURIER,
-                    _ => StandardFonts.HELVETICA,
-                };
-                font = PdfFontFactory.CreateFont(fontName);
+                y = input.SignRect.Y + input.SignRect.Height - layout.BoxHeightPt;
             }
 
-            float? fontSize = appearanceOptions.FontSize;
+            var font = ResolveFont(appearanceOptions.FontFamily);
+            var fgColor = ParseColor(appearanceOptions.ForegroundColor);
+            var bgColor = ParseColor(appearanceOptions.BackgroundColor);
 
             var rect = new Rectangle(x, y, width, height);
             var canvas = new Canvas(new PdfCanvas(page), rect);
 
-            if (hasStamp || hasBgImage || hasCompanyLogo)
-            {
-                // Full layout: 3-column table matching BuildSignerProperties pattern
-                var div = new Div()
-                    .SetWidth(UnitValue.CreatePercentValue(100))
-                    .SetHeight(UnitValue.CreatePercentValue(100));
+            var div = BuildSignatureDiv(
+                layout: layout,
+                signImage: input.SignImageContent,
+                logoImage: input.CompanyLogoContent,
+                stampImage: input.StampImageContent,
+                backgroundImage: input.BackgroundImageContent,
+                backgroundRepeat: appearanceOptions.BackgroundRepeat,
+                font: font,
+                fgColor: fgColor,
+                bgColor: bgColor);
 
-                if (hasBgImage)
-                {
-                    var bgData = ImageDataFactory.Create(Convert.FromBase64String(input.BackgroundImageContent!));
-                    var shouldRepeat = appearanceOptions?.BackgroundRepeat ?? true;
-                    var builder = new BackgroundImage.Builder()
-                        .SetImage(new PdfImageXObject(bgData));
-
-                    if (shouldRepeat)
-                    {
-                        builder.SetBackgroundRepeat(new BackgroundRepeat(BackgroundRepeat.BackgroundRepeatValue.REPEAT));
-                    }
-                    else
-                    {
-                        var bgSize = new BackgroundSize();
-                        bgSize.SetBackgroundSizeToContain();
-                        builder.SetBackgroundSize(bgSize)
-                            .SetBackgroundRepeat(new BackgroundRepeat(BackgroundRepeat.BackgroundRepeatValue.NO_REPEAT))
-                            .SetBackgroundPosition(new BackgroundPosition().SetPositionX(BackgroundPosition.PositionX.CENTER).SetPositionY(BackgroundPosition.PositionY.CENTER));
-                    }
-
-                    div.SetBackgroundImage(builder.Build());
-                }
-                else if (bgColor != null)
-                {
-                    div.SetBackgroundColor(bgColor);
-                }
-
-                var table = new Table(new float[] { 1, 2, 1 })
-                    .SetWidth(UnitValue.CreatePercentValue(100))
-                    .UseAllAvailableWidth();
-
-                // Left: signature image + company logo
-                var leftCell = new Cell().SetBorder(Border.NO_BORDER).SetVerticalAlignment(VerticalAlignment.MIDDLE);
-                if (hasSignImage)
-                {
-                    var img = new Image(ImageDataFactory.Create(Convert.FromBase64String(input.SignImageContent!)));
-                    img.SetAutoScale(true);
-                    leftCell.Add(img);
-                }
-                if (hasCompanyLogo)
-                {
-                    var logoImg = new Image(ImageDataFactory.Create(Convert.FromBase64String(input.CompanyLogoContent!)));
-                    logoImg.SetAutoScale(true);
-                    leftCell.Add(logoImg);
-                }
-                table.AddCell(leftCell);
-
-                // Center: text lines
-                var centerCell = new Cell().SetBorder(Border.NO_BORDER).SetVerticalAlignment(VerticalAlignment.MIDDLE);
-                var lines = BuildVisualSignTextLines(input, appearanceOptions);
-                foreach (var line in lines)
-                {
-                    var p = new Paragraph(line);
-                    if (font != null) p.SetFont(font);
-                    if (fgColor != null) p.SetFontColor(fgColor);
-                    if (fontSize.HasValue) p.SetFontSize(fontSize.Value);
-                    centerCell.Add(p);
-                }
-                table.AddCell(centerCell);
-
-                // Right: stamp image
-                var rightCell = new Cell().SetBorder(Border.NO_BORDER).SetVerticalAlignment(VerticalAlignment.MIDDLE);
-                if (hasStamp)
-                {
-                    var stampImg = new Image(ImageDataFactory.Create(Convert.FromBase64String(input.StampImageContent!)));
-                    stampImg.SetAutoScale(true);
-                    rightCell.Add(stampImg);
-                }
-                table.AddCell(rightCell);
-
-                div.Add(table);
-                canvas.Add(div);
-            }
-            else if (hasSignImage)
-            {
-                // Image + text layout matching digital signature appearance
-                var lines = BuildVisualSignTextLines(input, appearanceOptions);
-
-                if (lines.Count > 0)
-                {
-                    // 2-column table: [signature image | text lines]
-                    var div = new Div()
-                        .SetWidth(UnitValue.CreatePercentValue(100))
-                        .SetHeight(UnitValue.CreatePercentValue(100));
-
-                    if (bgColor != null)
-                        div.SetBackgroundColor(bgColor);
-
-                    var table = new Table(new float[] { 1, 2 })
-                        .SetWidth(UnitValue.CreatePercentValue(100))
-                        .UseAllAvailableWidth();
-
-                    var imgCell = new Cell().SetBorder(Border.NO_BORDER).SetVerticalAlignment(VerticalAlignment.MIDDLE);
-                    var img = new Image(ImageDataFactory.Create(Convert.FromBase64String(input.SignImageContent!)));
-                    img.SetAutoScale(true);
-                    imgCell.Add(img);
-                    table.AddCell(imgCell);
-
-                    var textCell = new Cell().SetBorder(Border.NO_BORDER).SetVerticalAlignment(VerticalAlignment.MIDDLE);
-                    foreach (var line in lines)
-                    {
-                        var p = new Paragraph(line);
-                        if (font != null) p.SetFont(font);
-                        if (fgColor != null) p.SetFontColor(fgColor);
-                        if (fontSize.HasValue) p.SetFontSize(fontSize.Value);
-                        textCell.Add(p);
-                    }
-                    table.AddCell(textCell);
-
-                    div.Add(table);
-                    canvas.Add(div);
-                }
-                else
-                {
-                    // No text lines -- just the image
-                    var imgData = ImageDataFactory.Create(Convert.FromBase64String(input.SignImageContent!));
-                    var img = new Image(imgData);
-                    img.ScaleToFit(width, height);
-                    img.SetFixedPosition(x, y);
-
-                    canvas.Close();
-                    var layoutDoc = new iText.Layout.Document(pdfDoc);
-                    layoutDoc.Add(img);
-                    layoutDoc.Flush();
-                    pdfDoc.Close();
-                    return Convert.ToBase64String(msOut.ToArray());
-                }
-            }
-            else
-            {
-                // Text-only visual stamp
-                var lines = BuildVisualSignTextLines(input, appearanceOptions);
-                if (bgColor != null)
-                {
-                    var div = new Div()
-                        .SetWidth(UnitValue.CreatePercentValue(100))
-                        .SetHeight(UnitValue.CreatePercentValue(100))
-                        .SetBackgroundColor(bgColor);
-                    foreach (var line in lines)
-                    {
-                        var p = new Paragraph(line);
-                        if (font != null) p.SetFont(font);
-                        if (fgColor != null) p.SetFontColor(fgColor);
-                        if (fontSize.HasValue) p.SetFontSize(fontSize.Value);
-                        div.Add(p);
-                    }
-                    canvas.Add(div);
-                }
-                else
-                {
-                    foreach (var line in lines)
-                    {
-                        var p = new Paragraph(line);
-                        if (font != null) p.SetFont(font);
-                        if (fgColor != null) p.SetFontColor(fgColor);
-                        if (fontSize.HasValue) p.SetFontSize(fontSize.Value);
-                        canvas.Add(p);
-                    }
-                }
-            }
-
+            canvas.Add(div);
             canvas.Close();
             pdfDoc.Close();
 
@@ -257,7 +104,10 @@ namespace DotNetSigningServer.Services
             string? stampImageContent = null,
             string? backgroundImageContent = null,
             string? companyLogoContent = null,
-            bool visible = true)
+            bool visible = true,
+            float? designWidth = null,
+            float? designHeight = null,
+            bool? autoHeight = null)
         {
             SignerProperties signerProperties = new SignerProperties().SetFieldName(fieldName);
 
@@ -272,174 +122,271 @@ namespace DotNetSigningServer.Services
                 return signerProperties;
             }
 
+            var appearanceOptionsLocal = appearanceOptions ?? new SignatureAppearanceOptions();
+
             var subjectDN = chain?.FirstOrDefault()?.GetSubjectDN()?.ToString();
-            var cn = subjectDN?.Split(",").Select(p => p.Trim()).FirstOrDefault(p => p.StartsWith("CN="))?.Substring(3);
+            var cn = subjectDN?
+                .Split(",")
+                .Select(p => p.Trim())
+                .FirstOrDefault(p => p.StartsWith("CN="))?
+                .Substring(3);
+            var org = subjectDN?
+                .Split(",")
+                .Select(p => p.Trim())
+                .FirstOrDefault(p => p.StartsWith("O="))?
+                .Substring(2);
+
+            var layoutInput = BuildLayoutInput(
+                signRect: signRect,
+                designWidth: designWidth,
+                designHeight: designHeight,
+                autoHeight: autoHeight,
+                appearance: appearanceOptionsLocal,
+                signImage: signImageContent,
+                logoImage: companyLogoContent,
+                stampImage: stampImageContent,
+                reason: reason,
+                location: location,
+                signerName: cn,
+                companyName: org,
+                description: appearanceOptionsLocal.DescriptionText,
+                dateUtcNow: DateTime.UtcNow);
+
+            var layout = SignatureLayoutCalculator.ComputeLayout(layoutInput);
+
+            var font = ResolveFont(appearanceOptionsLocal.FontFamily);
+            var fgColor = ParseColor(appearanceOptionsLocal.ForegroundColor);
+            var bgColor = ParseColor(appearanceOptionsLocal.BackgroundColor);
 
             SignatureFieldAppearance appearance = new SignatureFieldAppearance(SignerProperties.IGNORED_ID);
+            var div = BuildSignatureDiv(
+                layout: layout,
+                signImage: signImageContent,
+                logoImage: companyLogoContent,
+                stampImage: stampImageContent,
+                backgroundImage: backgroundImageContent,
+                backgroundRepeat: appearanceOptionsLocal.BackgroundRepeat,
+                font: font,
+                fgColor: fgColor,
+                bgColor: bgColor);
+            appearance.SetContent(div);
 
-            // Build text lines based on appearance options (or use defaults)
-            var showSignerName = appearanceOptions?.ShowSignerName ?? true;
-            var showCompanyName = appearanceOptions?.ShowCompanyName ?? true;
-            var showReason = appearanceOptions?.ShowReason ?? true;
-            var showDate = appearanceOptions?.ShowDate ?? true;
-
-            var lines = new List<string>();
-            if (showSignerName && !string.IsNullOrWhiteSpace(cn))
-                lines.Add($"Signed by {cn}");
-            if (showCompanyName && !string.IsNullOrWhiteSpace(subjectDN))
+            // AutoHeight grew the box: anchor to original top edge.
+            float finalY = signRect.Y;
+            if (autoHeight == true && Math.Abs(layout.BoxHeightPt - signRect.Height) > 0.01f)
             {
-                var orgMatch = subjectDN!.Split(",").Select(p => p.Trim()).FirstOrDefault(p => p.StartsWith("O="));
-                if (orgMatch != null)
-                    lines.Add($"Company: {orgMatch.Substring(2)}");
+                finalY = signRect.Y + signRect.Height - layout.BoxHeightPt;
             }
-            if (showReason && !string.IsNullOrWhiteSpace(reason))
-                lines.Add($"Reason: {reason}");
-            if (!string.IsNullOrWhiteSpace(appearanceOptions?.DescriptionText))
-                lines.Add(appearanceOptions!.DescriptionText!);
-
-            // Resolve styling
-            var hasSignImage = !string.IsNullOrEmpty(signImageContent);
-            var hasCompanyLogo = !string.IsNullOrEmpty(companyLogoContent);
-            var hasStamp = !string.IsNullOrEmpty(stampImageContent);
-            var hasBgImage = !string.IsNullOrEmpty(backgroundImageContent);
-
-            DeviceRgb? fgColor = !string.IsNullOrWhiteSpace(appearanceOptions?.ForegroundColor)
-                ? PdfCryptoHelper.ParseHexColor(appearanceOptions!.ForegroundColor!) : null;
-            DeviceRgb? bgColor = !string.IsNullOrWhiteSpace(appearanceOptions?.BackgroundColor)
-                ? PdfCryptoHelper.ParseHexColor(appearanceOptions!.BackgroundColor!) : null;
-
-            PdfFont? font = null;
-            if (!string.IsNullOrWhiteSpace(appearanceOptions?.FontFamily))
-            {
-                var fontName = appearanceOptions!.FontFamily switch
-                {
-                    "Times" => StandardFonts.TIMES_ROMAN,
-                    "Courier" => StandardFonts.COURIER,
-                    _ => StandardFonts.HELVETICA,
-                };
-                font = PdfFontFactory.CreateFont(fontName);
-            }
-
-            float? fontSize = appearanceOptions?.FontSize;
-
-            if (hasStamp || hasBgImage || hasCompanyLogo)
-            {
-                // Custom Div-based layout for stamp/background/company logo support
-                var div = new Div()
-                    .SetWidth(UnitValue.CreatePercentValue(100))
-                    .SetHeight(UnitValue.CreatePercentValue(100));
-
-                // Background: image takes priority over color
-                if (hasBgImage)
-                {
-                    var bgData = ImageDataFactory.Create(Convert.FromBase64String(backgroundImageContent!));
-                    var bgSize = new BackgroundSize();
-                    bgSize.SetBackgroundSizeToContain();
-                    div.SetBackgroundImage(new BackgroundImage.Builder()
-                        .SetImage(new PdfImageXObject(bgData))
-                        .SetBackgroundSize(bgSize)
-                        .Build());
-                }
-                else if (bgColor != null)
-                {
-                    div.SetBackgroundColor(bgColor);
-                }
-
-                // 3-column table: [signature+logo | text | stamp]
-                var table = new Table(new float[] { 1, 2, 1 })
-                    .SetWidth(UnitValue.CreatePercentValue(100))
-                    .UseAllAvailableWidth();
-
-                // Left: signature image + company logo (stacked vertically)
-                var leftCell = new Cell().SetBorder(Border.NO_BORDER).SetVerticalAlignment(VerticalAlignment.MIDDLE);
-                if (hasSignImage)
-                {
-                    var img = new Image(ImageDataFactory.Create(Convert.FromBase64String(signImageContent!)));
-                    img.SetAutoScale(true);
-                    leftCell.Add(img);
-                }
-                if (hasCompanyLogo)
-                {
-                    var logoImg = new Image(ImageDataFactory.Create(Convert.FromBase64String(companyLogoContent!)));
-                    logoImg.SetAutoScale(true);
-                    leftCell.Add(logoImg);
-                }
-                table.AddCell(leftCell);
-
-                // Center: text paragraphs
-                var centerCell = new Cell().SetBorder(Border.NO_BORDER).SetVerticalAlignment(VerticalAlignment.MIDDLE);
-                foreach (var line in lines)
-                {
-                    var p = new Paragraph(line);
-                    if (font != null) p.SetFont(font);
-                    if (fgColor != null) p.SetFontColor(fgColor);
-                    if (fontSize.HasValue) p.SetFontSize(fontSize.Value);
-                    centerCell.Add(p);
-                }
-                table.AddCell(centerCell);
-
-                // Right: stamp image
-                var rightCell = new Cell().SetBorder(Border.NO_BORDER).SetVerticalAlignment(VerticalAlignment.MIDDLE);
-                if (hasStamp)
-                {
-                    var stampImg = new Image(ImageDataFactory.Create(Convert.FromBase64String(stampImageContent!)));
-                    stampImg.SetAutoScale(true);
-                    rightCell.Add(stampImg);
-                }
-                table.AddCell(rightCell);
-
-                div.Add(table);
-                appearance.SetContent(div);
-            }
-            else
-            {
-                // Existing path -- backward compatible
-                var reasonLine = string.Join("\n", lines);
-                var appearanceText = new SignedAppearanceText().SetReasonLine(reasonLine);
-
-                if (hasSignImage)
-                {
-                    byte[] image = Convert.FromBase64String(signImageContent!);
-                    appearance.SetContent(appearanceText, ImageDataFactory.Create(image));
-                }
-                else
-                {
-                    appearance.SetContent(appearanceText);
-                }
-
-                // Apply color and font customization
-                if (fgColor != null)
-                    appearance.SetFontColor(fgColor);
-                if (bgColor != null)
-                    appearance.SetBackgroundColor(bgColor);
-                if (fontSize.HasValue)
-                    appearance.SetFontSize(fontSize.Value);
-                if (font != null)
-                    appearance.SetFont(font);
-            }
-
             signerProperties
-                .SetPageRect(new Rectangle(signRect.X, signRect.Y, signRect.Width, signRect.Height))
+                .SetPageRect(new Rectangle(signRect.X, finalY, layout.BoxWidthPt, layout.BoxHeightPt))
                 .SetPageNumber(pageNumber)
                 .SetSignatureAppearance(appearance);
 
             return signerProperties;
         }
 
+        // ===== shared layout → iText bridge ===================================
+
+        private static LayoutInput BuildLayoutInput(
+            SignRect signRect,
+            float? designWidth,
+            float? designHeight,
+            bool? autoHeight,
+            SignatureAppearanceOptions appearance,
+            string? signImage,
+            string? logoImage,
+            string? stampImage,
+            string reason,
+            string location,
+            string? signerName,
+            string? companyName,
+            string? description,
+            DateTime dateUtcNow)
+        {
+            return new LayoutInput
+            {
+                BoxWidthPt = designWidth ?? signRect.Width,
+                BoxHeightPt = designHeight ?? signRect.Height,
+                AutoHeight = autoHeight ?? false,
+                Appearance = new LayoutModule.LayoutAppearance
+                {
+                    FontFamily = string.IsNullOrWhiteSpace(appearance.FontFamily) ? "Helvetica" : appearance.FontFamily!,
+                    FontSize = appearance.FontSize ?? 10f,
+                    AutoFontSize = appearance.AutoFontSize ?? false,
+                    ShowReason = appearance.ShowReason,
+                    ShowLocation = appearance.ShowLocation,
+                    ShowDate = appearance.ShowDate,
+                    ShowSignerName = appearance.ShowSignerName,
+                    ShowCompanyName = appearance.ShowCompanyName,
+                    ShowSignature = !string.IsNullOrEmpty(signImage),
+                    ShowCompanyLogo = !string.IsNullOrEmpty(logoImage),
+                },
+                Labels = ResolveLabels(appearance.Labels),
+                Values = new LayoutModule.LayoutValues
+                {
+                    Description = description,
+                    Reason = reason,
+                    Location = location,
+                    Date = appearance.ShowDate ? dateUtcNow.ToString("yyyy-MM-dd HH:mm:ss") + " UTC" : null,
+                    Signer = signerName,
+                    Company = companyName,
+                },
+                Assets = new LayoutModule.LayoutAssets
+                {
+                    HasSignature = !string.IsNullOrEmpty(signImage),
+                    HasCompanyLogo = !string.IsNullOrEmpty(logoImage),
+                    HasStamp = !string.IsNullOrEmpty(stampImage),
+                },
+            };
+        }
+
+        private static LayoutModule.LayoutLabels ResolveLabels(SignatureLabels? input)
+        {
+            // Fall back to English when a specific label slot is unset — matches the
+            // TS side's getSignatureLabels(normalizeLocale(null)).
+            var english = SignatureLayoutCalculator.GetLabelsForLocale("en");
+            return new LayoutModule.LayoutLabels
+            {
+                Reason = input?.Reason ?? english.Reason,
+                Location = input?.Location ?? english.Location,
+                Date = input?.Date ?? english.Date,
+                Signer = input?.Signer ?? english.Signer,
+                Company = input?.Company ?? english.Company,
+            };
+        }
+
+        private static PdfFont? ResolveFont(string? fontFamily)
+        {
+            if (string.IsNullOrWhiteSpace(fontFamily)) return null;
+            var fontName = fontFamily switch
+            {
+                "Times" => StandardFonts.TIMES_ROMAN,
+                "Courier" => StandardFonts.COURIER,
+                _ => StandardFonts.HELVETICA,
+            };
+            return PdfFontFactory.CreateFont(fontName);
+        }
+
+        private static DeviceRgb? ParseColor(string? hex)
+            => !string.IsNullOrWhiteSpace(hex) ? PdfCryptoHelper.ParseHexColor(hex!) : null;
+
+        private static Div BuildSignatureDiv(
+            LayoutResult layout,
+            string? signImage,
+            string? logoImage,
+            string? stampImage,
+            string? backgroundImage,
+            bool backgroundRepeat,
+            PdfFont? font,
+            DeviceRgb? fgColor,
+            DeviceRgb? bgColor)
+        {
+            var div = new Div()
+                .SetWidth(UnitValue.CreatePercentValue(100))
+                .SetHeight(UnitValue.CreatePercentValue(100))
+                .SetPadding(layout.PaddingPt);
+
+            if (!string.IsNullOrEmpty(backgroundImage))
+            {
+                var bgData = ImageDataFactory.Create(Convert.FromBase64String(backgroundImage!));
+                var builder = new BackgroundImage.Builder().SetImage(new PdfImageXObject(bgData));
+                if (backgroundRepeat)
+                {
+                    builder.SetBackgroundRepeat(new BackgroundRepeat(BackgroundRepeat.BackgroundRepeatValue.REPEAT));
+                }
+                else
+                {
+                    var bgSize = new BackgroundSize();
+                    bgSize.SetBackgroundSizeToContain();
+                    builder
+                        .SetBackgroundSize(bgSize)
+                        .SetBackgroundRepeat(new BackgroundRepeat(BackgroundRepeat.BackgroundRepeatValue.NO_REPEAT))
+                        .SetBackgroundPosition(new BackgroundPosition()
+                            .SetPositionX(BackgroundPosition.PositionX.CENTER)
+                            .SetPositionY(BackgroundPosition.PositionY.CENTER));
+                }
+                div.SetBackgroundImage(builder.Build());
+            }
+            else if (bgColor != null)
+            {
+                div.SetBackgroundColor(bgColor);
+            }
+
+            if (layout.Columns.Count == 0) return div;
+
+            var weights = layout.Columns.Select(c => c.Weight).ToArray();
+            var table = new Table(weights)
+                .SetWidth(UnitValue.CreatePercentValue(100))
+                .UseAllAvailableWidth();
+
+            foreach (var col in layout.Columns)
+            {
+                var cell = new Cell()
+                    .SetBorder(Border.NO_BORDER)
+                    .SetVerticalAlignment(VerticalAlignment.MIDDLE);
+
+                switch (col.Kind)
+                {
+                    case ColumnKind.Left:
+                        if (!string.IsNullOrEmpty(signImage))
+                            cell.Add(CreateAutoScaledImage(signImage!));
+                        if (!string.IsNullOrEmpty(logoImage))
+                            cell.Add(CreateAutoScaledImage(logoImage!));
+                        break;
+
+                    case ColumnKind.Middle:
+                        foreach (var row in layout.Rows)
+                        {
+                            var p = new Paragraph(row.Text)
+                                .SetFontSize(layout.FontSizePt)
+                                .SetMargin(0)
+                                .SetFixedLeading(layout.LineHeightPt);
+                            if (font != null) p.SetFont(font);
+                            if (fgColor != null) p.SetFontColor(fgColor);
+                            cell.Add(p);
+                        }
+                        break;
+
+                    case ColumnKind.Right:
+                        if (!string.IsNullOrEmpty(stampImage))
+                            cell.Add(CreateAutoScaledImage(stampImage!));
+                        break;
+                }
+                table.AddCell(cell);
+            }
+
+            div.Add(table);
+            return div;
+        }
+
+        private static Image CreateAutoScaledImage(string base64)
+        {
+            var img = new Image(ImageDataFactory.Create(Convert.FromBase64String(base64)));
+            img.SetAutoScale(true);
+            return img;
+        }
+
+        // Kept for any external callers that still build text lines the old way.
+        // Internal signing pipeline now routes everything through the shared layout module.
         public static List<string> BuildVisualSignTextLines(VisualSignInput input, SignatureAppearanceOptions appearance)
         {
-            var lines = new List<string>();
-            if (appearance.ShowSignerName && !string.IsNullOrWhiteSpace(input.SignerName))
-                lines.Add($"Signed by {input.SignerName}");
-            if (appearance.ShowReason && !string.IsNullOrWhiteSpace(input.Reason))
-                lines.Add($"Reason: {input.Reason}");
-            if (appearance.ShowLocation && !string.IsNullOrWhiteSpace(input.Location))
-                lines.Add($"Location: {input.Location}");
-            if (appearance.ShowDate)
-                lines.Add($"Date: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
-            if (!string.IsNullOrWhiteSpace(appearance.DescriptionText))
-                lines.Add(appearance.DescriptionText!);
-            return lines;
+            var layoutInput = BuildLayoutInput(
+                signRect: input.SignRect,
+                designWidth: input.DesignWidth,
+                designHeight: input.DesignHeight,
+                autoHeight: input.AutoHeight,
+                appearance: appearance,
+                signImage: input.SignImageContent,
+                logoImage: input.CompanyLogoContent,
+                stampImage: input.StampImageContent,
+                reason: input.Reason,
+                location: input.Location,
+                signerName: input.SignerName,
+                companyName: null,
+                description: appearance.DescriptionText,
+                dateUtcNow: DateTime.UtcNow);
+            var rows = SignatureLayoutCalculator.BuildRows(layoutInput.Appearance, layoutInput.Labels, layoutInput.Values);
+            return rows.Select(r => r.Text).ToList();
         }
     }
 }

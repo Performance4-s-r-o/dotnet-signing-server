@@ -56,6 +56,9 @@ namespace DotNetSigningServer.Services
                     Appearance = input.Appearance,
                     TemplateId = input.TemplateId,
                     SignerName = input.SignerName,
+                    DesignWidth = input.DesignWidth,
+                    DesignHeight = input.DesignHeight,
+                    AutoHeight = input.AutoHeight,
                 });
             }
 
@@ -78,7 +81,10 @@ namespace DotNetSigningServer.Services
                 visible: _sealOptions.Visible,
                 tsaUrl: input.TsaUrl,
                 tsaUsername: input.TsaUsername,
-                tsaPassword: input.TsaPassword);
+                tsaPassword: input.TsaPassword,
+                designWidth: input.DesignWidth,
+                designHeight: input.DesignHeight,
+                autoHeight: input.AutoHeight);
 
             return Convert.ToBase64String(fullySignedPdf);
         }

@@ -59,7 +59,11 @@ namespace DotNetSigningServer.Services
                 input.Appearance,
                 input.StampImageContent,
                 input.BackgroundImageContent,
-                input.CompanyLogoContent);
+                input.CompanyLogoContent,
+                visible: true,
+                designWidth: input.DesignWidth,
+                designHeight: input.DesignHeight,
+                autoHeight: input.AutoHeight);
 
             string preSignedPdfPath = IOPath.Combine(IOPath.GetTempPath(), $"presigned_{Guid.NewGuid():N}.pdf");
             File.WriteAllBytes(preSignedPdfPath, pdfWithPlaceholder);
@@ -106,7 +110,10 @@ namespace DotNetSigningServer.Services
                 visible: true,
                 tsaUrl: null,
                 tsaUsername: null,
-                tsaPassword: null);
+                tsaPassword: null,
+                designWidth: input.DesignWidth,
+                designHeight: input.DesignHeight,
+                autoHeight: input.AutoHeight);
 
             return Convert.ToBase64String(fullySignedPdf);
         }
@@ -136,7 +143,11 @@ namespace DotNetSigningServer.Services
                 input.Appearance,
                 input.StampImageContent,
                 input.BackgroundImageContent,
-                input.CompanyLogoContent);
+                input.CompanyLogoContent,
+                visible: true,
+                designWidth: input.DesignWidth,
+                designHeight: input.DesignHeight,
+                autoHeight: input.AutoHeight);
 
             signer.SetSignerProperties(signerProperties);
             signer.Timestamp(tsaClient, fieldName);
@@ -245,7 +256,10 @@ namespace DotNetSigningServer.Services
             bool visible,
             string? tsaUrl,
             string? tsaUsername,
-            string? tsaPassword)
+            string? tsaPassword,
+            float? designWidth = null,
+            float? designHeight = null,
+            bool? autoHeight = null)
         {
             var preSignContainer = new DigestCalcBlankSigner(PdfName.Adobe_PPKLite, PdfName.Adbe_pkcs7_detached);
             preSignContainer.SetChain(chain);
@@ -264,7 +278,10 @@ namespace DotNetSigningServer.Services
                 stampImageContent,
                 backgroundImageContent,
                 companyLogoContent,
-                visible);
+                visible,
+                designWidth,
+                designHeight,
+                autoHeight);
 
             byte[] signatureBytes = PdfCryptoHelper.SignAuthenticatedAttributes(preSignContainer.GetDocBytesHash(), privateKey);
             ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(_tsaOptions, tsaUrl, tsaUsername, tsaPassword);
@@ -285,7 +302,10 @@ namespace DotNetSigningServer.Services
             string? stampImageContent = null,
             string? backgroundImageContent = null,
             string? companyLogoContent = null,
-            bool visible = true)
+            bool visible = true,
+            float? designWidth = null,
+            float? designHeight = null,
+            bool? autoHeight = null)
         {
             using var msIn = new MemoryStream(originalPdf);
             using var msOut = new MemoryStream();
@@ -305,7 +325,10 @@ namespace DotNetSigningServer.Services
                 stampImageContent,
                 backgroundImageContent,
                 companyLogoContent,
-                visible);
+                visible,
+                designWidth,
+                designHeight,
+                autoHeight);
 
             signer.SetSignerProperties(signerProperties);
             // Reserve extra space so the deferred signature can include TSA timestamp tokens when present.
