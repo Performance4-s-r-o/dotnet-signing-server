@@ -288,24 +288,31 @@ namespace DotNetSigningServer.Services
 
             if (!string.IsNullOrEmpty(backgroundImage))
             {
-                var bgData = ImageDataFactory.Create(Convert.FromBase64String(backgroundImage!));
-                var builder = new BackgroundImage.Builder().SetImage(new PdfImageXObject(bgData));
-                if (backgroundRepeat)
+                var bgData = TryDecodeImageData(backgroundImage!);
+                if (bgData != null)
                 {
-                    builder.SetBackgroundRepeat(new BackgroundRepeat(BackgroundRepeat.BackgroundRepeatValue.REPEAT));
+                    var builder = new BackgroundImage.Builder().SetImage(new PdfImageXObject(bgData));
+                    if (backgroundRepeat)
+                    {
+                        builder.SetBackgroundRepeat(new BackgroundRepeat(BackgroundRepeat.BackgroundRepeatValue.REPEAT));
+                    }
+                    else
+                    {
+                        var bgSize = new BackgroundSize();
+                        bgSize.SetBackgroundSizeToContain();
+                        builder
+                            .SetBackgroundSize(bgSize)
+                            .SetBackgroundRepeat(new BackgroundRepeat(BackgroundRepeat.BackgroundRepeatValue.NO_REPEAT))
+                            .SetBackgroundPosition(new BackgroundPosition()
+                                .SetPositionX(BackgroundPosition.PositionX.CENTER)
+                                .SetPositionY(BackgroundPosition.PositionY.CENTER));
+                    }
+                    div.SetBackgroundImage(builder.Build());
                 }
-                else
+                else if (bgColor != null)
                 {
-                    var bgSize = new BackgroundSize();
-                    bgSize.SetBackgroundSizeToContain();
-                    builder
-                        .SetBackgroundSize(bgSize)
-                        .SetBackgroundRepeat(new BackgroundRepeat(BackgroundRepeat.BackgroundRepeatValue.NO_REPEAT))
-                        .SetBackgroundPosition(new BackgroundPosition()
-                            .SetPositionX(BackgroundPosition.PositionX.CENTER)
-                            .SetPositionY(BackgroundPosition.PositionY.CENTER));
+                    div.SetBackgroundColor(bgColor);
                 }
-                div.SetBackgroundImage(builder.Build());
             }
             else if (bgColor != null)
             {
@@ -329,9 +336,15 @@ namespace DotNetSigningServer.Services
                 {
                     case ColumnKind.Left:
                         if (!string.IsNullOrEmpty(signImage))
-                            cell.Add(CreateAutoScaledImage(signImage!));
+                        {
+                            var img = TryCreateAutoScaledImage(signImage!);
+                            if (img != null) cell.Add(img);
+                        }
                         if (!string.IsNullOrEmpty(logoImage))
-                            cell.Add(CreateAutoScaledImage(logoImage!));
+                        {
+                            var img = TryCreateAutoScaledImage(logoImage!);
+                            if (img != null) cell.Add(img);
+                        }
                         break;
 
                     case ColumnKind.Middle:
@@ -349,7 +362,10 @@ namespace DotNetSigningServer.Services
 
                     case ColumnKind.Right:
                         if (!string.IsNullOrEmpty(stampImage))
-                            cell.Add(CreateAutoScaledImage(stampImage!));
+                        {
+                            var img = TryCreateAutoScaledImage(stampImage!);
+                            if (img != null) cell.Add(img);
+                        }
                         break;
                 }
                 table.AddCell(cell);
@@ -359,11 +375,38 @@ namespace DotNetSigningServer.Services
             return div;
         }
 
-        private static Image CreateAutoScaledImage(string base64)
+        private static Image? TryCreateAutoScaledImage(string base64)
         {
-            var img = new Image(ImageDataFactory.Create(Convert.FromBase64String(base64)));
+            var data = TryDecodeImageData(base64);
+            if (data == null) return null;
+            var img = new Image(data);
             img.SetAutoScale(true);
             return img;
+        }
+
+        // Accepts either raw base64 or a `data:image/<fmt>;base64,<data>` URI
+        // and returns ImageData, or null when the bytes can't be parsed as an
+        // image iText supports (e.g. SVG, unknown format, malformed payload).
+        // Failing soft keeps the sign operation alive — a missing stamp is
+        // preferable to aborting the whole signature.
+        private static iText.IO.Image.ImageData? TryDecodeImageData(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return null;
+            var payload = input;
+            var commaIdx = payload.IndexOf(',');
+            if (payload.StartsWith("data:", StringComparison.OrdinalIgnoreCase) && commaIdx > 0)
+            {
+                payload = payload.Substring(commaIdx + 1);
+            }
+            try
+            {
+                var bytes = Convert.FromBase64String(payload);
+                return ImageDataFactory.Create(bytes);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
         }
 
         // Kept for any external callers that still build text lines the old way.
