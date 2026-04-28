@@ -1,7 +1,8 @@
 @model DotNetSigningServer.Models.ErrorViewModel
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
     Layout = "_Layout";
-    ViewData["Title"] = "Error";
+    ViewData["Title"] = L["ErrorTitle"].Value;
 }
 
 <section class="container py-5">
@@ -9,9 +10,9 @@
         <div class="col-lg-8">
             <div class="card shadow-sm border-0">
                 <div class="card-body p-4">
-                    <h1 class="h4 mb-3">Something went wrong</h1>
+                    <h1 class="h4 mb-3">@L["ErrorHeading"]</h1>
                     <p class="text-muted mb-3">@Model.ErrorMessage</p>
-                    <p class="text-muted mb-1">Use this trace ID if you contact support:</p>
+                    <p class="text-muted mb-1">@L["ErrorTraceMsg"]</p>
                     <pre class="bg-light p-3 rounded border mb-0"><code>@Model.TraceId</code></pre>
                 </div>
             </div>

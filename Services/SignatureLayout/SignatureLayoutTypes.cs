@@ -57,7 +57,7 @@ namespace DotNetSigningServer.Services.SignatureLayout
         public LayoutValues Values { get; set; } = new();
         public LayoutAssets Assets { get; set; } = new();
         public float PaddingPt { get; set; } = 4f;
-        public float ColumnGapPt { get; set; } = 4f;
+        public float ColumnGapPt { get; set; } = 3f;
         public float LineHeightMul { get; set; } = 1.25f;
     }
 

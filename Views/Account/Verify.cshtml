@@ -1,15 +1,16 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "Verify email";
+    ViewData["Title"] = L["VerifyEmailTitle"].Value;
 }
 
-<h1>Verify your email</h1>
+<h1>@L["VerifyEmailHeading"]</h1>
 
 @{
     var verified = ViewData["Verified"] as bool? ?? false;
 }
 
 <p class="text-small">
-    We sent you a verification link.
+    @L["VerificationLinkSent"]
     @if (TempData["Error"] != null)
     {
     <div class="flash error">@TempData["Error"]</div>
@@ -20,6 +21,6 @@
 }
 @if (verified)
 {
-    <div class="flash info" style="display:inline-block;margin-left:0.5rem;">Success: your email is confirmed.</div>
+    <div class="flash info" style="display:inline-block;margin-left:0.5rem;">@L["VerifyEmailConfirmedMsg"]</div>
 }
 </p>

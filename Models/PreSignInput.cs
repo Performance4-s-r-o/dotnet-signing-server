@@ -28,6 +28,8 @@ namespace DotNetSigningServer.Models
         public float? DesignHeight { get; set; }
         /// <summary>When true, signature box height grows to fit content regardless of DesignHeight.</summary>
         public bool? AutoHeight { get; set; }
+        /// <summary>Display name used in the signer row. Overrides CN/GN+SN extracted from the cert chain when provided.</summary>
+        public string? SignerName { get; set; }
     }
 
     public class SignRect

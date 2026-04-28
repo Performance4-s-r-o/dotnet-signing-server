@@ -1,8 +1,9 @@
 @model DotNetSigningServer.Models.SignUpViewModel
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "Sign up";
+    ViewData["Title"] = L["SignUpLinkText"].Value;
 }
-<h1>Create an account</h1>
+<h1>@L["CreateAccountHeading"]</h1>
 
 @if (TempData["Error"] != null)
 {
@@ -15,31 +16,32 @@
 <form method="post" class="auth-form">
     @Html.AntiForgeryToken()
     <div class="form-group">
-        <label asp-for="Email" class="form-label">Email</label>
+        <label asp-for="Email" class="form-label">@L["EmailLabel"]</label>
         <input asp-for="Email" class="form-input" />
         <span asp-validation-for="Email" class="form-validation"></span>
     </div>
     <div class="form-group">
-        <label asp-for="Password" class="form-label">Password</label>
+        <label asp-for="Password" class="form-label">@L["PasswordLabel"]</label>
         <input asp-for="Password" type="password" class="form-input" />
         <span asp-validation-for="Password" class="form-validation"></span>
     </div>
     <div class="form-group">
-        <label asp-for="ConfirmPassword" class="form-label">Confirm password</label>
+        <label asp-for="ConfirmPassword" class="form-label">@L["ConfirmPasswordLabel"]</label>
         <input asp-for="ConfirmPassword" type="password" class="form-input" />
         <span asp-validation-for="ConfirmPassword" class="form-validation"></span>
     </div>
 
     <label class="form-check">
         <input type="checkbox" name="acceptPolicies" required />
-        <span>I agree to the <a href="/Legal/TermsOfService" target="_blank">Terms of Service</a> and <a
-                href="/Legal/PrivacyPolicy" target="_blank">Privacy Policy</a>.</span>
+        <span>@Html.Raw(string.Format(L["SignUpAgreeTerms"].Value,
+            $"<a href='/Legal/TermsOfService' target='_blank'>{L["TermsOfServiceLink"].Value}</a>",
+            $"<a href='/Legal/PrivacyPolicy' target='_blank'>{L["PrivacyPolicyLink"].Value}</a>"))</span>
     </label>
 
-    <button type="submit" class="btn btn-primary">Sign up</button>
+    <button type="submit" class="btn btn-primary">@L["SignUpButton"]</button>
 </form>
 
-<p class="muted text-center mt-3">Already have an account? <a href="/Account/SignIn">Sign in</a>.</p>
+<p class="muted text-center mt-3">@L["AlreadyHaveAccount"] <a href="/Account/SignIn">@L["SignInLinkText"]</a>.</p>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />

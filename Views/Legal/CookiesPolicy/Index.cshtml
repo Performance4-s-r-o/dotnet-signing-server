@@ -1,10 +1,11 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "Cookies Policy";
+    ViewData["Title"] = L["LegalCookiesPolicy"].Value;
 }
 
 <div class="legal-document">
-    <h1>Cookies Policy</h1>
-    <p><em>Last updated: 25. 11. 2025</em></p>
+    <h1>@L["LegalCookiesPolicy"]</h1>
+    <p><em>@L["LegalLastUpdated"] 25. 11. 2025</em></p>
 
     <p>
         This Cookies Policy explains how <strong>P4PDF by Performance4 s.r.o.</strong>

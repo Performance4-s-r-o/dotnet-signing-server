@@ -63,7 +63,8 @@ namespace DotNetSigningServer.Services
                 visible: true,
                 designWidth: input.DesignWidth,
                 designHeight: input.DesignHeight,
-                autoHeight: input.AutoHeight);
+                autoHeight: input.AutoHeight,
+                signerNameOverride: input.SignerName);
 
             string preSignedPdfPath = IOPath.Combine(IOPath.GetTempPath(), $"presigned_{Guid.NewGuid():N}.pdf");
             File.WriteAllBytes(preSignedPdfPath, pdfWithPlaceholder);
@@ -113,7 +114,8 @@ namespace DotNetSigningServer.Services
                 tsaPassword: null,
                 designWidth: input.DesignWidth,
                 designHeight: input.DesignHeight,
-                autoHeight: input.AutoHeight);
+                autoHeight: input.AutoHeight,
+                signerNameOverride: input.SignerName);
 
             return Convert.ToBase64String(fullySignedPdf);
         }
@@ -132,6 +134,9 @@ namespace DotNetSigningServer.Services
             var reader = new PdfReader(msIn);
             var signer = new PdfSigner(reader, msOut, new StampingProperties().UseAppendMode());
 
+            int resolvedPage = input.SignPageNumber <= 0 ? 1 : input.SignPageNumber;
+            var signerPageSize = signer.GetDocument().GetPage(resolvedPage).GetPageSize();
+
             SignerProperties signerProperties = PdfVisualSigningService.BuildSignerProperties(
                 fieldName,
                 input.SignRect,
@@ -147,7 +152,9 @@ namespace DotNetSigningServer.Services
                 visible: true,
                 designWidth: input.DesignWidth,
                 designHeight: input.DesignHeight,
-                autoHeight: input.AutoHeight);
+                autoHeight: input.AutoHeight,
+                pageSize: signerPageSize,
+                signerNameOverride: input.SignerName);
 
             signer.SetSignerProperties(signerProperties);
             signer.Timestamp(tsaClient, fieldName);
@@ -259,7 +266,8 @@ namespace DotNetSigningServer.Services
             string? tsaPassword,
             float? designWidth = null,
             float? designHeight = null,
-            bool? autoHeight = null)
+            bool? autoHeight = null,
+            string? signerNameOverride = null)
         {
             var preSignContainer = new DigestCalcBlankSigner(PdfName.Adobe_PPKLite, PdfName.Adbe_pkcs7_detached);
             preSignContainer.SetChain(chain);
@@ -281,7 +289,8 @@ namespace DotNetSigningServer.Services
                 visible,
                 designWidth,
                 designHeight,
-                autoHeight);
+                autoHeight,
+                signerNameOverride);
 
             byte[] signatureBytes = PdfCryptoHelper.SignAuthenticatedAttributes(preSignContainer.GetDocBytesHash(), privateKey);
             ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(_tsaOptions, tsaUrl, tsaUsername, tsaPassword);
@@ -305,13 +314,17 @@ namespace DotNetSigningServer.Services
             bool visible = true,
             float? designWidth = null,
             float? designHeight = null,
-            bool? autoHeight = null)
+            bool? autoHeight = null,
+            string? signerNameOverride = null)
         {
             using var msIn = new MemoryStream(originalPdf);
             using var msOut = new MemoryStream();
 
             var reader = new PdfReader(msIn);
             var signer = new PdfSigner(reader, msOut, new StampingProperties().UseAppendMode());
+
+            int resolvedPage = pageNumber <= 0 ? 1 : pageNumber;
+            var signerPageSize = signer.GetDocument().GetPage(resolvedPage).GetPageSize();
 
             SignerProperties signerProperties = PdfVisualSigningService.BuildSignerProperties(
                 fieldName,
@@ -328,7 +341,9 @@ namespace DotNetSigningServer.Services
                 visible,
                 designWidth,
                 designHeight,
-                autoHeight);
+                autoHeight,
+                pageSize: signerPageSize,
+                signerNameOverride: signerNameOverride);
 
             signer.SetSignerProperties(signerProperties);
             // Reserve extra space so the deferred signature can include TSA timestamp tokens when present.

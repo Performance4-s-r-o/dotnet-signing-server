@@ -289,7 +289,7 @@ public class PdfTemplateService
     {
         var page = pdfDoc.GetPage(pageNumber);
         // var canvas = new Canvas(new PdfCanvas(page), page.GetPageSize());
-        var fontName = ResolveFont(field.FontName, field.FontWeight);
+        var font = ResolveFont(field.FontName, field.FontWeight);
         var horiz = field.HorizontalAlign ?? PdfHorizontalAlign.Left;
         var vert = field.VerticalAlign ?? PdfVerticalAlign.Center;
         var paragraph = new Paragraph(value)
@@ -312,10 +312,7 @@ public class PdfTemplateService
             // .SetMultipliedLeading(1.1f)
             .SetFixedPosition(pageNumber, rect.GetX(), rect.GetY(), rect.GetWidth());
 
-        if (!string.IsNullOrWhiteSpace(fontName))
-        {
-            paragraph.SetFont(iText.Kernel.Font.PdfFontFactory.CreateFont(fontName));
-        }
+        paragraph.SetFont(font);
 
         // var textAlign = horiz switch
         // {
@@ -490,11 +487,7 @@ public class PdfTemplateService
                     .SetFontSize(col.FontSize <= 0 ? field.FontSize : col.FontSize)
                     .SetMultipliedLeading(1.1f);
 
-                var colFont = ResolveFont(field.FontName, col.FontWeight ?? field.FontWeight);
-                if (!string.IsNullOrWhiteSpace(colFont))
-                {
-                    paragraph.SetFont(iText.Kernel.Font.PdfFontFactory.CreateFont(colFont));
-                }
+                paragraph.SetFont(ResolveFont(field.FontName, col.FontWeight ?? field.FontWeight));
 
                 var cell = new Cell().Add(paragraph)
                     .SetPadding(4)
@@ -694,7 +687,7 @@ public class PdfTemplateService
         }
     }
 
-    private static string ResolveFont(PdfFontName? fontName, PdfFontWeight? fontWeight)
+    private static iText.Kernel.Font.PdfFont ResolveFont(PdfFontName? fontName, PdfFontWeight? fontWeight)
     {
         var resolvedName = fontName ?? PdfFontName.Helvetica;
         var weight = fontWeight ?? PdfFontWeight.Normal;
@@ -704,14 +697,20 @@ public class PdfTemplateService
             isBold = false;
         }
 
-        return resolvedName switch
+        // Symbol / ZapfDingbats are dingbat fonts with no Czech characters —
+        // keep them as Standard14 since they're used for glyph lookups, not text.
+        if (resolvedName == PdfFontName.Symbol)
+            return iText.Kernel.Font.PdfFontFactory.CreateFont(StandardFonts.SYMBOL);
+        if (resolvedName == PdfFontName.ZapfDingbats)
+            return iText.Kernel.Font.PdfFontFactory.CreateFont(StandardFonts.ZAPFDINGBATS);
+
+        var family = resolvedName switch
         {
-            PdfFontName.Courier => isBold ? StandardFonts.COURIER_BOLD : StandardFonts.COURIER,
-            PdfFontName.TimesRoman => isBold ? StandardFonts.TIMES_BOLD : StandardFonts.TIMES_ROMAN,
-            PdfFontName.Symbol => StandardFonts.SYMBOL,
-            PdfFontName.ZapfDingbats => StandardFonts.ZAPFDINGBATS,
-            _ => isBold ? StandardFonts.HELVETICA_BOLD : StandardFonts.HELVETICA
+            PdfFontName.Courier => AppFontFamily.Mono,
+            PdfFontName.TimesRoman => AppFontFamily.Serif,
+            _ => AppFontFamily.Sans,
         };
+        return AppFonts.Load(family, isBold);
     }
 
     private static Rectangle NormalizeRectForRotation(PdfPage page, Rectangle rect)

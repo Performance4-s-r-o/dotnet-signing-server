@@ -1,10 +1,11 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "AGPL License";
+    ViewData["Title"] = L["LegalAgplLicense"].Value;
 }
 
 <div class="legal-document">
-    <h1>AGPL License</h1>
-    <p><em>Last updated: 25. 11. 2025</em></p>
+    <h1>@L["LegalAgplLicense"]</h1>
+    <p><em>@L["LegalLastUpdated"] 25. 11. 2025</em></p>
 
     <p>
         The <strong>P4PDF by Performance4 s.r.o.</strong> server-side software is distributed under

@@ -148,7 +148,6 @@ public class AccountController : Controller
 
         // Send verification email (critical — user cannot complete signup without it)
         var verificationLink = BuildAbsoluteUrl($"/Account/Verify?token={Uri.EscapeDataString(verificationToken)}");
-        var settingsUrl = BuildAbsoluteUrl("/Account/Settings");
         var rendered = _emailTemplates.Render(EmailTemplateId.EmailVerification, CurrentLocale, new Dictionary<string, string?>
         {
             ["verificationUrl"] = verificationLink,
@@ -156,7 +155,7 @@ public class AccountController : Controller
 
         try
         {
-            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody, settingsUrl, isCritical: true);
+            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody);
             TempData["Info"] = _localizer["CheckEmailVerification"].Value;
         }
         catch
@@ -240,7 +239,6 @@ public class AccountController : Controller
         user.EmailOtpExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
         await _dbContext.SaveChangesAsync();
 
-        var otpSettingsUrl = BuildAbsoluteUrl("/Account/Settings");
         var rendered = _emailTemplates.Render(EmailTemplateId.TwoFactorCode, CurrentLocale, new Dictionary<string, string?>
         {
             ["otpCode"] = otp,
@@ -248,8 +246,7 @@ public class AccountController : Controller
         });
         try
         {
-            // 2FA codes are critical security emails — always sent regardless of notification preferences
-            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody, otpSettingsUrl, isCritical: true);
+            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody);
             TempData["Info"] = _localizer["TwoFactorCodeSent"].Value;
         }
         catch
@@ -441,7 +438,6 @@ public class AccountController : Controller
             await _dbContext.SaveChangesAsync();
 
             var resetLink = BuildAbsoluteUrl($"/Account/ResetPassword?token={Uri.EscapeDataString(token)}");
-            var settingsUrl = BuildAbsoluteUrl("/Account/Settings");
             var rendered = _emailTemplates.Render(EmailTemplateId.PasswordReset, CurrentLocale, new Dictionary<string, string?>
             {
                 ["resetUrl"] = resetLink,
@@ -450,7 +446,7 @@ public class AccountController : Controller
 
             try
             {
-                await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody, settingsUrl, isCritical: true);
+                await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody);
             }
             catch
             {
@@ -567,22 +563,6 @@ public class AccountController : Controller
                 IsPersistent = rememberMe,
                 AllowRefresh = true
             });
-    }
-
-    /// <summary>
-    /// Sends an email respecting the user's notification preference.
-    /// Critical emails (2FA, verification) are always sent regardless of the preference.
-    /// </summary>
-    private async Task<bool> SendEmailIfAllowed(Models.User user, string subject, string htmlBody, bool isCritical)
-    {
-        if (!isCritical && !user.EmailNotificationsEnabled)
-        {
-            return false;
-        }
-
-        var settingsUrl = BuildAbsoluteUrl("/Account/Settings");
-        await _emailSender.SendAsync(user.Email, subject, htmlBody, settingsUrl, isCritical);
-        return true;
     }
 
     private Guid? GetCurrentUserId()

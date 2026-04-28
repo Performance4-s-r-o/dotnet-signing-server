@@ -79,13 +79,6 @@ public class PriceChangeMonitorService : BackgroundService
 
         foreach (var user in affectedUsers)
         {
-            if (!user.EmailNotificationsEnabled)
-            {
-                // Can't notify, but mark as notified so the price updates after 30 days
-                user.PriceChangeNotifiedAt = DateTimeOffset.UtcNow;
-                continue;
-            }
-
             var cancelUrl = $"{baseUrl}/Billing/AutoRecharge/Cancel?token={user.AutoRechargeCancelToken}";
             var oldAmount = GetFormattedAmount(user.AutoRechargePricePer100, user.AutoRechargeQuantity, billingOptions);
             var newAmount = GetFormattedAmount(currentPrice, user.AutoRechargeQuantity, billingOptions);
@@ -103,12 +96,7 @@ public class PriceChangeMonitorService : BackgroundService
 
             try
             {
-                await emailSender.SendAsync(
-                    user.Email,
-                    rendered.Subject,
-                    rendered.HtmlBody,
-                    $"{baseUrl}/Account/Settings",
-                    isCritical: true);
+                await emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody);
 
                 user.PriceChangeNotifiedAt = DateTimeOffset.UtcNow;
                 _logger.LogInformation("Price change notification sent to user {UserId} ({Email})", user.Id, user.Email);

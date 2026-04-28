@@ -236,11 +236,6 @@ public class AutoRechargeService : IAutoRechargeService
 
     private async Task SendRechargeSuccessEmailAsync(User user, int creditsAdded, decimal amount)
     {
-        if (!user.EmailNotificationsEnabled)
-        {
-            return;
-        }
-
         var baseUrl = _appOptions.FqdnServerName?.TrimEnd('/') ?? "https://app.p4pdf.com";
         var billingUrl = $"{baseUrl}/Billing";
         var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
@@ -255,12 +250,7 @@ public class AutoRechargeService : IAutoRechargeService
 
         try
         {
-            await _emailSender.SendAsync(
-                user.Email,
-                rendered.Subject,
-                rendered.HtmlBody,
-                $"{baseUrl}/Account/Settings",
-                isCritical: false);
+            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody);
         }
         catch (Exception ex)
         {
@@ -270,11 +260,6 @@ public class AutoRechargeService : IAutoRechargeService
 
     private async Task SendRechargeFailedEmailAsync(User user, string reason)
     {
-        if (!user.EmailNotificationsEnabled)
-        {
-            return;
-        }
-
         var baseUrl = _appOptions.FqdnServerName?.TrimEnd('/') ?? "https://app.p4pdf.com";
         var billingUrl = $"{baseUrl}/Billing";
         var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
@@ -288,12 +273,7 @@ public class AutoRechargeService : IAutoRechargeService
 
         try
         {
-            await _emailSender.SendAsync(
-                user.Email,
-                rendered.Subject,
-                rendered.HtmlBody,
-                $"{baseUrl}/Account/Settings",
-                isCritical: false);
+            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody);
         }
         catch (Exception ex)
         {

@@ -1,27 +1,28 @@
 @model IEnumerable<DotNetSigningServer.Models.TemplateSummary>
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "My Templates";
+    ViewData["Title"] = L["TemplatesTitle"].Value;
     Layout = "_Layout";
 }
 
 <div class="mb-4 flex justify-between items-center">
-    <h1 class="content-box-title">My Templates</h1>
-    <a class="btn btn-primary" href="/template-builder">New Template</a>
+    <h1 class="content-box-title">@L["TemplatesTitle"]</h1>
+    <a class="btn btn-primary" href="/template-builder">@L["TemplatesNewTemplate"]</a>
 </div>
 
 <div class="table-wrapper">
 @if (!Model.Any())
 {
-    <p class="muted m-4">No templates yet. Create one to get started.</p>
+    <p class="muted m-4">@L["TemplatesNoTemplates"]</p>
 }
 else
 {
         <table class="table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Fields</th>
-                    <th>Created</th>
+                    <th>@L["TemplatesNameHeader"]</th>
+                    <th>@L["TemplatesFieldsHeader"]</th>
+                    <th>@L["Created"]</th>
                     <th></th>
                 </tr>
             </thead>
@@ -29,13 +30,12 @@ else
                 @foreach (var t in Model)
                 {
                     <tr>
-                        <td>@(string.IsNullOrWhiteSpace(t.Name) ? "Untitled" : t.Name)</td>
+                        <td>@(string.IsNullOrWhiteSpace(t.Name) ? L["TemplatesUntitled"].Value : t.Name)</td>
                         <td>@t.FieldCount</td>
                         <td>@t.CreatedAt.ToLocalTime().ToString("g")</td>
                         <td style="text-align:right;">
-                            <a class="btn-token-action" href="@($"/template-builder?templateId={t.TemplateId}")">Edit</a>
-                            <a class="btn-token-action" href="@($"/templates/{t.TemplateId}/docs")">API
-                                Docs</a>
+                            <a class="btn-token-action" href="@($"/template-builder?templateId={t.TemplateId}")">@L["TemplatesEdit"]</a>
+                            <a class="btn-token-action" href="@($"/templates/{t.TemplateId}/docs")">@L["TemplatesApiDocsLink"]</a>
                         </td>
                     </tr>
                 }

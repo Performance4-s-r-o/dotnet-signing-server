@@ -177,4 +177,205 @@
   <data name="RequestExceededLimit" xml:space="preserve"><value>La solicitud superó el límite.</value></data>
   <data name="InternalError" xml:space="preserve"><value>Se produjo un error interno.</value></data>
   <data name="UnexpectedError" xml:space="preserve"><value>Se produjo un error inesperado al procesar su solicitud.</value></data>
+
+  <!-- Home / Landing page -->
+  <data name="HomeSignupSuccess" xml:space="preserve"><value>Su cuenta está lista. Bienvenido a P4PDF.</value></data>
+  <data name="HomeHeroTitle" xml:space="preserve"><value>Genere, rellene, firme y procese documentos PDF con una sola API.</value></data>
+  <data name="HomeHeroDescription" xml:space="preserve"><value>P4PDF convierte sus datos en documentos PDF completos. Renderice plantillas, rellene campos dinámicos, aplique firmas digitales y sellos de tiempo, incruste archivos adjuntos y lea códigos QR o de barras, todo totalmente automatizado.</value></data>
+  <data name="HomeApiDocs" xml:space="preserve"><value>Documentación de la API</value></data>
+  <data name="HomeExampleIntegration" xml:space="preserve"><value>Ejemplo de integración</value></data>
+  <data name="HomeExampleApiRequest" xml:space="preserve"><value>Ejemplo de solicitud a la API</value></data>
+  <data name="HomeCodeFooter" xml:space="preserve"><value>Consulte la referencia completa en la documentación.</value></data>
+  <data name="HomeFeatureGenerateTitle" xml:space="preserve"><value>Generar PDF a partir de plantillas</value></data>
+  <data name="HomeFeatureGenerateDescription" xml:space="preserve"><value>Suba una plantilla PDF y defina campos dinámicos para texto, imágenes y códigos de barras. Asigne sus datos directamente a los marcadores y genere documentos coherentes a gran escala.</value></data>
+  <data name="HomeVisualFieldMappingTitle" xml:space="preserve"><value>Asignación visual de campos</value></data>
+  <data name="HomeVisualFieldMappingDescription" xml:space="preserve"><value>Defina con un clic campos de texto, imágenes o códigos de barras directamente sobre el PDF.</value></data>
+  <data name="HomeDynamicDataBindingTitle" xml:space="preserve"><value>Enlace dinámico de datos</value></data>
+  <data name="HomeDynamicDataBindingDescription" xml:space="preserve"><value>Rellene las plantillas con JSON estructurado, sin formateo manual.</value></data>
+  <data name="HomeFeatureSigningTitle" xml:space="preserve"><value>Firmas digitales y sellos de tiempo</value></data>
+  <data name="HomeFeatureSigningDescription" xml:space="preserve"><value>Aplique firmas basadas en certificados, añada sellos de tiempo de confianza (TSA) y automatice los flujos de hash con plena integridad criptográfica.</value></data>
+  <data name="HomeCertificateSigningTitle" xml:space="preserve"><value>Firma basada en certificado</value></data>
+  <data name="HomeCertificateSigningDescription" xml:space="preserve"><value>Compatible con firmantes externos, HSM, tarjetas inteligentes o clientes personalizados.</value></data>
+  <data name="HomeTrustedTimestampsTitle" xml:space="preserve"><value>Sellos de tiempo de confianza</value></data>
+  <data name="HomeTrustedTimestampsDescription" xml:space="preserve"><value>Integre cualquier TSA para añadir tokens de sello de tiempo verificables.</value></data>
+  <data name="HomeMultipleSignaturesTitle" xml:space="preserve"><value>Firmas múltiples</value></data>
+  <data name="HomeMultipleSignaturesDescription" xml:space="preserve"><value>Soporte para flujos de firma multiparte y multietapa.</value></data>
+  <data name="HomeFeatureAttachmentsTitle" xml:space="preserve"><value>Incrustar archivos adjuntos</value></data>
+  <data name="HomeFeatureAttachmentsDescription" xml:space="preserve"><value>Guarde documentación complementaria como datos en bruto, informes o registros directamente dentro del PDF para crear paquetes de documentos verificables.</value></data>
+  <data name="HomeAnyFileTypeTitle" xml:space="preserve"><value>Cualquier tipo de archivo</value></data>
+  <data name="HomeAnyFileTypeDescription" xml:space="preserve"><value>Adjunte archivos binarios, conjuntos de datos o salidas de auditoría personalizadas.</value></data>
+  <data name="HomeEvidenceBundlesTitle" xml:space="preserve"><value>Paquetes de evidencia</value></data>
+  <data name="HomeEvidenceBundlesDescription" xml:space="preserve"><value>Conserve mediciones, registros y certificados en un único contenedor.</value></data>
+  <data name="HomeMetadataSupportTitle" xml:space="preserve"><value>Compatibilidad con metadatos</value></data>
+  <data name="HomeMetadataSupportDescription" xml:space="preserve"><value>Almacene metadatos de los adjuntos para validación o trazabilidad de auditoría.</value></data>
+  <data name="HomeFeatureCodesTitle" xml:space="preserve"><value>Leer códigos QR y de barras</value></data>
+  <data name="HomeFeatureCodesDescription" xml:space="preserve"><value>Detecte y extraiga códigos QR, Datamatrix y otros tipos de códigos de barras de cualquier página PDF, incluidas coordenadas y orientación.</value></data>
+  <data name="HomeMultiCodeTitle" xml:space="preserve"><value>Detección de múltiples códigos</value></data>
+  <data name="HomeMultiCodeDescription" xml:space="preserve"><value>Escanee páginas con varios códigos QR/Datamatrix.</value></data>
+  <data name="HomeCoordinatesTitle" xml:space="preserve"><value>Coordenadas y dimensiones</value></data>
+  <data name="HomeCoordinatesDescription" xml:space="preserve"><value>Extraiga la posición x/y exacta y el tamaño de cada código.</value></data>
+  <data name="HomeErrorCorrectionTitle" xml:space="preserve"><value>Corrección de errores</value></data>
+  <data name="HomeErrorCorrectionDescription" xml:space="preserve"><value>Decodificación robusta de códigos dañados o de baja calidad.</value></data>
+
+  <!-- Account / SignIn -->
+  <data name="SignInTitle" xml:space="preserve"><value>Iniciar sesión</value></data>
+  <data name="SignInHeading" xml:space="preserve"><value>Iniciar sesión</value></data>
+  <data name="SignInFailedMsg" xml:space="preserve"><value>Error de inicio de sesión. Por favor, compruebe su correo electrónico y contraseña.</value></data>
+  <data name="EmailLabel" xml:space="preserve"><value>Correo electrónico</value></data>
+  <data name="PasswordLabel" xml:space="preserve"><value>Contraseña</value></data>
+  <data name="SignInRememberMe" xml:space="preserve"><value>Recuérdame</value></data>
+  <data name="SignInForgotPassword" xml:space="preserve"><value>¿Olvidó su contraseña?</value></data>
+  <data name="SignInButton" xml:space="preserve"><value>Iniciar sesión</value></data>
+  <data name="SignInNoAccount" xml:space="preserve"><value>¿Sin cuenta?</value></data>
+  <data name="SignUpLinkText" xml:space="preserve"><value>Registrarse</value></data>
+
+  <!-- Account / SignUp -->
+  <data name="CreateAccountHeading" xml:space="preserve"><value>Crear una cuenta</value></data>
+  <data name="ConfirmPasswordLabel" xml:space="preserve"><value>Confirmar contraseña</value></data>
+  <data name="SignUpAgreeTerms" xml:space="preserve"><value>Acepto los {0} y la {1}.</value></data>
+  <data name="TermsOfServiceLink" xml:space="preserve"><value>Condiciones de uso</value></data>
+  <data name="PrivacyPolicyLink" xml:space="preserve"><value>Política de privacidad</value></data>
+  <data name="SignUpButton" xml:space="preserve"><value>Registrarse</value></data>
+  <data name="AlreadyHaveAccount" xml:space="preserve"><value>¿Ya tiene una cuenta?</value></data>
+  <data name="SignInLinkText" xml:space="preserve"><value>Iniciar sesión</value></data>
+
+  <!-- Account / ForgotPassword -->
+  <data name="ForgotPasswordTitle" xml:space="preserve"><value>Contraseña olvidada</value></data>
+  <data name="ForgotPasswordHeading" xml:space="preserve"><value>Contraseña olvidada</value></data>
+  <data name="ForgotPasswordHint" xml:space="preserve"><value>Introduzca su dirección de correo electrónico y le enviaremos un enlace para restablecer su contraseña.</value></data>
+  <data name="SendResetLink" xml:space="preserve"><value>Enviar enlace de restablecimiento</value></data>
+  <data name="RememberPasswordQ" xml:space="preserve"><value>¿Recuerda su contraseña?</value></data>
+
+  <!-- Account / ResetPassword -->
+  <data name="ResetPasswordTitle" xml:space="preserve"><value>Restablecer contraseña</value></data>
+  <data name="ResetPasswordHeading" xml:space="preserve"><value>Restablecer contraseña</value></data>
+  <data name="CorrectErrorsBelow" xml:space="preserve"><value>Por favor, corrija los errores indicados.</value></data>
+  <data name="NewPasswordLabel" xml:space="preserve"><value>Nueva contraseña</value></data>
+  <data name="ConfirmNewPasswordLabel" xml:space="preserve"><value>Confirmar nueva contraseña</value></data>
+  <data name="ResetPasswordButton" xml:space="preserve"><value>Restablecer contraseña</value></data>
+
+  <!-- Account / TwoFactor -->
+  <data name="TwoFactorTitle" xml:space="preserve"><value>Verificación en dos pasos</value></data>
+  <data name="TwoFactorHeading" xml:space="preserve"><value>Introduzca el código de verificación</value></data>
+  <data name="TwoFactorCodeSentMsgFmt" xml:space="preserve"><value>Hemos enviado un código de 6 dígitos a {0}. Introdúzcalo a continuación para completar el inicio de sesión.</value></data>
+  <data name="SixDigitCodeLabel" xml:space="preserve"><value>Código de 6 dígitos</value></data>
+  <data name="VerifyButton" xml:space="preserve"><value>Verificar</value></data>
+
+  <!-- Account / Verify -->
+  <data name="VerifyEmailTitle" xml:space="preserve"><value>Verificar correo electrónico</value></data>
+  <data name="VerifyEmailHeading" xml:space="preserve"><value>Verifique su correo electrónico</value></data>
+  <data name="VerificationLinkSent" xml:space="preserve"><value>Le hemos enviado un enlace de verificación.</value></data>
+  <data name="VerifyEmailConfirmedMsg" xml:space="preserve"><value>Éxito: su correo electrónico ha sido confirmado.</value></data>
+
+  <!-- Account / Settings -->
+  <data name="AccountSettingsTitle" xml:space="preserve"><value>Configuración de la cuenta</value></data>
+  <data name="ReceiveEmailNotifications" xml:space="preserve"><value>Recibir notificaciones por correo electrónico</value></data>
+  <data name="EmailNotificationsHint" xml:space="preserve"><value>Actualizaciones de facturación y alertas de recarga automática. Los correos críticos (facturas, seguridad) se envían siempre.</value></data>
+  <data name="SaveSettingsButton" xml:space="preserve"><value>Guardar configuración</value></data>
+
+  <!-- Account / Index -->
+  <data name="AccountTitle" xml:space="preserve"><value>Cuenta</value></data>
+  <data name="AccountProfileDesc" xml:space="preserve"><value>Su perfil e identidad de facturación.</value></data>
+  <data name="AccountEmailLabel" xml:space="preserve"><value>Correo electrónico:</value></data>
+  <data name="AccountEmailVerifiedLabel" xml:space="preserve"><value>Correo verificado:</value></data>
+  <data name="AccountStatusLabel" xml:space="preserve"><value>Estado:</value></data>
+  <data name="AccountCreditsRemainingLabel" xml:space="preserve"><value>Créditos restantes:</value></data>
+  <data name="AccountMemberSinceLabel" xml:space="preserve"><value>Miembro desde:</value></data>
+  <data name="Yes" xml:space="preserve"><value>Sí</value></data>
+  <data name="No" xml:space="preserve"><value>No</value></data>
+  <data name="StatusInactive" xml:space="preserve"><value>Inactivo</value></data>
+
+  <!-- Support -->
+  <data name="SupportTitle" xml:space="preserve"><value>Soporte</value></data>
+  <data name="SupportDesc" xml:space="preserve"><value>Envíe un ticket de soporte y nuestro equipo le responderá.</value></data>
+  <data name="SupportSubmitTicketTitle" xml:space="preserve"><value>Enviar un ticket</value></data>
+  <data name="SupportCategory" xml:space="preserve"><value>Categoría</value></data>
+  <data name="SupportCategorySigning" xml:space="preserve"><value>Problemas de firma</value></data>
+  <data name="SupportCategoryTemplates" xml:space="preserve"><value>Plantillas</value></data>
+  <data name="SupportCategoryBilling" xml:space="preserve"><value>Facturación y suscripción</value></data>
+  <data name="SupportCategoryAccount" xml:space="preserve"><value>Cuenta y acceso</value></data>
+  <data name="SupportCategoryOther" xml:space="preserve"><value>Otro</value></data>
+  <data name="SupportPriority" xml:space="preserve"><value>Prioridad</value></data>
+  <data name="SupportPriorityLow" xml:space="preserve"><value>Baja</value></data>
+  <data name="SupportPriorityNormal" xml:space="preserve"><value>Normal</value></data>
+  <data name="SupportPriorityHigh" xml:space="preserve"><value>Alta</value></data>
+  <data name="SupportSubjectLabel" xml:space="preserve"><value>Asunto</value></data>
+  <data name="SupportSubjectPlaceholder" xml:space="preserve"><value>Breve descripción de su problema</value></data>
+  <data name="SupportMessageLabel" xml:space="preserve"><value>Mensaje</value></data>
+  <data name="SupportMessagePlaceholder" xml:space="preserve"><value>Describa el problema en detalle.</value></data>
+  <data name="SupportSubmitButton" xml:space="preserve"><value>Enviar ticket</value></data>
+  <data name="SupportContactTitle" xml:space="preserve"><value>Contacto</value></data>
+  <data name="SupportEmailLabel" xml:space="preserve"><value>Correo electrónico:</value></data>
+  <data name="SupportCompanyLabel" xml:space="preserve"><value>Empresa:</value></data>
+
+  <!-- Error page -->
+  <data name="ErrorTitle" xml:space="preserve"><value>Error</value></data>
+  <data name="ErrorHeading" xml:space="preserve"><value>Algo ha salido mal</value></data>
+  <data name="ErrorTraceMsg" xml:space="preserve"><value>Use este ID de seguimiento si contacta con el soporte:</value></data>
+
+  <!-- Billing / ConfirmCancelAutoRecharge -->
+  <data name="CancelAutoRechargeTitle" xml:space="preserve"><value>Cancelar recarga automática</value></data>
+  <data name="CancelAutoRechargeQuestion" xml:space="preserve"><value>¿Está seguro de que desea cancelar la recarga automática de créditos?</value></data>
+  <data name="CancelAutoRechargeNote" xml:space="preserve"><value>Puede volver a activarla en cualquier momento desde su página de facturación.</value></data>
+  <data name="CancelAutoRechargeButton" xml:space="preserve"><value>Confirmar cancelación</value></data>
+
+  <!-- Pricing -->
+  <data name="PricingTitle" xml:space="preserve"><value>Precios</value></data>
+  <data name="PricingDesc" xml:space="preserve"><value>Precios transparentes para firmar PDF a través de la API. No se necesita tarjeta de crédito para empezar.</value></data>
+  <data name="PricingFreeTitle" xml:space="preserve"><value>Gratis</value></data>
+  <data name="PricingFreeDesc" xml:space="preserve"><value>Para desarrolladores individuales y pruebas pequeñas.</value></data>
+  <data name="PricingFreeNote" xml:space="preserve"><value>Incluye 10 créditos.</value></data>
+  <data name="PricingFreeFeature1" xml:space="preserve"><value>Todas las funciones de la API</value></data>
+  <data name="PricingFreeFeature2" xml:space="preserve"><value>Acceso inmediato</value></data>
+  <data name="PricingGetStarted" xml:space="preserve"><value>Empezar</value></data>
+  <data name="PricingPaidTitle" xml:space="preserve"><value>De pago</value></data>
+  <data name="PricingPaidDesc" xml:space="preserve"><value>Para cargas de trabajo en producción con soporte.</value></data>
+  <data name="PricingPaidNote" xml:space="preserve"><value>Por 100 créditos • se aplican descuentos por volumen</value></data>
+  <data name="PricingPaidFeature1" xml:space="preserve"><value>Todas las funciones gratuitas</value></data>
+  <data name="PricingPaidFeature2" xml:space="preserve"><value>Soporte por correo electrónico prioritario</value></data>
+  <data name="PricingPaidFeature3" xml:space="preserve"><value>Descuentos: 300+ (5%), 500+ (10%), 1.000+ (15%)</value></data>
+
+  <!-- Contact -->
+  <data name="ContactTitle" xml:space="preserve"><value>Contacto</value></data>
+  <data name="ContactIdNumber" xml:space="preserve"><value>Número de identificación:</value></data>
+  <data name="ContactVatNumber" xml:space="preserve"><value>Número IVA (DIČ):</value></data>
+  <data name="ContactEmailLabel" xml:space="preserve"><value>Correo electrónico:</value></data>
+
+  <!-- Templates -->
+  <data name="TemplatesTitle" xml:space="preserve"><value>Mis plantillas</value></data>
+  <data name="TemplatesNewTemplate" xml:space="preserve"><value>Nueva plantilla</value></data>
+  <data name="TemplatesNoTemplates" xml:space="preserve"><value>Aún no hay plantillas. Cree una para empezar.</value></data>
+  <data name="TemplatesNameHeader" xml:space="preserve"><value>Nombre</value></data>
+  <data name="TemplatesFieldsHeader" xml:space="preserve"><value>Campos</value></data>
+  <data name="TemplatesUntitled" xml:space="preserve"><value>Sin título</value></data>
+  <data name="TemplatesEdit" xml:space="preserve"><value>Editar</value></data>
+  <data name="TemplatesApiDocsLink" xml:space="preserve"><value>Documentación API</value></data>
+
+  <!-- Legal / Index -->
+  <data name="LegalTitle" xml:space="preserve"><value>Documentos legales</value></data>
+  <data name="LegalDescription" xml:space="preserve"><value>Aquí puede encontrar todos los documentos legales y de políticas relacionados con el uso del servicio P4PDF de Performance4 s.r.o.</value></data>
+  <data name="LegalTermsOfService" xml:space="preserve"><value>Condiciones de uso</value></data>
+  <data name="LegalPrivacyPolicy" xml:space="preserve"><value>Política de privacidad</value></data>
+  <data name="LegalDpa" xml:space="preserve"><value>Acuerdo de procesamiento de datos (DPA)</value></data>
+  <data name="LegalSla" xml:space="preserve"><value>Acuerdo de nivel de servicio (SLA)</value></data>
+  <data name="LegalRefundPolicy" xml:space="preserve"><value>Política de reembolso</value></data>
+  <data name="LegalCookiesPolicy" xml:space="preserve"><value>Política de cookies</value></data>
+  <data name="LegalOpenSourceNotices" xml:space="preserve"><value>Avisos de código abierto</value></data>
+  <data name="LegalAgplLicense" xml:space="preserve"><value>Licencia AGPL</value></data>
+  <data name="LegalLastUpdated" xml:space="preserve"><value>Última actualización:</value></data>
+
+  <!-- Layout navigation & footer -->
+  <data name="NavPdfTemplates" xml:space="preserve"><value>Plantillas PDF</value></data>
+  <data name="NavApiTokens" xml:space="preserve"><value>Tokens de API</value></data>
+  <data name="NavDocs" xml:space="preserve"><value>Documentación</value></data>
+  <data name="NavBilling" xml:space="preserve"><value>Facturación</value></data>
+  <data name="NavAccount" xml:space="preserve"><value>Cuenta</value></data>
+  <data name="NavSignOut" xml:space="preserve"><value>Cerrar sesión</value></data>
+  <data name="NavPricing" xml:space="preserve"><value>Precios</value></data>
+  <data name="NavSignIn" xml:space="preserve"><value>Iniciar sesión</value></data>
+  <data name="NavSignUp" xml:space="preserve"><value>Registrarse</value></data>
+  <data name="FooterLegal" xml:space="preserve"><value>Legal</value></data>
+  <data name="FooterResources" xml:space="preserve"><value>Recursos</value></data>
+  <data name="FooterCreatedBy" xml:space="preserve"><value>Creado por Performance4 s.r.o.</value></data>
+  <data name="FooterContactInfo" xml:space="preserve"><value>Información de contacto</value></data>
 </root>

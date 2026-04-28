@@ -1,10 +1,11 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "Refund Policy";
+    ViewData["Title"] = L["LegalRefundPolicy"].Value;
 }
 
 <div class="legal-document">
-    <h1>Refund Policy</h1>
-    <p><em>Last updated: 25. 11. 2025</em></p>
+    <h1>@L["LegalRefundPolicy"]</h1>
+    <p><em>@L["LegalLastUpdated"] 25. 11. 2025</em></p>
 
     <p>
         This Refund Policy describes when you may be eligible for a refund

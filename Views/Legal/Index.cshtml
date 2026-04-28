@@ -1,22 +1,20 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "Legal documents";
+    ViewData["Title"] = L["LegalTitle"].Value;
 }
 
 <div class="legal-list">
-    <h1>Legal documents</h1>
-    <p>
-        Here you can find all legal and policy documents related to the use of the
-        <strong>P4PDF by Performance4 s.r.o.</strong> service.
-    </p>
+    <h1>@L["LegalTitle"]</h1>
+    <p>@L["LegalDescription"]</p>
 
     <ul>
-        <li><a href="/Legal/TermsOfService">Terms of Service</a></li>
-        <li><a href="/Legal/PrivacyPolicy">Privacy Policy</a></li>
-        <li><a href="/Legal/DataProcessingAgreement">Data Processing Agreement (DPA)</a></li>
-        <li><a href="/Legal/ServiceLevelAgreement">Service Level Agreement (SLA)</a></li>
-        <li><a href="/Legal/RefundPolicy">Refund Policy</a></li>
-        <li><a href="/Legal/CookiesPolicy">Cookies Policy</a></li>
-        <li><a href="/Legal/OpenSourceNotices">Open-Source Notices</a></li>
-        <li><a href="/Legal/License">AGPL License</a></li>
+        <li><a href="/Legal/TermsOfService">@L["LegalTermsOfService"]</a></li>
+        <li><a href="/Legal/PrivacyPolicy">@L["LegalPrivacyPolicy"]</a></li>
+        <li><a href="/Legal/DataProcessingAgreement">@L["LegalDpa"]</a></li>
+        <li><a href="/Legal/ServiceLevelAgreement">@L["LegalSla"]</a></li>
+        <li><a href="/Legal/RefundPolicy">@L["LegalRefundPolicy"]</a></li>
+        <li><a href="/Legal/CookiesPolicy">@L["LegalCookiesPolicy"]</a></li>
+        <li><a href="/Legal/OpenSourceNotices">@L["LegalOpenSourceNotices"]</a></li>
+        <li><a href="/Legal/License">@L["LegalAgplLicense"]</a></li>
     </ul>
 </div>

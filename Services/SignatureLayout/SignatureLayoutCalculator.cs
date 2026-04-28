@@ -203,8 +203,13 @@ namespace DotNetSigningServer.Services.SignatureLayout
             float finalHeight = input.BoxHeightPt;
             if (input.AutoHeight)
             {
+                // AutoHeight = grow-only. The design's box height is the
+                // starting point / minimum; we expand when text won't fit,
+                // but never shrink below it (shrinking would violate the
+                // chosen aspect ratio — e.g. a 300×100 design rendering as
+                // 300×54 when only two rows are present).
                 float needed = fit.ContentHeightPt + input.PaddingPt * 2;
-                finalHeight = Math.Max(MinBoxHeightPt, needed);
+                finalHeight = Math.Max(input.BoxHeightPt, Math.Max(MinBoxHeightPt, needed));
             }
 
             return new LayoutResult

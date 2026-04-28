@@ -23,5 +23,7 @@ namespace DotNetSigningServer.Models
         public float? DesignHeight { get; set; }
         /// <summary>When true, signature box height grows to fit content regardless of DesignHeight.</summary>
         public bool? AutoHeight { get; set; }
+        /// <summary>Display name used in the signer row. Falls back to empty when unset.</summary>
+        public string? SignerName { get; set; }
     }
 }

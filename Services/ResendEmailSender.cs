@@ -23,10 +23,7 @@ public class ResendEmailSender : IEmailSender
         _logger = logger;
     }
 
-    public Task SendAsync(string toEmail, string subject, string htmlBody)
-        => SendAsync(toEmail, subject, htmlBody, settingsUrl: null, isCritical: true);
-
-    public async Task SendAsync(string toEmail, string subject, string htmlBody, string? settingsUrl, bool isCritical)
+    public async Task SendAsync(string toEmail, string subject, string htmlBody)
     {
         if (string.IsNullOrWhiteSpace(_options.ApiKey))
         {
@@ -34,37 +31,17 @@ public class ResendEmailSender : IEmailSender
             return;
         }
 
-        var body = htmlBody;
-        if (!string.IsNullOrWhiteSpace(settingsUrl))
-        {
-            body += $@"<hr style=""margin-top:32px;border:none;border-top:1px solid #e0e0e0""/>
-<p style=""font-size:12px;color:#888"">You received this email because you have an account at P4PDF.
-<a href=""{settingsUrl}"">Manage notification preferences</a>.</p>";
-        }
-
-        var headers = new Dictionary<string, string>();
-        if (!string.IsNullOrWhiteSpace(settingsUrl))
-        {
-            headers["List-Unsubscribe"] = $"<{settingsUrl}>";
-            headers["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click-Unsubscribe";
-        }
-
         var payload = new Dictionary<string, object?>
         {
             ["from"] = _options.From,
             ["to"] = new[] { toEmail },
             ["subject"] = subject,
-            ["html"] = body,
+            ["html"] = htmlBody,
         };
 
         if (!string.IsNullOrWhiteSpace(_options.ReplyTo))
         {
             payload["reply_to"] = _options.ReplyTo;
-        }
-
-        if (headers.Count > 0)
-        {
-            payload["headers"] = headers;
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, EndpointUrl)
@@ -89,16 +66,13 @@ public class ResendEmailSender : IEmailSender
                     (int)response.StatusCode,
                     subject,
                     errorBody);
-                if (isCritical)
-                {
-                    throw new InvalidOperationException($"Resend failed: {(int)response.StatusCode} {errorBody}");
-                }
+                throw new InvalidOperationException($"Resend failed: {(int)response.StatusCode} {errorBody}");
             }
         }
         catch (Exception ex) when (ex is not InvalidOperationException)
         {
             _logger.LogError(ex, "Failed to send email via Resend (subject: {Subject})", subject);
-            if (isCritical) throw;
+            throw;
         }
     }
 }

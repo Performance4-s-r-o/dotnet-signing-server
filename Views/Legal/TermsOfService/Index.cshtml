@@ -1,10 +1,11 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "Terms of Service";
+    ViewData["Title"] = L["LegalTermsOfService"].Value;
 }
 
 <div class="legal-document">
-    <h1>Terms of Service</h1>
-    <p><em>Last updated: 25. 11. 2025</em></p>
+    <h1>@L["LegalTermsOfService"]</h1>
+    <p><em>@L["LegalLastUpdated"] 25. 11. 2025</em></p>
 
     <p>
         These Terms of Service (the "Terms") govern your use of the

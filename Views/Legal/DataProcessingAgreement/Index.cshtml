@@ -1,10 +1,11 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "Data Processing Agreement";
+    ViewData["Title"] = L["LegalDpa"].Value;
 }
 
 <div class="legal-document">
-    <h1>Data Processing Agreement (DPA)</h1>
-    <p><em>Last updated: 25. 11. 2025</em></p>
+    <h1>@L["LegalDpa"]</h1>
+    <p><em>@L["LegalLastUpdated"] 25. 11. 2025</em></p>
 
     <p>
         This Data Processing Agreement ("DPA") forms part of the agreement

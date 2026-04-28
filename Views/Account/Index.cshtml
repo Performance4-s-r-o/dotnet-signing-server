@@ -1,13 +1,14 @@
 @model DotNetSigningServer.Models.User
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "Account";
+    ViewData["Title"] = L["AccountTitle"].Value;
 }
-<h1>Account</h1>
-<p class="muted mt-2 mb-3">Your profile and billing identity.</p>
+<h1>@L["AccountTitle"]</h1>
+<p class="muted mt-2 mb-3">@L["AccountProfileDesc"]</p>
 <div class="card">
-    <p><strong>Email:</strong> @Model.Email</p>
-    <p><strong>Email verified:</strong> @(Model.EmailVerified ? "Yes" : "No")</p>
-    <p><strong>Status:</strong> @(Model.IsActive ? "Active" : "Inactive")</p>
-    <p><strong>Credits remaining:</strong> @Model.CreditsRemaining</p>
-    <p><strong>Member since:</strong> @Model.CreatedAt.ToString("D")</p>
+    <p><strong>@L["AccountEmailLabel"]</strong> @Model.Email</p>
+    <p><strong>@L["AccountEmailVerifiedLabel"]</strong> @(Model.EmailVerified ? L["Yes"].Value : L["No"].Value)</p>
+    <p><strong>@L["AccountStatusLabel"]</strong> @(Model.IsActive ? L["Active"].Value : L["StatusInactive"].Value)</p>
+    <p><strong>@L["AccountCreditsRemainingLabel"]</strong> @Model.CreditsRemaining</p>
+    <p><strong>@L["AccountMemberSinceLabel"]</strong> @Model.CreatedAt.ToString("D")</p>
 </div>

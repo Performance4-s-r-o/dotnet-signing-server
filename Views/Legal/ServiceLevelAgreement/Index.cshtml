@@ -1,10 +1,11 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "Service Level Agreement";
+    ViewData["Title"] = L["LegalSla"].Value;
 }
 
 <div class="legal-document">
-    <h1>Service Level Agreement (SLA)</h1>
-    <p><em>Last updated: 25. 11. 2025</em></p>
+    <h1>@L["LegalSla"]</h1>
+    <p><em>@L["LegalLastUpdated"] 25. 11. 2025</em></p>
 
     <p>
         This Service Level Agreement ("SLA") describes the availability and

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Localization;
 using DotNetSigningServer.Options;
 using Microsoft.Extensions.Options;
 
@@ -112,6 +113,35 @@ public class HomeController : Controller
         {
             return NotFound();
         }
+    }
+
+    [HttpPost("/set-language")]
+    [ValidateAntiForgeryToken]
+    public IActionResult SetLanguage(string culture, string? returnUrl)
+    {
+        var supported = new[] { "en", "cs", "de", "es" };
+        if (string.IsNullOrWhiteSpace(culture) || !supported.Contains(culture))
+        {
+            culture = "en";
+        }
+
+        Response.Cookies.Append(
+            CookieRequestCultureProvider.DefaultCookieName,
+            CookieRequestCultureProvider.MakeCookieValue(new RequestCulture(culture)),
+            new CookieOptions
+            {
+                Expires = DateTimeOffset.UtcNow.AddYears(1),
+                IsEssential = true,
+                SameSite = SameSiteMode.Lax,
+                Secure = Request.IsHttps,
+                HttpOnly = false
+            });
+
+        if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+        {
+            return LocalRedirect(returnUrl);
+        }
+        return Redirect("/");
     }
 
     private string BuildBaseUrl()

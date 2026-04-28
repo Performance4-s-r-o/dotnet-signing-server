@@ -5,7 +5,6 @@ using iText.Layout;
 using iText.Layout.Element;
 using iText.Layout.Properties;
 using iText.Barcodes;
-using iText.IO.Font.Constants;
 
 namespace DotNetSigningServer.Services
 {
@@ -67,8 +66,8 @@ namespace DotNetSigningServer.Services
             var pdfDoc = new PdfDocument(writer);
             var doc = new Document(pdfDoc, PageSize.A4);
 
-            var font = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
-            var fontBold = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
+            var font = AppFonts.Load(AppFontFamily.Sans);
+            var fontBold = AppFonts.Load(AppFontFamily.Sans, bold: true);
 
             doc.Add(new Paragraph("Document Verification")
                 .SetFont(fontBold)

@@ -1,8 +1,9 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "Contact";
+    ViewData["Title"] = L["ContactTitle"].Value;
 }
 
-<h1>Contact</h1>
+<h1>@L["ContactTitle"]</h1>
 
 <div class="ui doubling two column grid" style="font-size: 1.05em; line-height: 1.5em;">
     <div class="column">
@@ -11,11 +12,11 @@
         <br>Husova 429
         <br>373 67 Borek
         <br />
-        <br>Identification Number: 08415765
-        <br>VAT Number (DIČ): CZ08415765
+        <br>@L["ContactIdNumber"] 08415765
+        <br>@L["ContactVatNumber"] CZ08415765
     </div>
 </div>
 
 <p>
-    Email: <a href="mailto:support@performance4.cz">support@performance4.cz</a><br />
+    @L["ContactEmailLabel"] <a href="mailto:support@performance4.cz">support@performance4.cz</a><br />
 </p>

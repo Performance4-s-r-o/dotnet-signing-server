@@ -187,4 +187,205 @@
   <data name="MonthlyBreakdown" xml:space="preserve"><value>Měsíční přehled (posledních 12 měsíců)</value></data>
   <data name="Date" xml:space="preserve"><value>Datum</value></data>
   <data name="Credits" xml:space="preserve"><value>Kredity</value></data>
+
+  <!-- Home / Landing page -->
+  <data name="HomeSignupSuccess" xml:space="preserve"><value>Váš účet je připraven. Vítejte v P4PDF.</value></data>
+  <data name="HomeHeroTitle" xml:space="preserve"><value>Generujte, vyplňujte, podepisujte a zpracovávejte PDF dokumenty přes jediné API.</value></data>
+  <data name="HomeHeroDescription" xml:space="preserve"><value>P4PDF promění vaše data na kompletní PDF dokumenty. Renderujte šablony, vyplňujte dynamická pole, aplikujte digitální podpisy a časová razítka, vkládejte přílohy a čtěte QR nebo čárové kódy — plně automatizovaně.</value></data>
+  <data name="HomeApiDocs" xml:space="preserve"><value>Dokumentace API</value></data>
+  <data name="HomeExampleIntegration" xml:space="preserve"><value>Ukázková integrace</value></data>
+  <data name="HomeExampleApiRequest" xml:space="preserve"><value>Ukázkový API požadavek</value></data>
+  <data name="HomeCodeFooter" xml:space="preserve"><value>Kompletní reference najdete v dokumentaci.</value></data>
+  <data name="HomeFeatureGenerateTitle" xml:space="preserve"><value>Generování PDF ze šablon</value></data>
+  <data name="HomeFeatureGenerateDescription" xml:space="preserve"><value>Nahrajte PDF šablonu a definujte dynamická pole pro text, obrázky a čárové kódy. Namapujte svá data přímo do zástupných symbolů a vytvářejte konzistentní dokumenty ve velkém měřítku.</value></data>
+  <data name="HomeVisualFieldMappingTitle" xml:space="preserve"><value>Vizuální mapování polí</value></data>
+  <data name="HomeVisualFieldMappingDescription" xml:space="preserve"><value>Kliknutím definujte textová pole, obrázky nebo čárové kódy přímo v PDF.</value></data>
+  <data name="HomeDynamicDataBindingTitle" xml:space="preserve"><value>Dynamické propojení dat</value></data>
+  <data name="HomeDynamicDataBindingDescription" xml:space="preserve"><value>Vyplňujte šablony pomocí strukturovaného JSONu — bez ručního formátování.</value></data>
+  <data name="HomeFeatureSigningTitle" xml:space="preserve"><value>Digitální podpisy a časová razítka</value></data>
+  <data name="HomeFeatureSigningDescription" xml:space="preserve"><value>Aplikujte podpisy na bázi certifikátů, přidávejte důvěryhodná časová razítka (TSA) a automatizujte hashovací procesy s plnou kryptografickou integritou.</value></data>
+  <data name="HomeCertificateSigningTitle" xml:space="preserve"><value>Podepisování certifikátem</value></data>
+  <data name="HomeCertificateSigningDescription" xml:space="preserve"><value>Podpora externích podepisovatelů, HSM, čipových karet nebo vlastních klientů.</value></data>
+  <data name="HomeTrustedTimestampsTitle" xml:space="preserve"><value>Důvěryhodná časová razítka</value></data>
+  <data name="HomeTrustedTimestampsDescription" xml:space="preserve"><value>Integrujte libovolnou TSA pro přidání ověřitelných tokenů časových razítek.</value></data>
+  <data name="HomeMultipleSignaturesTitle" xml:space="preserve"><value>Vícenásobné podpisy</value></data>
+  <data name="HomeMultipleSignaturesDescription" xml:space="preserve"><value>Podpora vícestranných a vícestupňových podepisovacích procesů.</value></data>
+  <data name="HomeFeatureAttachmentsTitle" xml:space="preserve"><value>Vkládání příloh</value></data>
+  <data name="HomeFeatureAttachmentsDescription" xml:space="preserve"><value>Ukládejte doprovodnou dokumentaci, jako jsou surová data, reporty nebo logy, přímo do PDF a vytvářejte ověřitelné balíčky dokumentů.</value></data>
+  <data name="HomeAnyFileTypeTitle" xml:space="preserve"><value>Jakýkoli typ souboru</value></data>
+  <data name="HomeAnyFileTypeDescription" xml:space="preserve"><value>Připojujte binární soubory, datové sady nebo vlastní auditní výstupy.</value></data>
+  <data name="HomeEvidenceBundlesTitle" xml:space="preserve"><value>Důkazní balíčky</value></data>
+  <data name="HomeEvidenceBundlesDescription" xml:space="preserve"><value>Uchovávejte měření, logy a certifikáty v jediném kontejneru.</value></data>
+  <data name="HomeMetadataSupportTitle" xml:space="preserve"><value>Podpora metadat</value></data>
+  <data name="HomeMetadataSupportDescription" xml:space="preserve"><value>Ukládejte metadata příloh pro ověřování nebo auditní stopy.</value></data>
+  <data name="HomeFeatureCodesTitle" xml:space="preserve"><value>Čtení QR a čárových kódů</value></data>
+  <data name="HomeFeatureCodesDescription" xml:space="preserve"><value>Detekujte a extrahujte QR kódy, Datamatrix a další typy čárových kódů z libovolné stránky PDF, včetně souřadnic a orientace.</value></data>
+  <data name="HomeMultiCodeTitle" xml:space="preserve"><value>Detekce více kódů</value></data>
+  <data name="HomeMultiCodeDescription" xml:space="preserve"><value>Skenujte stránky s více QR/Datamatrix kódy.</value></data>
+  <data name="HomeCoordinatesTitle" xml:space="preserve"><value>Souřadnice a rozměry</value></data>
+  <data name="HomeCoordinatesDescription" xml:space="preserve"><value>Získávejte přesnou pozici x/y a velikost každého kódu.</value></data>
+  <data name="HomeErrorCorrectionTitle" xml:space="preserve"><value>Korekce chyb</value></data>
+  <data name="HomeErrorCorrectionDescription" xml:space="preserve"><value>Robustní dekódování poškozených nebo nekvalitních kódů.</value></data>
+
+  <!-- Account / SignIn -->
+  <data name="SignInTitle" xml:space="preserve"><value>Přihlášení</value></data>
+  <data name="SignInHeading" xml:space="preserve"><value>Přihlásit se</value></data>
+  <data name="SignInFailedMsg" xml:space="preserve"><value>Přihlášení selhalo. Zkontrolujte prosím e-mail a heslo.</value></data>
+  <data name="EmailLabel" xml:space="preserve"><value>E-mail</value></data>
+  <data name="PasswordLabel" xml:space="preserve"><value>Heslo</value></data>
+  <data name="SignInRememberMe" xml:space="preserve"><value>Zapamatovat si mě</value></data>
+  <data name="SignInForgotPassword" xml:space="preserve"><value>Zapomněli jste heslo?</value></data>
+  <data name="SignInButton" xml:space="preserve"><value>Přihlásit se</value></data>
+  <data name="SignInNoAccount" xml:space="preserve"><value>Nemáte účet?</value></data>
+  <data name="SignUpLinkText" xml:space="preserve"><value>Zaregistrovat se</value></data>
+
+  <!-- Account / SignUp -->
+  <data name="CreateAccountHeading" xml:space="preserve"><value>Vytvořit účet</value></data>
+  <data name="ConfirmPasswordLabel" xml:space="preserve"><value>Potvrdit heslo</value></data>
+  <data name="SignUpAgreeTerms" xml:space="preserve"><value>Souhlasím s {0} a {1}.</value></data>
+  <data name="TermsOfServiceLink" xml:space="preserve"><value>Podmínkami použití</value></data>
+  <data name="PrivacyPolicyLink" xml:space="preserve"><value>Zásadami ochrany osobních údajů</value></data>
+  <data name="SignUpButton" xml:space="preserve"><value>Zaregistrovat se</value></data>
+  <data name="AlreadyHaveAccount" xml:space="preserve"><value>Již máte účet?</value></data>
+  <data name="SignInLinkText" xml:space="preserve"><value>Přihlásit se</value></data>
+
+  <!-- Account / ForgotPassword -->
+  <data name="ForgotPasswordTitle" xml:space="preserve"><value>Zapomenuté heslo</value></data>
+  <data name="ForgotPasswordHeading" xml:space="preserve"><value>Zapomenuté heslo</value></data>
+  <data name="ForgotPasswordHint" xml:space="preserve"><value>Zadejte svou e-mailovou adresu a zašleme vám odkaz pro obnovení hesla.</value></data>
+  <data name="SendResetLink" xml:space="preserve"><value>Odeslat odkaz pro obnovení</value></data>
+  <data name="RememberPasswordQ" xml:space="preserve"><value>Vzpomněli jste si na heslo?</value></data>
+
+  <!-- Account / ResetPassword -->
+  <data name="ResetPasswordTitle" xml:space="preserve"><value>Obnovení hesla</value></data>
+  <data name="ResetPasswordHeading" xml:space="preserve"><value>Obnovení hesla</value></data>
+  <data name="CorrectErrorsBelow" xml:space="preserve"><value>Opravte prosím níže uvedené chyby.</value></data>
+  <data name="NewPasswordLabel" xml:space="preserve"><value>Nové heslo</value></data>
+  <data name="ConfirmNewPasswordLabel" xml:space="preserve"><value>Potvrdit nové heslo</value></data>
+  <data name="ResetPasswordButton" xml:space="preserve"><value>Obnovit heslo</value></data>
+
+  <!-- Account / TwoFactor -->
+  <data name="TwoFactorTitle" xml:space="preserve"><value>Dvoufaktorové ověření</value></data>
+  <data name="TwoFactorHeading" xml:space="preserve"><value>Zadejte ověřovací kód</value></data>
+  <data name="TwoFactorCodeSentMsgFmt" xml:space="preserve"><value>Na adresu {0} jsme odeslali 6místný kód. Zadejte ho níže a dokončete přihlášení.</value></data>
+  <data name="SixDigitCodeLabel" xml:space="preserve"><value>6místný kód</value></data>
+  <data name="VerifyButton" xml:space="preserve"><value>Ověřit</value></data>
+
+  <!-- Account / Verify -->
+  <data name="VerifyEmailTitle" xml:space="preserve"><value>Ověření e-mailu</value></data>
+  <data name="VerifyEmailHeading" xml:space="preserve"><value>Ověřte svůj e-mail</value></data>
+  <data name="VerificationLinkSent" xml:space="preserve"><value>Zaslali jsme vám ověřovací odkaz.</value></data>
+  <data name="VerifyEmailConfirmedMsg" xml:space="preserve"><value>Úspěch: váš e-mail byl potvrzen.</value></data>
+
+  <!-- Account / Settings -->
+  <data name="AccountSettingsTitle" xml:space="preserve"><value>Nastavení účtu</value></data>
+  <data name="ReceiveEmailNotifications" xml:space="preserve"><value>Přijímat e-mailová oznámení</value></data>
+  <data name="EmailNotificationsHint" xml:space="preserve"><value>Aktualizace fakturace a upozornění na automatické dobíjení. Kritické e-maily (faktury, bezpečnost) jsou odesílány vždy.</value></data>
+  <data name="SaveSettingsButton" xml:space="preserve"><value>Uložit nastavení</value></data>
+
+  <!-- Account / Index -->
+  <data name="AccountTitle" xml:space="preserve"><value>Účet</value></data>
+  <data name="AccountProfileDesc" xml:space="preserve"><value>Váš profil a fakturační identita.</value></data>
+  <data name="AccountEmailLabel" xml:space="preserve"><value>E-mail:</value></data>
+  <data name="AccountEmailVerifiedLabel" xml:space="preserve"><value>E-mail ověřen:</value></data>
+  <data name="AccountStatusLabel" xml:space="preserve"><value>Stav:</value></data>
+  <data name="AccountCreditsRemainingLabel" xml:space="preserve"><value>Zbývající kredity:</value></data>
+  <data name="AccountMemberSinceLabel" xml:space="preserve"><value>Člen od:</value></data>
+  <data name="Yes" xml:space="preserve"><value>Ano</value></data>
+  <data name="No" xml:space="preserve"><value>Ne</value></data>
+  <data name="StatusInactive" xml:space="preserve"><value>Neaktivní</value></data>
+
+  <!-- Support -->
+  <data name="SupportTitle" xml:space="preserve"><value>Podpora</value></data>
+  <data name="SupportDesc" xml:space="preserve"><value>Odešlete lístek podpory a náš tým se vám ozve.</value></data>
+  <data name="SupportSubmitTicketTitle" xml:space="preserve"><value>Odeslat lístek</value></data>
+  <data name="SupportCategory" xml:space="preserve"><value>Kategorie</value></data>
+  <data name="SupportCategorySigning" xml:space="preserve"><value>Problémy s podepisováním</value></data>
+  <data name="SupportCategoryTemplates" xml:space="preserve"><value>Šablony</value></data>
+  <data name="SupportCategoryBilling" xml:space="preserve"><value>Fakturace a předplatné</value></data>
+  <data name="SupportCategoryAccount" xml:space="preserve"><value>Účet a přístup</value></data>
+  <data name="SupportCategoryOther" xml:space="preserve"><value>Ostatní</value></data>
+  <data name="SupportPriority" xml:space="preserve"><value>Priorita</value></data>
+  <data name="SupportPriorityLow" xml:space="preserve"><value>Nízká</value></data>
+  <data name="SupportPriorityNormal" xml:space="preserve"><value>Normální</value></data>
+  <data name="SupportPriorityHigh" xml:space="preserve"><value>Vysoká</value></data>
+  <data name="SupportSubjectLabel" xml:space="preserve"><value>Předmět</value></data>
+  <data name="SupportSubjectPlaceholder" xml:space="preserve"><value>Stručný popis vašeho problému</value></data>
+  <data name="SupportMessageLabel" xml:space="preserve"><value>Zpráva</value></data>
+  <data name="SupportMessagePlaceholder" xml:space="preserve"><value>Popište problém podrobně.</value></data>
+  <data name="SupportSubmitButton" xml:space="preserve"><value>Odeslat lístek</value></data>
+  <data name="SupportContactTitle" xml:space="preserve"><value>Kontakt</value></data>
+  <data name="SupportEmailLabel" xml:space="preserve"><value>E-mail:</value></data>
+  <data name="SupportCompanyLabel" xml:space="preserve"><value>Společnost:</value></data>
+
+  <!-- Error page -->
+  <data name="ErrorTitle" xml:space="preserve"><value>Chyba</value></data>
+  <data name="ErrorHeading" xml:space="preserve"><value>Něco se pokazilo</value></data>
+  <data name="ErrorTraceMsg" xml:space="preserve"><value>Použijte toto ID trasování při kontaktování podpory:</value></data>
+
+  <!-- Billing / ConfirmCancelAutoRecharge -->
+  <data name="CancelAutoRechargeTitle" xml:space="preserve"><value>Zrušení automatického dobíjení</value></data>
+  <data name="CancelAutoRechargeQuestion" xml:space="preserve"><value>Opravdu chcete zrušit automatické dobíjení kreditů?</value></data>
+  <data name="CancelAutoRechargeNote" xml:space="preserve"><value>Kdykoli ho můžete znovu aktivovat na stránce fakturace.</value></data>
+  <data name="CancelAutoRechargeButton" xml:space="preserve"><value>Potvrdit zrušení</value></data>
+
+  <!-- Pricing -->
+  <data name="PricingTitle" xml:space="preserve"><value>Ceník</value></data>
+  <data name="PricingDesc" xml:space="preserve"><value>Transparentní ceny pro podepisování PDF přes API. K zahájení není potřeba kreditní karta.</value></data>
+  <data name="PricingFreeTitle" xml:space="preserve"><value>Zdarma</value></data>
+  <data name="PricingFreeDesc" xml:space="preserve"><value>Pro jednotlivé vývojáře a malé testy.</value></data>
+  <data name="PricingFreeNote" xml:space="preserve"><value>Zahrnuje 10 kreditů.</value></data>
+  <data name="PricingFreeFeature1" xml:space="preserve"><value>Všechny funkce API</value></data>
+  <data name="PricingFreeFeature2" xml:space="preserve"><value>Okamžitý přístup</value></data>
+  <data name="PricingGetStarted" xml:space="preserve"><value>Začít</value></data>
+  <data name="PricingPaidTitle" xml:space="preserve"><value>Placený</value></data>
+  <data name="PricingPaidDesc" xml:space="preserve"><value>Pro produkční provoz s podporou.</value></data>
+  <data name="PricingPaidNote" xml:space="preserve"><value>Za 100 kreditů • platí množstevní slevy</value></data>
+  <data name="PricingPaidFeature1" xml:space="preserve"><value>Všechny funkce zdarma</value></data>
+  <data name="PricingPaidFeature2" xml:space="preserve"><value>Prioritní e-mailová podpora</value></data>
+  <data name="PricingPaidFeature3" xml:space="preserve"><value>Slevy: 300+ (5 %), 500+ (10 %), 1 000+ (15 %)</value></data>
+
+  <!-- Contact -->
+  <data name="ContactTitle" xml:space="preserve"><value>Kontakt</value></data>
+  <data name="ContactIdNumber" xml:space="preserve"><value>IČO:</value></data>
+  <data name="ContactVatNumber" xml:space="preserve"><value>DIČ:</value></data>
+  <data name="ContactEmailLabel" xml:space="preserve"><value>E-mail:</value></data>
+
+  <!-- Templates -->
+  <data name="TemplatesTitle" xml:space="preserve"><value>Moje šablony</value></data>
+  <data name="TemplatesNewTemplate" xml:space="preserve"><value>Nová šablona</value></data>
+  <data name="TemplatesNoTemplates" xml:space="preserve"><value>Zatím žádné šablony. Vytvořte první a začněte.</value></data>
+  <data name="TemplatesNameHeader" xml:space="preserve"><value>Název</value></data>
+  <data name="TemplatesFieldsHeader" xml:space="preserve"><value>Pole</value></data>
+  <data name="TemplatesUntitled" xml:space="preserve"><value>Bez názvu</value></data>
+  <data name="TemplatesEdit" xml:space="preserve"><value>Upravit</value></data>
+  <data name="TemplatesApiDocsLink" xml:space="preserve"><value>Dokumentace API</value></data>
+
+  <!-- Legal / Index -->
+  <data name="LegalTitle" xml:space="preserve"><value>Právní dokumenty</value></data>
+  <data name="LegalDescription" xml:space="preserve"><value>Zde najdete všechny právní dokumenty a zásady týkající se používání služby P4PDF od Performance4 s.r.o.</value></data>
+  <data name="LegalTermsOfService" xml:space="preserve"><value>Podmínky použití</value></data>
+  <data name="LegalPrivacyPolicy" xml:space="preserve"><value>Zásady ochrany osobních údajů</value></data>
+  <data name="LegalDpa" xml:space="preserve"><value>Smlouva o zpracování dat (DPA)</value></data>
+  <data name="LegalSla" xml:space="preserve"><value>Dohoda o úrovni služeb (SLA)</value></data>
+  <data name="LegalRefundPolicy" xml:space="preserve"><value>Zásady vrácení peněz</value></data>
+  <data name="LegalCookiesPolicy" xml:space="preserve"><value>Zásady cookies</value></data>
+  <data name="LegalOpenSourceNotices" xml:space="preserve"><value>Oznámení o open-source</value></data>
+  <data name="LegalAgplLicense" xml:space="preserve"><value>AGPL licence</value></data>
+  <data name="LegalLastUpdated" xml:space="preserve"><value>Poslední aktualizace:</value></data>
+
+  <!-- Layout navigation & footer -->
+  <data name="NavPdfTemplates" xml:space="preserve"><value>PDF šablony</value></data>
+  <data name="NavApiTokens" xml:space="preserve"><value>API tokeny</value></data>
+  <data name="NavDocs" xml:space="preserve"><value>Dokumentace</value></data>
+  <data name="NavBilling" xml:space="preserve"><value>Fakturace</value></data>
+  <data name="NavAccount" xml:space="preserve"><value>Účet</value></data>
+  <data name="NavSignOut" xml:space="preserve"><value>Odhlásit se</value></data>
+  <data name="NavPricing" xml:space="preserve"><value>Ceník</value></data>
+  <data name="NavSignIn" xml:space="preserve"><value>Přihlásit se</value></data>
+  <data name="NavSignUp" xml:space="preserve"><value>Zaregistrovat se</value></data>
+  <data name="FooterLegal" xml:space="preserve"><value>Právní</value></data>
+  <data name="FooterResources" xml:space="preserve"><value>Zdroje</value></data>
+  <data name="FooterCreatedBy" xml:space="preserve"><value>Vytvořeno společností Performance4 s.r.o.</value></data>
+  <data name="FooterContactInfo" xml:space="preserve"><value>Kontaktní informace</value></data>
 </root>

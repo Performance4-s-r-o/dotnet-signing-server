@@ -1,38 +1,39 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "Pricing";
+    ViewData["Title"] = L["PricingTitle"].Value;
 }
 
-<h1>Pricing</h1>
-<p class="muted">Transparent pricing shipping signed PDFs via API. No credit card required to get started.</p>
+<h1>@L["PricingTitle"]</h1>
+<p class="muted">@L["PricingDesc"]</p>
 
 <div class="pricing-grid">
     <div class="pricing-card">
         <div class="flex flex-col">
-            <h2 class="pricing-title">Free</h2>
-            <p class="muted pricing-description">For individual developers and small tests.</p>
+            <h2 class="pricing-title">@L["PricingFreeTitle"]</h2>
+            <p class="muted pricing-description">@L["PricingFreeDesc"]</p>
             <p class="pricing-price">0 EUR</p>
-            <p class="muted pricing-note">Includes 10 credits.</p>
+            <p class="muted pricing-note">@L["PricingFreeNote"]</p>
             <ul class="list list-none-style">
-                <li>All API Features</li>
-                <li>Immediate access</li>
+                <li>@L["PricingFreeFeature1"]</li>
+                <li>@L["PricingFreeFeature2"]</li>
             </ul>
         </div>
-        <a href="/Account/SignUp" class="btn btn-primary">Get started</a>
+        <a href="/Account/SignUp" class="btn btn-primary">@L["PricingGetStarted"]</a>
     </div>
 
     <div class="pricing-card pricing-card--highlight">
         <div class="flex flex-col">
-            <h2 class="pricing-title">Paid</h2>
-            <p class="muted pricing-description">For production workloads with support.</p>
+            <h2 class="pricing-title">@L["PricingPaidTitle"]</h2>
+            <p class="muted pricing-description">@L["PricingPaidDesc"]</p>
             <p class="pricing-price">5 EUR<span style="font-size:1rem;font-weight:600;"></span>
             </p>
-            <p class="muted pricing-note">Per 100 credits • volume discounts apply</p>
+            <p class="muted pricing-note">@L["PricingPaidNote"]</p>
             <ul class="list list-none-style">
-                <li>All Free features</li>
-                <li>Priority email support</li>
-                <li>Discounts: 300+ (5%), 500+ (10%), 1000+ (15%)</li>
+                <li>@L["PricingPaidFeature1"]</li>
+                <li>@L["PricingPaidFeature2"]</li>
+                <li>@L["PricingPaidFeature3"]</li>
             </ul>
         </div>
-        <a href="/Account/SignUp" class="btn btn-primary ">Get Started</a>
+        <a href="/Account/SignUp" class="btn btn-primary">@L["PricingGetStarted"]</a>
     </div>
 </div>

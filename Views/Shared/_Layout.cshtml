@@ -1,3 +1,4 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
     var pageTitle = ViewData["Title"] as string;
     var fullTitle = string.IsNullOrWhiteSpace(pageTitle)
@@ -11,6 +12,27 @@
     : string.Empty;
     var isAuthenticated = User?.Identity?.IsAuthenticated == true;
     var displayName = isAuthenticated ? User?.Identity?.Name : null;
+    var currentCulture = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.ToLowerInvariant();
+    var supportedCultures = new[] { "en", "cs", "de", "es" };
+    if (!supportedCultures.Contains(currentCulture))
+    {
+        currentCulture = "en";
+    }
+    var cultureLabels = new Dictionary<string, string>
+    {
+        { "en", "EN" },
+        { "cs", "CZ" },
+        { "de", "DE" },
+        { "es", "ES" }
+    };
+    var cultureNames = new Dictionary<string, string>
+    {
+        { "en", "English" },
+        { "cs", "Čeština" },
+        { "de", "Deutsch" },
+        { "es", "Español" }
+    };
+    var currentReturnUrl = request != null ? (request.Path + request.QueryString) : "/";
     var controllerName = ViewContext?.RouteData?.Values?["controller"]?.ToString() ?? string.Empty;
     var isAccountPage = controllerName.Equals("Account", StringComparison.OrdinalIgnoreCase);
     var isHomePage = string.Equals(ViewContext?.HttpContext?.Request?.Path.Value, "/", StringComparison.Ordinal);
@@ -55,9 +77,9 @@
                     @if (isAuthenticated)
                     {
                         <nav class="header-nav">
-                            <a href="/Templates">PDF Templates</a>
-                            <a href="/ApiTokens">API Tokens</a>
-                            <a href="/api/docs">Docs</a>
+                            <a href="/Templates">@L["NavPdfTemplates"]</a>
+                            <a href="/ApiTokens">@L["NavApiTokens"]</a>
+                            <a href="/api/docs">@L["NavDocs"]</a>
                             @if (User.IsInRole("Admin"))
                             {
                                 <a href="/Admin">Admin</a>
@@ -68,11 +90,11 @@
                             <details>
                                 <summary>@(string.IsNullOrWhiteSpace(displayName) ? "Account" : displayName)</summary>
                                 <div class="menu">
-                                    <a href="/Billing">Billing</a>
-                                    <a href="/Account">Account</a>
+                                    <a href="/Billing">@L["NavBilling"]</a>
+                                    <a href="/Account">@L["NavAccount"]</a>
                                     <form method="post" action="/Account/SignOut" style="margin:0;">
                                         @Html.AntiForgeryToken()
-                                        <button type="submit">Sign out</button>
+                                        <button type="submit">@L["NavSignOut"]</button>
                                     </form>
                                 </div>
                             </details>
@@ -80,10 +102,39 @@
                     }
                     else
                     {
-                        <a href="/pricing">Pricing</a>
-                        <a href="/Account/SignIn">Sign in</a>
-                        <a href="/Account/SignUp">Sign up</a>
+                        <a href="/pricing">@L["NavPricing"]</a>
+                        <a href="/Account/SignIn">@L["NavSignIn"]</a>
+                        <a href="/Account/SignUp">@L["NavSignUp"]</a>
                     }
+
+                    <div class="lang-switcher">
+                        <details>
+                            <summary aria-label="Change language">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                     stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <path d="M2 12h20" />
+                                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                                </svg>
+                                <span>@cultureLabels[currentCulture]</span>
+                            </summary>
+                            <div class="menu">
+                                @foreach (var loc in supportedCultures)
+                                {
+                                    <form method="post" action="/set-language" style="margin:0;">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="culture" value="@loc" />
+                                        <input type="hidden" name="returnUrl" value="@currentReturnUrl" />
+                                        <button type="submit" class="@(loc == currentCulture ? "active" : "")">
+                                            <span class="check">@(loc == currentCulture ? "✓" : "")</span>
+                                            <span>@cultureNames[loc]</span>
+                                        </button>
+                                    </form>
+                                }
+                            </div>
+                        </details>
+                    </div>
                 </div>
             </div>
         </div>
@@ -112,9 +163,9 @@
                             </div>
                         </a>
                     </div>
-                    <p class="footer-company-text">Created by Performance4 s.r.o.</p>
+                    <p class="footer-company-text">@L["FooterCreatedBy"]</p>
                     <div>
-                        <p class="footer-contact-label">Contact information</p>
+                        <p class="footer-contact-label">@L["FooterContactInfo"]</p>
                         <a href="mailto:support@performance4.cz"
                             class="footer-contact-email">support@performance4.cz</a>
                     </div>
@@ -122,7 +173,7 @@
 
                 <!-- Legal links -->
                 <div class="footer-links-section">
-                    <h4>Legal</h4>
+                    <h4>@L["FooterLegal"]</h4>
                     <ul class="footer-links">
                         <li><a href="/Legal/TermsOfService">Terms of Service</a></li>
                         <li><a href="/Legal/PrivacyPolicy">Privacy Policy</a></li>
@@ -135,7 +186,7 @@
 
                 <!-- Resources -->
                 <div class="footer-links-section">
-                    <h4>Resources</h4>
+                    <h4>@L["FooterResources"]</h4>
                     <ul class="footer-links">
                         <li><a href="/Legal/OpenSourceNotices">Open-Source Notices</a></li>
                         <li><a href="/Legal/License">AGPL License</a></li>

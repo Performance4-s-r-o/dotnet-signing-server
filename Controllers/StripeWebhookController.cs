@@ -366,11 +366,6 @@ public class StripeWebhookController : ControllerBase
             Status = "failed"
         });
 
-        if (!user.EmailNotificationsEnabled)
-        {
-            return;
-        }
-
         var paymentType = paymentIntent.Metadata.TryGetValue("type", out var t) ? t : "purchase";
         var baseUrl = _appOptions.FqdnServerName?.TrimEnd('/') ?? "https://app.p4pdf.com";
         var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
@@ -385,12 +380,7 @@ public class StripeWebhookController : ControllerBase
 
         try
         {
-            await _emailSender.SendAsync(
-                user.Email,
-                rendered.Subject,
-                rendered.HtmlBody,
-                $"{baseUrl}/Account/Settings",
-                isCritical: false);
+            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody);
         }
         catch (Exception ex)
         {

@@ -1,8 +1,9 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "Support";
+    ViewData["Title"] = L["SupportTitle"].Value;
 }
-<h1>Support</h1>
-<p class="muted mt-2 mb-3">Submit a support ticket and our team will get back to you.</p>
+<h1>@L["SupportTitle"]</h1>
+<p class="muted mt-2 mb-3">@L["SupportDesc"]</p>
 
 @if (TempData["Info"] is string info)
 {
@@ -14,46 +15,46 @@
 }
 
 <div class="card">
-    <h2>Submit a Ticket</h2>
+    <h2>@L["SupportSubmitTicketTitle"]</h2>
     <form method="post" action="/support/ticket">
         @Html.AntiForgeryToken()
 
         <div class="form-group">
-            <label for="category">Category</label>
+            <label for="category">@L["SupportCategory"]</label>
             <select name="category" id="category" required>
-                <option value="signing">Signing Issues</option>
-                <option value="templates">Templates</option>
-                <option value="billing">Billing &amp; Subscription</option>
-                <option value="account">Account &amp; Access</option>
-                <option value="other" selected>Other</option>
+                <option value="signing">@L["SupportCategorySigning"]</option>
+                <option value="templates">@L["SupportCategoryTemplates"]</option>
+                <option value="billing">@L["SupportCategoryBilling"]</option>
+                <option value="account">@L["SupportCategoryAccount"]</option>
+                <option value="other" selected>@L["SupportCategoryOther"]</option>
             </select>
         </div>
 
         <div class="form-group">
-            <label for="priority">Priority</label>
+            <label for="priority">@L["SupportPriority"]</label>
             <select name="priority" id="priority">
-                <option value="low">Low</option>
-                <option value="normal" selected>Normal</option>
-                <option value="high">High</option>
+                <option value="low">@L["SupportPriorityLow"]</option>
+                <option value="normal" selected>@L["SupportPriorityNormal"]</option>
+                <option value="high">@L["SupportPriorityHigh"]</option>
             </select>
         </div>
 
         <div class="form-group">
-            <label for="subject">Subject</label>
-            <input type="text" name="subject" id="subject" placeholder="Brief description of your issue" required />
+            <label for="subject">@L["SupportSubjectLabel"]</label>
+            <input type="text" name="subject" id="subject" placeholder="@L["SupportSubjectPlaceholder"]" required />
         </div>
 
         <div class="form-group">
-            <label for="message">Message</label>
-            <textarea name="message" id="message" rows="6" placeholder="Describe the issue in detail." required></textarea>
+            <label for="message">@L["SupportMessageLabel"]</label>
+            <textarea name="message" id="message" rows="6" placeholder="@L["SupportMessagePlaceholder"]" required></textarea>
         </div>
 
-        <button type="submit" class="btn btn-primary">Submit Ticket</button>
+        <button type="submit" class="btn btn-primary">@L["SupportSubmitButton"]</button>
     </form>
 </div>
 
 <div class="card mt-3">
-    <h2>Contact</h2>
-    <p><strong>Email:</strong> <a href="mailto:support@performance4.cz">support@performance4.cz</a></p>
-    <p><strong>Company:</strong> Performance4 s.r.o.</p>
+    <h2>@L["SupportContactTitle"]</h2>
+    <p><strong>@L["SupportEmailLabel"]</strong> <a href="mailto:support@performance4.cz">support@performance4.cz</a></p>
+    <p><strong>@L["SupportCompanyLabel"]</strong> Performance4 s.r.o.</p>
 </div>

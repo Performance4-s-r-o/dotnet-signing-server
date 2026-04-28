@@ -1,10 +1,11 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "Two-factor verification";
+    ViewData["Title"] = L["TwoFactorTitle"].Value;
     var email = ViewData["Email"]?.ToString() ?? string.Empty;
     var rememberMe = (ViewData["RememberMe"] as bool?) ?? false;
 }
 
-<h1>Enter verification code</h1>
+<h1>@L["TwoFactorHeading"]</h1>
 
 <div class="auth-card">
     @if (TempData["Error"] != null)
@@ -16,17 +17,17 @@
         <div class="flash info">@TempData["Info"]</div>
     }
 
-    <p class="muted">We sent a 6-digit code to @email. Enter it below to finish signing in.</p>
+    <p class="muted">@string.Format(L["TwoFactorCodeSentMsgFmt"].Value, email)</p>
 
     <form method="post" action="/Account/TwoFactor" class="auth-form">
         @Html.AntiForgeryToken()
         <input type="hidden" name="email" value="@email" />
         <input type="hidden" name="rememberMe" value="@rememberMe" />
         <div class="form-group">
-            <label for="code" class="form-label">6-digit code</label>
+            <label for="code" class="form-label">@L["SixDigitCodeLabel"]</label>
             <input id="code" class="form-input" type="text" name="code" maxlength="6" minlength="6" pattern="\d{6}"
                 required />
         </div>
-        <button type="submit" class="btn btn-primary full-w mt-3">Verify</button>
+        <button type="submit" class="btn btn-primary full-w mt-3">@L["VerifyButton"]</button>
     </form>
 </div>
