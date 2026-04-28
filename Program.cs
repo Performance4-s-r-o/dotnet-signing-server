@@ -28,6 +28,16 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
         ForwardedHeaders.XForwardedProto |
         ForwardedHeaders.XForwardedHost;
     options.ForwardLimit = 1; // Only trust the immediate reverse proxy
+
+    // The container runs behind Coolify/Caddy on a Docker bridge network, so
+    // the proxy is never on 127.0.0.1. By default ASP.NET ignores forwarded
+    // headers from non-loopback IPs and Request.Host stays the internal
+    // container address — which breaks the CORS allow-list (it falls back to
+    // the request's own host) and produces 403s on same-origin browser calls.
+    // Clearing both lists trusts all upstreams; safe because the container
+    // is only reachable via the proxy on the isolated network.
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
 });
 
 // NOTE: Don't set ResourcesPath — SharedStrings.cs lives in DotNetSigningServer.Resources
