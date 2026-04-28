@@ -420,9 +420,44 @@ using (var scope = app.Services.CreateScope())
         // Ensure the target schema exists before EF Core looks up __EFMigrationsHistory.
         // Npgsql's SET search_path at connection open silently ignores missing schemas,
         // so on a fresh database the history lookup would fail with 42P01.
+        //
+        // CREATE SCHEMA IF NOT EXISTS still needs CREATE on the database even when
+        // the schema already exists. Hosted environments (Coolify, RDS) often run
+        // the app as a least-privilege role that lacks DB-level CREATE — in which
+        // case operators are expected to pre-create the schema with the right
+        // ownership. Probe first, then attempt CREATE; tolerate 42501 if the
+        // schema is already there.
         if (dbContext.Database.IsNpgsql())
         {
-            dbContext.Database.ExecuteSqlRaw("CREATE SCHEMA IF NOT EXISTS dotnet_signing");
+            var conn = dbContext.Database.GetDbConnection();
+            if (conn.State != System.Data.ConnectionState.Open)
+            {
+                conn.Open();
+            }
+
+            using (var probe = conn.CreateCommand())
+            {
+                probe.CommandText =
+                    "SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'dotnet_signing')";
+                var schemaExists = (bool)(probe.ExecuteScalar() ?? false);
+
+                if (!schemaExists)
+                {
+                    try
+                    {
+                        dbContext.Database.ExecuteSqlRaw("CREATE SCHEMA IF NOT EXISTS dotnet_signing");
+                    }
+                    catch (Npgsql.PostgresException ex) when (ex.SqlState == "42501")
+                    {
+                        logger.LogCritical(
+                            "Schema 'dotnet_signing' does not exist and the DB role lacks CREATE on database '{Database}'. " +
+                            "Pre-create the schema manually (e.g. CREATE SCHEMA dotnet_signing AUTHORIZATION <role>) or " +
+                            "switch the connection to a dedicated database where the role has CREATE.",
+                            conn.Database);
+                        throw;
+                    }
+                }
+            }
         }
 
         dbContext.Database.Migrate();
