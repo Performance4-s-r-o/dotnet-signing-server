@@ -134,6 +134,11 @@ namespace DotNetSigningServer.Controllers
 
                 return PdfOrJsonResult(result);
             }
+            catch (TsaCommunicationException ex)
+            {
+                Logger.LogWarning(ex, "Sign failed: TSA communication error ({TsaUrl})", ex.TsaUrl);
+                return StatusCode(StatusCodes.Status502BadGateway, new { code = "TSA_UNREACHABLE", message = ex.Message, tsaUrl = ex.TsaUrl });
+            }
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Sign failed");
@@ -210,10 +215,38 @@ namespace DotNetSigningServer.Controllers
                 await DebitUserAsync(user);
                 return PdfOrJsonResult(result);
             }
+            catch (TsaCommunicationException ex)
+            {
+                Logger.LogWarning(ex, "Timestamp failed: TSA communication error ({TsaUrl})", ex.TsaUrl);
+                return StatusCode(StatusCodes.Status502BadGateway, new { code = "TSA_UNREACHABLE", message = ex.Message, tsaUrl = ex.TsaUrl });
+            }
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Timestamp failed");
                 return SafeProblem(Localizer["TimestampError"], ex);
+            }
+        }
+
+        [HttpPost("/api/tsa-probe")]
+        public async Task<IActionResult> ProbeTsa([FromBody] TsaProbeInput input)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            try
+            {
+                _signingService.ProbeTsa(input.TsaUrl, input.TsaUsername, input.TsaPassword);
+                return Ok(new { ok = true });
+            }
+            catch (TsaCommunicationException ex)
+            {
+                Logger.LogInformation("TSA probe failed for {TsaUrl}: {Message}", ex.TsaUrl, ex.Message);
+                return Ok(new { ok = false, code = "TSA_UNREACHABLE", message = ex.Message, tsaUrl = ex.TsaUrl });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "TSA probe unexpected failure for {TsaUrl}", input.TsaUrl);
+                return Ok(new { ok = false, code = "TSA_PROBE_FAILED", message = ex.Message, tsaUrl = input.TsaUrl });
             }
         }
 

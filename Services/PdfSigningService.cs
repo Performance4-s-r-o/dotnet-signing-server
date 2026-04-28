@@ -8,6 +8,7 @@ using DotNetSigningServer.ExternalSignatures;
 using DotNetSigningServer.Options;
 using Microsoft.Extensions.Options;
 using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Tsp;
 
 using IOPath = System.IO.Path;
 
@@ -85,7 +86,7 @@ namespace DotNetSigningServer.Services
             var chain = PdfCryptoHelper.LoadCertificatesFromPemString(certificatePem);
             byte[] signatureBytes = PdfCryptoHelper.HexStringToByteArray(input.SignedHash);
             fieldName = PdfCryptoHelper.EnsureFieldName(fieldName);
-            byte[] fullySignedPdf = InjectFinalSignature(preSignedPdf, signatureBytes, chain, fieldName, tsaClient);
+            byte[] fullySignedPdf = InjectFinalSignature(preSignedPdf, signatureBytes, chain, fieldName, tsaClient, tsaUrlForErrorContext: tsaUrl);
 
             return Convert.ToBase64String(fullySignedPdf);
         }
@@ -157,9 +158,73 @@ namespace DotNetSigningServer.Services
                 signerNameOverride: input.SignerName);
 
             signer.SetSignerProperties(signerProperties);
-            signer.Timestamp(tsaClient, fieldName);
+            try
+            {
+                signer.Timestamp(tsaClient, fieldName);
+            }
+            catch (Exception ex) when (FindTspException(ex) is TspException tsp)
+            {
+                throw new TsaCommunicationException(
+                    input.TsaUrl ?? "(configured TSA)",
+                    BuildTsaErrorMessage(input.TsaUrl, tsp),
+                    ex);
+            }
 
             return Convert.ToBase64String(msOut.ToArray());
+        }
+
+        /// <summary>
+        /// Probes a TSA URL by requesting a timestamp for a dummy hash. Throws
+        /// <see cref="TsaCommunicationException"/> with a clean message when the
+        /// TSA is unreachable or returns a non-RFC-3161 response. Used by the
+        /// admin settings save flow on v0.
+        /// </summary>
+        public void ProbeTsa(string url, string? username, string? password)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                throw new TsaCommunicationException("(empty)", "TSA URL is required.");
+            }
+
+            ITSAClient? tsaClient;
+            try
+            {
+                tsaClient = PdfCryptoHelper.CreateTsaClient(
+                    new TimestampAuthorityOptions(),
+                    url,
+                    string.IsNullOrWhiteSpace(username) ? null : username,
+                    string.IsNullOrWhiteSpace(password) ? null : password,
+                    allowDefaultFallback: false);
+            }
+            catch (Exception ex)
+            {
+                throw new TsaCommunicationException(url, ex.Message, ex);
+            }
+
+            if (tsaClient == null)
+            {
+                throw new TsaCommunicationException(url, "TSA client could not be initialized.");
+            }
+
+            byte[] dummy = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("p4pdf-tsa-probe"));
+            try
+            {
+                var token = tsaClient.GetTimeStampToken(dummy);
+                if (token == null || token.Length == 0)
+                {
+                    throw new TsaCommunicationException(url, "TSA returned an empty timestamp token.");
+                }
+            }
+            catch (TsaCommunicationException) { throw; }
+            catch (Exception ex) when (FindTspException(ex) is TspException tsp)
+            {
+                throw new TsaCommunicationException(url, BuildTsaErrorMessage(url, tsp), ex);
+            }
+            catch (Exception ex)
+            {
+                throw new TsaCommunicationException(url,
+                    $"TSA at {url} is unreachable or rejected the request: {ex.Message}", ex);
+            }
         }
 
         public string ApplyVisualSign(VisualSignInput input)
@@ -294,7 +359,8 @@ namespace DotNetSigningServer.Services
 
             byte[] signatureBytes = PdfCryptoHelper.SignAuthenticatedAttributes(preSignContainer.GetDocBytesHash(), privateKey);
             ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(_tsaOptions, tsaUrl, tsaUsername, tsaPassword);
-            return InjectFinalSignature(pdfWithPlaceholder, signatureBytes, chain, fieldName, tsaClient);
+            var tsaUrlForError = !string.IsNullOrWhiteSpace(tsaUrl) ? tsaUrl : _tsaOptions.Url;
+            return InjectFinalSignature(pdfWithPlaceholder, signatureBytes, chain, fieldName, tsaClient, tsaUrlForErrorContext: tsaUrlForError);
         }
 
         private static byte[] CreatePreSignedPdf(
@@ -352,7 +418,7 @@ namespace DotNetSigningServer.Services
             return msOut.ToArray();
         }
 
-        private static byte[] InjectFinalSignature(byte[] pdfWithPlaceholder, byte[] signatureBytes, IX509Certificate[] chain, string fieldName, ITSAClient? tsaClient)
+        private static byte[] InjectFinalSignature(byte[] pdfWithPlaceholder, byte[] signatureBytes, IX509Certificate[] chain, string fieldName, ITSAClient? tsaClient, string? tsaUrlForErrorContext = null)
         {
             using var msIn = new MemoryStream(pdfWithPlaceholder);
             using var msOut = new MemoryStream();
@@ -360,9 +426,36 @@ namespace DotNetSigningServer.Services
             var reader = new PdfReader(msIn);
             IExternalSignatureContainer external = new ExternalSignatureContainer(chain, signatureBytes, tsaClient);
 
-            PdfSigner.SignDeferred(reader, fieldName, msOut, external);
+            try
+            {
+                PdfSigner.SignDeferred(reader, fieldName, msOut, external);
+            }
+            catch (Exception ex) when (FindTspException(ex) is TspException tsp)
+            {
+                throw new TsaCommunicationException(
+                    tsaUrlForErrorContext ?? "(configured TSA)",
+                    BuildTsaErrorMessage(tsaUrlForErrorContext, tsp),
+                    ex);
+            }
 
             return msOut.ToArray();
+        }
+
+        private static TspException? FindTspException(Exception ex)
+        {
+            for (var current = (Exception?)ex; current != null; current = current.InnerException)
+            {
+                if (current is TspException tsp) return tsp;
+            }
+            return null;
+        }
+
+        private static string BuildTsaErrorMessage(string? tsaUrl, TspException tsp)
+        {
+            var urlPart = string.IsNullOrWhiteSpace(tsaUrl) ? "" : $" ({tsaUrl})";
+            var detail = tsp.Message ?? "unknown failure";
+            return $"Timestamp authority{urlPart} did not return a valid response: {detail}. " +
+                   "Check that the TSA URL is reachable, supports RFC 3161, and that any required credentials are correct.";
         }
     }
 }
