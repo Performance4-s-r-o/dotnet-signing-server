@@ -21,6 +21,8 @@ services:
       - TSA_USERNAME=${TSA_USERNAME:-}
       - TSA_PASSWORD=${TSA_PASSWORD:-}
       - Token__Secret=${TOKEN_SECRET:-}
+      # Internal preprocessing bypass — must match SIGN_API_ATTACHMENT_BILLING_BYPASS_KEY on v0
+      - Billing__AttachmentDebitBypassKey=${BILLING_ATTACHMENT_DEBIT_BYPASS_KEY:-}
       # Stripe configuration
       - Stripe__ApiKey=${STRIPE_API_KEY:-}
       - Stripe__WebhookSecret=${STRIPE_WEBHOOK_SECRET:-}
