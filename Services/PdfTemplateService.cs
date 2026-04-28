@@ -253,7 +253,7 @@ public class PdfTemplateService
             {
                 if (!string.IsNullOrWhiteSpace(value))
                 {
-                    TryAddImage(value, pdfDoc, pageNumber, rect);
+                    TryAddImage(value, pdfDoc, pageNumber, rect, field.Rotation);
                 }
                 continue;
             }
@@ -283,6 +283,21 @@ public class PdfTemplateService
 
         pdfDoc.Close();
         return msOut.ToArray();
+    }
+
+    /// <summary>
+    /// Concatenates a rotation matrix that rotates around the rect's center.
+    /// Used by Add* helpers so a field's visible content is rotated in place
+    /// instead of around the page origin. No-op when rotation is ~0.
+    /// </summary>
+    private static void ApplyFieldRotation(PdfCanvas canvas, Rectangle rect, float rotationDegrees)
+    {
+        if (Math.Abs(rotationDegrees) < 0.001f) return;
+        var rad = rotationDegrees * Math.PI / 180.0;
+        var cx = rect.GetX() + rect.GetWidth() / 2;
+        var cy = rect.GetY() + rect.GetHeight() / 2;
+        var transform = AffineTransform.GetRotateInstance(rad, cx, cy);
+        canvas.ConcatMatrix(transform);
     }
 
     private static void AddText(string value, PdfDocument pdfDoc, int pageNumber, Rectangle rect, PdfFieldDefinition field)
@@ -349,6 +364,7 @@ public class PdfTemplateService
 
         try
         {
+            ApplyFieldRotation(pdfCanvas, rect, field.Rotation);
             var canvas = new Canvas(pdfCanvas, rect);
             canvas.Add(paragraph);
             canvas.Close();
@@ -359,7 +375,7 @@ public class PdfTemplateService
         }
     }
 
-    private static void TryAddImage(string base64, PdfDocument pdfDoc, int pageNumber, Rectangle rect)
+    private static void TryAddImage(string base64, PdfDocument pdfDoc, int pageNumber, Rectangle rect, float rotation = 0)
     {
         try
         {
@@ -375,6 +391,7 @@ public class PdfTemplateService
 
             try
             {
+                ApplyFieldRotation(pdfCanvas, rect, rotation);
                 var canvas = new Canvas(pdfCanvas, rect);
                 canvas.Add(image);
                 canvas.Close();
@@ -419,6 +436,7 @@ public class PdfTemplateService
 
             try
             {
+                ApplyFieldRotation(pdfCanvas, rect, field.Rotation);
                 var canvas = new Canvas(pdfCanvas, rect);
                 canvas.Add(barcodeImage);
                 canvas.Close();
@@ -524,6 +542,7 @@ public class PdfTemplateService
 
         try
         {
+            ApplyFieldRotation(pdfCanvas, rect, field.Rotation);
             var canvas = new Canvas(pdfCanvas, rect);
             canvas.Add(table);
             canvas.Close();

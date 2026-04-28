@@ -138,6 +138,9 @@ public class PdfFieldDefinition
     public PdfBarcodeFormat? BarcodeFormat { get; set; } = PdfBarcodeFormat.Code128; // Used when Type == barcode
     public int? Columns { get; set; } // table
     public List<TableColumnDefinition>? TableColumns { get; set; } // table
+    // Counter-clockwise rotation in degrees, applied around the rect's center.
+    // 0 = no rotation; common values are 90/180/270.
+    public float Rotation { get; set; } = 0;
 }
 
 public class TableColumnDefinition
