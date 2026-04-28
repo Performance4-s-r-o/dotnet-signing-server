@@ -23,6 +23,14 @@ services:
       - Token__Secret=${TOKEN_SECRET:-}
       # Internal preprocessing bypass — must match SIGN_API_ATTACHMENT_BILLING_BYPASS_KEY on v0
       - Billing__AttachmentDebitBypassKey=${BILLING_ATTACHMENT_DEBIT_BYPASS_KEY:-}
+      # Seal (server-side PFX sealing for SES flow)
+      - Seal__Enabled=${SEAL_ENABLED:-false}
+      - SEAL_PFX_PATH=${SEAL_PFX_PATH:-}
+      - SEAL_PFX_BASE64=${SEAL_PFX_BASE64:-}
+      - SEAL_PFX_PASSWORD=${SEAL_PFX_PASSWORD:-}
+      # Evidence encryption certificate (for SES evidence attachment encryption)
+      - EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64=${EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64:-}
+      - EVIDENCE_ENCRYPTION_CERTIFICATE_PEM=${EVIDENCE_ENCRYPTION_CERTIFICATE_PEM:-}
       # Stripe configuration
       - Stripe__ApiKey=${STRIPE_API_KEY:-}
       - Stripe__WebhookSecret=${STRIPE_WEBHOOK_SECRET:-}
