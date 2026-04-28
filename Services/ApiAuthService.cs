@@ -22,19 +22,22 @@ public class ApiAuthService : IApiAuthService
     private readonly IAllowedOriginService _allowedOriginService;
     private readonly IIpWhitelistService _ipWhitelistService;
     private readonly IMemoryCache _cache;
+    private readonly ILogger<ApiAuthService> _logger;
 
     public ApiAuthService(
         ApplicationDbContext dbContext,
         ITokenService tokenService,
         IAllowedOriginService allowedOriginService,
         IIpWhitelistService ipWhitelistService,
-        IMemoryCache cache)
+        IMemoryCache cache,
+        ILogger<ApiAuthService> logger)
     {
         _dbContext = dbContext;
         _tokenService = tokenService;
         _allowedOriginService = allowedOriginService;
         _ipWhitelistService = ipWhitelistService;
         _cache = cache;
+        _logger = logger;
     }
 
     public async Task<User?> ValidateTokenAsync(string authorizationHeader, string? originHeader = null, IPAddress? clientIp = null)
@@ -98,6 +101,8 @@ public class ApiAuthService : IApiAuthService
         var apiToken = candidates.FirstOrDefault(t => _tokenService.VerifyToken(token, t.TokenHash));
         if (apiToken == null)
         {
+            _logger.LogWarning("[auth] token rejected: no active token matched prefix={Prefix} candidates={Count}",
+                prefix, candidates.Count);
             return null;
         }
 
@@ -106,26 +111,31 @@ public class ApiAuthService : IApiAuthService
             var origin = originHeader?.Trim();
             if (string.IsNullOrWhiteSpace(origin))
             {
+                _logger.LogWarning("[auth] token rejected: browser token without Origin (tokenId={TokenId})", apiToken.Id);
                 return null;
             }
 
             if (!_allowedOriginService.IsOriginAllowedForToken(origin, apiToken))
             {
+                _logger.LogWarning("[auth] token rejected: origin not allowed (tokenId={TokenId} origin={Origin})", apiToken.Id, origin);
                 return null;
             }
         }
         else if (!string.IsNullOrWhiteSpace(originHeader) && !_allowedOriginService.IsLocalOrigin(originHeader))
         {
+            _logger.LogWarning("[auth] token rejected: non-browser token with non-local Origin (tokenId={TokenId} origin={Origin})", apiToken.Id, originHeader);
             return null;
         }
 
         if (!_ipWhitelistService.IsIpAllowedForToken(clientIp, apiToken))
         {
+            _logger.LogWarning("[auth] token rejected: IP not whitelisted (tokenId={TokenId} ip={Ip})", apiToken.Id, clientIp);
             return null;
         }
 
         if (apiToken.User != null && !apiToken.User.IsActive)
         {
+            _logger.LogWarning("[auth] token rejected: user inactive (tokenId={TokenId} userId={UserId})", apiToken.Id, apiToken.User.Id);
             return null;
         }
 

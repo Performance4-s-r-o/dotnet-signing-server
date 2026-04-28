@@ -36,7 +36,7 @@ public class ApiAuthServiceTests : IDisposable
         _allowedOriginService = new AllowedOriginService(sp.GetRequiredService<IServiceScopeFactory>());
         _ipWhitelistService = new IpWhitelistService();
 
-        _sut = new ApiAuthService(_dbContext, _tokenService, _allowedOriginService, _ipWhitelistService, new MemoryCache(new MemoryCacheOptions()));
+        _sut = new ApiAuthService(_dbContext, _tokenService, _allowedOriginService, _ipWhitelistService, new MemoryCache(new MemoryCacheOptions()), Microsoft.Extensions.Logging.Abstractions.NullLogger<ApiAuthService>.Instance);
     }
 
     public void Dispose()
