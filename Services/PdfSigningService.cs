@@ -81,7 +81,7 @@ namespace DotNetSigningServer.Services
             }
 
             byte[] preSignedPdf = File.ReadAllBytes(presignedPdfPath);
-            ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(_tsaOptions, tsaUrl, tsaUsername, tsaPassword);
+            ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(_tsaOptions, tsaUrl, tsaUsername, tsaPassword, allowDefaultFallback: false);
             var chain = PdfCryptoHelper.LoadCertificatesFromPemString(certificatePem);
             byte[] signatureBytes = PdfCryptoHelper.HexStringToByteArray(input.SignedHash);
             fieldName = PdfCryptoHelper.EnsureFieldName(fieldName);
@@ -122,7 +122,7 @@ namespace DotNetSigningServer.Services
 
         public string ApplyDocumentTimestamp(DocumentTimestampInput input)
         {
-            ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(_tsaOptions, input.TsaUrl, input.TsaUsername, input.TsaPassword);
+            ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(_tsaOptions, input.TsaUrl, input.TsaUsername, input.TsaPassword, allowDefaultFallback: false);
             if (tsaClient == null)
             {
                 throw new InvalidOperationException("Timestamp authority must be configured to apply document timestamps.");

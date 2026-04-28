@@ -85,11 +85,18 @@ namespace DotNetSigningServer.Services
             TimestampAuthorityOptions? tsaOptions,
             string? urlOverride = null,
             string? usernameOverride = null,
-            string? passwordOverride = null)
+            string? passwordOverride = null,
+            bool allowDefaultFallback = true)
         {
-            string? url = !string.IsNullOrWhiteSpace(urlOverride) ? urlOverride : tsaOptions?.Url;
-            string? username = !string.IsNullOrWhiteSpace(usernameOverride) ? usernameOverride : tsaOptions?.Username;
-            string? password = !string.IsNullOrWhiteSpace(passwordOverride) ? passwordOverride : tsaOptions?.Password;
+            string? url = !string.IsNullOrWhiteSpace(urlOverride)
+                ? urlOverride
+                : (allowDefaultFallback ? tsaOptions?.Url : null);
+            string? username = !string.IsNullOrWhiteSpace(urlOverride)
+                ? usernameOverride
+                : (allowDefaultFallback ? tsaOptions?.Username : null);
+            string? password = !string.IsNullOrWhiteSpace(urlOverride)
+                ? passwordOverride
+                : (allowDefaultFallback ? tsaOptions?.Password : null);
 
             if (string.IsNullOrWhiteSpace(url))
             {
