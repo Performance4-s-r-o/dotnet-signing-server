@@ -17,18 +17,30 @@ namespace DotNetSigningServer.Services
     {
         private static readonly string FontsDir = Path.Combine(AppContext.BaseDirectory, "Fonts");
 
-        public static PdfFont Load(AppFontFamily family, bool bold = false)
+        public static PdfFont Load(AppFontFamily family, bool bold = false, bool italic = false)
         {
-            var fileName = (family, bold) switch
+            // Liberation Italic TTFs aren't always shipped — fall back to the
+            // upright variant so missing italic doesn't break document
+            // generation. The `Load(family, bold)` overload still works.
+            string Filename(bool i) => (family, bold, i) switch
             {
-                (AppFontFamily.Serif, false) => "LiberationSerif-Regular.ttf",
-                (AppFontFamily.Serif, true) => "LiberationSerif-Bold.ttf",
-                (AppFontFamily.Mono, false) => "LiberationMono-Regular.ttf",
-                (AppFontFamily.Mono, true) => "LiberationMono-Bold.ttf",
-                (_, false) => "LiberationSans-Regular.ttf",
-                (_, true) => "LiberationSans-Bold.ttf",
+                (AppFontFamily.Serif, false, true) => "LiberationSerif-Italic.ttf",
+                (AppFontFamily.Serif, true, true) => "LiberationSerif-BoldItalic.ttf",
+                (AppFontFamily.Serif, false, false) => "LiberationSerif-Regular.ttf",
+                (AppFontFamily.Serif, true, false) => "LiberationSerif-Bold.ttf",
+                (AppFontFamily.Mono, false, true) => "LiberationMono-Italic.ttf",
+                (AppFontFamily.Mono, true, true) => "LiberationMono-BoldItalic.ttf",
+                (AppFontFamily.Mono, false, false) => "LiberationMono-Regular.ttf",
+                (AppFontFamily.Mono, true, false) => "LiberationMono-Bold.ttf",
+                (_, false, true) => "LiberationSans-Italic.ttf",
+                (_, true, true) => "LiberationSans-BoldItalic.ttf",
+                (_, false, false) => "LiberationSans-Regular.ttf",
+                (_, true, false) => "LiberationSans-Bold.ttf",
             };
-            var path = Path.Combine(FontsDir, fileName);
+
+            var preferred = Path.Combine(FontsDir, Filename(italic));
+            var fallback = Path.Combine(FontsDir, Filename(false));
+            var path = italic && !File.Exists(preferred) ? fallback : preferred;
             return PdfFontFactory.CreateFont(path, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
         }
 

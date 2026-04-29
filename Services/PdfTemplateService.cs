@@ -300,15 +300,52 @@ public class PdfTemplateService
         canvas.ConcatMatrix(transform);
     }
 
+    /// <summary>
+    /// Parses a CSS-style hex color (#RRGGBB or #RGB). Returns null when the
+    /// input is empty/invalid so callers can fall back to a default.
+    /// </summary>
+    private static DeviceRgb? ParseHexColor(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return null;
+        var s = hex.TrimStart('#');
+        if (s.Length == 3)
+        {
+            // #RGB → #RRGGBB
+            s = $"{s[0]}{s[0]}{s[1]}{s[1]}{s[2]}{s[2]}";
+        }
+        if (s.Length != 6) return null;
+        try
+        {
+            var r = Convert.ToInt32(s.Substring(0, 2), 16);
+            var g = Convert.ToInt32(s.Substring(2, 2), 16);
+            var b = Convert.ToInt32(s.Substring(4, 2), 16);
+            return new DeviceRgb(r, g, b);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static void AddText(string value, PdfDocument pdfDoc, int pageNumber, Rectangle rect, PdfFieldDefinition field)
     {
         var page = pdfDoc.GetPage(pageNumber);
-        // var canvas = new Canvas(new PdfCanvas(page), page.GetPageSize());
-        var font = ResolveFont(field.FontName, field.FontWeight);
+        var font = ResolveFont(field.FontName, field.FontWeight, field.Italic);
         var horiz = field.HorizontalAlign ?? PdfHorizontalAlign.Left;
         var vert = field.VerticalAlign ?? PdfVerticalAlign.Center;
+        // Padding shrinks the inner rect used for the text paragraph; the
+        // outer `rect` is still used for background fill and border so the
+        // visual frame matches what the SPFx builder previewed.
+        var pad = Math.Max(0f, field.Padding);
+        var innerRect = new Rectangle(
+            rect.GetX() + pad,
+            rect.GetY() + pad,
+            Math.Max(0, rect.GetWidth() - 2 * pad),
+            Math.Max(0, rect.GetHeight() - 2 * pad));
+
+        var fontSize = field.FontSize <= 0 ? 12 : field.FontSize;
         var paragraph = new Paragraph(value)
-            .SetFontSize(field.FontSize <= 0 ? 12 : field.FontSize)
+            .SetFontSize(fontSize)
             .SetTextAlignment(
                 horiz switch
                 {
@@ -324,40 +361,16 @@ public class PdfTemplateService
                 _ => VerticalAlignment.MIDDLE
             })
             .SetMargin(0)
-            // .SetMultipliedLeading(1.1f)
-            .SetFixedPosition(pageNumber, rect.GetX(), rect.GetY(), rect.GetWidth());
+            .SetFixedPosition(pageNumber, innerRect.GetX(), innerRect.GetY(), innerRect.GetWidth());
 
         paragraph.SetFont(font);
-
-        // var textAlign = horiz switch
-        // {
-        //     "center" => TextAlignment.CENTER,
-        //     "right" => TextAlignment.RIGHT,
-        //     _ => TextAlignment.LEFT
-        // };
-        // var vAlign = vert switch
-        // {
-        //     "top" => VerticalAlignment.TOP,
-        //     "bottom" => VerticalAlignment.BOTTOM,
-        //     _ => VerticalAlignment.MIDDLE
-        // };
-
-        // var anchorX = horiz switch
-        // {
-        //     "center" => rect.GetX() + rect.GetWidth() / 2,
-        //     "right" => rect.GetX() + rect.GetWidth(),
-        //     _ => rect.GetX()
-        // };
-        // var anchorY = vert switch
-        // {
-        //     "top" => rect.GetY() + rect.GetHeight(),
-        //     "bottom" => rect.GetY(),
-        //     _ => rect.GetY() + rect.GetHeight() / 2
-        // };
-
-        // canvas.ShowTextAligned(paragraph, anchorX, anchorY, pageNumber, textAlign, vAlign, 0);
-        // canvas.Add(paragraph);
-        // canvas.Close();
+        if (field.Underline) paragraph.SetUnderline();
+        var textColor = ParseHexColor(field.TextColor);
+        if (textColor != null) paragraph.SetFontColor(textColor);
+        if (field.Multiline && field.LineHeight is { } lh && lh > 0)
+        {
+            paragraph.SetFixedLeading(lh);
+        }
 
         var pdfCanvas = new PdfCanvas(page);
         pdfCanvas.SaveState();
@@ -365,9 +378,38 @@ public class PdfTemplateService
         try
         {
             ApplyFieldRotation(pdfCanvas, rect, field.Rotation);
+
+            // Background fill + border are drawn in the rotated frame so the
+            // decoration follows the field's visual orientation.
+            var bgColor = ParseHexColor(field.BackgroundColor);
+            if (bgColor != null)
+            {
+                pdfCanvas.SaveState();
+                pdfCanvas.SetFillColor(bgColor);
+                pdfCanvas.Rectangle(rect.GetX(), rect.GetY(), rect.GetWidth(), rect.GetHeight());
+                pdfCanvas.Fill();
+                pdfCanvas.RestoreState();
+            }
+
             var canvas = new Canvas(pdfCanvas, rect);
             canvas.Add(paragraph);
             canvas.Close();
+
+            // Border drawn last so it sits above the text — matches the
+            // builder's CSS render order.
+            var borderStyle = (field.BorderStyle ?? "none").ToLowerInvariant();
+            if (borderStyle != "none" && field.BorderWidth > 0)
+            {
+                var borderColor = ParseHexColor(field.BorderColor) ?? new DeviceRgb(0, 0, 0);
+                pdfCanvas.SaveState();
+                pdfCanvas.SetStrokeColor(borderColor);
+                pdfCanvas.SetLineWidth(field.BorderWidth);
+                if (borderStyle == "dashed") pdfCanvas.SetLineDash(6f, 4f);
+                else if (borderStyle == "dotted") pdfCanvas.SetLineDash(1.5f, 2.5f);
+                pdfCanvas.Rectangle(rect.GetX(), rect.GetY(), rect.GetWidth(), rect.GetHeight());
+                pdfCanvas.Stroke();
+                pdfCanvas.RestoreState();
+            }
         }
         finally
         {
@@ -706,7 +748,7 @@ public class PdfTemplateService
         }
     }
 
-    private static iText.Kernel.Font.PdfFont ResolveFont(PdfFontName? fontName, PdfFontWeight? fontWeight)
+    private static iText.Kernel.Font.PdfFont ResolveFont(PdfFontName? fontName, PdfFontWeight? fontWeight, bool italic = false)
     {
         var resolvedName = fontName ?? PdfFontName.Helvetica;
         var weight = fontWeight ?? PdfFontWeight.Normal;
@@ -729,7 +771,7 @@ public class PdfTemplateService
             PdfFontName.TimesRoman => AppFontFamily.Serif,
             _ => AppFontFamily.Sans,
         };
-        return AppFonts.Load(family, isBold);
+        return AppFonts.Load(family, isBold, italic);
     }
 
     private static Rectangle NormalizeRectForRotation(PdfPage page, Rectangle rect)

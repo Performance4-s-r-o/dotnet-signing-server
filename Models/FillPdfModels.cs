@@ -141,6 +141,24 @@ public class PdfFieldDefinition
     // Counter-clockwise rotation in degrees, applied around the rect's center.
     // 0 = no rotation; common values are 90/180/270.
     public float Rotation { get; set; } = 0;
+    // Text decoration (text fields)
+    public bool Italic { get; set; } = false;
+    public bool Underline { get; set; } = false;
+    /// <summary>Hex color string (#RRGGBB). Empty/null ⇒ default black.</summary>
+    public string? TextColor { get; set; }
+    /// <summary>Hex color string (#RRGGBB). Empty/null ⇒ transparent.</summary>
+    public string? BackgroundColor { get; set; }
+    /// <summary>Inner padding in PT applied uniformly to all four sides.</summary>
+    public float Padding { get; set; } = 0;
+    /// <summary>When true, paragraphs wrap and `LineHeight` controls leading.</summary>
+    public bool Multiline { get; set; } = false;
+    /// <summary>Leading (PT) used when Multiline is true.</summary>
+    public float? LineHeight { get; set; }
+    /// <summary>Border style for text fields. "none" / "solid" / "dashed" / "dotted".</summary>
+    public string? BorderStyle { get; set; }
+    public float BorderWidth { get; set; } = 0;
+    /// <summary>Hex color string (#RRGGBB). Empty/null ⇒ default black.</summary>
+    public string? BorderColor { get; set; }
 }
 
 public class TableColumnDefinition
