@@ -30,7 +30,19 @@ public enum PdfFontName
     [JsonStringEnumMemberName("Symbol")]
     Symbol,
     [JsonStringEnumMemberName("ZapfDingbats")]
-    ZapfDingbats
+    ZapfDingbats,
+    // Open-source extras shipped in Fonts/. Names match what the SPFx
+    // builder dropdown emits.
+    [JsonStringEnumMemberName("Inter")]
+    Inter,
+    [JsonStringEnumMemberName("Source Sans 3")]
+    SourceSans3,
+    [JsonStringEnumMemberName("Lora")]
+    Lora,
+    [JsonStringEnumMemberName("Merriweather")]
+    Merriweather,
+    [JsonStringEnumMemberName("JetBrains Mono")]
+    JetBrainsMono
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

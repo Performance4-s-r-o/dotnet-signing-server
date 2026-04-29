@@ -11,32 +11,55 @@ namespace DotNetSigningServer.Services
     //
     // Liberation fonts are bundled as Content files under Fonts/ and copied
     // next to the binary at build time.
-    public enum AppFontFamily { Sans, Serif, Mono }
+    public enum AppFontFamily {
+        Sans,
+        Serif,
+        Mono,
+        // Open-source extras bundled in Fonts/. All four variants
+        // (Regular/Bold/Italic/BoldItalic) are shipped, so AppFonts.Load
+        // can serve any combination without falling back.
+        Inter,
+        SourceSans3,
+        Lora,
+        Merriweather,
+        JetBrainsMono,
+    }
 
     public static class AppFonts
     {
         private static readonly string FontsDir = Path.Combine(AppContext.BaseDirectory, "Fonts");
 
+        // Maps family enum to the file-name stem used in Fonts/. Suffix
+        // -Regular / -Bold / -Italic / -BoldItalic is appended at lookup.
+        private static string FamilyStem(AppFontFamily family) => family switch
+        {
+            AppFontFamily.Serif => "LiberationSerif",
+            AppFontFamily.Mono => "LiberationMono",
+            AppFontFamily.Inter => "Inter",
+            AppFontFamily.SourceSans3 => "SourceSans3",
+            AppFontFamily.Lora => "Lora",
+            AppFontFamily.Merriweather => "Merriweather",
+            AppFontFamily.JetBrainsMono => "JetBrainsMono",
+            _ => "LiberationSans",
+        };
+
         public static PdfFont Load(AppFontFamily family, bool bold = false, bool italic = false)
         {
-            // Liberation Italic TTFs aren't always shipped — fall back to the
-            // upright variant so missing italic doesn't break document
-            // generation. The `Load(family, bold)` overload still works.
-            string Filename(bool i) => (family, bold, i) switch
+            // Italic TTFs aren't guaranteed for every shipped family — fall
+            // back to the upright variant so a missing italic file doesn't
+            // break document generation. Bold is always shipped.
+            string Filename(bool i)
             {
-                (AppFontFamily.Serif, false, true) => "LiberationSerif-Italic.ttf",
-                (AppFontFamily.Serif, true, true) => "LiberationSerif-BoldItalic.ttf",
-                (AppFontFamily.Serif, false, false) => "LiberationSerif-Regular.ttf",
-                (AppFontFamily.Serif, true, false) => "LiberationSerif-Bold.ttf",
-                (AppFontFamily.Mono, false, true) => "LiberationMono-Italic.ttf",
-                (AppFontFamily.Mono, true, true) => "LiberationMono-BoldItalic.ttf",
-                (AppFontFamily.Mono, false, false) => "LiberationMono-Regular.ttf",
-                (AppFontFamily.Mono, true, false) => "LiberationMono-Bold.ttf",
-                (_, false, true) => "LiberationSans-Italic.ttf",
-                (_, true, true) => "LiberationSans-BoldItalic.ttf",
-                (_, false, false) => "LiberationSans-Regular.ttf",
-                (_, true, false) => "LiberationSans-Bold.ttf",
-            };
+                var stem = FamilyStem(family);
+                var variant = (bold, i) switch
+                {
+                    (true, true) => "BoldItalic",
+                    (true, false) => "Bold",
+                    (false, true) => "Italic",
+                    _ => "Regular",
+                };
+                return $"{stem}-{variant}.ttf";
+            }
 
             var preferred = Path.Combine(FontsDir, Filename(italic));
             var fallback = Path.Combine(FontsDir, Filename(false));
@@ -46,8 +69,13 @@ namespace DotNetSigningServer.Services
 
         public static AppFontFamily FamilyFromLegacyName(string? name) => name switch
         {
-            "Times" or "TimesRoman" or "TIMES_ROMAN" or "TIMES_BOLD" => AppFontFamily.Serif,
+            "Times" or "TimesRoman" or "TIMES_ROMAN" or "TIMES_BOLD" or "Times New Roman" => AppFontFamily.Serif,
             "Courier" or "COURIER" or "COURIER_BOLD" => AppFontFamily.Mono,
+            "Inter" => AppFontFamily.Inter,
+            "Source Sans 3" or "SourceSans3" or "Source Sans" => AppFontFamily.SourceSans3,
+            "Lora" => AppFontFamily.Lora,
+            "Merriweather" => AppFontFamily.Merriweather,
+            "JetBrains Mono" or "JetBrainsMono" => AppFontFamily.JetBrainsMono,
             _ => AppFontFamily.Sans,
         };
     }

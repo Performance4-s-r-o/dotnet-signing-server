@@ -769,6 +769,11 @@ public class PdfTemplateService
         {
             PdfFontName.Courier => AppFontFamily.Mono,
             PdfFontName.TimesRoman => AppFontFamily.Serif,
+            PdfFontName.Inter => AppFontFamily.Inter,
+            PdfFontName.SourceSans3 => AppFontFamily.SourceSans3,
+            PdfFontName.Lora => AppFontFamily.Lora,
+            PdfFontName.Merriweather => AppFontFamily.Merriweather,
+            PdfFontName.JetBrainsMono => AppFontFamily.JetBrainsMono,
             _ => AppFontFamily.Sans,
         };
         return AppFonts.Load(family, isBold, italic);
