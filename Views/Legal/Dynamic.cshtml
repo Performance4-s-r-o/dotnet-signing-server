@@ -1,0 +1,27 @@
+@model DotNetSigningServer.Services.LegalDocumentRendered
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
+@{
+    ViewData["Title"] = Model.Title;
+    var locale = string.Equals(Model.Locale, "cs", StringComparison.OrdinalIgnoreCase) ? "cs" : "en";
+    var effectiveFromLabel = locale == "cs"
+        ? $"Účinnost od {Model.EffectiveFrom.LocalDateTime:d. M. yyyy}"
+        : $"Effective from {Model.EffectiveFrom.LocalDateTime:MMMM d, yyyy}";
+    var versionLabel = locale == "cs" ? $"Verze {Model.Version}" : $"Version {Model.Version}";
+}
+
+<div class="legal-document">
+    <h1>@Model.Title</h1>
+    <p><em>@versionLabel · @effectiveFromLabel</em></p>
+
+    @if (!string.IsNullOrWhiteSpace(Model.Summary))
+    {
+        <div class="legal-document__summary">
+            <strong>@(locale == "cs" ? "Hlavní změny:" : "Key changes:")</strong>
+            <p>@Model.Summary</p>
+        </div>
+    }
+
+    @* Content was rendered server-side from Markdown by LegalDocumentsClient.
+       Source is the platform-controlled CMS — safe to emit as raw HTML. *@
+    @Html.Raw(Model.ContentHtml)
+</div>

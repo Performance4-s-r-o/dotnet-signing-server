@@ -74,6 +74,11 @@ builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();
 builder.Services.AddSingleton<IIpWhitelistService, IpWhitelistService>();
 builder.Services.AddHttpClient<LokiClient>();
 builder.Services.AddHttpClient<TemplateAiService>();
+builder.Services.AddHttpClient<LegalDocumentsClient>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/legal-cms-consumer");
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -96,6 +101,7 @@ builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("AI"));
 builder.Services.Configure<LimitsOptions>(builder.Configuration.GetSection("Limits"));
 builder.Services.Configure<SealOptions>(builder.Configuration.GetSection("Seal"));
 builder.Services.Configure<EvidenceOptions>(builder.Configuration.GetSection("Evidence"));
+builder.Services.Configure<LegalDocumentsCmsOptions>(builder.Configuration.GetSection("LegalDocumentsCms"));
 builder.Services.Configure<AppOptions>(builder.Configuration);
 builder.Services.AddAuthentication(options =>
     {
