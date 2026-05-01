@@ -378,6 +378,30 @@
   <data name="NavPdfTemplates" xml:space="preserve"><value>PDF Templates</value></data>
   <data name="NavApiTokens" xml:space="preserve"><value>API Tokens</value></data>
   <data name="NavDocs" xml:space="preserve"><value>Docs</value></data>
+  <data name="NavRequests" xml:space="preserve"><value>Requests</value></data>
+  <data name="RequestsTitle" xml:space="preserve"><value>API requests</value></data>
+  <data name="RequestsSubtitle" xml:space="preserve"><value>Detailed log of your recent API requests, credit usage, and failed operations. Document and signature contents are never recorded.</value></data>
+  <data name="RequestsCreditsRemaining" xml:space="preserve"><value>Credits remaining</value></data>
+  <data name="RequestsSuccess30d" xml:space="preserve"><value>Successful (30 d)</value></data>
+  <data name="RequestsCreditsSpent30d" xml:space="preserve"><value>Credits spent (30 d)</value></data>
+  <data name="RequestsErrors30d" xml:space="preserve"><value>Failed (30 d)</value></data>
+  <data name="RequestsFilterAll" xml:space="preserve"><value>All</value></data>
+  <data name="RequestsFilterSuccess" xml:space="preserve"><value>Successful</value></data>
+  <data name="RequestsFilterErrors" xml:space="preserve"><value>Failed only</value></data>
+  <data name="RequestsEmpty" xml:space="preserve"><value>No requests recorded yet.</value></data>
+  <data name="RequestsColTime" xml:space="preserve"><value>Time</value></data>
+  <data name="RequestsColOperation" xml:space="preserve"><value>Operation</value></data>
+  <data name="RequestsColStatus" xml:space="preserve"><value>Status</value></data>
+  <data name="RequestsColCredits" xml:space="preserve"><value>Credits</value></data>
+  <data name="RequestsColDuration" xml:space="preserve"><value>Duration</value></data>
+  <data name="RequestsColDetails" xml:space="preserve"><value>Details</value></data>
+  <data name="RequestsStatusSuccess" xml:space="preserve"><value>Success</value></data>
+  <data name="RequestsStatusError" xml:space="preserve"><value>Failed</value></data>
+  <data name="RequestsCreditsTooltip" xml:space="preserve"><value>Base cost {0} × tier {1}</value></data>
+  <data name="RequestsPaginationLabel" xml:space="preserve"><value>Showing {0}–{1} of {2}</value></data>
+  <data name="RequestsPaginationPrev" xml:space="preserve"><value>← Previous</value></data>
+  <data name="RequestsPaginationNext" xml:space="preserve"><value>Next →</value></data>
+  <data name="RequestsPrivacyNote" xml:space="preserve"><value>Privacy: only request metadata is stored (operation name, status, credits, duration). PDF contents, signatures, certificates, and other request bodies are never logged.</value></data>
   <data name="NavBilling" xml:space="preserve"><value>Billing</value></data>
   <data name="NavAccount" xml:space="preserve"><value>Account</value></data>
   <data name="NavSignOut" xml:space="preserve"><value>Sign out</value></data>
