@@ -378,6 +378,30 @@
   <data name="NavPdfTemplates" xml:space="preserve"><value>PDF šablony</value></data>
   <data name="NavApiTokens" xml:space="preserve"><value>API tokeny</value></data>
   <data name="NavDocs" xml:space="preserve"><value>Dokumentace</value></data>
+  <data name="NavRequests" xml:space="preserve"><value>Požadavky</value></data>
+  <data name="RequestsTitle" xml:space="preserve"><value>API požadavky</value></data>
+  <data name="RequestsSubtitle" xml:space="preserve"><value>Detailní přehled vašich nedávných API požadavků, spotřeby kreditů a neúspěšných operací. Obsah dokumentů ani podpisy se nezaznamenávají.</value></data>
+  <data name="RequestsCreditsRemaining" xml:space="preserve"><value>Zbývající kredity</value></data>
+  <data name="RequestsSuccess30d" xml:space="preserve"><value>Úspěšné (30 dní)</value></data>
+  <data name="RequestsCreditsSpent30d" xml:space="preserve"><value>Spotřeba kreditů (30 dní)</value></data>
+  <data name="RequestsErrors30d" xml:space="preserve"><value>Chyby (30 dní)</value></data>
+  <data name="RequestsFilterAll" xml:space="preserve"><value>Vše</value></data>
+  <data name="RequestsFilterSuccess" xml:space="preserve"><value>Úspěšné</value></data>
+  <data name="RequestsFilterErrors" xml:space="preserve"><value>Pouze chyby</value></data>
+  <data name="RequestsEmpty" xml:space="preserve"><value>Zatím žádné požadavky.</value></data>
+  <data name="RequestsColTime" xml:space="preserve"><value>Čas</value></data>
+  <data name="RequestsColOperation" xml:space="preserve"><value>Operace</value></data>
+  <data name="RequestsColStatus" xml:space="preserve"><value>Stav</value></data>
+  <data name="RequestsColCredits" xml:space="preserve"><value>Kredity</value></data>
+  <data name="RequestsColDuration" xml:space="preserve"><value>Doba</value></data>
+  <data name="RequestsColDetails" xml:space="preserve"><value>Detaily</value></data>
+  <data name="RequestsStatusSuccess" xml:space="preserve"><value>Úspěch</value></data>
+  <data name="RequestsStatusError" xml:space="preserve"><value>Chyba</value></data>
+  <data name="RequestsCreditsTooltip" xml:space="preserve"><value>Základní cena {0} × stupeň {1}</value></data>
+  <data name="RequestsPaginationLabel" xml:space="preserve"><value>Zobrazeno {0}–{1} z {2}</value></data>
+  <data name="RequestsPaginationPrev" xml:space="preserve"><value>← Předchozí</value></data>
+  <data name="RequestsPaginationNext" xml:space="preserve"><value>Další →</value></data>
+  <data name="RequestsPrivacyNote" xml:space="preserve"><value>Soukromí: ukládáme pouze metadata požadavků (název operace, stav, kredity, dobu trvání). Obsah PDF, podpisy, certifikáty a další těla požadavků se nikdy nelogují.</value></data>
   <data name="NavBilling" xml:space="preserve"><value>Fakturace</value></data>
   <data name="NavAccount" xml:space="preserve"><value>Účet</value></data>
   <data name="NavSignOut" xml:space="preserve"><value>Odhlásit se</value></data>

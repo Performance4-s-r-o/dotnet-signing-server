@@ -368,6 +368,30 @@
   <data name="NavPdfTemplates" xml:space="preserve"><value>Plantillas PDF</value></data>
   <data name="NavApiTokens" xml:space="preserve"><value>Tokens de API</value></data>
   <data name="NavDocs" xml:space="preserve"><value>Documentación</value></data>
+  <data name="NavRequests" xml:space="preserve"><value>Solicitudes</value></data>
+  <data name="RequestsTitle" xml:space="preserve"><value>Solicitudes de API</value></data>
+  <data name="RequestsSubtitle" xml:space="preserve"><value>Registro detallado de sus solicitudes de API recientes, uso de créditos y operaciones fallidas. El contenido de los documentos y las firmas nunca se registra.</value></data>
+  <data name="RequestsCreditsRemaining" xml:space="preserve"><value>Créditos restantes</value></data>
+  <data name="RequestsSuccess30d" xml:space="preserve"><value>Exitosas (30 d)</value></data>
+  <data name="RequestsCreditsSpent30d" xml:space="preserve"><value>Créditos usados (30 d)</value></data>
+  <data name="RequestsErrors30d" xml:space="preserve"><value>Fallidas (30 d)</value></data>
+  <data name="RequestsFilterAll" xml:space="preserve"><value>Todas</value></data>
+  <data name="RequestsFilterSuccess" xml:space="preserve"><value>Exitosas</value></data>
+  <data name="RequestsFilterErrors" xml:space="preserve"><value>Solo fallidas</value></data>
+  <data name="RequestsEmpty" xml:space="preserve"><value>Aún no hay solicitudes registradas.</value></data>
+  <data name="RequestsColTime" xml:space="preserve"><value>Hora</value></data>
+  <data name="RequestsColOperation" xml:space="preserve"><value>Operación</value></data>
+  <data name="RequestsColStatus" xml:space="preserve"><value>Estado</value></data>
+  <data name="RequestsColCredits" xml:space="preserve"><value>Créditos</value></data>
+  <data name="RequestsColDuration" xml:space="preserve"><value>Duración</value></data>
+  <data name="RequestsColDetails" xml:space="preserve"><value>Detalles</value></data>
+  <data name="RequestsStatusSuccess" xml:space="preserve"><value>Éxito</value></data>
+  <data name="RequestsStatusError" xml:space="preserve"><value>Fallida</value></data>
+  <data name="RequestsCreditsTooltip" xml:space="preserve"><value>Coste base {0} × nivel {1}</value></data>
+  <data name="RequestsPaginationLabel" xml:space="preserve"><value>Mostrando {0}–{1} de {2}</value></data>
+  <data name="RequestsPaginationPrev" xml:space="preserve"><value>← Anterior</value></data>
+  <data name="RequestsPaginationNext" xml:space="preserve"><value>Siguiente →</value></data>
+  <data name="RequestsPrivacyNote" xml:space="preserve"><value>Privacidad: solo se almacenan los metadatos de las solicitudes (nombre de la operación, estado, créditos, duración). El contenido de los PDF, firmas, certificados y otros cuerpos de solicitud nunca se registran.</value></data>
   <data name="NavBilling" xml:space="preserve"><value>Facturación</value></data>
   <data name="NavAccount" xml:space="preserve"><value>Cuenta</value></data>
   <data name="NavSignOut" xml:space="preserve"><value>Cerrar sesión</value></data>

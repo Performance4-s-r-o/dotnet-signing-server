@@ -73,6 +73,9 @@ namespace DotNetSigningServer.Data
                 .HasIndex(u => new { u.UserId, u.CreatedAt });
 
             modelBuilder.Entity<UsageRecord>()
+                .HasIndex(u => new { u.UserId, u.Status, u.CreatedAt });
+
+            modelBuilder.Entity<UsageRecord>()
                 .HasOne(r => r.User)
                 .WithMany(u => u.UsageRecords)
                 .HasForeignKey(r => r.UserId);

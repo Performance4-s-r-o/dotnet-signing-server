@@ -393,6 +393,10 @@ app.UseAuthorization();
 // Concurrency limiting runs AFTER authentication so ClaimsPrincipal carries the user id.
 app.UseMiddleware<UserConcurrencyMiddleware>();
 
+// Records UsageRecord rows for failed /api/* requests so users can see them on /Requests.
+// Successful billable requests are still logged from ApiControllerBase.DebitUserAsync.
+app.UseMiddleware<ApiRequestLoggingMiddleware>();
+
 app.MapControllers();
 
 // Health check endpoints

@@ -3,6 +3,12 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace DotNetSigningServer.Models;
 
+public enum UsageRecordStatus
+{
+    Success = 0,
+    Error = 1,
+}
+
 public class UsageRecord
 {
     [Key]
@@ -19,7 +25,7 @@ public class UsageRecord
     [ForeignKey(nameof(DocumentId))]
     public Document? Document { get; set; }
 
-    /// <summary>Actual credits debited (base cost × concurrency tier multiplier).</summary>
+    /// <summary>Actual credits debited (base cost × concurrency tier multiplier). 0 for failed requests.</summary>
     [Required]
     public int Count { get; set; } = 1;
 
@@ -32,6 +38,24 @@ public class UsageRecord
     /// <summary>Short operation name (e.g. "sign", "timestamp", "fill-pdf").</summary>
     [MaxLength(32)]
     public string? Operation { get; set; }
+
+    /// <summary>Outcome of the API call. Errors are stored with Count = 0 so billing aggregates remain unaffected.</summary>
+    [Required]
+    public UsageRecordStatus Status { get; set; } = UsageRecordStatus.Success;
+
+    /// <summary>Short, machine-readable error code (e.g. "TSA_UNREACHABLE", "PDF_TOO_LARGE").</summary>
+    [MaxLength(64)]
+    public string? ErrorCode { get; set; }
+
+    /// <summary>Human-readable error message. MUST NOT contain PDF bytes, signatures, or other sensitive payload.</summary>
+    [MaxLength(512)]
+    public string? ErrorMessage { get; set; }
+
+    /// <summary>HTTP status code returned to the client.</summary>
+    public int? HttpStatusCode { get; set; }
+
+    /// <summary>Wall-clock duration of the request in milliseconds.</summary>
+    public int? DurationMs { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

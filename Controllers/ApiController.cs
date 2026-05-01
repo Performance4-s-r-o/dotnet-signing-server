@@ -75,6 +75,7 @@ namespace DotNetSigningServer.Controllers
                     if (cookieUser != null)
                     {
                         if (!cookieUser.IsActive) return null;
+                        TagAuthenticatedUser(cookieUser.Id);
                         return cookieUser;
                     }
                 }
@@ -90,7 +91,16 @@ namespace DotNetSigningServer.Controllers
 
             var dbUser = await DbContext.Users.FirstOrDefaultAsync(u => u.Id == tokenUser.Id);
             if (dbUser != null && !dbUser.IsActive) return null;
+            if (dbUser != null) TagAuthenticatedUser(dbUser.Id);
             return dbUser;
+        }
+
+        private void TagAuthenticatedUser(Guid userId)
+        {
+            if (HttpContext != null)
+            {
+                HttpContext.Items[DotNetSigningServer.Middleware.ApiRequestLoggingMiddleware.AuthenticatedUserIdItemKey] = userId;
+            }
         }
 
         protected async Task<(User? user, ActionResult? error)> EnsureUserWithCreditsAsync(int requiredCredits = 1, string? originHeader = null)
