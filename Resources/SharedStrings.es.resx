@@ -254,6 +254,16 @@
   <data name="ConfirmNewPasswordLabel" xml:space="preserve"><value>Confirmar nueva contraseña</value></data>
   <data name="ResetPasswordButton" xml:space="preserve"><value>Restablecer contraseña</value></data>
 
+  <!-- Account / ChangePassword -->
+  <data name="ChangePasswordTitle" xml:space="preserve"><value>Cambiar contraseña</value></data>
+  <data name="ChangePasswordHeading" xml:space="preserve"><value>Cambiar contraseña</value></data>
+  <data name="ChangePasswordButton" xml:space="preserve"><value>Cambiar contraseña</value></data>
+  <data name="CurrentPasswordLabel" xml:space="preserve"><value>Contraseña actual</value></data>
+  <data name="CurrentPasswordIncorrect" xml:space="preserve"><value>La contraseña actual no es correcta.</value></data>
+  <data name="NewPasswordSameAsCurrent" xml:space="preserve"><value>La nueva contraseña debe ser distinta de la actual.</value></data>
+  <data name="PasswordChangedSuccess" xml:space="preserve"><value>Contraseña cambiada correctamente.</value></data>
+  <data name="Cancel" xml:space="preserve"><value>Cancelar</value></data>
+
   <!-- Account / TwoFactor -->
   <data name="TwoFactorTitle" xml:space="preserve"><value>Verificación en dos pasos</value></data>
   <data name="TwoFactorHeading" xml:space="preserve"><value>Introduzca el código de verificación</value></data>

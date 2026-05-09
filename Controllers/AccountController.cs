@@ -539,6 +539,72 @@ public class AccountController : Controller
         return RedirectToAction(nameof(Settings));
     }
 
+    [Authorize]
+    [HttpGet("/Account/ChangePassword")]
+    public async Task<IActionResult> ChangePassword()
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction(nameof(SignIn));
+
+        var user = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null)
+        {
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return RedirectToAction(nameof(SignIn));
+        }
+
+        return View(new ChangePasswordViewModel());
+    }
+
+    [Authorize]
+    [HttpPost("/Account/ChangePassword")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ChangePassword(ChangePasswordViewModel model)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction(nameof(SignIn));
+
+        if (!ModelState.IsValid) return View(model);
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null)
+        {
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return RedirectToAction(nameof(SignIn));
+        }
+
+        var rateLimitKey = $"changepw:{user.Id}";
+        if (IsRateLimited(rateLimitKey))
+        {
+            ModelState.AddModelError(string.Empty, _localizer["TooManySignInAttempts"]);
+            return View(model);
+        }
+
+        if (!_authService.VerifyPassword(model.CurrentPassword, user.PasswordHash, user.PasswordSalt))
+        {
+            ModelState.AddModelError(nameof(model.CurrentPassword), _localizer["CurrentPasswordIncorrect"]);
+            return View(model);
+        }
+
+        if (_authService.VerifyPassword(model.NewPassword, user.PasswordHash, user.PasswordSalt))
+        {
+            ModelState.AddModelError(nameof(model.NewPassword), _localizer["NewPasswordSameAsCurrent"]);
+            return View(model);
+        }
+
+        var (hash, salt) = _authService.HashPassword(model.NewPassword);
+        user.PasswordHash = hash;
+        user.PasswordSalt = salt;
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        await _dbContext.SaveChangesAsync();
+
+        // Re-issue cookie so SecurityStamp matches the new UpdatedAt
+        await SignInUser(user, rememberMe: false);
+
+        TempData["Info"] = _localizer["PasswordChangedSuccess"].Value;
+        return RedirectToAction(nameof(Index));
+    }
+
     private async Task SignInUser(User user, bool rememberMe)
     {
         var claims = new List<Claim>

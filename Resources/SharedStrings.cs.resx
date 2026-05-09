@@ -264,6 +264,16 @@
   <data name="ConfirmNewPasswordLabel" xml:space="preserve"><value>Potvrdit nové heslo</value></data>
   <data name="ResetPasswordButton" xml:space="preserve"><value>Obnovit heslo</value></data>
 
+  <!-- Account / ChangePassword -->
+  <data name="ChangePasswordTitle" xml:space="preserve"><value>Změna hesla</value></data>
+  <data name="ChangePasswordHeading" xml:space="preserve"><value>Změna hesla</value></data>
+  <data name="ChangePasswordButton" xml:space="preserve"><value>Změnit heslo</value></data>
+  <data name="CurrentPasswordLabel" xml:space="preserve"><value>Současné heslo</value></data>
+  <data name="CurrentPasswordIncorrect" xml:space="preserve"><value>Současné heslo není správné.</value></data>
+  <data name="NewPasswordSameAsCurrent" xml:space="preserve"><value>Nové heslo se musí lišit od současného.</value></data>
+  <data name="PasswordChangedSuccess" xml:space="preserve"><value>Heslo bylo úspěšně změněno.</value></data>
+  <data name="Cancel" xml:space="preserve"><value>Zrušit</value></data>
+
   <!-- Account / TwoFactor -->
   <data name="TwoFactorTitle" xml:space="preserve"><value>Dvoufaktorové ověření</value></data>
   <data name="TwoFactorHeading" xml:space="preserve"><value>Zadejte ověřovací kód</value></data>
