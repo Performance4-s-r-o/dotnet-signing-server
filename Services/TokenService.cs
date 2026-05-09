@@ -10,15 +10,33 @@ public class TokenService : ITokenService
 {
     private readonly byte[] _secret;
 
-    public TokenService(IOptions<TokenOptions> options)
+    public TokenService(IOptions<TokenOptions> options, IWebHostEnvironment env, ILogger<TokenService> logger)
     {
         var secret = options.Value.Secret;
-        if (string.IsNullOrWhiteSpace(secret) || string.Equals(secret, "change-this-secret", StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException("TokenOptions.Secret must be configured with a strong value.");
-        }
+        var isWeak = string.IsNullOrWhiteSpace(secret)
+                     || string.Equals(secret, "change-this-secret", StringComparison.Ordinal)
+                     || string.Equals(secret, "secret", StringComparison.Ordinal)
+                     || secret.Length < 32;
 
-        _secret = Encoding.UTF8.GetBytes(secret);
+        if (isWeak)
+        {
+            if (env.IsProduction())
+            {
+                throw new InvalidOperationException(
+                    "TokenOptions.Secret must be configured with a strong value (>= 32 characters) in production. " +
+                    "Set the Token__Secret environment variable.");
+            }
+
+            // Auto-generate a secure secret for development
+            var generated = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+            logger.LogWarning("Token secret is weak or missing — auto-generated a random secret for this session. " +
+                              "This is acceptable in development but MUST be configured in production.");
+            _secret = Encoding.UTF8.GetBytes(generated);
+        }
+        else
+        {
+            _secret = Encoding.UTF8.GetBytes(secret);
+        }
     }
 
     public (string PlaintextToken, byte[] TokenHash, DateTimeOffset? ExpiresAt) IssueToken(User user, string label, DateTimeOffset? expiresAt = null)

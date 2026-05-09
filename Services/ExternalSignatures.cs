@@ -1,6 +1,7 @@
 using iText.Kernel.Pdf;
 using iText.Signatures;
 using Org.BouncyCastle.Security;
+using Org.BouncyCastle.Crypto.Parameters;
 using System.IO;
 using System;
 using iText.Kernel.Crypto;
@@ -58,7 +59,14 @@ namespace DotNetSigningServer.ExternalSignatures
         {
             var sgn = new PdfPKCS7(null, _chain, "SHA256", false);
             byte[] hash = DigestAlgorithms.Digest(inputStream, DigestAlgorithms.SHA256);
-            sgn.SetExternalSignatureValue(_signature, null, "RSA");
+            var pubKey = _chain[0].GetPublicKey();
+            string algorithm = pubKey switch
+            {
+                RsaKeyParameters => "RSA",
+                ECPublicKeyParameters => "ECDSA",
+                _ => "RSA"
+            };
+            sgn.SetExternalSignatureValue(_signature, null, algorithm);
             return sgn.GetEncodedPKCS7(hash, PdfSigner.CryptoStandard.CMS, _tsaClient, null, null);
         }
 

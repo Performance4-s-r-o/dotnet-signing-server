@@ -58,7 +58,8 @@ button {
 
 .form-field input[type="text"],
 .form-field input[type="password"],
-.form-field input[type="file"] {
+.form-field input[type="file"],
+.form-field select {
   width: calc(100% - 20px);
   padding: 10px;
   border: 1px solid #ccc;

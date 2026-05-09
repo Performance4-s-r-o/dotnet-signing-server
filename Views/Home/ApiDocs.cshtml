@@ -1,70 +1,225 @@
+@using System.Text.Json
 @{
   ViewData["Title"] = "API Documentation";
+  var baseUrl = (ViewData["BaseUrl"]?.ToString() ?? string.Empty).TrimEnd('/');
+  var apiBase = string.IsNullOrWhiteSpace(baseUrl) ? "/api" : $"{baseUrl}/api";
+  var sampleRequest = new
+  {
+    pdfContent = "base64-pdf",
+    location = "Prague, CZ",
+    reason = "Approving contract",
+    signRect = new { x = 50, y = 120, width = 200, height = 50 },
+    signPageNumber = 1,
+    fieldName = "Signature1",
+    tsaUrl = "https://freetsa.org/tsr"
+  };
+  var curlPayload = JsonSerializer.Serialize(sampleRequest, new JsonSerializerOptions { WriteIndented = true });
+  var curlRequest = $"curl -X POST {apiBase}/presign -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlPayload}'";
+  var curlSign = $"curl -X POST {apiBase}/sign -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{{ \"id\": \"ef2c4d7a-...\", \"signedHash\": \"base64-signature\" }}'";
+  var curlSignPfxPayload = JsonSerializer.Serialize(new
+  {
+    pdfContent = "base64-pdf",
+    pfxContent = "base64-pfx",
+    pfxPassword = "password",
+    location = "Prague, CZ",
+    reason = "Internal approval",
+    signRect = new { x = 40, y = 100, width = 180, height = 45 },
+    signPageNumber = 1,
+    signImageContent = (string?)null,
+    fieldName = "Signature1"
+  }, new JsonSerializerOptions { WriteIndented = true });
+  var curlSignPfx = $"curl -X POST {apiBase}/sign-pfx -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlSignPfxPayload}'";
+  var curlTimestampPayload = JsonSerializer.Serialize(new
+  {
+    pdfContent = "base64-pdf",
+    location = "Prague, CZ",
+    reason = "Timestamp",
+    signRect = new { x = 30, y = 90, width = 180, height = 40 },
+    signPageNumber = 1,
+    fieldName = "Timestamp1",
+    tsaUrl = "https://freetsa.org/tsr"
+  }, new JsonSerializerOptions { WriteIndented = true });
+  var curlTimestamp = $"curl -X POST {apiBase}/timestamp -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlTimestampPayload}'";
+  var curlAttachmentPayload = JsonSerializer.Serialize(new
+  {
+    pdfContent = "base64-pdf",
+    attachmentContent = "base64-binary",
+    fileName = "terms.pdf",
+    description = "Terms and conditions",
+    mimeType = "application/pdf"
+  }, new JsonSerializerOptions { WriteIndented = true });
+  var curlAttachment = $"curl -X POST {apiBase}/attachment -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlAttachmentPayload}'";
+  var curlFillPayload = JsonSerializer.Serialize(new
+  {
+    templateId = "a1b2c3d4-…",
+    data = new[]
+  {
+new { data = new[] { new { fieldName = "Name", value = "Ada" } } },
+new { data = new[] { new { fieldName = "Name", value = "Grace" } } }
+}
+  }, new JsonSerializerOptions { WriteIndented = true });
+  var curlFillPdf = $"curl -X POST {apiBase}/fill-pdf -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlFillPayload}'";
+  var curlFindCodesPayload = JsonSerializer.Serialize(new
+  {
+    pdfContent = "base64-pdf",
+    codeType = "any"
+  }, new JsonSerializerOptions { WriteIndented = true });
+  var curlFindCodes = $"curl -X POST {apiBase}/find-codes -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlFindCodesPayload}'";
+  var curlTemplatesCreatePayload = JsonSerializer.Serialize(new
+  {
+    pdfContent = "base64-pdf",
+    templateName = "Invoice",
+    fields = new[]
+  {
+new { fieldName = "Name", page = 1, rect = new { x = 40, y = 700, width = 200, height = 32 }, type = "text" }
+}
+  }, new JsonSerializerOptions { WriteIndented = true });
+  var curlTemplatesCreate = $"curl -X POST {apiBase}/pdf-template -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlTemplatesCreatePayload}'";
+  var curlConvertPdfaPayload = JsonSerializer.Serialize(new
+  {
+    pdfContent = "base64-pdf",
+    conformance = "PDF/A-2B"
+  }, new JsonSerializerOptions { WriteIndented = true });
+  var curlConvertPdfa = $"curl -X POST {apiBase}/convert/pdfa -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{curlConvertPdfaPayload}'";
 }
 
-<h1>API Documentation</h1>
+<h1 class="content-box-title">API Documentation</h1>
 <p class="muted">
-  All endpoints are under the <code>/api</code> prefix and require a bearer token in the
-  <code>Authorization: Bearer &lt;token&gt;</code> header. Payloads are JSON; PDF and certificate inputs are base64
+  All endpoints live under <code>@apiBase</code> and expect JSON. PDFs, certificates, and attachments are base64
   strings.
-  Tokens can be created in the <a href="/ApiTokens">API Tokens</a> page after signing in.
-  Default responses are JSON objects; non-2xx responses include a <code>message</code> describing the issue.
+  <br />
+  Add <code>Authorization: Bearer &lt;token&gt;</code> (create tokens in <a href="/ApiTokens">API Tokens</a>).
 </p>
 
-<h2>Endpoints</h2>
-<table>
-  <thead>
-    <tr>
-      <th>Method</th>
-      <th>Path</th>
-      <th>Purpose</th>
-      <th>Credits</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>POST</td>
-      <td><code>/api/presign</code></td>
-      <td>Prepare a PDF for signing and return a hash to sign.</td>
-      <td>Consumes 0</td>
-    </tr>
-    <tr>
-      <td>POST</td>
-      <td><code>/api/sign</code></td>
-      <td>Finalize a prepared signing by submitting the signed hash.</td>
-      <td>Consumes 1</td>
-    </tr>
-    <tr>
-      <td>POST</td>
-      <td><code>/api/attachment</code></td>
-      <td>Add an embedded attachment/file to a PDF.</td>
-      <td>Consumes 1</td>
-    </tr>
-    <tr>
-      <td>POST</td>
-      <td><code>/api/sign-pfx</code></td>
-      <td>Sign a PDF directly using a PFX (PKCS#12) package.</td>
-      <td>Consumes 1</td>
-    </tr>
-    <tr>
-      <td>POST</td>
-      <td><code>/api/timestamp</code></td>
-      <td>Apply a timestamp signature to a PDF.</td>
-      <td>Consumes 1</td>
-    </tr>
-    <tr>
-      <td>POST</td>
-      <td><code>/api/find-codes</code></td>
-      <td>Scan a PDF for QR/DataMatrix/PDF417/Aztec barcodes.</td>
-      <td>Consumes 1</td>
-    </tr>
-  </tbody>
-</table>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:1rem 0;">
+  <div class="card">
+    <strong>Credits</strong>
+    <p class="muted" style="margin:6px 0 0;">
+      In the table below, you can find information on the credit costs for each API call.
+    </p>
+  </div>
+  <div class="card">
+    <strong>Limits</strong>
+    <p class="muted" style="margin:6px 0 0;">PDFs & templates: 20MB. Images: 1MB. Attachments: 10MB. Request body limit:
+      40MB. Too-large requests return “Request exceeded limit”.</p>
+  </div>
+  <div class="card">
+    <strong>Abuse protection</strong>
+    <p class="muted" style="margin:6px 0 0;">Concurrent API calls per user/IP are throttled; bursts return HTTP 429.</p>
+  </div>
+</div>
 
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
-<h2 style="margin-top:0;">Presign a PDF</h2>
-<p class="muted">Obtain a hash to sign with your private key. Include TSA details to embed a timestamp later.</p>
-<pre><code>POST /api/presign
+<h2 class="tokens-existing-title">Endpoint overview</h2>
+<div class="table-wrapper">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Method</th>
+        <th>Path</th>
+        <th>Purpose</th>
+        <th>Credits</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>POST</td>
+        <td><a href="#presign"><code>/api/presign</code></a></td>
+        <td>Prepare PDF and return hash to sign</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><a href="#sign"><code>/api/sign</code></a></td>
+        <td>Finalize presigned PDF</td>
+        <td>1</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><a href="#sign-pfx"><code>/api/sign-pfx</code></a></td>
+        <td>Sign directly with PFX</td>
+        <td>1</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><a href="#timestamp"><code>/api/timestamp</code></a></td>
+        <td>Apply TSA timestamp</td>
+        <td>1</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><a href="#attachment"><code>/api/attachment</code></a></td>
+        <td>Embed attachment</td>
+        <td>1</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><a href="#fill-pdf"><code>/api/fill-pdf</code></a></td>
+        <td>Fill a template with data</td>
+        <td>1 credit / 3 pages / output</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><a href="#convert-pdfa"><code>/api/convert/pdfa</code></a></td>
+        <td>Convert PDF to PDF/A (PDF/A-2B default)</td>
+        <td>1 credit / 3 pages</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><a href="#find-codes"><code>/api/find-codes</code></a></td>
+        <td>Scan for QR/DataMatrix/PDF417/Aztec</td>
+        <td>1 credit / 3 pages</td>
+      </tr>
+      <tr>
+        <td>POST</td>
+        <td><a href="#templates"><code>/api/pdf-template</code></a></td>
+        <td>Create template</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td>GET</td>
+        <td><a href="#templates"><code>/api/pdf-template</code></a></td>
+        <td>List templates</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td>GET</td>
+        <td><a href="#templates"><code>/api/pdf-template/{id}</code></a></td>
+        <td>Get template</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td>PUT</td>
+        <td><a href="#templates"><code>/api/pdf-template/{id}</code></a></td>
+        <td>Update template</td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td>DELETE</td>
+        <td><a href="#templates"><code>/api/pdf-template/{id}</code></a></td>
+        <td>Delete template</td>
+        <td>0</td>
+      </tr>
+      @* <tr>
+      <td>POST</td>
+      <td><code>/api/ai/detect-fields</code></td>
+      <td>Auto-detect fields (when AI is configured)</td>
+      <td>0</td>
+    </tr> *@
+    </tbody>
+  </table>
+</div>
+
+<h2 class="tokens-existing-title mt-4 mb-4">Endpoint details</h2>
+
+<div class="card mb-3" id="presign">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Presign</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="presign">Copy cURL</button>
+      <span id="curl-status-presign" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <pre class="code-block"><code>POST /api/presign
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
 
@@ -77,54 +232,40 @@ Content-Type: application/json
   "signPageNumber": 1,
   "signImageContent": "base64-png-optional",
   "fieldName": "Signature1",
-  "tsaUrl": "https://freetsa.org/tsr",
-  "tsaUsername": null,
-  "tsaPassword": null
-}</code></pre>
-<p><strong>Response</strong></p>
-<pre><code>{
-  "id": "ef2c4d7a-…",
-  "hashToSign": "6c3d…9f"
-}</code></pre>
+  "tsaUrl": "https://freetsa.org/tsr"
+}
+
+Response:
+{ "id": "ef2c4d7a-…", "hashToSign": "6c3d…9f" }</code></pre>
 </div>
 
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
-<h2 style="margin-top:0;">Finalize signing</h2>
-<p class="muted">Submit the signed hash returned by your HSM or client library.</p>
-<pre><code>POST /api/sign
+<div class="card mb-3" id="sign">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Finalize signing</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="sign">Copy cURL</button>
+      <span id="curl-status-sign" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <pre class="code-block"><code>POST /api/sign
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
 
-{
-  "id": "ef2c4d7a-…",
-  "signedHash": "base64-signature"
-}</code></pre>
-<p><strong>Response</strong></p>
-<pre><code>{ "result": "base64-pdf-with-signature" }</code></pre>
+{ "id": "ef2c4d7a-…", "signedHash": "base64-signature" }
+
+Response:
+{ "result": "base64-pdf-with-signature" }</code></pre>
 </div>
 
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
-<h2 style="margin-top:0;">Add attachment</h2>
-<p class="muted">Embed an additional file into an existing PDF. Attachment bytes should be base64 encoded.</p>
-<pre><code>POST /api/attachment
-Authorization: Bearer &lt;token&gt;
-Content-Type: application/json
-
-{
-  "pdfContent": "base64-pdf",
-  "attachmentContent": "base64-binary",
-  "fileName": "terms.pdf",
-  "description": "Terms and conditions",
-  "mimeType": "application/pdf"
-}</code></pre>
-<p><strong>Response</strong></p>
-<pre><code>{ "result": "base64-pdf-with-attachment" }</code></pre>
-</div>
-
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
-<h2 style="margin-top:0;">Sign with PFX</h2>
-<p class="muted">Send a PKCS#12 archive directly; the service signs and returns the PDF.</p>
-<pre><code>POST /api/sign-pfx
+<div class="card mb-3" id="sign-pfx">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Sign with PFX</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="signPfx">Copy cURL</button>
+      <span id="curl-status-signPfx" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <pre class="code-block"><code>POST /api/sign-pfx
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
 
@@ -138,15 +279,21 @@ Content-Type: application/json
   "signPageNumber": 1,
   "signImageContent": null,
   "fieldName": "Signature1"
-}</code></pre>
-<p><strong>Response</strong></p>
-<pre><code>{ "result": "base64-pdf-with-signature" }</code></pre>
+}
+
+Response:
+{ "result": "base64-pdf-with-signature" }</code></pre>
 </div>
 
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
-<h2 style="margin-top:0;">Apply timestamp</h2>
-<p class="muted">Embed a timestamp token; TSA credentials are optional for public endpoints.</p>
-<pre><code>POST /api/timestamp
+<div class="card mb-3" id="timestamp">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Apply timestamp</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="timestamp">Copy cURL</button>
+      <span id="curl-status-timestamp" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <pre class="code-block"><code>POST /api/timestamp
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
 
@@ -156,41 +303,200 @@ Content-Type: application/json
   "reason": "Timestamp",
   "signRect": { "x": 30, "y": 90, "width": 180, "height": 40 },
   "signPageNumber": 1,
-  "signImageContent": null,
   "fieldName": "Timestamp1",
-  "tsaUrl": "https://freetsa.org/tsr",
-  "tsaUsername": null,
-  "tsaPassword": null
-}</code></pre>
-<p><strong>Response</strong></p>
-<pre><code>{ "result": "base64-pdf-with-timestamp" }</code></pre>
+  "tsaUrl": "https://freetsa.org/tsr"
+}
+
+Response:
+{ "result": "base64-pdf-with-timestamp" }</code></pre>
 </div>
 
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-top:1.25rem;">
-<h2 style="margin-top:0;">Find barcodes in a PDF</h2>
-<p class="muted">Scan for QR, Data Matrix, PDF417, or Aztec codes. Set <code>codeType</code> to limit formats
-  (<code>qr</code>, <code>datamatrix</code>, <code>pdf417</code>, <code>aztec</code>, or <code>any</code>).</p>
-<pre><code>POST /api/find-codes
+<div class="card mb-3" id="attachment">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Add attachment</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="attachment">Copy cURL</button>
+      <span id="curl-status-attachment" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <pre class="code-block"><code>POST /api/attachment
 Authorization: Bearer &lt;token&gt;
 Content-Type: application/json
 
 {
   "pdfContent": "base64-pdf",
-  "codeType": "any"
+  "attachmentContent": "base64-binary",
+  "fileName": "terms.pdf",
+  "description": "Terms and conditions",
+  "mimeType": "application/pdf"
+}
+
+Response:
+{ "result": "base64-pdf-with-attachment" }</code></pre>
+</div>
+
+<div class="card mb-3" id="convert-pdfa">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Convert to PDF/A</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="convertPdfa">Copy cURL</button>
+      <span id="curl-status-convertPdfa" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <p class="muted" style="margin:0 0 6px;">Costs 1 credit per started 3 pages. Defaults to PDF/A-2B.</p>
+  <p class="muted" style="margin:0 0 6px;">Conformance options: PDF/A-1A, PDF/A-1B, PDF/A-2A, PDF/A-2B, PDF/A-2U, PDF/A-3A, PDF/A-3B, PDF/A-3U, PDF/A-4, PDF/A-4E, PDF/A-4F.</p>
+  <pre class="code-block"><code>POST /api/convert/pdfa
+Authorization: Bearer &lt;token&gt;
+Content-Type: application/json
+
+{
+  "pdfContent": "base64-pdf",
+  "conformance": "PDF/A-2B"
+}
+
+Response:
+{
+  "result": "base64-pdf-a",
+  "conformance": "PDF/A-2B"
 }</code></pre>
-<p><strong>Response</strong></p>
-<pre><code>{
+</div>
+
+
+<div class="card mb-3" id="fill-pdf">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Fill PDF from template</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="fillPdf">Copy cURL</button>
+      <span id="curl-status-fillPdf" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <p class="muted" style="margin:0 0 6px;">Costs 1 credit per started 3 pages per generated output (dataset).</p>
+  <pre class="code-block"><code>POST /api/fill-pdf
+Authorization: Bearer &lt;token&gt;
+Content-Type: application/json
+
+{
+  "templateId": "a1b2c3d4-…",
+  "data": [
+    { "data": [ { "fieldName": "Name", "value": "Ada" } ] },
+    { "data": [ { "fieldName": "Name", "value": "Grace" } ] }
+  ]
+}
+
+Response:
+{ "files": ["base64-pdf", "base64-pdf"], "templateId": "a1b2c3d4-…" }</code></pre>
+</div>
+
+<div class="card mb-3">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" id="find-codes" style="margin:0;">Find barcodes</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="findCodes">Copy cURL</button>
+      <span id="curl-status-findCodes" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <p class="muted" style="margin:0 0 6px;">Costs 1 credit per started 3 pages.</p>
+  <pre class="code-block"><code>POST /api/find-codes
+Authorization: Bearer &lt;token&gt;
+Content-Type: application/json
+
+{
+  "pdfContent": "base64-pdf",
+  "codeType": "any" // qr | datamatrix | pdf417 | aztec | any
+}
+
+Response:
+{
   "results": [
-    {
-      "value": "INV-2024-001",
-      "codeType": "QR_CODE",
-      "position": { "x": 212.5, "y": 412.0 },
-      "page": 2
-    }
+    { "value": "INV-2024-001", "codeType": "QR_CODE", "position": { "x": 212.5, "y": 412.0 }, "page": 2 }
   ]
 }</code></pre>
 </div>
 
+<div class="card mb-3" id="templates">
+  <div class="flex justify-between items-center mb-2">
+    <h3 class="card-title" style="margin:0;">Manage templates</h3>
+    <div class="flex items-center gap-2">
+      <button type="button" class="btn btn-small" data-curl-key="templates">Copy cURL</button>
+      <span id="curl-status-templates" class="muted text-small" style="margin:0;"></span>
+    </div>
+  </div>
+  <pre class="code-block"><code>// Create
+POST /api/pdf-template
+{
+  "pdfContent": "base64-pdf",
+  "templateName": "Invoice",
+  "fields": [
+    { "fieldName": "Name", "page": 1, "rect": { "x": 40, "y": 700, "width": 200, "height": 32 }, "type": "text" }
+  ]
+}
+
+// List
+GET /api/pdf-template
+// Get
+GET /api/pdf-template/{templateId}
+// Update
+PUT /api/pdf-template/{templateId}
+// Delete
+DELETE /api/pdf-template/{templateId}</code></pre>
+</div>
+
+@* <div class="card mb-3">
+<h3 class="card-title">AI: Detect fields (optional)</h3>
+<p class="muted" style="margin:0 0 6px;">Available when AI is configured in environment variables. Returns inferred fields for Template Builder.</p>
+<pre><code>POST /api/ai/detect-fields
+{
+  "pdfContent": "base64-pdf",
+  "prompt": "Detect fields for an invoice."
+}
+
+Response:
+{
+  "fields": [
+    { "fieldName": "Total", "page": 1, "rect": { "x": 420, "y": 110, "width": 120, "height": 28 }, "type": "text" }
+  ]
+}</code></pre>
+</div> *@
+
 <p class="muted" style="margin-top:1.5rem;">
-  Need help? Reach out to support with the request ID or timestamp from your logs, and include the endpoint path.
+  Need help? Reach out with the endpoint path, timestamp, and request ID from your logs.
 </p>
+
+<script>
+  (() => {
+    const curlMap = {
+      presign: @Html.Raw(JsonSerializer.Serialize(curlRequest)),
+      sign: @Html.Raw(JsonSerializer.Serialize(curlSign)),
+      signPfx: @Html.Raw(JsonSerializer.Serialize(curlSignPfx)),
+      timestamp: @Html.Raw(JsonSerializer.Serialize(curlTimestamp)),
+      attachment: @Html.Raw(JsonSerializer.Serialize(curlAttachment)),
+      convertPdfa: @Html.Raw(JsonSerializer.Serialize(curlConvertPdfa)),
+      fillPdf: @Html.Raw(JsonSerializer.Serialize(curlFillPdf)),
+      findCodes: @Html.Raw(JsonSerializer.Serialize(curlFindCodes)),
+      templates: @Html.Raw(JsonSerializer.Serialize(curlTemplatesCreate))
+    };
+
+    const copy = async (text, statusTarget) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        if (statusTarget) {
+          statusTarget.textContent = "Copied";
+          setTimeout(() => statusTarget.textContent = "", 2000);
+        }
+      } catch (e) {
+        if (statusTarget) statusTarget.textContent = "Copy not available";
+      }
+    };
+
+    document.querySelectorAll('button[data-curl-key]').forEach((btn) =>
+    {
+      const key = btn.dataset.curlKey;
+      const statusId = `curl-status-${key}`;
+      const statusEl = document.getElementById(statusId);
+      btn.addEventListener("click", () => {
+        const text = curlMap[key];
+        copy(text, statusEl);
+      });
+    });
+  })();
+</script>

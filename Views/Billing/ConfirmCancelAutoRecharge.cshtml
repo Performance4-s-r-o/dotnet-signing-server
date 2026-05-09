@@ -1,0 +1,17 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
+@{
+    ViewData["Title"] = L["CancelAutoRechargeTitle"].Value;
+}
+
+<div style="font-family:sans-serif;max-width:480px;margin:60px auto;text-align:center">
+    <h2>@L["CancelAutoRechargeTitle"]</h2>
+    <p>@L["CancelAutoRechargeQuestion"]</p>
+    <p style="color:#666;font-size:14px">@L["CancelAutoRechargeNote"]</p>
+    <form method="post" action="/Billing/AutoRecharge/Cancel" style="margin-top:24px">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="token" value="@ViewBag.Token" />
+        <button type="submit" style="padding:12px 32px;background:#dc3545;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:16px">
+            @L["CancelAutoRechargeButton"]
+        </button>
+    </form>
+</div>

@@ -1,13 +1,18 @@
 @model IEnumerable<DotNetSigningServer.Models.ApiToken>
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
     ViewData["Title"] = "API Tokens";
+    int? maxConcurrent = ViewBag.MaxConcurrentOperations as int?;
+    int? queueTimeout = ViewBag.ConcurrencyQueueTimeoutSeconds as int?;
 }
-
-<h1>API Tokens</h1>
 
 @if (TempData["Error"] != null)
 {
     <div class="flash error">@TempData["Error"]</div>
+}
+@if (TempData["Info"] != null)
+{
+    <div class="flash info">@TempData["Info"]</div>
 }
 @if (TempData["NewToken"] != null)
 {
@@ -17,102 +22,189 @@
     </div>
 }
 
-<h3>Issue new token</h3>
-<form method="post" action="/ApiTokens">
-    <label>Label</label>
-    <input type="text" name="label" placeholder="e.g., CI token" required />
-    <label>Expires At (optional)</label>
-    <input type="datetime-local" name="expiresAt" />
-    <label>Usage</label>
-    <div style="display:flex;gap:1rem;align-items:center;">
-        <label style="display:flex;align-items:center;gap:0.35rem;width: 25%;">
-            <input type="radio" name="usageType" value="server" checked="" style="
-                flex-basis: 20px;
-                margin: 0;
-            "> Server-to-server
-        </label>
-        <label style="display:flex;align-items:center;gap:0.35rem;width: 25%;">
-            <input type="radio" name="usageType" value="web" style="
-                flex-basis: 20px;
-                margin: 0;
-            "> Browser-to-server
-        </label>
-    </div>
-    <div id="origin-block" style="margin-top:1rem; display:none;">
-        <label>Allowed Origins (one per line, localhost always allowed)</label>
-        <textarea name="allowedOrigins" rows="4" placeholder="https://app.example.com&#10;https://admin.example.com"
-            style="margin-top:0.25rem;width:100%;"></textarea>
-        <p class="muted" style="margin:0.35rem 0 0;">Browser tokens require a matching <code>Origin</code> header.
-            Localhost is always permitted for testing.</p>
-    </div>
-    <button type="submit" style="margin-top:1.5rem;margin-bottom:2rem;">Create token</button>
-    @Html.AntiForgeryToken()
-</form>
+<main>
+    <h1 class="content-box-title">API Tokens</h1>
 
-<h3>Existing tokens</h3>
-<table>
-    <thead>
-        <tr>
-            <th>Label</th>
-            <th>Created</th>
-            <th>Expires</th>
-            <th>Revoked</th>
-            <th>Type</th>
-            <th>Origins</th>
-            <th>Action</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var token in Model)
-        {
-            <tr>
-                <td>@token.Label</td>
-                <td>@token.CreatedAt.ToString("u")</td>
-                <td>@(token.ExpiresAt?.ToString("u") ?? "-")</td>
-                <td>@(token.RevokedAt?.ToString("u") ?? "-")</td>
-                <td>@(token.IsBrowserToken ? "Browser" : "Server")</td>
-                <td style="max-width:220px;white-space:pre-wrap;">@(token.AllowedOrigins ?? "-")</td>
-                <td>
-                    @if (token.RevokedAt == null)
+    <!-- Concurrency limit (per-user) -->
+    <div class="tokens-form" style="margin-bottom:1.5rem">
+        <h2 class="tokens-form-title">@L["ConcurrencyLimitTitle"]</h2>
+        <p class="muted" style="margin-bottom:0.75rem">
+            @L["ConcurrencyLimitDescription"]
+            <a href="/Billing#pricing">@L["SeePricing"]</a>
+        </p>
+        <form method="post" action="/ApiTokens/MaxConcurrent" style="display:flex;gap:0.75rem;align-items:flex-end;flex-wrap:wrap">
+            @Html.AntiForgeryToken()
+            <div class="tokens-form-group" style="flex:0 0 auto">
+                <label for="max-concurrent" class="tokens-label">@L["MaxParallelRequests"]</label>
+                <input type="number" id="max-concurrent" name="maxConcurrent" class="tokens-input"
+                       min="1" max="50" placeholder="@L["ConcurrencyDefault"]"
+                       value="@(maxConcurrent?.ToString() ?? "")" style="width:120px" />
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-bottom:0.125rem">@L["SaveLimit"]</button>
+        </form>
+    </div>
+
+    <!-- Queue timeout (long polling vs 429) -->
+    <div class="tokens-form" style="margin-bottom:1.5rem">
+        <h2 class="tokens-form-title">@L["ConcurrencyQueueTimeout"]</h2>
+        <p class="muted" style="margin-bottom:0.75rem">@L["ConcurrencyQueueTimeoutDescription"]</p>
+        <form method="post" action="/ApiTokens/QueueTimeout" style="display:flex;gap:0.75rem;align-items:flex-end;flex-wrap:wrap">
+            @Html.AntiForgeryToken()
+            <div class="tokens-form-group" style="flex:0 0 auto">
+                <label for="queue-timeout" class="tokens-label">@L["ConcurrencyQueueTimeout"]</label>
+                <input type="number" id="queue-timeout" name="queueTimeoutSeconds" class="tokens-input"
+                       min="0" placeholder="@L["ConcurrencyQueueDefault"]"
+                       value="@(queueTimeout?.ToString() ?? "")" style="width:120px" />
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-bottom:0.125rem">@L["SaveLimit"]</button>
+            @if (queueTimeout.HasValue)
+            {
+                <button type="submit" name="queueTimeoutSeconds" value="-1" class="btn" style="margin-bottom:0.125rem">@L["UseGlobalDefault"]</button>
+            }
+        </form>
+    </div>
+
+    <!-- Issue New Token Form -->
+    <div class="tokens-form">
+        <h2 class="tokens-form-title">Issue new token</h2>
+
+        <form method="post" action="/ApiTokens">
+            <div class="tokens-form-row">
+                <div class="tokens-form-group">
+                    <label for="token-label" class="tokens-label">Label</label>
+                    <input type="text" id="token-label" name="label" class="tokens-input" placeholder="e.g., CI token" required maxlength="128">
+                    @if (TempData["LabelError"] != null)
                     {
-                        <div style="display:flex;gap:0.4rem;">
-                            <form method="post" action="/ApiTokens/@token.Id/revoke" style="display:inline">
-                                @Html.AntiForgeryToken()
-                                <button type="submit">Revoke</button>
-                            </form>
-                            <form method="post" action="/ApiTokens/@token.Id/delete" style="display:inline">
-                                @Html.AntiForgeryToken()
-                                <button type="submit">Delete</button>
-                            </form>
-                        </div>
+                        <span class="form-validation">@TempData["LabelError"]</span>
                     }
-                    else
-                    {
-                        <div style="display:flex;gap:0.4rem;">
-                            <span class="muted">Revoked</span>
-                            <form method="post" action="/ApiTokens/@token.Id/delete" style="display:inline">
-                                @Html.AntiForgeryToken()
-                                <button type="submit">Delete</button>
-                            </form>
-                        </div>
-                    }
-                </td>
-            </tr>
-        }
-    </tbody>
-</table>
+                </div>
+
+                <div class="tokens-form-group">
+                    <label for="token-expires" class="tokens-label">Expires At (optional)</label>
+                    <input type="datetime-local" id="token-expires" name="expiresAt" class="tokens-input">
+                </div>
+            </div>
+
+            <div class="tokens-usage">
+                <span class="tokens-usage-label">Usage</span>
+                <div class="tokens-usage-options">
+                    <label class="tokens-radio-label">
+                        <input type="radio" name="usageType" value="server" checked>
+                        Server-to-server
+                    </label>
+                    <label class="tokens-radio-label">
+                        <input type="radio" name="usageType" value="web">
+                        Browser-to-server
+                    </label>
+                </div>
+            </div>
+
+            <div id="origin-block" class="tokens-form-group">
+                <label class="tokens-label">Allowed Origins (one per line, localhost always allowed)</label>
+                <textarea name="allowedOrigins" rows="4"
+                    placeholder="https://app.example.com&#10;https://admin.example.com" class="tokens-input"></textarea>
+                <p class="muted" style="margin-bottom: 0.5rem;">Browser tokens require a matching <code>Origin</code>
+                    header.
+                    Localhost is always permitted for testing.</p>
+            </div>
+
+            <div id="ip-block" class="tokens-form-group">
+                <label class="tokens-label">Allowed IPs (optional, one per line, max 20)</label>
+                <textarea name="allowedIps" rows="4"
+                    placeholder="203.0.113.10&#10;198.51.100.0/24&#10;2001:db8::1" class="tokens-input"></textarea>
+                <p class="muted" style="margin-bottom: 0.5rem;">Restrict this token to specific IP addresses or CIDR
+                    subnets.
+                    Leave empty to allow any IP.</p>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Create token</button>
+            @Html.AntiForgeryToken()
+        </form>
+    </div>
+
+    <section class="tokens-existing">
+        <h2 class="tokens-existing-title">Existing tokens</h2>
+        <div class="table-wrapper">
+            @if (!Model.Any())
+            {
+                <p class="muted p-4">No API tokens yet. Create one to get started.</p>
+            }
+            else
+            {
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Label</th>
+                            <th>Created</th>
+                            <th>Expires</th>
+                            <th>Revoked</th>
+                            <th>Type</th>
+                            <th>Origins</th>
+                            <th>Allowed IPs</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var token in Model)
+                        {
+                            <tr>
+                                <td>@token.Label</td>
+                                <td>@token.CreatedAt.ToLocalTime().ToString("g")</td>
+                                <td>@(token.ExpiresAt?.ToLocalTime().ToString("g") ?? "-")</td>
+                                <td>@(token.RevokedAt?.ToLocalTime().ToString("g") ?? "-")</td>
+                                <td>@(token.IsBrowserToken ? "Browser" : "Server")</td>
+                                <td style="max-width:220px;white-space:pre-wrap;">@(token.AllowedOrigins ?? "-")</td>
+                                <td style="max-width:220px;white-space:pre-wrap;">@(token.AllowedIps ?? "-")</td>
+                                <td>
+                                    @if (token.RevokedAt == null)
+                                    {
+                                        <div style="display:flex;gap:0.8rem;">
+                                            <form method="post" action="/ApiTokens/@token.Id/revoke" style="display:inline">
+                                                <button class="btn-token-action btn-token-action--revoke"
+                                                    type="submit">Revoke</button>
+                                                @Html.AntiForgeryToken()
+                                            </form>
+                                            <form method="post" action="/ApiTokens/@token.Id/delete" style="display:inline">
+                                                <button class="btn-token-action btn-token-action--delete"
+                                                    type="submit">Delete</button>
+                                                @Html.AntiForgeryToken()
+                                            </form>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div style="display:flex;gap:0.8rem;align-items:center;">
+                                            <span class="tokens-status tokens-status--revoked">Revoked</span>
+                                            @Html.AntiForgeryToken()
+                                            <form method="post" action="/ApiTokens/@token.Id/delete" style="display:inline">
+                                                <button class="btn-token-action btn-token-action--delete"
+                                                    type="submit">Delete</button>
+                                                @Html.AntiForgeryToken()
+                                            </form>
+                                        </div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </section>
 
 @section Scripts {
-    <script>
-        (function () {
-            const radios = document.querySelectorAll('input[name="usageType"]');
-            const originBlock = document.getElementById('origin-block');
-            function toggleOrigins() {
-                const val = document.querySelector('input[name="usageType"]:checked')?.value;
-                originBlock.style.display = val === 'web' ? 'block' : 'none';
-            }
-            radios.forEach(r => r.addEventListener('change', toggleOrigins));
-            toggleOrigins();
-        })();
-    </script>
+        <script>
+            (function () {
+                const radios = document.querySelectorAll('input[name="usageType"]');
+                const originBlock = document.getElementById('origin-block');
+                const ipBlock = document.getElementById('ip-block');
+                function toggleBlocks() {
+                    const val = document.querySelector('input[name="usageType"]:checked')?.value;
+                    originBlock.style.display = val === 'web' ? 'flex' : 'none';
+                    ipBlock.style.display = val === 'server' ? 'flex' : 'none';
+                }
+                radios.forEach(r => r.addEventListener('change', toggleBlocks));
+                toggleBlocks();
+            })();
+        </script>
 }

@@ -14,5 +14,6 @@ namespace DotNetSigningServer.Models
         public string? TsaUsername { get; set; }
         public string? TsaPassword { get; set; }
         public Guid? UserId { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

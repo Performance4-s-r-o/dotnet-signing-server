@@ -29,7 +29,46 @@ public class User
     public string? EmailOtpCode { get; set; }
     public DateTimeOffset? EmailOtpExpiresAt { get; set; }
 
+    [MaxLength(128)]
+    public string? PasswordResetToken { get; set; }
+    public DateTimeOffset? PasswordResetExpiresAt { get; set; }
+
     public int CreditsRemaining { get; set; } = 10;
+
+    public bool AutoRechargeEnabled { get; set; } = false;
+    public int AutoRechargeQuantity { get; set; } = 0;
+    public decimal AutoRechargePricePer100 { get; set; } = 0m;
+    [MaxLength(128)]
+    public string? AutoRechargeCancelToken { get; set; }
+    public DateTimeOffset? PriceChangeNotifiedAt { get; set; }
+
+    public bool EmailNotificationsEnabled { get; set; } = true;
+
+    /// <summary>Max parallel API operations. NULL = use default (3).</summary>
+    public int? MaxConcurrentOperations { get; set; }
+
+    /// <summary>
+    /// Seconds to wait for a free concurrency slot when the limit is reached.
+    /// 0 = reject immediately with 429. NULL = use BillingOptions.ConcurrencyQueueTimeoutSeconds.
+    /// </summary>
+    public int? ConcurrencyQueueTimeoutSeconds { get; set; }
+
+    /// <summary>Admin users can access /Admin pages (user management, enterprise toggle).</summary>
+    public bool IsAdmin { get; set; } = false;
+
+    /// <summary>
+    /// Enterprise users bypass credit checks and are billed manually based on tracked usage.
+    /// When enabled: auto-recharge is disabled, saved cards are detached, CreditsRemaining is ignored.
+    /// </summary>
+    public bool IsEnterprise { get; set; } = false;
+
+    /// <summary>
+    /// Timestamp when enterprise mode was last enabled. Usage shown in the enterprise billing
+    /// view is filtered to records created at or after this time — usage before the switch is
+    /// considered separately (pay-as-you-go credits). NULL = enterprise was never enabled, or
+    /// the flag predates this tracking (treated as "since account creation").
+    /// </summary>
+    public DateTimeOffset? EnterpriseEnabledAt { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;

@@ -1,6 +1,9 @@
+using System.Security.Policy;
 using System.Text.RegularExpressions;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
 
 namespace DotNetSigningServer.Services;
 
@@ -21,7 +24,7 @@ public class AllowedOriginService : IAllowedOriginService
         _scopeFactory = scopeFactory;
     }
 
-    public bool IsOriginAllowed(string origin)
+    public bool IsOriginAllowed(string origin, HttpContext context)
     {
         var normalized = NormalizeOrigin(origin);
         if (normalized == null)
@@ -34,7 +37,9 @@ public class AllowedOriginService : IAllowedOriginService
             return true;
         }
 
-        var allowedOrigins = LoadAllowedOrigins();
+        var allowedOrigins = LoadAllowedOrigins().Concat(LocalOrigins).Concat(
+            [context.Request.Scheme + "://" + context.Request.Host.ToString()]
+        ).ToHashSet();
         return allowedOrigins.Contains(normalized);
     }
 

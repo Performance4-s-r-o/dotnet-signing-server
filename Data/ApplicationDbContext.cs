@@ -17,10 +17,16 @@ namespace DotNetSigningServer.Data
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<Payment> Payments { get; set; }
         public DbSet<WebhookEvent> WebhookEvents { get; set; }
+        public DbSet<StoredPdfTemplate> StoredPdfTemplates { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            if (Database.IsNpgsql())
+            {
+                modelBuilder.HasDefaultSchema("dotnet_signing");
+            }
 
             if (Database.IsSqlite())
             {
@@ -47,9 +53,16 @@ namespace DotNetSigningServer.Data
                 .HasIndex(t => t.TokenHash);
 
             modelBuilder.Entity<ApiToken>()
+                .HasIndex(t => t.TokenPrefix);
+
+            modelBuilder.Entity<ApiToken>()
                 .HasOne(t => t.User)
                 .WithMany(u => u.ApiTokens)
                 .HasForeignKey(t => t.UserId);
+
+            modelBuilder.Entity<SigningData>()
+                .Property(s => s.UserId)
+                .HasColumnType("uuid");
 
             modelBuilder.Entity<Document>()
                 .HasOne(d => d.User)
@@ -58,6 +71,9 @@ namespace DotNetSigningServer.Data
 
             modelBuilder.Entity<UsageRecord>()
                 .HasIndex(u => new { u.UserId, u.CreatedAt });
+
+            modelBuilder.Entity<UsageRecord>()
+                .HasIndex(u => new { u.UserId, u.Status, u.CreatedAt });
 
             modelBuilder.Entity<UsageRecord>()
                 .HasOne(r => r.User)

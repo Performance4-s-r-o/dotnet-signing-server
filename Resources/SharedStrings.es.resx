@@ -1,0 +1,415 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+
+  <!-- Account -->
+  <data name="EmailAlreadyRegistered" xml:space="preserve"><value>El correo electrónico ya está registrado.</value></data>
+  <data name="CheckEmailVerification" xml:space="preserve"><value>Por favor, revise su correo electrónico para obtener el enlace de verificación.</value></data>
+  <data name="VerificationEmailFailed" xml:space="preserve"><value>No se pudo enviar el correo de verificación. Por favor, contacte con soporte o inténtelo de nuevo más tarde.</value></data>
+  <data name="TooManySignInAttempts" xml:space="preserve"><value>Demasiados intentos de inicio de sesión. Por favor, inténtelo de nuevo en un minuto.</value></data>
+  <data name="InvalidCredentials" xml:space="preserve"><value>Credenciales no válidas.</value></data>
+  <data name="AccountDeactivated" xml:space="preserve"><value>Su cuenta ha sido desactivada.</value></data>
+  <data name="VerifyEmailFirst" xml:space="preserve"><value>Por favor, verifique su correo electrónico antes de iniciar sesión.</value></data>
+  <data name="TwoFactorCodeSent" xml:space="preserve"><value>Hemos enviado un código de 6 dígitos a su correo electrónico.</value></data>
+  <data name="TwoFactorCodeFailed" xml:space="preserve"><value>No se pudo enviar el código de verificación. Por favor, inténtelo de nuevo.</value></data>
+  <data name="AccessDenied" xml:space="preserve"><value>Acceso denegado</value></data>
+  <data name="EmailVerified" xml:space="preserve"><value>Correo electrónico verificado. Ha iniciado sesión correctamente.</value></data>
+  <data name="InvalidVerificationToken" xml:space="preserve"><value>Token de verificación no válido o caducado.</value></data>
+  <data name="VerificationTokenRequired" xml:space="preserve"><value>El token de verificación es obligatorio.</value></data>
+  <data name="EmailAndCodeRequired" xml:space="preserve"><value>El correo electrónico y el código son obligatorios.</value></data>
+  <data name="TooManyVerificationAttempts" xml:space="preserve"><value>Demasiados intentos de verificación. Por favor, inténtelo de nuevo en un minuto.</value></data>
+  <data name="VerificationCodeInvalid" xml:space="preserve"><value>El código de verificación no es válido o ha caducado.</value></data>
+  <data name="SettingsSaved" xml:space="preserve"><value>Configuración guardada.</value></data>
+  <data name="PasswordResetEmailSent" xml:space="preserve"><value>Si existe una cuenta con ese correo electrónico, le hemos enviado un enlace para restablecer la contraseña.</value></data>
+  <data name="InvalidResetToken" xml:space="preserve"><value>Enlace para restablecer la contraseña no válido o caducado.</value></data>
+  <data name="PasswordResetSuccess" xml:space="preserve"><value>Su contraseña ha sido restablecida. Ya puede iniciar sesión.</value></data>
+
+  <!-- API Tokens -->
+  <data name="LabelRequired" xml:space="preserve"><value>La etiqueta es obligatoria.</value></data>
+  <data name="LabelTooLong" xml:space="preserve"><value>La etiqueta debe tener 128 caracteres o menos.</value></data>
+  <data name="ExpirationMustBeFuture" xml:space="preserve"><value>La fecha de expiración debe ser futura.</value></data>
+  <data name="UserNotFound" xml:space="preserve"><value>Usuario no encontrado.</value></data>
+  <data name="OriginsRequired" xml:space="preserve"><value>Se requiere al menos un origen válido (https o localhost) para los tokens de navegador.</value></data>
+  <data name="InvalidIpAddresses" xml:space="preserve"><value>Dirección(es) IP no válida(s): {0}</value></data>
+  <data name="MaxIpEntries" xml:space="preserve"><value>Se permiten un máximo de 20 entradas de IP.</value></data>
+  <data name="TokenNotFound" xml:space="preserve"><value>Token no encontrado.</value></data>
+  <data name="TokenDeleted" xml:space="preserve"><value>Token eliminado.</value></data>
+  <data name="TokenCreated" xml:space="preserve"><value>Token creado.</value></data>
+
+  <!-- Billing -->
+  <data name="StripeInvoicesError" xml:space="preserve"><value>No se pudieron cargar las facturas de Stripe.</value></data>
+  <data name="StripeCustomerError" xml:space="preserve"><value>No se pudo crear el cliente de Stripe. Por favor, inténtelo de nuevo.</value></data>
+  <data name="SelectAtLeastOneDocument" xml:space="preserve"><value>Seleccione al menos 1 documento para comprar créditos.</value></data>
+  <data name="InvalidDocumentBundle" xml:space="preserve"><value>Paquete de documentos seleccionado no válido.</value></data>
+  <data name="CheckoutStartFailed" xml:space="preserve"><value>No se pudo iniciar el proceso de pago.</value></data>
+  <data name="PaymentStartFailed" xml:space="preserve"><value>No se pudo iniciar el pago. Por favor, inténtelo de nuevo.</value></data>
+  <data name="MissingStripeSession" xml:space="preserve"><value>Falta el ID de sesión de Stripe.</value></data>
+  <data name="PaymentAlreadyProcessed" xml:space="preserve"><value>Este pago ya ha sido procesado.</value></data>
+  <data name="PaymentNotCompleted" xml:space="preserve"><value>Pago no completado.</value></data>
+  <data name="PaymentSessionMismatch" xml:space="preserve"><value>Esta sesión de pago no pertenece a su cuenta.</value></data>
+  <data name="CouldNotDetermineCredits" xml:space="preserve"><value>No se pudieron determinar los créditos adquiridos.</value></data>
+  <data name="CreditsAdded" xml:space="preserve"><value>Se han añadido {0} créditos de documentos a su cuenta. Encontrará la factura en la lista a continuación en unos momentos.</value></data>
+  <data name="PaymentConfirmFailed" xml:space="preserve"><value>No se pudo confirmar el pago.</value></data>
+  <data name="AutoRechargeEnabled" xml:space="preserve"><value>La recarga automática ha sido activada.</value></data>
+  <data name="AutoRechargeDisabled" xml:space="preserve"><value>La recarga automática ha sido desactivada.</value></data>
+  <data name="NoSavedPaymentMethod" xml:space="preserve"><value>No se encontró ningún método de pago guardado. Marque "Guardar tarjeta" en su próxima compra.</value></data>
+  <data name="SavedPaymentMethod" xml:space="preserve"><value>Método de pago guardado</value></data>
+  <data name="ManagePaymentMethod" xml:space="preserve"><value>Administrar método de pago</value></data>
+  <data name="ManagePaymentMethodDescription" xml:space="preserve"><value>Actualice, reemplace o elimine su tarjeta guardada a través del portal seguro de Stripe.</value></data>
+  <data name="SaveCardLabel" xml:space="preserve"><value>Guardar mi tarjeta para futuras compras y recarga automática</value></data>
+  <data name="SaveCardHint" xml:space="preserve"><value>Stripe almacenará su tarjeta de forma segura. Puede eliminarla en cualquier momento.</value></data>
+  <data name="NoCardOnFile" xml:space="preserve"><value>No hay tarjeta guardada. Guarde una en su próxima compra.</value></data>
+  <data name="InvalidCancelToken" xml:space="preserve"><value>Enlace de cancelación no válido o caducado.</value></data>
+
+  <!-- Concurrency limit + tier pricing -->
+  <data name="ConcurrencyLimitTitle" xml:space="preserve"><value>Máximo paralelismo</value></data>
+  <data name="ConcurrencyLimitDescription" xml:space="preserve"><value>Limite cuántas solicitudes API pueden ejecutarse en paralelo para su cuenta. Valores más altos usan precios de créditos escalonados.</value></data>
+  <data name="MaxParallelRequests" xml:space="preserve"><value>Máx. solicitudes paralelas</value></data>
+  <data name="ConcurrencyDefault" xml:space="preserve"><value>Predeterminado</value></data>
+  <data name="ConcurrencyQueueTimeout" xml:space="preserve"><value>Tiempo de espera en cola (s)</value></data>
+  <data name="ConcurrencyQueueTimeoutDescription" xml:space="preserve"><value>0 = rechazar inmediatamente (429). Mayor que 0 = esperar hasta N segundos por un slot libre.</value></data>
+  <data name="ConcurrencyQueueTimeoutUpdated" xml:space="preserve"><value>Tiempo de espera en cola actualizado.</value></data>
+  <data name="ConcurrencyQueueDefault" xml:space="preserve"><value>predeterminado global</value></data>
+  <data name="UseGlobalDefault" xml:space="preserve"><value>Usar predeterminado global</value></data>
+  <data name="ServerAtCapacity" xml:space="preserve"><value>El servidor está a plena capacidad. Por favor, inténtelo de nuevo en unos segundos.</value></data>
+  <data name="SaveLimit" xml:space="preserve"><value>Guardar</value></data>
+  <data name="SeePricing" xml:space="preserve"><value>Ver precios</value></data>
+  <data name="InvalidConcurrencyLimit" xml:space="preserve"><value>El límite de paralelismo debe estar entre 1 y 50 (vacío = predeterminado).</value></data>
+  <data name="ConcurrencyLimitUpdated" xml:space="preserve"><value>Límite de paralelismo actualizado.</value></data>
+  <data name="ConcurrencyPricingTitle" xml:space="preserve"><value>Precio del procesamiento paralelo</value></data>
+  <data name="ConcurrencyPricingDescription" xml:space="preserve"><value>Las operaciones en paralelo usan precios de créditos escalonados:</value></data>
+  <data name="ConcurrencyTier1" xml:space="preserve"><value>Slots 1–5: coste base (1× créditos)</value></data>
+  <data name="ConcurrencyTier2" xml:space="preserve"><value>Slots 6–10: 2× créditos por operación</value></data>
+  <data name="ConcurrencyTier3" xml:space="preserve"><value>Slots 11–15: 3× créditos por operación</value></data>
+  <data name="ConcurrencyTier4" xml:space="preserve"><value>Slots 16+: cada 5 slots adicionales = +1× multiplicador</value></data>
+  <data name="ConfigureConcurrencyLink" xml:space="preserve"><value>Configurar máximo paralelismo en ajustes de tokens API →</value></data>
+
+  <!-- Admin -->
+  <data name="AdminTitle" xml:space="preserve"><value>Admin — Usuarios</value></data>
+  <data name="SearchByEmail" xml:space="preserve"><value>Buscar por email…</value></data>
+  <data name="Search" xml:space="preserve"><value>Buscar</value></data>
+  <data name="Clear" xml:space="preserve"><value>Limpiar</value></data>
+  <data name="Users" xml:space="preserve"><value>Usuarios</value></data>
+  <data name="NoUsersFound" xml:space="preserve"><value>No se encontraron usuarios.</value></data>
+  <data name="Email" xml:space="preserve"><value>Email</value></data>
+  <data name="Credits" xml:space="preserve"><value>Créditos</value></data>
+  <data name="Plan" xml:space="preserve"><value>Plan</value></data>
+  <data name="Active" xml:space="preserve"><value>Activo</value></data>
+  <data name="Created" xml:space="preserve"><value>Creado</value></data>
+  <data name="Detail" xml:space="preserve"><value>Detalle</value></data>
+  <data name="BackToUsers" xml:space="preserve"><value>Volver a usuarios</value></data>
+  <data name="AccountStatus" xml:space="preserve"><value>Estado de la cuenta</value></data>
+  <data name="EmailVerified" xml:space="preserve"><value>Email verificado</value></data>
+  <data name="Admin" xml:space="preserve"><value>Admin</value></data>
+  <data name="Enterprise" xml:space="preserve"><value>Enterprise</value></data>
+  <data name="AutoRecharge" xml:space="preserve"><value>Recarga automática</value></data>
+  <data name="CreatedAt" xml:space="preserve"><value>Creado el</value></data>
+  <data name="EnterpriseMode" xml:space="preserve"><value>Modo Enterprise</value></data>
+  <data name="EnterpriseModeDescription" xml:space="preserve"><value>Los usuarios Enterprise omiten las comprobaciones de créditos y se facturan manualmente según el uso registrado. Activar esto desactiva la recarga automática y elimina los métodos de pago guardados.</value></data>
+  <data name="EnableEnterprise" xml:space="preserve"><value>Activar modo Enterprise</value></data>
+  <data name="DisableEnterprise" xml:space="preserve"><value>Desactivar modo Enterprise</value></data>
+  <data name="ConfirmEnableEnterprise" xml:space="preserve"><value>Esto desactivará la recarga automática y eliminará la tarjeta guardada. ¿Continuar?</value></data>
+  <data name="ConfirmDisableEnterprise" xml:space="preserve"><value>El usuario volverá a facturarse por créditos. ¿Continuar?</value></data>
+  <data name="EnterpriseEnabled" xml:space="preserve"><value>Modo Enterprise activado. Recarga automática desactivada y tarjetas eliminadas.</value></data>
+  <data name="EnterpriseDisabled" xml:space="preserve"><value>Modo Enterprise desactivado.</value></data>
+  <data name="UsageThisMonth" xml:space="preserve"><value>Uso este mes</value></data>
+  <data name="CreditsUsedInMonth" xml:space="preserve"><value>créditos usados en {0}</value></data>
+  <data name="ByOperation" xml:space="preserve"><value>Por operación</value></data>
+  <data name="Operation" xml:space="preserve"><value>Operación</value></data>
+  <data name="Count" xml:space="preserve"><value>Cantidad</value></data>
+  <data name="MonthlyHistory" xml:space="preserve"><value>Historial mensual (últimos 6 meses)</value></data>
+  <data name="NoUsageYet" xml:space="preserve"><value>Sin uso registrado aún.</value></data>
+  <data name="Month" xml:space="preserve"><value>Mes</value></data>
+  <data name="OperationCount" xml:space="preserve"><value>Operaciones</value></data>
+  <data name="TotalCredits" xml:space="preserve"><value>Total de créditos</value></data>
+
+  <!-- API Errors -->
+  <data name="PresignError" xml:space="preserve"><value>Se produjo un error durante el proceso de prefirma</value></data>
+  <data name="FieldsRequired" xml:space="preserve"><value>Se requiere al menos una definición de campo.</value></data>
+  <data name="PdfContentRequired" xml:space="preserve"><value>PdfContent es obligatorio.</value></data>
+  <data name="TemplateCreateError" xml:space="preserve"><value>Se produjo un error al crear la plantilla</value></data>
+  <data name="TemplateRetrieveError" xml:space="preserve"><value>Se produjo un error al recuperar la plantilla</value></data>
+  <data name="AiNotConfigured" xml:space="preserve"><value>La detección de AI no está configurada.</value></data>
+  <data name="AiDetectionFailed" xml:space="preserve"><value>La detección de AI falló. Verifique la configuración de AI e inténtelo de nuevo.</value></data>
+  <data name="AiExtractionNotConfigured" xml:space="preserve"><value>La extracción de AI no está configurada.</value></data>
+  <data name="ColumnsRequired" xml:space="preserve"><value>Se requiere al menos una definición de columna.</value></data>
+  <data name="AiExtractionFailed" xml:space="preserve"><value>La extracción de datos de AI falló. Verifique la configuración de AI e inténtelo de nuevo.</value></data>
+  <data name="ProvideAtLeastOneChange" xml:space="preserve"><value>Proporcione al menos un cambio (fields, pdfContent o templateName).</value></data>
+  <data name="TemplateUpdateError" xml:space="preserve"><value>Se produjo un error al actualizar la plantilla</value></data>
+  <data name="TemplateDeleteError" xml:space="preserve"><value>Se produjo un error al eliminar la plantilla</value></data>
+  <data name="SigningDataNotFound" xml:space="preserve"><value>No se encontraron datos de firma para el ID proporcionado.</value></data>
+  <data name="SignError" xml:space="preserve"><value>Se produjo un error durante el proceso de firma final</value></data>
+  <data name="PfxSignError" xml:space="preserve"><value>Se produjo un error durante el proceso de firma PFX</value></data>
+  <data name="TimestampError" xml:space="preserve"><value>Se produjo un error al aplicar la marca de tiempo</value></data>
+  <data name="VisualSignError" xml:space="preserve"><value>Se produjo un error al aplicar la firma visual</value></data>
+  <data name="SealError" xml:space="preserve"><value>Se produjo un error al aplicar el sello</value></data>
+  <data name="AttachmentError" xml:space="preserve"><value>Se produjo un error al añadir el archivo adjunto</value></data>
+  <data name="ProvidePdfOrFillPdf" xml:space="preserve"><value>Proporcione PdfContents o FillPdf.</value></data>
+  <data name="SignaturesRequired" xml:space="preserve"><value>Las firmas son obligatorias.</value></data>
+  <data name="PdfaConversionError" xml:space="preserve"><value>Se produjo un error al convertir el documento a PDF/A</value></data>
+  <data name="ProvideTemplateOrPdf" xml:space="preserve"><value>Proporcione TemplateId o PdfContent (pero no ambos).</value></data>
+  <data name="FieldsRequiredForDirectPdf" xml:space="preserve"><value>Los campos son obligatorios cuando se utiliza PdfContent directamente.</value></data>
+  <data name="DataSetRequired" xml:space="preserve"><value>Se requiere al menos un conjunto de datos.</value></data>
+  <data name="FillPdfError" xml:space="preserve"><value>Se produjo un error al rellenar el PDF</value></data>
+  <data name="ScanCodesError" xml:space="preserve"><value>Se produjo un error al escanear los códigos</value></data>
+  <data name="InvalidBase64" xml:space="preserve"><value>PdfContent no es un base64 válido.</value></data>
+  <data name="NoCreditsRemaining" xml:space="preserve"><value>No quedan créditos. Por favor, adquiera más para continuar.</value></data>
+  <data name="NotEnoughCredits" xml:space="preserve"><value>Créditos insuficientes. Se requieren {0} crédito(s).</value></data>
+
+  <!-- Middleware -->
+  <data name="TooManyRequests" xml:space="preserve"><value>Demasiadas solicitudes simultáneas. Por favor, reduzca la frecuencia.</value></data>
+  <data name="RequestExceededLimit" xml:space="preserve"><value>La solicitud superó el límite.</value></data>
+  <data name="InternalError" xml:space="preserve"><value>Se produjo un error interno.</value></data>
+  <data name="UnexpectedError" xml:space="preserve"><value>Se produjo un error inesperado al procesar su solicitud.</value></data>
+
+  <!-- Home / Landing page -->
+  <data name="HomeSignupSuccess" xml:space="preserve"><value>Su cuenta está lista. Bienvenido a P4PDF.</value></data>
+  <data name="HomeHeroTitle" xml:space="preserve"><value>Genere, rellene, firme y procese documentos PDF con una sola API.</value></data>
+  <data name="HomeHeroDescription" xml:space="preserve"><value>P4PDF convierte sus datos en documentos PDF completos. Renderice plantillas, rellene campos dinámicos, aplique firmas digitales y sellos de tiempo, incruste archivos adjuntos y lea códigos QR o de barras, todo totalmente automatizado.</value></data>
+  <data name="HomeApiDocs" xml:space="preserve"><value>Documentación de la API</value></data>
+  <data name="HomeExampleIntegration" xml:space="preserve"><value>Ejemplo de integración</value></data>
+  <data name="HomeExampleApiRequest" xml:space="preserve"><value>Ejemplo de solicitud a la API</value></data>
+  <data name="HomeCodeFooter" xml:space="preserve"><value>Consulte la referencia completa en la documentación.</value></data>
+  <data name="HomeFeatureGenerateTitle" xml:space="preserve"><value>Generar PDF a partir de plantillas</value></data>
+  <data name="HomeFeatureGenerateDescription" xml:space="preserve"><value>Suba una plantilla PDF y defina campos dinámicos para texto, imágenes y códigos de barras. Asigne sus datos directamente a los marcadores y genere documentos coherentes a gran escala.</value></data>
+  <data name="HomeVisualFieldMappingTitle" xml:space="preserve"><value>Asignación visual de campos</value></data>
+  <data name="HomeVisualFieldMappingDescription" xml:space="preserve"><value>Defina con un clic campos de texto, imágenes o códigos de barras directamente sobre el PDF.</value></data>
+  <data name="HomeDynamicDataBindingTitle" xml:space="preserve"><value>Enlace dinámico de datos</value></data>
+  <data name="HomeDynamicDataBindingDescription" xml:space="preserve"><value>Rellene las plantillas con JSON estructurado, sin formateo manual.</value></data>
+  <data name="HomeFeatureSigningTitle" xml:space="preserve"><value>Firmas digitales y sellos de tiempo</value></data>
+  <data name="HomeFeatureSigningDescription" xml:space="preserve"><value>Aplique firmas basadas en certificados, añada sellos de tiempo de confianza (TSA) y automatice los flujos de hash con plena integridad criptográfica.</value></data>
+  <data name="HomeCertificateSigningTitle" xml:space="preserve"><value>Firma basada en certificado</value></data>
+  <data name="HomeCertificateSigningDescription" xml:space="preserve"><value>Compatible con firmantes externos, HSM, tarjetas inteligentes o clientes personalizados.</value></data>
+  <data name="HomeTrustedTimestampsTitle" xml:space="preserve"><value>Sellos de tiempo de confianza</value></data>
+  <data name="HomeTrustedTimestampsDescription" xml:space="preserve"><value>Integre cualquier TSA para añadir tokens de sello de tiempo verificables.</value></data>
+  <data name="HomeMultipleSignaturesTitle" xml:space="preserve"><value>Firmas múltiples</value></data>
+  <data name="HomeMultipleSignaturesDescription" xml:space="preserve"><value>Soporte para flujos de firma multiparte y multietapa.</value></data>
+  <data name="HomeFeatureAttachmentsTitle" xml:space="preserve"><value>Incrustar archivos adjuntos</value></data>
+  <data name="HomeFeatureAttachmentsDescription" xml:space="preserve"><value>Guarde documentación complementaria como datos en bruto, informes o registros directamente dentro del PDF para crear paquetes de documentos verificables.</value></data>
+  <data name="HomeAnyFileTypeTitle" xml:space="preserve"><value>Cualquier tipo de archivo</value></data>
+  <data name="HomeAnyFileTypeDescription" xml:space="preserve"><value>Adjunte archivos binarios, conjuntos de datos o salidas de auditoría personalizadas.</value></data>
+  <data name="HomeEvidenceBundlesTitle" xml:space="preserve"><value>Paquetes de evidencia</value></data>
+  <data name="HomeEvidenceBundlesDescription" xml:space="preserve"><value>Conserve mediciones, registros y certificados en un único contenedor.</value></data>
+  <data name="HomeMetadataSupportTitle" xml:space="preserve"><value>Compatibilidad con metadatos</value></data>
+  <data name="HomeMetadataSupportDescription" xml:space="preserve"><value>Almacene metadatos de los adjuntos para validación o trazabilidad de auditoría.</value></data>
+  <data name="HomeFeatureCodesTitle" xml:space="preserve"><value>Leer códigos QR y de barras</value></data>
+  <data name="HomeFeatureCodesDescription" xml:space="preserve"><value>Detecte y extraiga códigos QR, Datamatrix y otros tipos de códigos de barras de cualquier página PDF, incluidas coordenadas y orientación.</value></data>
+  <data name="HomeMultiCodeTitle" xml:space="preserve"><value>Detección de múltiples códigos</value></data>
+  <data name="HomeMultiCodeDescription" xml:space="preserve"><value>Escanee páginas con varios códigos QR/Datamatrix.</value></data>
+  <data name="HomeCoordinatesTitle" xml:space="preserve"><value>Coordenadas y dimensiones</value></data>
+  <data name="HomeCoordinatesDescription" xml:space="preserve"><value>Extraiga la posición x/y exacta y el tamaño de cada código.</value></data>
+  <data name="HomeErrorCorrectionTitle" xml:space="preserve"><value>Corrección de errores</value></data>
+  <data name="HomeErrorCorrectionDescription" xml:space="preserve"><value>Decodificación robusta de códigos dañados o de baja calidad.</value></data>
+
+  <!-- Account / SignIn -->
+  <data name="SignInTitle" xml:space="preserve"><value>Iniciar sesión</value></data>
+  <data name="SignInHeading" xml:space="preserve"><value>Iniciar sesión</value></data>
+  <data name="SignInFailedMsg" xml:space="preserve"><value>Error de inicio de sesión. Por favor, compruebe su correo electrónico y contraseña.</value></data>
+  <data name="EmailLabel" xml:space="preserve"><value>Correo electrónico</value></data>
+  <data name="PasswordLabel" xml:space="preserve"><value>Contraseña</value></data>
+  <data name="SignInRememberMe" xml:space="preserve"><value>Recuérdame</value></data>
+  <data name="SignInForgotPassword" xml:space="preserve"><value>¿Olvidó su contraseña?</value></data>
+  <data name="SignInButton" xml:space="preserve"><value>Iniciar sesión</value></data>
+  <data name="SignInNoAccount" xml:space="preserve"><value>¿Sin cuenta?</value></data>
+  <data name="SignUpLinkText" xml:space="preserve"><value>Registrarse</value></data>
+
+  <!-- Account / SignUp -->
+  <data name="CreateAccountHeading" xml:space="preserve"><value>Crear una cuenta</value></data>
+  <data name="ConfirmPasswordLabel" xml:space="preserve"><value>Confirmar contraseña</value></data>
+  <data name="SignUpAgreeTerms" xml:space="preserve"><value>Acepto los {0} y la {1}.</value></data>
+  <data name="TermsOfServiceLink" xml:space="preserve"><value>Condiciones de uso</value></data>
+  <data name="PrivacyPolicyLink" xml:space="preserve"><value>Política de privacidad</value></data>
+  <data name="SignUpButton" xml:space="preserve"><value>Registrarse</value></data>
+  <data name="AlreadyHaveAccount" xml:space="preserve"><value>¿Ya tiene una cuenta?</value></data>
+  <data name="SignInLinkText" xml:space="preserve"><value>Iniciar sesión</value></data>
+
+  <!-- Account / ForgotPassword -->
+  <data name="ForgotPasswordTitle" xml:space="preserve"><value>Contraseña olvidada</value></data>
+  <data name="ForgotPasswordHeading" xml:space="preserve"><value>Contraseña olvidada</value></data>
+  <data name="ForgotPasswordHint" xml:space="preserve"><value>Introduzca su dirección de correo electrónico y le enviaremos un enlace para restablecer su contraseña.</value></data>
+  <data name="SendResetLink" xml:space="preserve"><value>Enviar enlace de restablecimiento</value></data>
+  <data name="RememberPasswordQ" xml:space="preserve"><value>¿Recuerda su contraseña?</value></data>
+
+  <!-- Account / ResetPassword -->
+  <data name="ResetPasswordTitle" xml:space="preserve"><value>Restablecer contraseña</value></data>
+  <data name="ResetPasswordHeading" xml:space="preserve"><value>Restablecer contraseña</value></data>
+  <data name="CorrectErrorsBelow" xml:space="preserve"><value>Por favor, corrija los errores indicados.</value></data>
+  <data name="NewPasswordLabel" xml:space="preserve"><value>Nueva contraseña</value></data>
+  <data name="ConfirmNewPasswordLabel" xml:space="preserve"><value>Confirmar nueva contraseña</value></data>
+  <data name="ResetPasswordButton" xml:space="preserve"><value>Restablecer contraseña</value></data>
+
+  <!-- Account / ChangePassword -->
+  <data name="ChangePasswordTitle" xml:space="preserve"><value>Cambiar contraseña</value></data>
+  <data name="ChangePasswordHeading" xml:space="preserve"><value>Cambiar contraseña</value></data>
+  <data name="ChangePasswordButton" xml:space="preserve"><value>Cambiar contraseña</value></data>
+  <data name="CurrentPasswordLabel" xml:space="preserve"><value>Contraseña actual</value></data>
+  <data name="CurrentPasswordIncorrect" xml:space="preserve"><value>La contraseña actual no es correcta.</value></data>
+  <data name="NewPasswordSameAsCurrent" xml:space="preserve"><value>La nueva contraseña debe ser distinta de la actual.</value></data>
+  <data name="PasswordChangedSuccess" xml:space="preserve"><value>Contraseña cambiada correctamente.</value></data>
+  <data name="Cancel" xml:space="preserve"><value>Cancelar</value></data>
+
+  <!-- Account / TwoFactor -->
+  <data name="TwoFactorTitle" xml:space="preserve"><value>Verificación en dos pasos</value></data>
+  <data name="TwoFactorHeading" xml:space="preserve"><value>Introduzca el código de verificación</value></data>
+  <data name="TwoFactorCodeSentMsgFmt" xml:space="preserve"><value>Hemos enviado un código de 6 dígitos a {0}. Introdúzcalo a continuación para completar el inicio de sesión.</value></data>
+  <data name="SixDigitCodeLabel" xml:space="preserve"><value>Código de 6 dígitos</value></data>
+  <data name="VerifyButton" xml:space="preserve"><value>Verificar</value></data>
+
+  <!-- Account / Verify -->
+  <data name="VerifyEmailTitle" xml:space="preserve"><value>Verificar correo electrónico</value></data>
+  <data name="VerifyEmailHeading" xml:space="preserve"><value>Verifique su correo electrónico</value></data>
+  <data name="VerificationLinkSent" xml:space="preserve"><value>Le hemos enviado un enlace de verificación.</value></data>
+  <data name="VerifyEmailConfirmedMsg" xml:space="preserve"><value>Éxito: su correo electrónico ha sido confirmado.</value></data>
+
+  <!-- Account / Settings -->
+  <data name="AccountSettingsTitle" xml:space="preserve"><value>Configuración de la cuenta</value></data>
+  <data name="ReceiveEmailNotifications" xml:space="preserve"><value>Recibir notificaciones por correo electrónico</value></data>
+  <data name="EmailNotificationsHint" xml:space="preserve"><value>Actualizaciones de facturación y alertas de recarga automática. Los correos críticos (facturas, seguridad) se envían siempre.</value></data>
+  <data name="SaveSettingsButton" xml:space="preserve"><value>Guardar configuración</value></data>
+
+  <!-- Account / Index -->
+  <data name="AccountTitle" xml:space="preserve"><value>Cuenta</value></data>
+  <data name="AccountProfileDesc" xml:space="preserve"><value>Su perfil e identidad de facturación.</value></data>
+  <data name="AccountEmailLabel" xml:space="preserve"><value>Correo electrónico:</value></data>
+  <data name="AccountEmailVerifiedLabel" xml:space="preserve"><value>Correo verificado:</value></data>
+  <data name="AccountStatusLabel" xml:space="preserve"><value>Estado:</value></data>
+  <data name="AccountCreditsRemainingLabel" xml:space="preserve"><value>Créditos restantes:</value></data>
+  <data name="AccountMemberSinceLabel" xml:space="preserve"><value>Miembro desde:</value></data>
+  <data name="Yes" xml:space="preserve"><value>Sí</value></data>
+  <data name="No" xml:space="preserve"><value>No</value></data>
+  <data name="StatusInactive" xml:space="preserve"><value>Inactivo</value></data>
+
+  <!-- Support -->
+  <data name="SupportTitle" xml:space="preserve"><value>Soporte</value></data>
+  <data name="SupportDesc" xml:space="preserve"><value>Envíe un ticket de soporte y nuestro equipo le responderá.</value></data>
+  <data name="SupportSubmitTicketTitle" xml:space="preserve"><value>Enviar un ticket</value></data>
+  <data name="SupportCategory" xml:space="preserve"><value>Categoría</value></data>
+  <data name="SupportCategorySigning" xml:space="preserve"><value>Problemas de firma</value></data>
+  <data name="SupportCategoryTemplates" xml:space="preserve"><value>Plantillas</value></data>
+  <data name="SupportCategoryBilling" xml:space="preserve"><value>Facturación y suscripción</value></data>
+  <data name="SupportCategoryAccount" xml:space="preserve"><value>Cuenta y acceso</value></data>
+  <data name="SupportCategoryOther" xml:space="preserve"><value>Otro</value></data>
+  <data name="SupportPriority" xml:space="preserve"><value>Prioridad</value></data>
+  <data name="SupportPriorityLow" xml:space="preserve"><value>Baja</value></data>
+  <data name="SupportPriorityNormal" xml:space="preserve"><value>Normal</value></data>
+  <data name="SupportPriorityHigh" xml:space="preserve"><value>Alta</value></data>
+  <data name="SupportSubjectLabel" xml:space="preserve"><value>Asunto</value></data>
+  <data name="SupportSubjectPlaceholder" xml:space="preserve"><value>Breve descripción de su problema</value></data>
+  <data name="SupportMessageLabel" xml:space="preserve"><value>Mensaje</value></data>
+  <data name="SupportMessagePlaceholder" xml:space="preserve"><value>Describa el problema en detalle.</value></data>
+  <data name="SupportSubmitButton" xml:space="preserve"><value>Enviar ticket</value></data>
+  <data name="SupportContactTitle" xml:space="preserve"><value>Contacto</value></data>
+  <data name="SupportEmailLabel" xml:space="preserve"><value>Correo electrónico:</value></data>
+  <data name="SupportCompanyLabel" xml:space="preserve"><value>Empresa:</value></data>
+
+  <!-- Error page -->
+  <data name="ErrorTitle" xml:space="preserve"><value>Error</value></data>
+  <data name="ErrorHeading" xml:space="preserve"><value>Algo ha salido mal</value></data>
+  <data name="ErrorTraceMsg" xml:space="preserve"><value>Use este ID de seguimiento si contacta con el soporte:</value></data>
+
+  <!-- Billing / ConfirmCancelAutoRecharge -->
+  <data name="CancelAutoRechargeTitle" xml:space="preserve"><value>Cancelar recarga automática</value></data>
+  <data name="CancelAutoRechargeQuestion" xml:space="preserve"><value>¿Está seguro de que desea cancelar la recarga automática de créditos?</value></data>
+  <data name="CancelAutoRechargeNote" xml:space="preserve"><value>Puede volver a activarla en cualquier momento desde su página de facturación.</value></data>
+  <data name="CancelAutoRechargeButton" xml:space="preserve"><value>Confirmar cancelación</value></data>
+
+  <!-- Pricing -->
+  <data name="PricingTitle" xml:space="preserve"><value>Precios</value></data>
+  <data name="PricingDesc" xml:space="preserve"><value>Precios transparentes para firmar PDF a través de la API. No se necesita tarjeta de crédito para empezar.</value></data>
+  <data name="PricingFreeTitle" xml:space="preserve"><value>Gratis</value></data>
+  <data name="PricingFreeDesc" xml:space="preserve"><value>Para desarrolladores individuales y pruebas pequeñas.</value></data>
+  <data name="PricingFreeNote" xml:space="preserve"><value>Incluye 10 créditos.</value></data>
+  <data name="PricingFreeFeature1" xml:space="preserve"><value>Todas las funciones de la API</value></data>
+  <data name="PricingFreeFeature2" xml:space="preserve"><value>Acceso inmediato</value></data>
+  <data name="PricingGetStarted" xml:space="preserve"><value>Empezar</value></data>
+  <data name="PricingPaidTitle" xml:space="preserve"><value>De pago</value></data>
+  <data name="PricingPaidDesc" xml:space="preserve"><value>Para cargas de trabajo en producción con soporte.</value></data>
+  <data name="PricingPaidNote" xml:space="preserve"><value>Por 100 créditos • se aplican descuentos por volumen</value></data>
+  <data name="PricingPaidFeature1" xml:space="preserve"><value>Todas las funciones gratuitas</value></data>
+  <data name="PricingPaidFeature2" xml:space="preserve"><value>Soporte por correo electrónico prioritario</value></data>
+  <data name="PricingPaidFeature3" xml:space="preserve"><value>Descuentos: 300+ (5%), 500+ (10%), 1.000+ (15%)</value></data>
+
+  <!-- Contact -->
+  <data name="ContactTitle" xml:space="preserve"><value>Contacto</value></data>
+  <data name="ContactIdNumber" xml:space="preserve"><value>Número de identificación:</value></data>
+  <data name="ContactVatNumber" xml:space="preserve"><value>Número IVA (DIČ):</value></data>
+  <data name="ContactEmailLabel" xml:space="preserve"><value>Correo electrónico:</value></data>
+
+  <!-- Templates -->
+  <data name="TemplatesTitle" xml:space="preserve"><value>Mis plantillas</value></data>
+  <data name="TemplatesNewTemplate" xml:space="preserve"><value>Nueva plantilla</value></data>
+  <data name="TemplatesNoTemplates" xml:space="preserve"><value>Aún no hay plantillas. Cree una para empezar.</value></data>
+  <data name="TemplatesNameHeader" xml:space="preserve"><value>Nombre</value></data>
+  <data name="TemplatesFieldsHeader" xml:space="preserve"><value>Campos</value></data>
+  <data name="TemplatesUntitled" xml:space="preserve"><value>Sin título</value></data>
+  <data name="TemplatesEdit" xml:space="preserve"><value>Editar</value></data>
+  <data name="TemplatesApiDocsLink" xml:space="preserve"><value>Documentación API</value></data>
+
+  <!-- Legal / Index -->
+  <data name="LegalTitle" xml:space="preserve"><value>Documentos legales</value></data>
+  <data name="LegalDescription" xml:space="preserve"><value>Aquí puede encontrar todos los documentos legales y de políticas relacionados con el uso del servicio P4PDF de Performance4 s.r.o.</value></data>
+  <data name="LegalTermsOfService" xml:space="preserve"><value>Condiciones de uso</value></data>
+  <data name="LegalPrivacyPolicy" xml:space="preserve"><value>Política de privacidad</value></data>
+  <data name="LegalDpa" xml:space="preserve"><value>Acuerdo de procesamiento de datos (DPA)</value></data>
+  <data name="LegalSla" xml:space="preserve"><value>Acuerdo de nivel de servicio (SLA)</value></data>
+  <data name="LegalRefundPolicy" xml:space="preserve"><value>Política de reembolso</value></data>
+  <data name="LegalCookiesPolicy" xml:space="preserve"><value>Política de cookies</value></data>
+  <data name="LegalOpenSourceNotices" xml:space="preserve"><value>Avisos de código abierto</value></data>
+  <data name="LegalAgplLicense" xml:space="preserve"><value>Licencia AGPL</value></data>
+  <data name="LegalLastUpdated" xml:space="preserve"><value>Última actualización:</value></data>
+
+  <!-- Layout navigation & footer -->
+  <data name="NavPdfTemplates" xml:space="preserve"><value>Plantillas PDF</value></data>
+  <data name="NavApiTokens" xml:space="preserve"><value>Tokens de API</value></data>
+  <data name="NavDocs" xml:space="preserve"><value>Documentación</value></data>
+  <data name="NavRequests" xml:space="preserve"><value>Solicitudes</value></data>
+  <data name="RequestsTitle" xml:space="preserve"><value>Solicitudes de API</value></data>
+  <data name="RequestsSubtitle" xml:space="preserve"><value>Registro detallado de sus solicitudes de API recientes, uso de créditos y operaciones fallidas. El contenido de los documentos y las firmas nunca se registra.</value></data>
+  <data name="RequestsCreditsRemaining" xml:space="preserve"><value>Créditos restantes</value></data>
+  <data name="RequestsSuccess30d" xml:space="preserve"><value>Exitosas (30 d)</value></data>
+  <data name="RequestsCreditsSpent30d" xml:space="preserve"><value>Créditos usados (30 d)</value></data>
+  <data name="RequestsErrors30d" xml:space="preserve"><value>Fallidas (30 d)</value></data>
+  <data name="RequestsFilterAll" xml:space="preserve"><value>Todas</value></data>
+  <data name="RequestsFilterSuccess" xml:space="preserve"><value>Exitosas</value></data>
+  <data name="RequestsFilterErrors" xml:space="preserve"><value>Solo fallidas</value></data>
+  <data name="RequestsEmpty" xml:space="preserve"><value>Aún no hay solicitudes registradas.</value></data>
+  <data name="RequestsColTime" xml:space="preserve"><value>Hora</value></data>
+  <data name="RequestsColOperation" xml:space="preserve"><value>Operación</value></data>
+  <data name="RequestsColStatus" xml:space="preserve"><value>Estado</value></data>
+  <data name="RequestsColCredits" xml:space="preserve"><value>Créditos</value></data>
+  <data name="RequestsColDuration" xml:space="preserve"><value>Duración</value></data>
+  <data name="RequestsColDetails" xml:space="preserve"><value>Detalles</value></data>
+  <data name="RequestsStatusSuccess" xml:space="preserve"><value>Éxito</value></data>
+  <data name="RequestsStatusError" xml:space="preserve"><value>Fallida</value></data>
+  <data name="RequestsCreditsTooltip" xml:space="preserve"><value>Coste base {0} × nivel {1}</value></data>
+  <data name="RequestsPaginationLabel" xml:space="preserve"><value>Mostrando {0}–{1} de {2}</value></data>
+  <data name="RequestsPaginationPrev" xml:space="preserve"><value>← Anterior</value></data>
+  <data name="RequestsPaginationNext" xml:space="preserve"><value>Siguiente →</value></data>
+  <data name="RequestsPrivacyNote" xml:space="preserve"><value>Privacidad: solo se almacenan los metadatos de las solicitudes (nombre de la operación, estado, créditos, duración). El contenido de los PDF, firmas, certificados y otros cuerpos de solicitud nunca se registran.</value></data>
+  <data name="NavBilling" xml:space="preserve"><value>Facturación</value></data>
+  <data name="NavAccount" xml:space="preserve"><value>Cuenta</value></data>
+  <data name="NavSignOut" xml:space="preserve"><value>Cerrar sesión</value></data>
+  <data name="NavPricing" xml:space="preserve"><value>Precios</value></data>
+  <data name="NavSignIn" xml:space="preserve"><value>Iniciar sesión</value></data>
+  <data name="NavSignUp" xml:space="preserve"><value>Registrarse</value></data>
+  <data name="FooterLegal" xml:space="preserve"><value>Legal</value></data>
+  <data name="FooterResources" xml:space="preserve"><value>Recursos</value></data>
+  <data name="FooterCreatedBy" xml:space="preserve"><value>Creado por Performance4 s.r.o.</value></data>
+  <data name="FooterContactInfo" xml:space="preserve"><value>Información de contacto</value></data>
+</root>

@@ -1,0 +1,31 @@
+@model DotNetSigningServer.Models.User
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
+@{
+    ViewData["Title"] = L["AccountSettingsTitle"].Value;
+}
+
+<h1 class="content-box-title">@L["AccountSettingsTitle"]</h1>
+
+@if (TempData["Error"] != null)
+{
+    <div class="flash error">@TempData["Error"]</div>
+}
+@if (TempData["Info"] != null)
+{
+    <div class="flash info">@TempData["Info"]</div>
+}
+
+<form method="post" class="auth-form">
+    @Html.AntiForgeryToken()
+
+    <div class="form-group">
+        <label class="form-check">
+            <input type="checkbox" name="emailNotificationsEnabled" value="true"
+                   @(Model.EmailNotificationsEnabled ? "checked" : "") />
+            @L["ReceiveEmailNotifications"]
+        </label>
+        <p class="text-small muted">@L["EmailNotificationsHint"]</p>
+    </div>
+
+    <button type="submit" class="btn btn-primary">@L["SaveSettingsButton"]</button>
+</form>

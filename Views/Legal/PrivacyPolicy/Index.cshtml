@@ -1,15 +1,16 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "Privacy Policy";
+    ViewData["Title"] = L["LegalPrivacyPolicy"].Value;
 }
 
 <div class="legal-document">
-    <h1>Privacy Policy</h1>
-    <p><em>Last updated: 25. 11. 2025</em></p>
+    <h1>@L["LegalPrivacyPolicy"]</h1>
+    <p><em>@L["LegalLastUpdated"] 25. 11. 2025</em></p>
 
     <p>
         This Privacy Policy explains how <strong>Performance4 s.r.o.</strong>
         ("we", "us", or "our") collects, uses and protects personal data
-        in connection with the <strong>SignProxy by Performance4 s.r.o.</strong> service (the "Service").
+        in connection with the <strong>P4PDF by Performance4 s.r.o.</strong> service (the "Service").
     </p>
 
     <h2>1. Data Controller</h2>

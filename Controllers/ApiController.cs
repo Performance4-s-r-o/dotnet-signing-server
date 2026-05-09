@@ -1,317 +1,277 @@
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Options;
+using DotNetSigningServer.Resources;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using ImageMagick;
-using ZXing;
-using ZXing.Common;
+using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Options;
+using iText.Kernel.Pdf;
 
 namespace DotNetSigningServer.Controllers
 {
+    /// <summary>
+    /// Shared base class for all API controllers.
+    /// Provides authentication, credit management, and common helpers.
+    /// </summary>
     [ApiController]
-    public class ApiController : ControllerBase
+    [IgnoreAntiforgeryToken]
+    public abstract class ApiControllerBase : ControllerBase
     {
-        private readonly ApplicationDbContext _dbContext;
-        private readonly PdfSigningService _signingService;
-        private readonly IApiAuthService _apiAuthService;
+        protected readonly ApplicationDbContext DbContext;
+        protected readonly IApiAuthService ApiAuthService;
+        protected readonly ILogger Logger;
+        protected readonly ContentLimitGuard LimitGuard;
+        protected readonly BillingOptions BillingOptions;
+        protected readonly IWebHostEnvironment Env;
+        protected readonly PdfTemplateService PdfTemplateService;
+        protected readonly IStringLocalizer<SharedStrings> Localizer;
 
-        public ApiController(ApplicationDbContext dbContext, PdfSigningService signingService, IApiAuthService apiAuthService)
+        protected ApiControllerBase(
+            ApplicationDbContext dbContext,
+            IApiAuthService apiAuthService,
+            ILogger logger,
+            ContentLimitGuard limitGuard,
+            IOptions<BillingOptions> billingOptions,
+            IWebHostEnvironment env,
+            PdfTemplateService pdfTemplateService,
+            IStringLocalizer<SharedStrings> localizer)
         {
-            _dbContext = dbContext;
-            _signingService = signingService;
-            _apiAuthService = apiAuthService;
+            DbContext = dbContext;
+            ApiAuthService = apiAuthService;
+            Logger = logger;
+            LimitGuard = limitGuard;
+            BillingOptions = billingOptions.Value;
+            Env = env;
+            PdfTemplateService = pdfTemplateService;
+            Localizer = localizer;
         }
 
-        [HttpPost("/api/presign")]
-        public async Task<IActionResult> PreSign([FromBody] PreSignInput input)
+        /// <summary>
+        /// Returns a Problem response with trace ID. Only includes exception details in Development.
+        /// </summary>
+        protected ObjectResult SafeProblem(string genericMessage, Exception? ex = null)
         {
-            var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
-            if (error != null || user == null) return error!;
+            var traceId = HttpContext.TraceIdentifier;
+            var detail = Env.IsDevelopment() && ex != null
+                ? $"{genericMessage}: {ex.Message}"
+                : $"{genericMessage} (traceId: {traceId})";
 
-            try
-            {
-                var signingData = new SigningData();
-                string fieldName = string.IsNullOrWhiteSpace(input.FieldName)
-                    ? $"Signature_{signingData.Id.Replace("-", string.Empty)}"
-                    : input.FieldName;
-
-                var (presignedPdfPath, hashToSign) = _signingService.HandlePreSign(input, fieldName);
-                signingData.FieldName = fieldName;
-                signingData.PresignedPdfPath = presignedPdfPath;
-                signingData.HashToSign = hashToSign;
-                signingData.CertificatePem = input.CertificatePem;
-                signingData.TsaUrl = input.TsaUrl;
-                signingData.TsaUsername = input.TsaUsername;
-                signingData.TsaPassword = input.TsaPassword;
-
-                signingData.UserId = user.Id;
-
-                _dbContext.SigningData.Add(signingData);
-                await _dbContext.SaveChangesAsync();
-
-                return Ok(new { id = signingData.Id, hashToSign = signingData.HashToSign });
-            }
-            catch (Exception ex)
-            {
-                Console.Out.WriteLine(ex);
-                return Problem($"An error occurred during the presign process: {ex.Message}");
-            }
+            return Problem(detail: detail, statusCode: StatusCodes.Status500InternalServerError);
         }
 
-        [HttpPost("/api/sign")]
-        public async Task<IActionResult> Sign([FromBody] SignInput input)
+        protected async Task<User?> GetAuthenticatedUserAsync(string? originHeader = null)
         {
-            var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
-            if (error != null || user == null) return error!;
-
-            var signingData = await _dbContext.SigningData.FindAsync(input.Id);
-            if (signingData == null)
+            // Prefer cookie-authenticated user
+            if (User?.Identity?.IsAuthenticated == true)
             {
-                return NotFound(new { message = "Signing data not found for the provided ID." });
-            }
-            if (signingData.UserId != user.Id)
-            {
-                return Forbid();
-            }
-
-            try
-            {
-                var result = _signingService.HandleSign(
-                    input,
-                    signingData.PresignedPdfPath,
-                    signingData.CertificatePem,
-                    signingData.FieldName,
-                    signingData.TsaUrl,
-                    signingData.TsaUsername,
-                    signingData.TsaPassword);
-
-                System.IO.File.Delete(signingData.PresignedPdfPath);
-                _dbContext.SigningData.Remove(signingData);
-                await DebitUserAsync(user);
-
-                return Ok(new { result });
-            }
-            catch (Exception ex)
-            {
-                Console.Out.WriteLine(ex);
-                return Problem($"An error occurred during the final signing process: {ex.Message}");
-            }
-        }
-
-        [HttpPost("/api/sign-pfx")]
-        public async Task<IActionResult> SignWithPfx([FromBody] PfxSignInput input)
-        {
-            var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
-            if (error != null || user == null) return error!;
-
-            try
-            {
-                var result = _signingService.SignWithPfx(input);
-                await DebitUserAsync(user);
-                return Ok(new { result });
-            }
-            catch (Exception ex)
-            {
-                Console.Out.WriteLine(ex);
-                return Problem($"An error occurred during the PFX signing process: {ex.Message}");
-            }
-        }
-
-        [HttpPost("/api/timestamp")]
-        public async Task<IActionResult> ApplyTimestamp([FromBody] DocumentTimestampInput input)
-        {
-            var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
-            if (error != null || user == null) return error!;
-
-            try
-            {
-                var result = _signingService.ApplyDocumentTimestamp(input);
-                await DebitUserAsync(user);
-                return Ok(new { result });
-            }
-            catch (Exception ex)
-            {
-                Console.Out.WriteLine(ex);
-                return Problem($"An error occurred while applying the timestamp: {ex.Message}");
-            }
-        }
-
-        [HttpPost("/api/attachment")]
-        public async Task<IActionResult> AddAttachment([FromBody] AddAttachmentInput input)
-        {
-            var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
-            if (error != null || user == null) return error!;
-
-            try
-            {
-                var result = _signingService.AddAttachment(input);
-                await DebitUserAsync(user);
-                return Ok(new { result });
-            }
-            catch (Exception ex)
-            {
-                Console.Out.WriteLine(ex);
-                return Problem($"An error occurred while adding the attachment: {ex.Message}");
-            }
-        }
-
-        [HttpPost("/api/find-codes")]
-        public async Task<IActionResult> FindCodes([FromBody] FindCodesInput input)
-        {
-            var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
-            if (error != null || user == null) return error!;
-
-            if (string.IsNullOrWhiteSpace(input.PdfContent))
-            {
-                return BadRequest(new { message = "PdfContent is required." });
-            }
-
-            var formats = ParseFormats(input.CodeType);
-            try
-            {
-                var results = await DetectCodesAsync(input.PdfContent, formats);
-                await DebitUserAsync(user);
-                return Ok(new { results });
-            }
-            catch (Exception ex)
-            {
-                Console.Out.WriteLine(ex);
-                return Problem($"An error occurred while scanning codes: {ex.Message}");
-            }
-        }
-
-        private IList<BarcodeFormat> ParseFormats(string codeType)
-        {
-            var formats = new List<BarcodeFormat>();
-            var normalized = (codeType ?? "any").Trim().ToLowerInvariant();
-            if (normalized == "qr")
-            {
-                formats.Add(BarcodeFormat.QR_CODE);
-            }
-            else if (normalized is "datamatrix" or "data-matrix" or "dm")
-            {
-                formats.Add(BarcodeFormat.DATA_MATRIX);
-            }
-            else if (normalized == "pdf417")
-            {
-                formats.Add(BarcodeFormat.PDF_417);
-            }
-            else if (normalized == "aztec")
-            {
-                formats.Add(BarcodeFormat.AZTEC);
-            }
-            else
-            {
-                formats.AddRange(new[]
+                var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                                  ?? User.FindFirst("sub")?.Value;
+                if (Guid.TryParse(userIdClaim, out var guid))
                 {
-                    BarcodeFormat.QR_CODE,
-                    BarcodeFormat.DATA_MATRIX,
-                    BarcodeFormat.PDF_417,
-                    BarcodeFormat.AZTEC
-                });
-            }
-
-            return formats;
-        }
-
-        private async Task<List<object>> DetectCodesAsync(string base64Pdf, IList<BarcodeFormat> formats)
-        {
-            byte[] pdfBytes;
-            try
-            {
-                pdfBytes = Convert.FromBase64String(base64Pdf);
-            }
-            catch
-            {
-                throw new InvalidOperationException("PdfContent is not valid base64.");
-            }
-
-            var results = new List<object>();
-
-            using var collection = new MagickImageCollection();
-            var settings = new MagickReadSettings
-            {
-                Density = new Density(300, 300),
-                Format = MagickFormat.Pdf
-            };
-            using (var ms = new MemoryStream(pdfBytes))
-            {
-                await collection.ReadAsync(ms, settings);
-            }
-
-            var reader = new BarcodeReaderGeneric
-            {
-                Options = new DecodingOptions
-                {
-                    PossibleFormats = formats.ToList(),
-                    TryHarder = true,
-                    PureBarcode = false
-                }
-            };
-
-            for (var pageIndex = 0; pageIndex < collection.Count; pageIndex++)
-            {
-                var page = collection[pageIndex];
-                var rgba = page.ToByteArray(MagickFormat.Rgba);
-                var luminance = new RGBLuminanceSource(rgba, (int)page.Width, (int)page.Height, RGBLuminanceSource.BitmapFormat.RGBA32);
-                var decoded = reader.DecodeMultiple(luminance);
-                if (decoded == null) continue;
-
-                foreach (var code in decoded)
-                {
-                    var point = code.ResultPoints?.FirstOrDefault();
-                    results.Add(new
+                    var cookieUser = await DbContext.Users.FirstOrDefaultAsync(u => u.Id == guid);
+                    if (cookieUser != null)
                     {
-                        value = code.Text,
-                        codeType = code.BarcodeFormat.ToString(),
-                        position = new { x = point?.X ?? 0, y = point?.Y ?? 0 },
-                        page = pageIndex + 1
-                    });
+                        if (!cookieUser.IsActive) return null;
+                        TagAuthenticatedUser(cookieUser.Id);
+                        return cookieUser;
+                    }
                 }
             }
 
-            return results;
-        }
-
-        private async Task<User?> GetAuthenticatedUserAsync(string? originHeader = null)
-        {
-            var user = await _apiAuthService.ValidateTokenAsync(Request.Headers["Authorization"].ToString(), originHeader);
-            if (user == null)
+            // Fallback to API token
+            Logger.LogDebug("Validating API token from Authorization header");
+            var tokenUser = await ApiAuthService.ValidateTokenAsync(Request.Headers["Authorization"].ToString(), originHeader, HttpContext.Connection.RemoteIpAddress);
+            if (tokenUser == null)
             {
                 return null;
             }
 
-            return await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == user.Id);
+            var dbUser = await DbContext.Users.FirstOrDefaultAsync(u => u.Id == tokenUser.Id);
+            if (dbUser != null && !dbUser.IsActive) return null;
+            if (dbUser != null) TagAuthenticatedUser(dbUser.Id);
+            return dbUser;
         }
 
-        private async Task<(User? user, IActionResult? error)> EnsureUserWithCreditsAsync(int requiredCredits = 1, string? originHeader = null)
+        private void TagAuthenticatedUser(Guid userId)
+        {
+            if (HttpContext != null)
+            {
+                HttpContext.Items[DotNetSigningServer.Middleware.ApiRequestLoggingMiddleware.AuthenticatedUserIdItemKey] = userId;
+            }
+        }
+
+        protected async Task<(User? user, ActionResult? error)> EnsureUserWithCreditsAsync(int requiredCredits = 1, string? originHeader = null)
         {
             var user = await GetAuthenticatedUserAsync(originHeader);
             if (user == null)
             {
+                Logger.LogWarning(Logging.LoggingEvents.AuthFailed, "API auth failed");
                 return (null, Unauthorized());
             }
 
-            if (requiredCredits > 0 && user.CreditsRemaining < requiredCredits)
+            // Enterprise users bypass the credits check (billed manually based on tracked usage)
+            if (requiredCredits > 0 && !user.IsEnterprise && user.CreditsRemaining < requiredCredits)
             {
-                return (null, StatusCode(StatusCodes.Status402PaymentRequired, new { message = "No credits remaining. Please purchase more to continue." }));
+                Logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Credits insufficient for user {UserId}", user.Id);
+                return (null, StatusCode(StatusCodes.Status402PaymentRequired, new { message = Localizer["NoCreditsRemaining"].Value }));
             }
 
             return (user, null);
         }
 
-        private async Task DebitUserAsync(User user, int debit = 1)
+        protected async Task<bool> DebitUserAsync(User user, int debit = 1, string? operation = null, Guid? documentId = null)
         {
             if (debit <= 0)
             {
-                return;
+                return true;
             }
 
-            user.CreditsRemaining = Math.Max(0, user.CreditsRemaining - debit);
-            _dbContext.Users.Update(user);
-            await _dbContext.SaveChangesAsync();
+            // Tier is computed by UserConcurrencyMiddleware at semaphore acquisition (atomic with
+            // WaitAsync success). Reading it from HttpContext.Items avoids the SemaphoreSlim.CurrentCount
+            // race where multiple requests can observe the same drifting inFlight value near tier boundaries.
+            var tier = HttpContext?.Items[DotNetSigningServer.Middleware.UserConcurrencyMiddleware.TierItemKey] is int t ? t : 1;
+            var effectiveDebit = debit * tier;
+
+            // Enterprise users: skip the credits decrement but still record usage for billing
+            if (!user.IsEnterprise)
+            {
+                var rowsAffected = await DbContext.Database.ExecuteSqlRawAsync(
+                    "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" - {0} WHERE \"Id\" = {1} AND \"CreditsRemaining\" >= {2}",
+                    effectiveDebit, user.Id, effectiveDebit);
+
+                if (rowsAffected == 0)
+                {
+                    return false;
+                }
+
+                // Refresh the in-memory entity to reflect the new value
+                await DbContext.Entry(user).ReloadAsync();
+            }
+
+            // Track usage for reporting (base cost, tier, effective debit)
+            try
+            {
+                DbContext.UsageRecords.Add(new UsageRecord
+                {
+                    UserId = user.Id,
+                    DocumentId = documentId,
+                    Count = effectiveDebit,
+                    BaseCost = debit,
+                    Tier = tier,
+                    Operation = operation,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                });
+                await DbContext.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                // Usage tracking is best-effort — never fail the request because of it
+                Logger.LogWarning(ex, "Failed to write UsageRecord for user {UserId}", user.Id);
+            }
+
+            // Check auto-recharge threshold (fire-and-forget to not block the API response)
+            // Skip for Enterprise users — they're billed manually
+            if (!user.IsEnterprise && user.AutoRechargeEnabled && user.AutoRechargeQuantity > 0)
+            {
+                if (user.CreditsRemaining < AutoRechargeService.ThresholdCredits)
+                {
+                    var userId = user.Id;
+                    var serviceScopeFactory = HttpContext.RequestServices.GetRequiredService<IServiceScopeFactory>();
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            using var scope = serviceScopeFactory.CreateScope();
+                            var rechargeService = scope.ServiceProvider.GetRequiredService<IAutoRechargeService>();
+                            await rechargeService.TryAutoRechargeAsync(userId);
+                        }
+                        catch (Exception ex)
+                        {
+                            using var scope = serviceScopeFactory.CreateScope();
+                            scope.ServiceProvider.GetService<ILoggerFactory>()
+                                ?.CreateLogger("AutoRecharge")
+                                .LogError(ex, "Background auto-recharge failed for user {UserId}", userId);
+                        }
+                    });
+                }
+            }
+
+            return true;
+        }
+
+        protected async Task<PdfFieldDefinition> GetSignatureFieldAsync(Guid templateId, Guid userId)
+        {
+            var template = await PdfTemplateService.GetTemplateAsync(templateId, userId);
+            var signatureField = template.Fields.FirstOrDefault(f => f.Type == PdfFieldType.Signature);
+            if (signatureField == null)
+            {
+                throw new InvalidOperationException("Template does not contain a signature field.");
+            }
+            return signatureField;
+        }
+
+        /// <summary>
+        /// Returns a base64 PDF either as JSON (default) or as raw application/pdf bytes when
+        /// the client explicitly sets Accept: application/pdf.
+        /// </summary>
+        /// <param name="base64Pdf">Base64-encoded PDF content.</param>
+        /// <param name="jsonBody">Optional custom JSON body; defaults to { result = base64Pdf }.</param>
+        /// <param name="onPdfResponse">Optional hook to set response headers when returning raw PDF.</param>
+        protected IActionResult PdfOrJsonResult(string base64Pdf, object? jsonBody = null, Action<HttpResponse>? onPdfResponse = null)
+        {
+            if (ClientPrefersPdf(Request.Headers["Accept"].ToString()))
+            {
+                try
+                {
+                    var bytes = Convert.FromBase64String(base64Pdf);
+                    onPdfResponse?.Invoke(Response);
+                    return File(bytes, "application/pdf");
+                }
+                catch (FormatException)
+                {
+                    // Malformed base64 from the service — fall through to JSON so the client still sees the payload.
+                }
+            }
+            return Ok(jsonBody ?? new { result = base64Pdf });
+        }
+
+        private static bool ClientPrefersPdf(string acceptHeader)
+        {
+            if (string.IsNullOrWhiteSpace(acceptHeader)) return false;
+            foreach (var raw in acceptHeader.Split(','))
+            {
+                var type = raw.Trim();
+                var sep = type.IndexOf(';');
+                if (sep >= 0) type = type[..sep].Trim();
+                if (string.Equals(type, "application/pdf", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        protected IActionResult PaymentRequired(User user, int requiredCredits)
+        {
+            Logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Credits insufficient for user {UserId}", user.Id);
+            return StatusCode(StatusCodes.Status402PaymentRequired, new { message = Localizer["NotEnoughCredits", requiredCredits].Value });
+        }
+
+        protected static int CalculateCreditsForPages(int pageCount)
+        {
+            if (pageCount <= 0) return 0;
+            return (int)Math.Ceiling(pageCount / 3.0);
+        }
+
+        protected static int CountPagesFromBase64(string pdfBase64)
+        {
+            using var ms = new MemoryStream(Convert.FromBase64String(pdfBase64));
+            using var reader = new PdfReader(ms);
+            using var pdf = new PdfDocument(reader);
+            return pdf.GetNumberOfPages();
         }
     }
 }

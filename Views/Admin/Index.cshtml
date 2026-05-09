@@ -1,0 +1,88 @@
+@model IEnumerable<DotNetSigningServer.Controllers.AdminController.AdminUserRow>
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
+@{
+    ViewData["Title"] = L["AdminTitle"].Value;
+    var search = ViewBag.Search as string ?? "";
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="flash error">@TempData["Error"]</div>
+}
+@if (TempData["Info"] != null)
+{
+    <div class="flash info">@TempData["Info"]</div>
+}
+
+<main>
+    <h1 class="content-box-title">@L["AdminTitle"]</h1>
+
+    <form method="get" action="/Admin" style="margin-bottom:1.25rem">
+        <div style="display:flex;gap:0.5rem;align-items:center">
+            <input type="text" name="search" placeholder="@L["SearchByEmail"]" value="@search"
+                   class="tokens-input" style="max-width:400px" />
+            <button type="submit" class="btn btn-primary">@L["Search"]</button>
+            @if (!string.IsNullOrEmpty(search))
+            {
+                <a href="/Admin" class="btn-small btn-secondary">@L["Clear"]</a>
+            }
+        </div>
+    </form>
+
+    <section class="tokens-existing">
+        <h2 class="tokens-existing-title">@L["Users"] (@Model.Count())</h2>
+        <div class="table-wrapper">
+            @if (!Model.Any())
+            {
+                <p class="muted p-4">@L["NoUsersFound"]</p>
+            }
+            else
+            {
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>@L["Email"]</th>
+                            <th>@L["Credits"]</th>
+                            <th>@L["Plan"]</th>
+                            <th>@L["Active"]</th>
+                            <th>@L["Created"]</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var u in Model)
+                        {
+                            <tr>
+                                <td>
+                                    @u.Email
+                                    @if (u.IsAdmin)
+                                    {
+                                        <span class="tokens-status" style="background:#dbeafe;color:#1e40af;margin-left:0.5rem">Admin</span>
+                                    }
+                                </td>
+                                <td>@(u.IsEnterprise ? "∞" : u.CreditsRemaining.ToString())</td>
+                                <td>
+                                    @if (u.IsEnterprise)
+                                    {
+                                        <span class="tokens-status" style="background:#fef3c7;color:#92400e">Enterprise</span>
+                                    }
+                                    else if (u.AutoRechargeEnabled)
+                                    {
+                                        <span class="tokens-status" style="background:#dcfce7;color:#166534">Auto-recharge</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="muted">Pay-as-you-go</span>
+                                    }
+                                </td>
+                                <td>@(u.IsActive ? "✓" : "✗")</td>
+                                <td>@u.CreatedAt.ToLocalTime().ToString("d")</td>
+                                <td><a href="/Admin/Users/@u.Id" class="btn-small btn-secondary">@L["Detail"]</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </section>
+</main>

@@ -1,76 +1,265 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "Digital Signing Platform";
-    var signupSuccess = ViewData["SignupSuccess"] as bool? ?? false;
+  ViewData["Title"] = "PDF Automation Platform | P4PDF by Performance4 s.r.o.";
+  var signupSuccess = ViewData["SignupSuccess"] as bool? ?? false;
 }
 
 @if (signupSuccess)
 {
-    <div class="flash info">Email verified and account created successfully. Welcome!</div>
+  <div class="flash info m-0">@L["HomeSignupSuccess"]</div>
 }
 
-<section style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:2rem;align-items:center;">
-    <div>
-        <p style="display:inline-block;padding:0.4rem 0.75rem;border-radius:999px;background:#e0f2fe;color:#075985;font-weight:700;font-size:0.9rem;">
-            PDF signing API
-        </p>
-        <h1 style="font-size:2.6rem;margin:0.75rem 0 0.5rem;line-height:1.1;">
-            PDF digital signatures, timestamps, and attachments in one API.
-        </h1>
-        <p style="color:#475569;font-size:1.05rem;max-width:38ch;margin-bottom:1.25rem;">
-            Sign PDFs, add trusted timestamps, embed attachments, and detect barcodes using a simple REST API you can call from any backend or workflow.
-        </p>
-        <div style="display:inline-flex;gap:0.25rem;flex-wrap:wrap;flex-direction:column;">
-            <a href="/Account/SignUp" style="background:#2563eb;color:#fff;padding:0.8rem 1.1rem;border-radius:8px;text-decoration:none;font-weight:700;">
-                Get Started With Free Account
-            </a>
-            <small class="muted" style="text-align:center;">No credit card required</small>
-        </div>
-    </div>
-    <div style="background:#0f172a;color:#e2e8f0;padding:1.5rem;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,0.1);">
-        <p style="color:#94a3b8;font-weight:600;font-size:0.95rem;margin:0 0 0.25rem;">Simple REST request</p>
-        <div style="font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;font-size:0.92rem;line-height:1.45;overflow-x:auto;">
-<pre style="margin:0;white-space:pre-wrap;">POST /api/sign
-Authorization: Bearer &lt;token&gt;
-Content-Type: application/json
+<section class="hero">
+  <div class="hero-container">
+    <div class="hero-grid">
+      <!-- Left side - Content -->
+      <div class="hero-content">
+        <h1 class="hero-title">@L["HomeHeroTitle"]</h1>
 
-{
-  "id": "ef2c…4d7a",
-  "signedHash": "iVBORw0KG…RK5CYII="
-}</pre>
+        <p class="hero-description">
+          @L["HomeHeroDescription"]
+        </p>
+
+        <div class="hero-buttons">
+          <a href="/api/docs" class="btn btn-primary">
+            @L["HomeApiDocs"]
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h14" />
+              <path d="m12 5 7 7-7 7" />
+            </svg>
+          </a>
+          <a href="https://github.com/janprasil/dotnet-signing-server/tree/main/examples"
+             class="btn btn-secondary">@L["HomeExampleIntegration"]</a>
         </div>
-        <div style="margin-top:1rem;display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;">
-            <p style="margin:0;color:#cbd5e1;font-size:0.95rem;">
-                Full reference and examples in the docs.
-            </p>
-            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                <a href="/api/docs" style="background:#2563eb;color:#fff;padding:0.65rem 0.9rem;border-radius:8px;text-decoration:none;font-weight:700;">
-                    View API docs
-                </a>
-                <a href="https://github.com/janprasil/dotnet-signing-server/tree/main/examples/react-example" target="_blank" rel="noopener" style="background:#0ea5e9;color:#0f172a;padding:0.65rem 0.9rem;border-radius:8px;text-decoration:none;font-weight:700;">
-                    Check integration example
-                </a>
+      </div>
+
+      <!-- Right side - Code example -->
+      <div class="hero-code">
+        <div class="hero-code-header">
+          <div class="hero-code-dot hero-code-dot--red"></div>
+          <div class="hero-code-dot hero-code-dot--yellow"></div>
+          <div class="hero-code-dot hero-code-dot--green"></div>
+          <span class="hero-code-label">@L["HomeExampleApiRequest"]</span>
+        </div>
+        <pre><code><span class="code-accent">POST</span> /api/sign
+          <span class="code-dim">Authorization:</span> Bearer &lt;token&gt;
+          <span class="code-dim">Content-Type:</span> application/json
+
+          <span class="code-white">{</span>
+          <span class="code-accent">"id"</span>: <span class="code-string">"ef2c...4d7a"</span>,
+          <span class="code-accent">"signedHash"</span>: <span class="code-string">"iVB0Rw0KGgo..."</span>
+          <span class="code-white">}</span></code></pre>
+          <p class="hero-code-footer">@L["HomeCodeFooter"]</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================
+       FEATURES SECTION
+       ============================================ -->
+  <section class="features">
+    <div class="features-groups">
+
+      <!-- Feature Group 1: Generate PDFs -->
+      <div class="feature-group">
+        <div class="feature-group-header">
+          <h2 class="feature-group-title">@L["HomeFeatureGenerateTitle"]</h2>
+          <p class="feature-group-description">
+            @L["HomeFeatureGenerateDescription"]
+          </p>
+        </div>
+
+        <div class="feature-cards">
+          <div class="feature-card">
+            <div class="feature-card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+                <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+              </svg>
             </div>
-        </div>
-    </div>
-</section>
+            <h3 class="feature-card-title">@L["HomeVisualFieldMappingTitle"]</h3>
+            <p class="feature-card-description">@L["HomeVisualFieldMappingDescription"]</p>
+          </div>
 
-<section style="margin-top:2.5rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
-    <div style="background:#f8fafc;padding:1rem;border-radius:10px;border:1px solid #e2e8f0;">
-        <h3>Sign &amp; timestamp PDFs</h3>
-        <p class="muted">
-            Apply digital signatures and add trusted timestamps from your preferred TSA, fully automated.
-        </p>
+          <div class="feature-card">
+            <div class="feature-card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path
+                d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z" />
+                <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65" />
+                <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65" />
+              </svg>
+            </div>
+            <h3 class="feature-card-title">@L["HomeDynamicDataBindingTitle"]</h3>
+            <p class="feature-card-description">@L["HomeDynamicDataBindingDescription"]</p>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Feature Group 2: Digital signatures -->
+      <div class="feature-group">
+        <div class="feature-group-header">
+          <h2 class="feature-group-title">@L["HomeFeatureSigningTitle"]</h2>
+          <p class="feature-group-description">
+            @L["HomeFeatureSigningDescription"]
+          </p>
+        </div>
+
+        <div class="feature-cards">
+          <div class="feature-card">
+            <div class="feature-card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
+                <path d="m9 12 2 2 4-4" />
+              </svg>
+            </div>
+            <h3 class="feature-card-title">@L["HomeCertificateSigningTitle"]</h3>
+            <p class="feature-card-description">@L["HomeCertificateSigningDescription"]</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            </div>
+            <h3 class="feature-card-title">@L["HomeTrustedTimestampsTitle"]</h3>
+            <p class="feature-card-description">@L["HomeTrustedTimestampsDescription"]</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </div>
+            <h3 class="feature-card-title">@L["HomeMultipleSignaturesTitle"]</h3>
+            <p class="feature-card-description">@L["HomeMultipleSignaturesDescription"]</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature Group 3: Embed attachments -->
+      <div class="feature-group">
+        <div class="feature-group-header">
+          <h2 class="feature-group-title">@L["HomeFeatureAttachmentsTitle"]</h2>
+          <p class="feature-group-description">
+            @L["HomeFeatureAttachmentsDescription"]
+          </p>
+        </div>
+
+        <div class="feature-cards">
+          <div class="feature-card">
+            <div class="feature-card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path
+                d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+              </svg>
+            </div>
+            <h3 class="feature-card-title">@L["HomeAnyFileTypeTitle"]</h3>
+            <p class="feature-card-description">@L["HomeAnyFileTypeDescription"]</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path
+                d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+                <path d="M12 10v6" />
+                <path d="m9 13 3-3 3 3" />
+              </svg>
+            </div>
+            <h3 class="feature-card-title">@L["HomeEvidenceBundlesTitle"]</h3>
+            <p class="feature-card-description">@L["HomeEvidenceBundlesDescription"]</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <ellipse cx="12" cy="5" rx="9" ry="3" />
+                <path d="M3 5v14a9 3 0 0 0 18 0V5" />
+                <path d="M3 12a9 3 0 0 0 18 0" />
+              </svg>
+            </div>
+            <h3 class="feature-card-title">@L["HomeMetadataSupportTitle"]</h3>
+            <p class="feature-card-description">@L["HomeMetadataSupportDescription"]</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature Group 4: QR & barcodes -->
+      <div class="feature-group">
+        <div class="feature-group-header">
+          <h2 class="feature-group-title">@L["HomeFeatureCodesTitle"]</h2>
+          <p class="feature-group-description">
+            @L["HomeFeatureCodesDescription"]
+          </p>
+        </div>
+
+        <div class="feature-cards">
+          <div class="feature-card">
+            <div class="feature-card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="5" height="5" x="3" y="3" rx="1" />
+                <rect width="5" height="5" x="16" y="3" rx="1" />
+                <rect width="5" height="5" x="3" y="16" rx="1" />
+                <path d="M21 16h-3a2 2 0 0 0-2 2v3" />
+                <path d="M21 21v.01" />
+                <path d="M12 7v3a2 2 0 0 1-2 2H7" />
+                <path d="M3 12h.01" />
+                <path d="M12 3h.01" />
+                <path d="M12 16v.01" />
+                <path d="M16 12h1" />
+                <path d="M21 12v.01" />
+                <path d="M12 21v-1" />
+              </svg>
+            </div>
+            <h3 class="feature-card-title">@L["HomeMultiCodeTitle"]</h3>
+            <p class="feature-card-description">@L["HomeMultiCodeDescription"]</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="6" />
+                <circle cx="12" cy="12" r="2" />
+              </svg>
+            </div>
+            <h3 class="feature-card-title">@L["HomeCoordinatesTitle"]</h3>
+            <p class="feature-card-description">@L["HomeCoordinatesDescription"]</p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <path d="m9 11 3 3L22 4" />
+              </svg>
+            </div>
+            <h3 class="feature-card-title">@L["HomeErrorCorrectionTitle"]</h3>
+            <p class="feature-card-description">@L["HomeErrorCorrectionDescription"]</p>
+          </div>
+        </div>
+      </div>
+
     </div>
-    <div style="background:#f8fafc;padding:1rem;border-radius:10px;border:1px solid #e2e8f0;">
-        <h3>Embed attachments</h3>
-        <p class="muted">
-            Attach reports, raw data or any supporting files directly inside the signed PDF package.
-        </p>
-    </div>
-    <div style="background:#f8fafc;padding:1rem;border-radius:10px;border:1px solid #e2e8f0;">
-        <h3>Read QR &amp; barcodes</h3>
-        <p class="muted">
-            Detect and extract QR codes, Datamatrix and other barcodes from documents via the same API.
-        </p>
-    </div>
-</section>
+  </section>

@@ -1,9 +1,12 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Middleware;
 using DotNetSigningServer.Models;
+using DotNetSigningServer.Resources;
 using DotNetSigningServer.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Localization;
 using System.Security.Claims;
 
 namespace DotNetSigningServer.Controllers;
@@ -13,11 +16,19 @@ public class ApiTokensController : Controller
 {
     private readonly ApplicationDbContext _dbContext;
     private readonly ITokenService _tokenService;
+    private readonly IIpWhitelistService _ipWhitelistService;
+    private readonly IApiAuthService _apiAuth;
+    private readonly ILogger<ApiTokensController> _logger;
+    private readonly IStringLocalizer<SharedStrings> _localizer;
 
-    public ApiTokensController(ApplicationDbContext dbContext, ITokenService tokenService)
+    public ApiTokensController(ApplicationDbContext dbContext, ITokenService tokenService, IIpWhitelistService ipWhitelistService, IApiAuthService apiAuth, ILogger<ApiTokensController> logger, IStringLocalizer<SharedStrings> localizer)
     {
         _dbContext = dbContext;
         _tokenService = tokenService;
+        _ipWhitelistService = ipWhitelistService;
+        _apiAuth = apiAuth;
+        _logger = logger;
+        _localizer = localizer;
     }
 
     [HttpGet("/ApiTokens")]
@@ -36,12 +47,64 @@ public class ApiTokensController : Controller
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync();
 
+        var user = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId.Value);
+        ViewBag.MaxConcurrentOperations = user?.MaxConcurrentOperations;
+        ViewBag.ConcurrencyQueueTimeoutSeconds = user?.ConcurrencyQueueTimeoutSeconds;
+
         return View(tokens);
+    }
+
+    [HttpPost("/ApiTokens/MaxConcurrent")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateMaxConcurrent(int? maxConcurrent)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction("SignIn", "Account");
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null) return RedirectToAction("SignIn", "Account");
+
+        // Clamp to a sane range; NULL = use plan default
+        if (maxConcurrent.HasValue)
+        {
+            if (maxConcurrent.Value < 1 || maxConcurrent.Value > 50)
+            {
+                TempData["Error"] = _localizer["InvalidConcurrencyLimit"].Value;
+                return RedirectToAction(nameof(Index));
+            }
+        }
+
+        user.MaxConcurrentOperations = maxConcurrent;
+        // Intentionally NOT touching UpdatedAt — it's used as the cookie security stamp
+        // (see Program.cs cookie OnValidatePrincipal). Bumping it here would sign the user out.
+        await _dbContext.SaveChangesAsync();
+        UserConcurrencyMiddleware.InvalidateLimitCache(user.Id);
+
+        TempData["Info"] = _localizer["ConcurrencyLimitUpdated"].Value;
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost("/ApiTokens/QueueTimeout")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateQueueTimeout(int? queueTimeoutSeconds)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction("SignIn", "Account");
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null) return RedirectToAction("SignIn", "Account");
+
+        user.ConcurrencyQueueTimeoutSeconds = queueTimeoutSeconds < 0 ? null : queueTimeoutSeconds;
+        await _dbContext.SaveChangesAsync();
+        UserConcurrencyMiddleware.InvalidateLimitCache(user.Id);
+
+        TempData["Info"] = _localizer["ConcurrencyQueueTimeoutUpdated"].Value;
+        return RedirectToAction(nameof(Index));
     }
 
     [HttpPost("/ApiTokens")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(string label, DateTimeOffset? expiresAt = null, string usageType = "server", string? allowedOrigins = null)
+    public async Task<IActionResult> Create(string label, DateTimeOffset? expiresAt = null, string usageType = "server", string? allowedOrigins = null, string? allowedIps = null)
     {
         var userId = GetCurrentUserId();
         if (userId == null)
@@ -49,10 +112,31 @@ public class ApiTokensController : Controller
             return RedirectToAction("SignIn", "Account");
         }
 
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            TempData["LabelError"] = _localizer["LabelRequired"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+
+        label = label.Trim();
+        if (label.Length > 128)
+        {
+            TempData["LabelError"] = _localizer["LabelTooLong"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+
+        var nowUtc = DateTimeOffset.UtcNow;
+        var expiresUtc = expiresAt?.ToUniversalTime();
+        if (expiresUtc.HasValue && expiresUtc.Value <= nowUtc)
+        {
+            TempData["Error"] = _localizer["ExpirationMustBeFuture"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+
         var user = await _dbContext.Users.FindAsync(userId.Value);
         if (user == null)
         {
-            TempData["Error"] = "User not found.";
+            TempData["Error"] = _localizer["UserNotFound"].Value;
             return RedirectToAction(nameof(Index));
         }
 
@@ -64,8 +148,29 @@ public class ApiTokensController : Controller
 
         if (isBrowser && normalizedOrigins.Count == 0)
         {
-            TempData["Error"] = "At least one valid origin (https or localhost) is required for browser tokens.";
+            TempData["Error"] = _localizer["OriginsRequired"].Value;
             return RedirectToAction(nameof(Index));
+        }
+
+        // Validate AllowedIps for server tokens
+        string? storedIps = null;
+        if (!isBrowser && !string.IsNullOrWhiteSpace(allowedIps))
+        {
+            var (validIps, invalidIps) = _ipWhitelistService.ParseAndValidateIps(allowedIps);
+            if (invalidIps.Count > 0)
+            {
+                TempData["Error"] = _localizer["InvalidIpAddresses", string.Join(", ", invalidIps)].Value;
+                return RedirectToAction(nameof(Index));
+            }
+            if (validIps.Count > 20)
+            {
+                TempData["Error"] = _localizer["MaxIpEntries"].Value;
+                return RedirectToAction(nameof(Index));
+            }
+            if (validIps.Count > 0)
+            {
+                storedIps = string.Join("\n", validIps);
+            }
         }
 
         var (plaintext, hash, _) = _tokenService.IssueToken(user, label, expiresAt);
@@ -74,14 +179,18 @@ public class ApiTokensController : Controller
             UserId = user.Id,
             Label = label,
             TokenHash = hash,
-            ExpiresAt = expiresAt,
+            TokenPrefix = plaintext.Length >= 8 ? plaintext[..8] : plaintext,
+            ExpiresAt = expiresUtc,
             IsBrowserToken = isBrowser,
-            AllowedOrigins = isBrowser ? string.Join("\n", normalizedOrigins) : null
+            AllowedOrigins = isBrowser ? string.Join("\n", normalizedOrigins) : null,
+            AllowedIps = storedIps,
+            CreatedAt = nowUtc
         };
 
         _dbContext.ApiTokens.Add(token);
         await _dbContext.SaveChangesAsync();
 
+        _logger.LogInformation(DotNetSigningServer.Logging.LoggingEvents.TokenCreated, "Token created for user {UserId} label {Label} browser {Browser}", user.Id, label, isBrowser);
         TempData["NewToken"] = plaintext;
         return RedirectToAction(nameof(Index));
     }
@@ -99,12 +208,14 @@ public class ApiTokensController : Controller
         var token = await _dbContext.ApiTokens.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId.Value);
         if (token == null)
         {
-            TempData["Error"] = "Token not found.";
+            TempData["Error"] = _localizer["TokenNotFound"].Value;
             return RedirectToAction(nameof(Index));
         }
 
         token.RevokedAt = DateTimeOffset.UtcNow;
         await _dbContext.SaveChangesAsync();
+        _apiAuth.InvalidateTokenCache(token.Id);
+        _logger.LogInformation(DotNetSigningServer.Logging.LoggingEvents.TokenRevoked, "Token {TokenId} revoked for user {UserId}", id, userId);
         return RedirectToAction(nameof(Index));
     }
 
@@ -121,13 +232,15 @@ public class ApiTokensController : Controller
         var token = await _dbContext.ApiTokens.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId.Value);
         if (token == null)
         {
-            TempData["Error"] = "Token not found.";
+            TempData["Error"] = _localizer["TokenNotFound"].Value;
             return RedirectToAction(nameof(Index));
         }
 
         _dbContext.ApiTokens.Remove(token);
         await _dbContext.SaveChangesAsync();
-        TempData["Info"] = "Token deleted.";
+        _apiAuth.InvalidateTokenCache(token.Id);
+        _logger.LogInformation(DotNetSigningServer.Logging.LoggingEvents.TokenDeleted, "Token {TokenId} deleted for user {UserId}", id, userId);
+        TempData["Info"] = _localizer["TokenDeleted"].Value;
         return RedirectToAction(nameof(Index));
     }
 

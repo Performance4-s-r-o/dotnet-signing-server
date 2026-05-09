@@ -1,22 +1,54 @@
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "dotnet-signing-server", "dotnet-signing-server.csproj", "{93D0F867-019F-4E7B-D648-918F34878E04}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DotNetSigningServer.Tests", "tests\DotNetSigningServer.Tests\DotNetSigningServer.Tests.csproj", "{7BA10D05-2E4E-466A-8685-48741E20AE3C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
 		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{93D0F867-019F-4E7B-D648-918F34878E04}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{93D0F867-019F-4E7B-D648-918F34878E04}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{93D0F867-019F-4E7B-D648-918F34878E04}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{93D0F867-019F-4E7B-D648-918F34878E04}.Debug|x64.Build.0 = Debug|Any CPU
+		{93D0F867-019F-4E7B-D648-918F34878E04}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{93D0F867-019F-4E7B-D648-918F34878E04}.Debug|x86.Build.0 = Debug|Any CPU
 		{93D0F867-019F-4E7B-D648-918F34878E04}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{93D0F867-019F-4E7B-D648-918F34878E04}.Release|Any CPU.Build.0 = Release|Any CPU
+		{93D0F867-019F-4E7B-D648-918F34878E04}.Release|x64.ActiveCfg = Release|Any CPU
+		{93D0F867-019F-4E7B-D648-918F34878E04}.Release|x64.Build.0 = Release|Any CPU
+		{93D0F867-019F-4E7B-D648-918F34878E04}.Release|x86.ActiveCfg = Release|Any CPU
+		{93D0F867-019F-4E7B-D648-918F34878E04}.Release|x86.Build.0 = Release|Any CPU
+		{7BA10D05-2E4E-466A-8685-48741E20AE3C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7BA10D05-2E4E-466A-8685-48741E20AE3C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7BA10D05-2E4E-466A-8685-48741E20AE3C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7BA10D05-2E4E-466A-8685-48741E20AE3C}.Debug|x64.Build.0 = Debug|Any CPU
+		{7BA10D05-2E4E-466A-8685-48741E20AE3C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{7BA10D05-2E4E-466A-8685-48741E20AE3C}.Debug|x86.Build.0 = Debug|Any CPU
+		{7BA10D05-2E4E-466A-8685-48741E20AE3C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7BA10D05-2E4E-466A-8685-48741E20AE3C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7BA10D05-2E4E-466A-8685-48741E20AE3C}.Release|x64.ActiveCfg = Release|Any CPU
+		{7BA10D05-2E4E-466A-8685-48741E20AE3C}.Release|x64.Build.0 = Release|Any CPU
+		{7BA10D05-2E4E-466A-8685-48741E20AE3C}.Release|x86.ActiveCfg = Release|Any CPU
+		{7BA10D05-2E4E-466A-8685-48741E20AE3C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{7BA10D05-2E4E-466A-8685-48741E20AE3C} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {8F618B3F-4565-4E5A-BFCB-02E62270617A}
