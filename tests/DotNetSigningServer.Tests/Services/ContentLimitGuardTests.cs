@@ -1,3 +1,4 @@
+using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Tests.Helpers;
@@ -73,9 +74,8 @@ public class ContentLimitGuardTests
     {
         var sut = CreateGuard(new LimitsOptions { PdfMaxBytes = 100 });
         var base64 = TestHelpers.CreateBase64OfSize(200);
-        var ex = Assert.Throws<InvalidOperationException>(() => sut.EnsurePdfWithinLimit(base64, "test"));
-        Assert.Contains("PDF", ex.Message);
-        Assert.Contains("exceeds", ex.Message);
+        var ex = Assert.Throws<ApiValidationException>(() => sut.EnsurePdfWithinLimit(base64, "test"));
+        Assert.Equal("PDF_SIZE_EXCEEDED", ex.Code);
     }
 
     [Fact]
@@ -113,8 +113,8 @@ public class ContentLimitGuardTests
     {
         var sut = CreateGuard(new LimitsOptions { ImageMaxBytes = 100 });
         var base64 = TestHelpers.CreateBase64OfSize(200);
-        var ex = Assert.Throws<InvalidOperationException>(() => sut.EnsureImageWithinLimit(base64, "test"));
-        Assert.Contains("image", ex.Message);
+        var ex = Assert.Throws<ApiValidationException>(() => sut.EnsureImageWithinLimit(base64, "test"));
+        Assert.Equal("IMAGE_SIZE_EXCEEDED", ex.Code);
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public class ContentLimitGuardTests
     {
         var sut = CreateGuard(new LimitsOptions { AttachmentMaxBytes = 100 });
         var base64 = TestHelpers.CreateBase64OfSize(200);
-        var ex = Assert.Throws<InvalidOperationException>(() => sut.EnsureAttachmentWithinLimit(base64, "test"));
-        Assert.Contains("attachment", ex.Message);
+        var ex = Assert.Throws<ApiValidationException>(() => sut.EnsureAttachmentWithinLimit(base64, "test"));
+        Assert.Equal("ATTACHMENT_SIZE_EXCEEDED", ex.Code);
     }
 }

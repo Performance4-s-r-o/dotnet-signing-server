@@ -412,4 +412,39 @@
   <data name="FooterResources" xml:space="preserve"><value>Ressourcen</value></data>
   <data name="FooterCreatedBy" xml:space="preserve"><value>Erstellt von Performance4 s.r.o.</value></data>
   <data name="FooterContactInfo" xml:space="preserve"><value>Kontaktinformationen</value></data>
+
+  <!-- Validation Error Codes -->
+  <data name="Error_PDF_SIZE_EXCEEDED" xml:space="preserve"><value>Die PDF-Datei überschreitet die maximal zulässige Größe.</value></data>
+  <data name="Error_IMAGE_SIZE_EXCEEDED" xml:space="preserve"><value>Die Bilddatei überschreitet die maximal zulässige Größe.</value></data>
+  <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>Der Anhang überschreitet die maximal zulässige Größe.</value></data>
+  <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>PDF-Inhalt ist erforderlich.</value></data>
+  <data name="Error_FIELDS_REQUIRED" xml:space="preserve"><value>Mindestens eine Felddefinition ist erforderlich.</value></data>
+  <data name="Error_PDF_CONTENT_REQUIRED_NO_TEMPLATE" xml:space="preserve"><value>PDF-Inhalt ist erforderlich, wenn keine Vorlage angegeben wird.</value></data>
+  <data name="Error_DATA_REQUIRED" xml:space="preserve"><value>Mindestens ein Datensatz ist erforderlich, um das PDF auszufüllen.</value></data>
+  <data name="Error_TEMPLATE_NO_FIELDS" xml:space="preserve"><value>Die gespeicherte Vorlage enthält keine Felddefinitionen.</value></data>
+  <data name="Error_TEMPLATE_NOT_FOUND" xml:space="preserve"><value>Vorlage nicht gefunden oder nicht zugänglich.</value></data>
+  <data name="Error_PRESIGNED_NOT_FOUND" xml:space="preserve"><value>Vorsigniertes PDF nicht gefunden. Bitte starten Sie den Signiervorgang neu.</value></data>
+  <data name="Error_TSA_NOT_CONFIGURED" xml:space="preserve"><value>Für die Anwendung von Zeitstempeln muss eine Zeitstempel-Behörde konfiguriert sein.</value></data>
+  <data name="Error_NO_SIGNATURE_FIELD" xml:space="preserve"><value>Die Vorlage enthält kein Signaturfeld.</value></data>
+  <data name="Error_PFX_NO_PRIVATE_KEY" xml:space="preserve"><value>In der bereitgestellten PFX-Datei wurde kein privater Schlüssel gefunden.</value></data>
+  <data name="Error_ENCRYPTION_NO_RECIPIENTS" xml:space="preserve"><value>Für die Beweismittelverschlüsselung ist mindestens ein Empfängerzertifikat erforderlich.</value></data>
+  <data name="Error_TSA_HTTPS_REQUIRED" xml:space="preserve"><value>Die URL der Zeitstempel-Behörde muss HTTPS verwenden.</value></data>
+  <data name="Error_FIELD_NAME_INVALID" xml:space="preserve"><value>Der Feldname darf nur Buchstaben, Zahlen, Unterstrich oder Bindestrich enthalten.</value></data>
+  <data name="Error_FIELD_TYPE_INVALID" xml:space="preserve"><value>Nicht unterstützter Feldtyp. Erlaubt: text, image, barcode, signature, table.</value></data>
+  <data name="Error_FIELD_HALIGN_INVALID" xml:space="preserve"><value>Horizontale Ausrichtung muss eines sein von: left, center, right.</value></data>
+  <data name="Error_FIELD_VALIGN_INVALID" xml:space="preserve"><value>Vertikale Ausrichtung muss eines sein von: top, center, bottom.</value></data>
+  <data name="Error_FIELD_FONTSIZE_INVALID" xml:space="preserve"><value>Schriftgröße muss zwischen 5 und 128 liegen.</value></data>
+  <data name="Error_FIELD_FONTWEIGHT_INVALID" xml:space="preserve"><value>Schriftstärke muss eines sein von: tiny, normal, bold.</value></data>
+  <data name="Error_FIELD_FONTNAME_INVALID" xml:space="preserve"><value>Schriftname muss eines sein von: Helvetica, Times-Roman, Courier, Symbol, ZapfDingbats.</value></data>
+  <data name="Error_FIELD_BARCODE_UNSUPPORTED" xml:space="preserve"><value>Das angegebene Barcode-Format wird nicht unterstützt.</value></data>
+  <data name="Error_TABLE_COLUMNS_ZERO" xml:space="preserve"><value>Die Tabelle muss mindestens eine Spalte haben.</value></data>
+  <data name="Error_TABLE_COLUMNS_MISMATCH" xml:space="preserve"><value>Die Anzahl der Spaltendefinitionen stimmt nicht mit der deklarierten Spaltenanzahl überein.</value></data>
+  <data name="Error_TABLE_COLUMN_NAME_REQUIRED" xml:space="preserve"><value>Tabellenspaltenname ist erforderlich.</value></data>
+  <data name="Error_TABLE_COLUMN_WIDTH_INVALID" xml:space="preserve"><value>Der prozentuale Breitenwert der Tabellenspalte muss zwischen 0 und 100 liegen.</value></data>
+  <data name="Error_TABLE_COLUMN_FONTSIZE_INVALID" xml:space="preserve"><value>Die Schriftgröße der Tabellenspalte muss zwischen 5 und 128 liegen.</value></data>
+  <data name="Error_TABLE_COLUMN_FONTWEIGHT_INVALID" xml:space="preserve"><value>Die Schriftstärke der Tabellenspalte muss eines sein von: tiny, normal, bold.</value></data>
+  <data name="Error_TABLE_COLUMN_HALIGN_INVALID" xml:space="preserve"><value>Die horizontale Ausrichtung der Tabellenspalte muss eines sein von: left, center, right.</value></data>
+  <data name="Error_TABLE_COLUMN_VALIGN_INVALID" xml:space="preserve"><value>Die vertikale Ausrichtung der Tabellenspalte muss eines sein von: top, center, bottom.</value></data>
+  <data name="Error_TABLE_COLUMN_BORDER_INVALID" xml:space="preserve"><value>Der Rahmen der Tabellenspalte muss eines sein von: none, dashed, filled.</value></data>
+  <data name="Error_TABLE_NO_COLUMNS" xml:space="preserve"><value>Das Tabellenfeld muss mindestens eine Spalte definieren.</value></data>
 </root>

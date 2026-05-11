@@ -1,4 +1,5 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Options;
@@ -147,9 +148,9 @@ namespace DotNetSigningServer.Controllers
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "AI detect");
             }
-            catch (InvalidOperationException ex)
+            catch (ApiValidationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
             try
@@ -189,9 +190,9 @@ namespace DotNetSigningServer.Controllers
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "AI extract-data");
             }
-            catch (InvalidOperationException ex)
+            catch (ApiValidationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
             try

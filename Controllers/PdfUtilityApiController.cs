@@ -1,4 +1,5 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Options;
@@ -48,9 +49,9 @@ namespace DotNetSigningServer.Controllers
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "PDF/A conversion");
             }
-            catch (InvalidOperationException ex)
+            catch (ApiValidationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
             try
@@ -110,9 +111,9 @@ namespace DotNetSigningServer.Controllers
                     LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Fill PDF");
                 }
             }
-            catch (InvalidOperationException ex)
+            catch (ApiValidationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
             try
@@ -153,9 +154,9 @@ namespace DotNetSigningServer.Controllers
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Barcode scan");
             }
-            catch (InvalidOperationException ex)
+            catch (ApiValidationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
             var formats = ParseFormats(input.CodeType);

@@ -412,4 +412,39 @@
   <data name="FooterResources" xml:space="preserve"><value>Recursos</value></data>
   <data name="FooterCreatedBy" xml:space="preserve"><value>Creado por Performance4 s.r.o.</value></data>
   <data name="FooterContactInfo" xml:space="preserve"><value>Información de contacto</value></data>
+
+  <!-- Validation Error Codes -->
+  <data name="Error_PDF_SIZE_EXCEEDED" xml:space="preserve"><value>El archivo PDF supera el tamaño máximo permitido.</value></data>
+  <data name="Error_IMAGE_SIZE_EXCEEDED" xml:space="preserve"><value>El archivo de imagen supera el tamaño máximo permitido.</value></data>
+  <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>El archivo adjunto supera el tamaño máximo permitido.</value></data>
+  <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>El contenido del PDF es obligatorio.</value></data>
+  <data name="Error_FIELDS_REQUIRED" xml:space="preserve"><value>Se requiere al menos una definición de campo.</value></data>
+  <data name="Error_PDF_CONTENT_REQUIRED_NO_TEMPLATE" xml:space="preserve"><value>El contenido del PDF es obligatorio cuando no se proporciona una plantilla.</value></data>
+  <data name="Error_DATA_REQUIRED" xml:space="preserve"><value>Se requiere al menos un conjunto de datos para rellenar el PDF.</value></data>
+  <data name="Error_TEMPLATE_NO_FIELDS" xml:space="preserve"><value>La plantilla almacenada no contiene definiciones de campos.</value></data>
+  <data name="Error_TEMPLATE_NOT_FOUND" xml:space="preserve"><value>Plantilla no encontrada o no accesible.</value></data>
+  <data name="Error_PRESIGNED_NOT_FOUND" xml:space="preserve"><value>PDF prefirmado no encontrado. Por favor, reinicie el proceso de firma.</value></data>
+  <data name="Error_TSA_NOT_CONFIGURED" xml:space="preserve"><value>Se debe configurar una autoridad de sellado de tiempo para aplicar marcas de tiempo.</value></data>
+  <data name="Error_NO_SIGNATURE_FIELD" xml:space="preserve"><value>La plantilla no contiene un campo de firma.</value></data>
+  <data name="Error_PFX_NO_PRIVATE_KEY" xml:space="preserve"><value>No se encontró ninguna entrada de clave privada en el archivo PFX proporcionado.</value></data>
+  <data name="Error_ENCRYPTION_NO_RECIPIENTS" xml:space="preserve"><value>Se requiere al menos un certificado de destinatario para el cifrado de evidencias.</value></data>
+  <data name="Error_TSA_HTTPS_REQUIRED" xml:space="preserve"><value>La URL de la autoridad de sellado de tiempo debe usar HTTPS.</value></data>
+  <data name="Error_FIELD_NAME_INVALID" xml:space="preserve"><value>El nombre del campo solo puede contener letras, números, guión bajo o guión.</value></data>
+  <data name="Error_FIELD_TYPE_INVALID" xml:space="preserve"><value>Tipo de campo no compatible. Permitidos: text, image, barcode, signature, table.</value></data>
+  <data name="Error_FIELD_HALIGN_INVALID" xml:space="preserve"><value>La alineación horizontal debe ser una de: left, center, right.</value></data>
+  <data name="Error_FIELD_VALIGN_INVALID" xml:space="preserve"><value>La alineación vertical debe ser una de: top, center, bottom.</value></data>
+  <data name="Error_FIELD_FONTSIZE_INVALID" xml:space="preserve"><value>El tamaño de fuente debe estar entre 5 y 128.</value></data>
+  <data name="Error_FIELD_FONTWEIGHT_INVALID" xml:space="preserve"><value>El peso de la fuente debe ser uno de: tiny, normal, bold.</value></data>
+  <data name="Error_FIELD_FONTNAME_INVALID" xml:space="preserve"><value>El nombre de la fuente debe ser uno de: Helvetica, Times-Roman, Courier, Symbol, ZapfDingbats.</value></data>
+  <data name="Error_FIELD_BARCODE_UNSUPPORTED" xml:space="preserve"><value>El formato de código de barras especificado no es compatible.</value></data>
+  <data name="Error_TABLE_COLUMNS_ZERO" xml:space="preserve"><value>La tabla debe tener al menos una columna.</value></data>
+  <data name="Error_TABLE_COLUMNS_MISMATCH" xml:space="preserve"><value>El número de definiciones de columnas no coincide con el número de columnas declarado.</value></data>
+  <data name="Error_TABLE_COLUMN_NAME_REQUIRED" xml:space="preserve"><value>El nombre de la columna de tabla es obligatorio.</value></data>
+  <data name="Error_TABLE_COLUMN_WIDTH_INVALID" xml:space="preserve"><value>El porcentaje de anchura de la columna de tabla debe estar entre 0 y 100.</value></data>
+  <data name="Error_TABLE_COLUMN_FONTSIZE_INVALID" xml:space="preserve"><value>El tamaño de fuente de la columna de tabla debe estar entre 5 y 128.</value></data>
+  <data name="Error_TABLE_COLUMN_FONTWEIGHT_INVALID" xml:space="preserve"><value>El peso de fuente de la columna de tabla debe ser uno de: tiny, normal, bold.</value></data>
+  <data name="Error_TABLE_COLUMN_HALIGN_INVALID" xml:space="preserve"><value>La alineación horizontal de la columna de tabla debe ser una de: left, center, right.</value></data>
+  <data name="Error_TABLE_COLUMN_VALIGN_INVALID" xml:space="preserve"><value>La alineación vertical de la columna de tabla debe ser una de: top, center, bottom.</value></data>
+  <data name="Error_TABLE_COLUMN_BORDER_INVALID" xml:space="preserve"><value>El borde de la columna de tabla debe ser uno de: none, dashed, filled.</value></data>
+  <data name="Error_TABLE_NO_COLUMNS" xml:space="preserve"><value>El campo de tabla debe definir al menos una columna.</value></data>
 </root>

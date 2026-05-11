@@ -1,5 +1,6 @@
 using System.Text.Json;
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
 using iText.IO.Font.Constants;
 using iText.IO.Image;
@@ -34,11 +35,11 @@ public class PdfTemplateService
     {
         if (string.IsNullOrWhiteSpace(input.PdfContent))
         {
-            throw new ArgumentException("PdfContent is required.", nameof(input.PdfContent));
+            throw new ApiValidationException("PDF_CONTENT_REQUIRED");
         }
         if (input.Fields == null || input.Fields.Count == 0)
         {
-            throw new ArgumentException("At least one field definition is required.", nameof(input.Fields));
+            throw new ApiValidationException("FIELDS_REQUIRED");
         }
 
         ValidateFields(input.Fields);
@@ -62,12 +63,12 @@ public class PdfTemplateService
     {
         if (input.TemplateId == null && string.IsNullOrWhiteSpace(input.PdfContent))
         {
-            throw new ArgumentException("PdfContent is required when TemplateId is not provided.", nameof(input.PdfContent));
+            throw new ApiValidationException("PDF_CONTENT_REQUIRED_NO_TEMPLATE");
         }
 
         if (input.TemplateId == null && (input.Fields == null || input.Fields.Count == 0))
         {
-            throw new ArgumentException("At least one field definition is required.", nameof(input.Fields));
+            throw new ApiValidationException("FIELDS_REQUIRED");
         }
 
         if (input.TemplateId == null)
@@ -84,7 +85,7 @@ public class PdfTemplateService
 
         if (input.Data == null || input.Data.Count == 0)
         {
-            throw new ArgumentException("At least one data set is required to fill the PDF.", nameof(input.Data));
+            throw new ApiValidationException("DATA_REQUIRED");
         }
 
         var templateBytes = await ResolveTemplateBytesAsync(input, userId, cancellationToken);
@@ -129,7 +130,7 @@ public class PdfTemplateService
         var fields = JsonSerializer.Deserialize<List<PdfFieldDefinition>>(template.FieldsJson);
         if (fields == null || fields.Count == 0)
         {
-            throw new InvalidOperationException("Stored template does not contain field definitions.");
+            throw new ApiValidationException("TEMPLATE_NO_FIELDS");
         }
 
         return fields;
@@ -208,7 +209,7 @@ public class PdfTemplateService
         var template = await _dbContext.StoredPdfTemplates.FindAsync(new object[] { id }, cancellationToken);
         if (template == null || template.UserId != userId)
         {
-            throw new InvalidOperationException("Template not found or not accessible for the current user.");
+            throw new ApiValidationException("TEMPLATE_NOT_FOUND");
         }
 
         return template;
@@ -658,91 +659,91 @@ public class PdfTemplateService
         {
             if (string.IsNullOrWhiteSpace(field.FieldName) || !regex.IsMatch(field.FieldName))
             {
-                throw new ArgumentException("FieldName must contain only letters, numbers, underscore or dash.");
+                throw new ApiValidationException("FIELD_NAME_INVALID");
             }
 
             if (!Enum.IsDefined(typeof(PdfFieldType), field.Type))
             {
-                throw new ArgumentException("Unsupported field type. Allowed: text, image, barcode, signature, table.");
+                throw new ApiValidationException("FIELD_TYPE_INVALID");
             }
 
             if (field.HorizontalAlign.HasValue && !Enum.IsDefined(typeof(PdfHorizontalAlign), field.HorizontalAlign.Value))
             {
-                throw new ArgumentException("HorizontalAlign must be one of: left, center, right.");
+                throw new ApiValidationException("FIELD_HALIGN_INVALID");
             }
             if (field.VerticalAlign.HasValue && !Enum.IsDefined(typeof(PdfVerticalAlign), field.VerticalAlign.Value))
             {
-                throw new ArgumentException("VerticalAlign must be one of: top, center, bottom.");
+                throw new ApiValidationException("FIELD_VALIGN_INVALID");
             }
 
             if (field.FontSize < 5 || field.FontSize > 128)
             {
-                throw new ArgumentException("FontSize must be between 5 and 128.");
+                throw new ApiValidationException("FIELD_FONTSIZE_INVALID");
             }
 
             if (field.FontWeight.HasValue && !Enum.IsDefined(typeof(PdfFontWeight), field.FontWeight.Value))
             {
-                throw new ArgumentException("FontWeight must be one of: tiny, normal, bold.");
+                throw new ApiValidationException("FIELD_FONTWEIGHT_INVALID");
             }
 
             if (field.FontName.HasValue && !Enum.IsDefined(typeof(PdfFontName), field.FontName.Value))
             {
-                throw new ArgumentException("FontName must be one of: Helvetica, Times-Roman, Courier, Symbol, ZapfDingbats.");
+                throw new ApiValidationException("FIELD_FONTNAME_INVALID");
             }
 
             if (field.BarcodeFormat.HasValue && !Enum.IsDefined(typeof(PdfBarcodeFormat), field.BarcodeFormat.Value))
             {
-                throw new ArgumentException("BarcodeFormat is not supported.");
+                throw new ApiValidationException("FIELD_BARCODE_UNSUPPORTED");
             }
 
             if (field.Type == PdfFieldType.Table)
             {
                 if (field.Columns.HasValue && field.Columns.Value <= 0)
                 {
-                    throw new ArgumentException("Table columns must be greater than zero.");
+                    throw new ApiValidationException("TABLE_COLUMNS_ZERO");
                 }
                 if (field.TableColumns != null && field.TableColumns.Count > 0)
                 {
                     if (field.Columns.HasValue && field.TableColumns.Count != field.Columns.Value)
                     {
-                        throw new ArgumentException("TableColumns length must match the number of columns.");
+                        throw new ApiValidationException("TABLE_COLUMNS_MISMATCH");
                     }
 
                     foreach (var col in field.TableColumns)
                     {
                         if (string.IsNullOrWhiteSpace(col.Name))
                         {
-                            throw new ArgumentException("Table column name is required.");
+                            throw new ApiValidationException("TABLE_COLUMN_NAME_REQUIRED");
                         }
                         if (col.WidthPercent.HasValue && (col.WidthPercent.Value <= 0 || col.WidthPercent.Value > 100))
                         {
-                            throw new ArgumentException("Table column width percent must be between 0 and 100.");
+                            throw new ApiValidationException("TABLE_COLUMN_WIDTH_INVALID");
                         }
                         if (col.FontSize < 5 || col.FontSize > 128)
                         {
-                            throw new ArgumentException("Table column font size must be between 5 and 128.");
+                            throw new ApiValidationException("TABLE_COLUMN_FONTSIZE_INVALID");
                         }
                         if (col.FontWeight.HasValue && !Enum.IsDefined(typeof(PdfFontWeight), col.FontWeight.Value))
                         {
-                            throw new ArgumentException("Table column font weight must be one of: tiny, normal, bold.");
+                            throw new ApiValidationException("TABLE_COLUMN_FONTWEIGHT_INVALID");
                         }
                         if (col.HorizontalAlign.HasValue && !Enum.IsDefined(typeof(PdfHorizontalAlign), col.HorizontalAlign.Value))
                         {
-                            throw new ArgumentException("Table column horizontal align must be one of: left, center, right.");
+                            throw new ApiValidationException("TABLE_COLUMN_HALIGN_INVALID");
                         }
                         if (col.VerticalAlign.HasValue && !Enum.IsDefined(typeof(PdfVerticalAlign), col.VerticalAlign.Value))
                         {
-                            throw new ArgumentException("Table column vertical align must be one of: top, center, bottom.");
+                            throw new ApiValidationException("TABLE_COLUMN_VALIGN_INVALID");
                         }
                         if (col.BorderStyle.HasValue && !Enum.IsDefined(typeof(PdfBorderStyle), col.BorderStyle.Value))
                         {
-                            throw new ArgumentException("Table column border must be one of: none, dashed, filled.");
+                            throw new ApiValidationException("TABLE_COLUMN_BORDER_INVALID");
                         }
                     }
                 }
                 else
                 {
-                    throw new ArgumentException("Table fields must define at least one column.");
+                    throw new ApiValidationException("TABLE_NO_COLUMNS");
                 }
             }
         }
