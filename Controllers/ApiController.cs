@@ -1,4 +1,5 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Options;
@@ -208,7 +209,7 @@ namespace DotNetSigningServer.Controllers
             var signatureField = template.Fields.FirstOrDefault(f => f.Type == PdfFieldType.Signature);
             if (signatureField == null)
             {
-                throw new InvalidOperationException("Template does not contain a signature field.");
+                throw new ApiValidationException("NO_SIGNATURE_FIELD");
             }
             return signatureField;
         }

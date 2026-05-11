@@ -422,4 +422,39 @@
   <data name="FooterResources" xml:space="preserve"><value>Resources</value></data>
   <data name="FooterCreatedBy" xml:space="preserve"><value>Created by Performance4 s.r.o.</value></data>
   <data name="FooterContactInfo" xml:space="preserve"><value>Contact information</value></data>
+
+  <!-- Validation Error Codes -->
+  <data name="Error_PDF_SIZE_EXCEEDED" xml:space="preserve"><value>The PDF file exceeds the maximum allowed size.</value></data>
+  <data name="Error_IMAGE_SIZE_EXCEEDED" xml:space="preserve"><value>The image file exceeds the maximum allowed size.</value></data>
+  <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>The attachment exceeds the maximum allowed size.</value></data>
+  <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>PDF content is required.</value></data>
+  <data name="Error_FIELDS_REQUIRED" xml:space="preserve"><value>At least one field definition is required.</value></data>
+  <data name="Error_PDF_CONTENT_REQUIRED_NO_TEMPLATE" xml:space="preserve"><value>PDF content is required when no template is provided.</value></data>
+  <data name="Error_DATA_REQUIRED" xml:space="preserve"><value>At least one data set is required to fill the PDF.</value></data>
+  <data name="Error_TEMPLATE_NO_FIELDS" xml:space="preserve"><value>The stored template does not contain field definitions.</value></data>
+  <data name="Error_TEMPLATE_NOT_FOUND" xml:space="preserve"><value>Template not found or not accessible.</value></data>
+  <data name="Error_PRESIGNED_NOT_FOUND" xml:space="preserve"><value>Pre-signed PDF not found. Please restart the signing process.</value></data>
+  <data name="Error_TSA_NOT_CONFIGURED" xml:space="preserve"><value>A timestamp authority must be configured to apply timestamps.</value></data>
+  <data name="Error_NO_SIGNATURE_FIELD" xml:space="preserve"><value>The template does not contain a signature field.</value></data>
+  <data name="Error_PFX_NO_PRIVATE_KEY" xml:space="preserve"><value>No private key entry found in the provided PFX file.</value></data>
+  <data name="Error_ENCRYPTION_NO_RECIPIENTS" xml:space="preserve"><value>At least one recipient certificate is required for evidence encryption.</value></data>
+  <data name="Error_TSA_HTTPS_REQUIRED" xml:space="preserve"><value>The timestamp authority URL must use HTTPS.</value></data>
+  <data name="Error_FIELD_NAME_INVALID" xml:space="preserve"><value>Field name must contain only letters, numbers, underscore or dash.</value></data>
+  <data name="Error_FIELD_TYPE_INVALID" xml:space="preserve"><value>Unsupported field type. Allowed: text, image, barcode, signature, table.</value></data>
+  <data name="Error_FIELD_HALIGN_INVALID" xml:space="preserve"><value>Horizontal alignment must be one of: left, center, right.</value></data>
+  <data name="Error_FIELD_VALIGN_INVALID" xml:space="preserve"><value>Vertical alignment must be one of: top, center, bottom.</value></data>
+  <data name="Error_FIELD_FONTSIZE_INVALID" xml:space="preserve"><value>Font size must be between 5 and 128.</value></data>
+  <data name="Error_FIELD_FONTWEIGHT_INVALID" xml:space="preserve"><value>Font weight must be one of: tiny, normal, bold.</value></data>
+  <data name="Error_FIELD_FONTNAME_INVALID" xml:space="preserve"><value>Font name must be one of: Helvetica, Times-Roman, Courier, Symbol, ZapfDingbats.</value></data>
+  <data name="Error_FIELD_BARCODE_UNSUPPORTED" xml:space="preserve"><value>The specified barcode format is not supported.</value></data>
+  <data name="Error_TABLE_COLUMNS_ZERO" xml:space="preserve"><value>Table must have at least one column.</value></data>
+  <data name="Error_TABLE_COLUMNS_MISMATCH" xml:space="preserve"><value>The number of column definitions does not match the declared column count.</value></data>
+  <data name="Error_TABLE_COLUMN_NAME_REQUIRED" xml:space="preserve"><value>Table column name is required.</value></data>
+  <data name="Error_TABLE_COLUMN_WIDTH_INVALID" xml:space="preserve"><value>Table column width percentage must be between 0 and 100.</value></data>
+  <data name="Error_TABLE_COLUMN_FONTSIZE_INVALID" xml:space="preserve"><value>Table column font size must be between 5 and 128.</value></data>
+  <data name="Error_TABLE_COLUMN_FONTWEIGHT_INVALID" xml:space="preserve"><value>Table column font weight must be one of: tiny, normal, bold.</value></data>
+  <data name="Error_TABLE_COLUMN_HALIGN_INVALID" xml:space="preserve"><value>Table column horizontal alignment must be one of: left, center, right.</value></data>
+  <data name="Error_TABLE_COLUMN_VALIGN_INVALID" xml:space="preserve"><value>Table column vertical alignment must be one of: top, center, bottom.</value></data>
+  <data name="Error_TABLE_COLUMN_BORDER_INVALID" xml:space="preserve"><value>Table column border must be one of: none, dashed, filled.</value></data>
+  <data name="Error_TABLE_NO_COLUMNS" xml:space="preserve"><value>Table field must define at least one column.</value></data>
 </root>

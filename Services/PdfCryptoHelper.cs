@@ -1,3 +1,4 @@
+using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Options;
 using iText.Bouncycastle.X509;
 using iText.Commons.Bouncycastle.Cert;
@@ -39,7 +40,7 @@ namespace DotNetSigningServer.Services
             string? alias = store.Aliases.Cast<string>().FirstOrDefault(store.IsKeyEntry);
             if (alias == null)
             {
-                throw new InvalidOperationException("No private key entry found in the provided PFX file.");
+                throw new ApiValidationException("PFX_NO_PRIVATE_KEY");
             }
 
             var keyEntry = store.GetKey(alias);
@@ -75,7 +76,7 @@ namespace DotNetSigningServer.Services
             var certificates = LoadCertificatesFromPemString(pem);
             if (certificates.Length == 0)
             {
-                throw new InvalidOperationException("At least one recipient certificate is required for evidence encryption.");
+                throw new ApiValidationException("ENCRYPTION_NO_RECIPIENTS");
             }
 
             return ((X509CertificateBC)certificates[0]).GetCertificate();
@@ -110,7 +111,7 @@ namespace DotNetSigningServer.Services
                 if (!Uri.TryCreate(urlOverride, UriKind.Absolute, out var parsedUri)
                     || !string.Equals(parsedUri.Scheme, "https", StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new InvalidOperationException("User-provided TSA URL must use HTTPS.");
+                    throw new ApiValidationException("TSA_HTTPS_REQUIRED");
                 }
             }
 

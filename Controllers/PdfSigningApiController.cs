@@ -1,4 +1,5 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Options;
@@ -49,9 +50,9 @@ namespace DotNetSigningServer.Controllers
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Presign");
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }
-            catch (InvalidOperationException ex)
+            catch (ApiValidationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
             try
@@ -157,9 +158,9 @@ namespace DotNetSigningServer.Controllers
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Sign with PFX");
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }
-            catch (InvalidOperationException ex)
+            catch (ApiValidationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
             try
@@ -195,9 +196,9 @@ namespace DotNetSigningServer.Controllers
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Timestamp");
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }
-            catch (InvalidOperationException ex)
+            catch (ApiValidationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
             try
@@ -274,10 +275,10 @@ namespace DotNetSigningServer.Controllers
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Visual sign");
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }
-            catch (InvalidOperationException ex)
+            catch (ApiValidationException ex)
             {
-                Logger.LogWarning("[visual-sign] Limit check failed: {Message}", ex.Message);
-                return BadRequest(new { message = ex.Message });
+                Logger.LogWarning("[visual-sign] Limit check failed: {Code}", ex.Code);
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
             try
@@ -318,9 +319,9 @@ namespace DotNetSigningServer.Controllers
                 LimitGuard.EnsureImageWithinLimit(input.CompanyLogoContent, "Company logo");
                 LimitGuard.EnsureImageWithinLimit(input.BackgroundImageContent, "Background");
             }
-            catch (InvalidOperationException ex)
+            catch (ApiValidationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
             try
@@ -367,9 +368,9 @@ namespace DotNetSigningServer.Controllers
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Attachment PDF");
                 LimitGuard.EnsureAttachmentWithinLimit(input.AttachmentContent, "Attachment");
             }
-            catch (InvalidOperationException ex)
+            catch (ApiValidationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
             try

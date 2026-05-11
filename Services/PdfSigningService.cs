@@ -1,3 +1,4 @@
+using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
 using iText.Commons.Bouncycastle.Cert;
 using iText.Kernel.Geom;
@@ -78,7 +79,7 @@ namespace DotNetSigningServer.Services
         {
             if (!File.Exists(presignedPdfPath))
             {
-                throw new FileNotFoundException("Pre-signed PDF not found.", presignedPdfPath);
+                throw new ApiValidationException("PRESIGNED_NOT_FOUND");
             }
 
             byte[] preSignedPdf = File.ReadAllBytes(presignedPdfPath);
@@ -126,7 +127,7 @@ namespace DotNetSigningServer.Services
             ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(_tsaOptions, input.TsaUrl, input.TsaUsername, input.TsaPassword, allowDefaultFallback: false);
             if (tsaClient == null)
             {
-                throw new InvalidOperationException("Timestamp authority must be configured to apply document timestamps.");
+                throw new ApiValidationException("TSA_NOT_CONFIGURED");
             }
 
             string fieldName = PdfCryptoHelper.EnsureFieldName(input.FieldName, $"Timestamp_{Guid.NewGuid():N}");

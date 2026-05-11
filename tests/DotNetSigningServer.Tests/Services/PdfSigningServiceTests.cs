@@ -1,3 +1,4 @@
+using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
@@ -153,7 +154,7 @@ public class PdfSigningServiceTests : IDisposable
         var (certPem, _, _) = TestHelpers.CreateTestCertificate();
         var nonExistentPath = Path.Combine(Path.GetTempPath(), $"nonexistent_{Guid.NewGuid():N}.pdf");
 
-        Assert.Throws<FileNotFoundException>(() =>
+        Assert.Throws<ApiValidationException>(() =>
             _sut.HandleSign(
                 new SignInput { Id = "test", SignedHash = "aabbccdd" },
                 nonExistentPath,
@@ -309,7 +310,7 @@ public class PdfSigningServiceTests : IDisposable
     {
         var pdfBase64 = TestHelpers.CreateMinimalPdfBase64();
 
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.Throws<ApiValidationException>(() =>
             _sut.ApplyDocumentTimestamp(new DocumentTimestampInput
             {
                 PdfContent = pdfBase64,

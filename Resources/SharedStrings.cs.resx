@@ -422,4 +422,39 @@
   <data name="FooterResources" xml:space="preserve"><value>Zdroje</value></data>
   <data name="FooterCreatedBy" xml:space="preserve"><value>Vytvořeno společností Performance4 s.r.o.</value></data>
   <data name="FooterContactInfo" xml:space="preserve"><value>Kontaktní informace</value></data>
+
+  <!-- Validation Error Codes -->
+  <data name="Error_PDF_SIZE_EXCEEDED" xml:space="preserve"><value>Soubor PDF překračuje maximální povolenou velikost.</value></data>
+  <data name="Error_IMAGE_SIZE_EXCEEDED" xml:space="preserve"><value>Soubor s obrázkem překračuje maximální povolenou velikost.</value></data>
+  <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>Příloha překračuje maximální povolenou velikost.</value></data>
+  <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>Obsah PDF je povinný.</value></data>
+  <data name="Error_FIELDS_REQUIRED" xml:space="preserve"><value>Je vyžadována alespoň jedna definice pole.</value></data>
+  <data name="Error_PDF_CONTENT_REQUIRED_NO_TEMPLATE" xml:space="preserve"><value>Obsah PDF je povinný, pokud není zadána šablona.</value></data>
+  <data name="Error_DATA_REQUIRED" xml:space="preserve"><value>Pro vyplnění PDF je vyžadována alespoň jedna sada dat.</value></data>
+  <data name="Error_TEMPLATE_NO_FIELDS" xml:space="preserve"><value>Uložená šablona neobsahuje definice polí.</value></data>
+  <data name="Error_TEMPLATE_NOT_FOUND" xml:space="preserve"><value>Šablona nebyla nalezena nebo není přístupná.</value></data>
+  <data name="Error_PRESIGNED_NOT_FOUND" xml:space="preserve"><value>Předpřipravený PDF nebyl nalezen. Restartujte prosím proces podepisování.</value></data>
+  <data name="Error_TSA_NOT_CONFIGURED" xml:space="preserve"><value>Pro aplikaci časových razítek musí být nakonfigurována autorita časových razítek.</value></data>
+  <data name="Error_NO_SIGNATURE_FIELD" xml:space="preserve"><value>Šablona neobsahuje pole pro podpis.</value></data>
+  <data name="Error_PFX_NO_PRIVATE_KEY" xml:space="preserve"><value>V poskytnutém PFX souboru nebyl nalezen soukromý klíč.</value></data>
+  <data name="Error_ENCRYPTION_NO_RECIPIENTS" xml:space="preserve"><value>Pro šifrování důkazů je vyžadován alespoň jeden certifikát příjemce.</value></data>
+  <data name="Error_TSA_HTTPS_REQUIRED" xml:space="preserve"><value>URL adresa autority časových razítek musí používat HTTPS.</value></data>
+  <data name="Error_FIELD_NAME_INVALID" xml:space="preserve"><value>Název pole musí obsahovat pouze písmena, čísla, podtržítko nebo pomlčku.</value></data>
+  <data name="Error_FIELD_TYPE_INVALID" xml:space="preserve"><value>Nepodporovaný typ pole. Povolené typy: text, image, barcode, signature, table.</value></data>
+  <data name="Error_FIELD_HALIGN_INVALID" xml:space="preserve"><value>Horizontální zarovnání musí být jedno z: left, center, right.</value></data>
+  <data name="Error_FIELD_VALIGN_INVALID" xml:space="preserve"><value>Vertikální zarovnání musí být jedno z: top, center, bottom.</value></data>
+  <data name="Error_FIELD_FONTSIZE_INVALID" xml:space="preserve"><value>Velikost písma musí být mezi 5 a 128.</value></data>
+  <data name="Error_FIELD_FONTWEIGHT_INVALID" xml:space="preserve"><value>Tloušťka písma musí být jedna z: tiny, normal, bold.</value></data>
+  <data name="Error_FIELD_FONTNAME_INVALID" xml:space="preserve"><value>Název písma musí být jedno z: Helvetica, Times-Roman, Courier, Symbol, ZapfDingbats.</value></data>
+  <data name="Error_FIELD_BARCODE_UNSUPPORTED" xml:space="preserve"><value>Zadaný formát čárového kódu není podporován.</value></data>
+  <data name="Error_TABLE_COLUMNS_ZERO" xml:space="preserve"><value>Tabulka musí mít alespoň jeden sloupec.</value></data>
+  <data name="Error_TABLE_COLUMNS_MISMATCH" xml:space="preserve"><value>Počet definic sloupců neodpovídá deklarovanému počtu sloupců.</value></data>
+  <data name="Error_TABLE_COLUMN_NAME_REQUIRED" xml:space="preserve"><value>Název sloupce tabulky je povinný.</value></data>
+  <data name="Error_TABLE_COLUMN_WIDTH_INVALID" xml:space="preserve"><value>Procentuální šířka sloupce tabulky musí být mezi 0 a 100.</value></data>
+  <data name="Error_TABLE_COLUMN_FONTSIZE_INVALID" xml:space="preserve"><value>Velikost písma sloupce tabulky musí být mezi 5 a 128.</value></data>
+  <data name="Error_TABLE_COLUMN_FONTWEIGHT_INVALID" xml:space="preserve"><value>Tloušťka písma sloupce tabulky musí být jedna z: tiny, normal, bold.</value></data>
+  <data name="Error_TABLE_COLUMN_HALIGN_INVALID" xml:space="preserve"><value>Horizontální zarovnání sloupce tabulky musí být jedno z: left, center, right.</value></data>
+  <data name="Error_TABLE_COLUMN_VALIGN_INVALID" xml:space="preserve"><value>Vertikální zarovnání sloupce tabulky musí být jedno z: top, center, bottom.</value></data>
+  <data name="Error_TABLE_COLUMN_BORDER_INVALID" xml:space="preserve"><value>Rámeček sloupce tabulky musí být jedno z: none, dashed, filled.</value></data>
+  <data name="Error_TABLE_NO_COLUMNS" xml:space="preserve"><value>Pole tabulky musí definovat alespoň jeden sloupec.</value></data>
 </root>

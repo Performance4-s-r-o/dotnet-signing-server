@@ -1,4 +1,5 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
@@ -68,7 +69,7 @@ public class PdfTemplateServiceTests : IDisposable
     {
         var input = MakeValidInput();
         input.PdfContent = "";
-        await Assert.ThrowsAsync<ArgumentException>(() => _sut.CreateTemplateAsync(input, _userId));
+        await Assert.ThrowsAsync<ApiValidationException>(() => _sut.CreateTemplateAsync(input, _userId));
     }
 
     [Fact]
@@ -76,7 +77,7 @@ public class PdfTemplateServiceTests : IDisposable
     {
         var input = MakeValidInput();
         input.Fields = new List<PdfFieldDefinition>();
-        await Assert.ThrowsAsync<ArgumentException>(() => _sut.CreateTemplateAsync(input, _userId));
+        await Assert.ThrowsAsync<ApiValidationException>(() => _sut.CreateTemplateAsync(input, _userId));
     }
 
     [Fact]
@@ -98,14 +99,14 @@ public class PdfTemplateServiceTests : IDisposable
         var created = await _sut.CreateTemplateAsync(MakeValidInput(), _userId);
         var otherUser = Guid.NewGuid();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<ApiValidationException>(
             () => _sut.GetTemplateAsync(created.TemplateId, otherUser));
     }
 
     [Fact]
     public async Task GetTemplate_NonExistent_Throws()
     {
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<ApiValidationException>(
             () => _sut.GetTemplateAsync(Guid.NewGuid(), _userId));
     }
 
@@ -168,7 +169,7 @@ public class PdfTemplateServiceTests : IDisposable
     public async Task UpdateTemplate_WrongUser_Throws()
     {
         var created = await _sut.CreateTemplateAsync(MakeValidInput(), _userId);
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<ApiValidationException>(
             () => _sut.UpdateTemplateAsync(created.TemplateId, Guid.NewGuid(), new UpdateTemplateInput { TemplateName = "Hacked" }));
     }
 
@@ -186,7 +187,7 @@ public class PdfTemplateServiceTests : IDisposable
     public async Task DeleteTemplate_WrongUser_Throws()
     {
         var created = await _sut.CreateTemplateAsync(MakeValidInput(), _userId);
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<ApiValidationException>(
             () => _sut.DeleteTemplateAsync(created.TemplateId, Guid.NewGuid()));
     }
 
@@ -284,7 +285,7 @@ public class PdfTemplateServiceTests : IDisposable
             Data = new List<FillDataSet>()
         };
 
-        await Assert.ThrowsAsync<ArgumentException>(() => _sut.FillAsync(input, _userId));
+        await Assert.ThrowsAsync<ApiValidationException>(() => _sut.FillAsync(input, _userId));
     }
 
     [Fact]
@@ -298,7 +299,7 @@ public class PdfTemplateServiceTests : IDisposable
             }
         };
 
-        await Assert.ThrowsAsync<ArgumentException>(() => _sut.FillAsync(input, _userId));
+        await Assert.ThrowsAsync<ApiValidationException>(() => _sut.FillAsync(input, _userId));
     }
 
     [Fact]
@@ -306,7 +307,7 @@ public class PdfTemplateServiceTests : IDisposable
     {
         var input = MakeValidInput();
         input.Fields[0].FieldName = "invalid field name!";
-        await Assert.ThrowsAsync<ArgumentException>(() => _sut.CreateTemplateAsync(input, _userId));
+        await Assert.ThrowsAsync<ApiValidationException>(() => _sut.CreateTemplateAsync(input, _userId));
     }
 
     [Fact]
@@ -314,6 +315,6 @@ public class PdfTemplateServiceTests : IDisposable
     {
         var input = MakeValidInput();
         input.Fields[0].FontSize = 200;
-        await Assert.ThrowsAsync<ArgumentException>(() => _sut.CreateTemplateAsync(input, _userId));
+        await Assert.ThrowsAsync<ApiValidationException>(() => _sut.CreateTemplateAsync(input, _userId));
     }
 }
