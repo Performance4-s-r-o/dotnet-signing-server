@@ -536,8 +536,10 @@ namespace DotNetSigningServer.Services
                 var bytes = Convert.FromBase64String(payload);
                 return ImageDataFactory.Create(bytes);
             }
-            catch
+            catch (Exception ex)
             {
+                Console.Error.WriteLine(
+                    $"[PdfVisualSigning] TryDecodeImageData failed: {ex.GetType().Name}: {ex.Message}");
                 return null;
             }
         }
