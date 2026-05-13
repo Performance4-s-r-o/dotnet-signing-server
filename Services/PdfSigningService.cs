@@ -333,7 +333,8 @@ namespace DotNetSigningServer.Services
             float? designWidth = null,
             float? designHeight = null,
             bool? autoHeight = null,
-            string? signerNameOverride = null)
+            string? signerNameOverride = null,
+            bool disableDefaultTsa = false)
         {
             var preSignContainer = new DigestCalcBlankSigner(PdfName.Adobe_PPKLite, PdfName.Adbe_pkcs7_detached);
             preSignContainer.SetChain(chain);
@@ -359,7 +360,9 @@ namespace DotNetSigningServer.Services
                 signerNameOverride);
 
             byte[] signatureBytes = PdfCryptoHelper.SignAuthenticatedAttributes(preSignContainer.GetDocBytesHash(), privateKey);
-            ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(_tsaOptions, tsaUrl, tsaUsername, tsaPassword);
+            ITSAClient? tsaClient = disableDefaultTsa
+                ? null
+                : PdfCryptoHelper.CreateTsaClient(_tsaOptions, tsaUrl, tsaUsername, tsaPassword);
             var tsaUrlForError = !string.IsNullOrWhiteSpace(tsaUrl) ? tsaUrl : _tsaOptions.Url;
             return InjectFinalSignature(pdfWithPlaceholder, signatureBytes, chain, fieldName, tsaClient, tsaUrlForErrorContext: tsaUrlForError);
         }

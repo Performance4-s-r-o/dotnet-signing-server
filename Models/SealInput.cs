@@ -17,6 +17,8 @@ namespace DotNetSigningServer.Models
         public string? TsaUrl { get; set; }
         public string? TsaUsername { get; set; }
         public string? TsaPassword { get; set; }
+        /// <summary>When true, do not apply any timestamp — overrides env-configured TSA fallback.</summary>
+        public bool DisableTsa { get; set; }
         /// <summary>Verification URL to embed in PDF (e.g. "https://verify.p4pdf.com/abc123").</summary>
         public string? VerificationUrl { get; set; }
         /// <summary>"disabled" | "link" (PDF metadata) | "qr" (append QR page).</summary>
