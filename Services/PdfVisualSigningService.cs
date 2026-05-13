@@ -55,13 +55,6 @@ namespace DotNetSigningServer.Services
 
             var layout = SignatureLayoutCalculator.ComputeLayout(layoutInput);
 
-            Console.Error.WriteLine(
-                $"[PdfVisualSigning.ApplyVisualSign] signRect=({input.SignRect.X:F1},{input.SignRect.Y:F1},{input.SignRect.Width:F1}×{input.SignRect.Height:F1}) " +
-                $"designW={input.DesignWidth?.ToString("F1") ?? "null"} designH={input.DesignHeight?.ToString("F1") ?? "null"} autoH={input.AutoHeight?.ToString() ?? "null"} " +
-                $"appearance.FontSize={appearanceOptions.FontSize?.ToString("F1") ?? "null"} appearance.AutoFontSize={appearanceOptions.AutoFontSize?.ToString() ?? "null"} " +
-                $"show(R={appearanceOptions.ShowReason},L={appearanceOptions.ShowLocation},D={appearanceOptions.ShowDate},S={appearanceOptions.ShowSignerName},C={appearanceOptions.ShowCompanyName}) " +
-                $"→ layout box={layout.BoxWidthPt:F1}×{layout.BoxHeightPt:F1} font={layout.FontSizePt:F1}pt lh={layout.LineHeightPt:F1}pt rows={layout.Rows.Count} cols={layout.Columns.Count}");
-
             float x = input.SignRect.X;
             float y = input.SignRect.Y;
             float width = layout.BoxWidthPt;
@@ -88,12 +81,6 @@ namespace DotNetSigningServer.Services
             if (y < 0) y = 0;
             if (x + width > pageW) x = pageW - width;
             if (y + height > pageH) y = pageH - height;
-
-            if (x != input.SignRect.X || y != input.SignRect.Y || width != input.SignRect.Width || height != input.SignRect.Height)
-            {
-                Console.Error.WriteLine(
-                    $"[PdfVisualSigning.ApplyVisualSign] rect clamped to page: ({x:F1},{y:F1},{width:F1}×{height:F1}) page={pageW:F1}×{pageH:F1}");
-            }
 
             var font = ResolveFont(appearanceOptions.FontFamily);
             var fgColor = ParseColor(appearanceOptions.ForegroundColor);
@@ -194,13 +181,6 @@ namespace DotNetSigningServer.Services
 
             var layout = SignatureLayoutCalculator.ComputeLayout(layoutInput);
 
-            Console.Error.WriteLine(
-                $"[PdfVisualSigning.BuildSignerProperties] fieldName={fieldName} signRect=({signRect.X:F1},{signRect.Y:F1},{signRect.Width:F1}×{signRect.Height:F1}) " +
-                $"signerNameOverride=\"{signerNameOverride ?? "<null>"}\" finalSignerCN=\"{cn ?? "<null>"}\" " +
-                $"designW={designWidth?.ToString("F1") ?? "null"} designH={designHeight?.ToString("F1") ?? "null"} autoH={autoHeight?.ToString() ?? "null"} " +
-                $"appearance.FontSize={appearanceOptionsLocal.FontSize?.ToString("F1") ?? "null"} appearance.AutoFontSize={appearanceOptionsLocal.AutoFontSize?.ToString() ?? "null"} " +
-                $"→ layout box={layout.BoxWidthPt:F1}×{layout.BoxHeightPt:F1} font={layout.FontSizePt:F1}pt lh={layout.LineHeightPt:F1}pt rows={layout.Rows.Count} cols={layout.Columns.Count}");
-
             var font = ResolveFont(appearanceOptionsLocal.FontFamily);
             var fgColor = ParseColor(appearanceOptionsLocal.ForegroundColor);
             var bgColor = ParseColor(appearanceOptionsLocal.BackgroundColor);
@@ -263,11 +243,6 @@ namespace DotNetSigningServer.Services
                 if (finalX + finalW > pageW) finalX = pageW - finalW;
                 if (finalY + finalH > pageH) finalY = pageH - finalH;
 
-                if (finalX != signRect.X || finalY != signRect.Y || finalW != signRect.Width || finalH != signRect.Height)
-                {
-                    Console.Error.WriteLine(
-                        $"[PdfVisualSigning.BuildSignerProperties] rect clamped to page: ({finalX:F1},{finalY:F1},{finalW:F1}×{finalH:F1}) page={pageW:F1}×{pageH:F1}");
-                }
             }
 
             signerProperties
@@ -561,13 +536,8 @@ namespace DotNetSigningServer.Services
                 var bytes = Convert.FromBase64String(payload);
                 return ImageDataFactory.Create(bytes);
             }
-            catch (Exception ex)
+            catch
             {
-                // Log so silent image-skip isn't a black box during development.
-                var headLen = Math.Min(40, payload.Length);
-                var head = payload.Substring(0, headLen);
-                Console.Error.WriteLine(
-                    $"[PdfVisualSigning] TryDecodeImageData failed: {ex.GetType().Name}: {ex.Message} — payload len={payload.Length}, head=\"{head}\"");
                 return null;
             }
         }
