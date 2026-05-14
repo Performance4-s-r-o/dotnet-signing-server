@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -6,85 +7,85 @@ using Microsoft.Extensions.Options;
 
 namespace DotNetSigningServer.Services;
 
-public class LokiClient
+/// <summary>
+/// Best-effort Loki shipper. Entries are queued and flushed in batches by a
+/// background timer, so high-volume ILogger output doesn't translate into one
+/// HTTP request per line. Failures are swallowed — logging must never break a
+/// request.
+/// </summary>
+public class LokiClient : IDisposable
 {
-    private readonly HttpClient _httpClient;
-    private readonly LokiOptions _options;
+    private readonly record struct Entry(
+        long TimestampNs,
+        string Level,
+        string Message,
+        IReadOnlyDictionary<string, string>? Labels);
 
-    public LokiClient(HttpClient httpClient, IOptions<LokiOptions> options)
+    private const int MaxBatch = 200;
+
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly LokiOptions _options;
+    private readonly ConcurrentQueue<Entry> _queue = new();
+    private readonly Timer? _flushTimer;
+
+    public LokiClient(IHttpClientFactory httpClientFactory, IOptions<LokiOptions> options)
     {
-        _httpClient = httpClient;
+        _httpClientFactory = httpClientFactory;
         _options = options.Value;
+
+        if (!string.IsNullOrWhiteSpace(_options.Url))
+        {
+            _flushTimer = new Timer(
+                _ => { _ = FlushAsync(); },
+                null,
+                TimeSpan.FromSeconds(5),
+                TimeSpan.FromSeconds(5));
+        }
     }
 
-    public async Task LogAsync(string level, string message, IDictionary<string, string>? labels = null)
+    private string ResolvedEnvironment =>
+        _options.Environment
+        ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+        ?? "production";
+
+    /// <summary>
+    /// Builds the Loki push endpoint. <see cref="LokiOptions.Url"/> is the Loki
+    /// API base (the part before <c>/api/v1/*</c>). Some deployments expose it
+    /// behind a proxy path that already ends in <c>/loki</c> (e.g. a Grafana
+    /// datasource mount at <c>/datasource/loki</c>); strip a trailing
+    /// <c>/loki</c> before re-appending the canonical suffix so the URL never
+    /// becomes a doubled <c>/loki/loki</c>.
+    /// </summary>
+    internal static string BuildPushUrl(string baseUrl)
+    {
+        var trimmed = baseUrl.TrimEnd('/');
+        if (trimmed.EndsWith("/loki", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed[..^"/loki".Length];
+        }
+        return trimmed + "/loki/api/v1/push";
+    }
+
+    public void Enqueue(string level, string message, IReadOnlyDictionary<string, string>? labels = null)
     {
         if (string.IsNullOrWhiteSpace(_options.Url))
         {
             return;
         }
 
-        try
+        var ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000; // nanoseconds
+        _queue.Enqueue(new Entry(ts, level, message, labels));
+
+        if (_queue.Count >= MaxBatch)
         {
-            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000; // nanoseconds
-            var environment = _options.Environment
-                              ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
-                              ?? "production";
-            var streamLabels = new Dictionary<string, string>
-            {
-                ["app"] = _options.App ?? "dotnet-signing-server",
-                ["level"] = level,
-                ["env"] = environment
-            };
-
-            if (labels != null)
-            {
-                foreach (var kv in labels)
-                {
-                    streamLabels[kv.Key] = kv.Value;
-                }
-            }
-
-            var payload = new
-            {
-                streams = new[]
-                {
-                    new
-                    {
-                        stream = streamLabels,
-                        values = new[]
-                        {
-                            new[] { now.ToString(), message }
-                        }
-                    }
-                }
-            };
-
-            using var req = new HttpRequestMessage(HttpMethod.Post, _options.Url!.TrimEnd('/') + "/loki/api/v1/push");
-            req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-
-            if (!string.IsNullOrWhiteSpace(_options.BearerToken))
-            {
-                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.BearerToken);
-            }
-            else if (!string.IsNullOrWhiteSpace(_options.Username))
-            {
-                var bytes = Encoding.UTF8.GetBytes($"{_options.Username}:{_options.Password}");
-                req.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(bytes));
-            }
-            else if (!string.IsNullOrWhiteSpace(_options.Password))
-            {
-                var bytes = Encoding.UTF8.GetBytes($":{_options.Password}");
-                req.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(bytes));
-            }
-
-            using var response = await _httpClient.SendAsync(req);
-            response.EnsureSuccessStatusCode();
+            _ = FlushAsync();
         }
-        catch
-        {
-            // Best-effort: ignore logging failures
-        }
+    }
+
+    public Task LogAsync(string level, string message, IDictionary<string, string>? labels = null)
+    {
+        Enqueue(level, message, labels is null ? null : new Dictionary<string, string>(labels));
+        return Task.CompletedTask;
     }
 
     public Task LogExceptionAsync(Exception ex, string? path = null, string? traceId = null, string? userId = null)
@@ -104,6 +105,127 @@ public class LokiClient
         }
 
         var message = $"{ex.GetType().Name}: {ex.Message}\nTraceId: {traceId ?? "unknown"}\nUserId: {userId ?? "anonymous"}\n{ex.StackTrace}";
-        return LogAsync("error", message, labels);
+        Enqueue("error", message, labels);
+        return Task.CompletedTask;
+    }
+
+    public async Task FlushAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_options.Url) || _queue.IsEmpty)
+        {
+            return;
+        }
+
+        var batch = new List<Entry>();
+        while (batch.Count < MaxBatch && _queue.TryDequeue(out var entry))
+        {
+            batch.Add(entry);
+        }
+        if (batch.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var streams = batch
+                .GroupBy(BuildLabels, LabelComparer.Instance)
+                .Select(group => new
+                {
+                    stream = group.Key,
+                    values = group
+                        .OrderBy(e => e.TimestampNs)
+                        .Select(e => new[] { e.TimestampNs.ToString(), e.Message })
+                        .ToArray(),
+                })
+                .ToArray();
+
+            var payload = new { streams };
+
+            using var req = new HttpRequestMessage(HttpMethod.Post, BuildPushUrl(_options.Url!));
+            req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            ApplyAuth(req);
+
+            var client = _httpClientFactory.CreateClient(nameof(LokiClient));
+            using var response = await client.SendAsync(req);
+            response.EnsureSuccessStatusCode();
+        }
+        catch
+        {
+            // Best-effort: drop the batch on failure rather than retrying
+            // forever and risking unbounded memory growth.
+        }
+    }
+
+    private Dictionary<string, string> BuildLabels(Entry entry)
+    {
+        var labels = new Dictionary<string, string>
+        {
+            ["app"] = _options.App ?? "dotnet-signing-server",
+            ["level"] = entry.Level,
+            ["env"] = ResolvedEnvironment,
+        };
+        if (entry.Labels != null)
+        {
+            foreach (var kv in entry.Labels)
+            {
+                labels[kv.Key] = kv.Value;
+            }
+        }
+        return labels;
+    }
+
+    private void ApplyAuth(HttpRequestMessage req)
+    {
+        if (!string.IsNullOrWhiteSpace(_options.BearerToken))
+        {
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.BearerToken);
+        }
+        else if (!string.IsNullOrWhiteSpace(_options.Username))
+        {
+            var bytes = Encoding.UTF8.GetBytes($"{_options.Username}:{_options.Password}");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(bytes));
+        }
+        else if (!string.IsNullOrWhiteSpace(_options.Password))
+        {
+            var bytes = Encoding.UTF8.GetBytes($":{_options.Password}");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(bytes));
+        }
+    }
+
+    public void Dispose()
+    {
+        _flushTimer?.Dispose();
+        // Drain whatever is left so a clean shutdown doesn't lose the tail.
+        FlushAsync().GetAwaiter().GetResult();
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>Equality over label sets so entries sharing labels land in one stream.</summary>
+    private sealed class LabelComparer : IEqualityComparer<Dictionary<string, string>>
+    {
+        public static readonly LabelComparer Instance = new();
+
+        public bool Equals(Dictionary<string, string>? x, Dictionary<string, string>? y)
+        {
+            if (ReferenceEquals(x, y)) return true;
+            if (x is null || y is null || x.Count != y.Count) return false;
+            foreach (var kv in x)
+            {
+                if (!y.TryGetValue(kv.Key, out var v) || v != kv.Value) return false;
+            }
+            return true;
+        }
+
+        public int GetHashCode(Dictionary<string, string> obj)
+        {
+            var hash = new HashCode();
+            foreach (var kv in obj.OrderBy(k => k.Key, StringComparer.Ordinal))
+            {
+                hash.Add(kv.Key);
+                hash.Add(kv.Value);
+            }
+            return hash.ToHashCode();
+        }
     }
 }

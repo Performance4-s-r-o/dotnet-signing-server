@@ -72,7 +72,12 @@ builder.Services.AddHostedService<PresignCleanupService>();
 builder.Services.AddHostedService<PriceChangeMonitorService>();
 builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();
 builder.Services.AddSingleton<IIpWhitelistService, IpWhitelistService>();
-builder.Services.AddHttpClient<LokiClient>();
+// LokiClient is a singleton (it owns a batching queue + background flush
+// timer) and pulls HttpClient instances from the factory by name.
+builder.Services.AddHttpClient(nameof(LokiClient));
+builder.Services.AddSingleton<LokiClient>();
+// Ship all ILogger output (not just unhandled exceptions) to Loki.
+builder.Services.AddSingleton<ILoggerProvider, DotNetSigningServer.Logging.LokiLoggerProvider>();
 builder.Services.AddHttpClient<TemplateAiService>();
 builder.Services.AddHttpClient<LegalDocumentsClient>(client =>
 {
@@ -417,6 +422,8 @@ if (!app.Environment.IsProduction())
         await loki.LogAsync("info", "Loki test: info message from dotnet-signing-server");
         await loki.LogAsync("warn", "Loki test: warning message from dotnet-signing-server");
         await loki.LogAsync("error", "Loki test: error message from dotnet-signing-server");
+        // Force an immediate flush so the test result reflects real delivery.
+        await loki.FlushAsync();
         return Results.Json(new { status = "ok", message = "Sent info, warn, and error to Loki" });
     });
 }
