@@ -15,6 +15,12 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Error monitoring. Reads the "Sentry" config section (DSN, Debug,
+// TracesSampleRate). Captures unhandled exceptions plus everything logged at
+// LogError/LogCritical — including LokiExceptionMiddleware's handled-exception
+// path — via the Sentry ILogger integration.
+builder.WebHost.UseSentry();
+
 // Persist data protection keys so antiforgery/cookies survive restarts and container re-creations.
 var dataProtectionPath = Environment.GetEnvironmentVariable("DATA_PROTECTION_KEYS_PATH")
                         ?? Path.Combine(builder.Environment.ContentRootPath, "data-protection-keys");
