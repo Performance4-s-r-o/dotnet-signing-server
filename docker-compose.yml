@@ -49,6 +49,10 @@ services:
       - Loki__BearerToken=${LOKI_BEARER_TOKEN:-}
       - Loki__App=${LOKI_APP:-dotnet-signing-server}
       - Loki__Environment=${LOKI_ENVIRONMENT:-development}
+      # Sentry error monitoring (DSN is public-safe; overridable via SENTRY_DSN)
+      - Sentry__Dsn=${SENTRY_DSN:-https://02d7cd2de1627b37a7c10591ad49b635@o4504337978163200.ingest.us.sentry.io/4511387894808576}
+      - Sentry__Debug=${SENTRY_DEBUG:-false}
+      - Sentry__TracesSampleRate=${SENTRY_TRACES_SAMPLE_RATE:-0}
       # AI (Google)
       - AI__Enabled=${AI_ENABLED:-false}
       - AI__Provider=${AI_PROVIDER:-google}
