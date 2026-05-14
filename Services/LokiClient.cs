@@ -49,22 +49,16 @@ public class LokiClient : IDisposable
         ?? "production";
 
     /// <summary>
-    /// Builds the Loki push endpoint. <see cref="LokiOptions.Url"/> is the Loki
-    /// API base (the part before <c>/api/v1/*</c>). Some deployments expose it
-    /// behind a proxy path that already ends in <c>/loki</c> (e.g. a Grafana
-    /// datasource mount at <c>/datasource/loki</c>); strip a trailing
-    /// <c>/loki</c> before re-appending the canonical suffix so the URL never
-    /// becomes a doubled <c>/loki/loki</c>.
+    /// Builds the Loki push endpoint. <see cref="LokiOptions.Url"/> is the
+    /// deployment's Loki ingress (e.g. a Grafana datasource proxy at
+    /// <c>…/datasource/loki</c>). The canonical <c>/loki/api/v1/push</c> suffix
+    /// is always appended verbatim — even when the URL already ends in
+    /// <c>/loki</c>, the path behind the proxy still expects its own
+    /// <c>/loki/api/v1/push</c>, so the doubled <c>…/loki/loki/api/v1/push</c>
+    /// is intentional and correct for this setup.
     /// </summary>
     internal static string BuildPushUrl(string baseUrl)
-    {
-        var trimmed = baseUrl.TrimEnd('/');
-        if (trimmed.EndsWith("/loki", StringComparison.OrdinalIgnoreCase))
-        {
-            trimmed = trimmed[..^"/loki".Length];
-        }
-        return trimmed + "/loki/api/v1/push";
-    }
+        => baseUrl.TrimEnd('/') + "/loki/api/v1/push";
 
     public void Enqueue(string level, string message, IReadOnlyDictionary<string, string>? labels = null)
     {
