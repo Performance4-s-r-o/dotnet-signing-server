@@ -6,6 +6,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Git short SHA from Coolify; combined inside the Dockerfile with
+        # the build date (UTC) to form release name YYYY-MM-DD-<sha>. Empty
+        # disables it and Sentry falls back to its default detection.
+        SENTRY_RELEASE_SHA: ${SENTRY_RELEASE_SHA:-}
     restart: unless-stopped
     volumes:
       - data_protection_keys:/app/data-protection-keys
@@ -53,6 +58,9 @@ services:
       - Sentry__Dsn=${SENTRY_DSN:-https://02d7cd2de1627b37a7c10591ad49b635@o4504337978163200.ingest.us.sentry.io/4511387894808576}
       - Sentry__Debug=${SENTRY_DEBUG:-false}
       - Sentry__TracesSampleRate=${SENTRY_TRACES_SAMPLE_RATE:-0}
+      # Environment tag — set per Coolify deployment (test / production).
+      # Defaults to "production" when unset.
+      - Sentry__Environment=${SENTRY_ENVIRONMENT:-production}
       # AI (Google)
       - AI__Enabled=${AI_ENABLED:-false}
       - AI__Provider=${AI_PROVIDER:-google}
