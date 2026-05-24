@@ -113,9 +113,73 @@ namespace DotNetSigningServer.Services
                 {
                     throw new ApiValidationException("TSA_HTTPS_REQUIRED");
                 }
+                // SSRF guard: a caller-supplied TSA URL must not point at an
+                // internal/loopback/link-local address. Public TSAs are unaffected.
+                if (ResolvesToPrivateAddress(parsedUri.DnsSafeHost))
+                {
+                    throw new ApiValidationException("TSA_HOST_NOT_ALLOWED");
+                }
             }
 
             return new TSAClientBouncyCastle(url, username, password);
+        }
+
+        /// <summary>
+        /// True if the host is, or DNS-resolves to, a loopback / private / link-local /
+        /// unique-local address — blocked to prevent SSRF into the internal network.
+        /// Fails closed (returns true) if the host cannot be resolved.
+        /// </summary>
+        private static bool ResolvesToPrivateAddress(string host)
+        {
+            System.Net.IPAddress[] addresses;
+            if (System.Net.IPAddress.TryParse(host, out var literal))
+            {
+                addresses = new[] { literal };
+            }
+            else
+            {
+                try
+                {
+                    addresses = System.Net.Dns.GetHostAddresses(host);
+                }
+                catch
+                {
+                    return true; // unresolvable → treat as not allowed
+                }
+                if (addresses.Length == 0) return true;
+            }
+
+            foreach (var ip in addresses)
+            {
+                if (IsPrivateOrLocal(ip)) return true;
+            }
+            return false;
+        }
+
+        private static bool IsPrivateOrLocal(System.Net.IPAddress ip)
+        {
+            if (System.Net.IPAddress.IsLoopback(ip)) return true;
+
+            if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+            {
+                var b = ip.GetAddressBytes();
+                // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10 (CGNAT), 0.0.0.0/8
+                if (b[0] == 10) return true;
+                if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return true;
+                if (b[0] == 192 && b[1] == 168) return true;
+                if (b[0] == 169 && b[1] == 254) return true;
+                if (b[0] == 100 && b[1] >= 64 && b[1] <= 127) return true;
+                if (b[0] == 0) return true;
+            }
+            else if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+            {
+                if (ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal) return true;
+                var b = ip.GetAddressBytes();
+                if ((b[0] & 0xfe) == 0xfc) return true; // fc00::/7 unique-local
+                // IPv4-mapped (::ffff:a.b.c.d) → re-check the embedded v4
+                if (ip.IsIPv4MappedToIPv6 && IsPrivateOrLocal(ip.MapToIPv4())) return true;
+            }
+            return false;
         }
 
         public static byte[] EncryptAttachmentPayload(byte[] attachmentBytes, string recipientCertificatePem, bool compressBeforeEncrypt)

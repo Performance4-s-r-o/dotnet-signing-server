@@ -19,7 +19,14 @@ var builder = WebApplication.CreateBuilder(args);
 // TracesSampleRate). Captures unhandled exceptions plus everything logged at
 // LogError/LogCritical — including LokiExceptionMiddleware's handled-exception
 // path — via the Sentry ILogger integration.
-builder.WebHost.UseSentry();
+//
+// Only initialise Sentry when a DSN is configured (docker/prod set Sentry__Dsn).
+// Local `dotnet watch` runs without one, and the SDK throws on a null DSN, so we
+// skip it here instead of crashing at startup.
+if (!string.IsNullOrWhiteSpace(builder.Configuration["Sentry:Dsn"]))
+{
+    builder.WebHost.UseSentry();
+}
 
 // Persist data protection keys so antiforgery/cookies survive restarts and container re-creations.
 var dataProtectionPath = Environment.GetEnvironmentVariable("DATA_PROTECTION_KEYS_PATH")

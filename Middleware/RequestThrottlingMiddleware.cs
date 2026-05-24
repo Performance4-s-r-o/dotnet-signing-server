@@ -35,7 +35,7 @@ public class RequestThrottlingMiddleware
 
         if (current > _options.MaxConcurrentRequestsPerKey)
         {
-            InFlightCounts.AddOrUpdate(key, 0, (_, val) => Math.Max(0, val - 1));
+            Decrement(key);
             _logger.LogWarning("Too many concurrent requests for key {Key} ({Count}/{Max})", key, current, _options.MaxConcurrentRequestsPerKey);
             context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
             var factory = context.RequestServices.GetRequiredService<IStringLocalizerFactory>();
@@ -50,7 +50,19 @@ public class RequestThrottlingMiddleware
         }
         finally
         {
-            InFlightCounts.AddOrUpdate(key, 0, (_, val) => Math.Max(0, val - 1));
+            Decrement(key);
+        }
+    }
+
+    private static void Decrement(string key)
+    {
+        var newVal = InFlightCounts.AddOrUpdate(key, 0, (_, val) => Math.Max(0, val - 1));
+        if (newVal == 0)
+        {
+            // Atomic compare-and-remove: only removes if the value is STILL 0, so a
+            // concurrent increment (which set it >0) is never lost. Keeps the dict
+            // from growing unbounded by distinct key (per-IP/per-user).
+            InFlightCounts.TryRemove(new System.Collections.Generic.KeyValuePair<string, int>(key, 0));
         }
     }
 

@@ -7,6 +7,7 @@ using DotNetSigningServer.Resources;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 
@@ -113,6 +114,18 @@ namespace DotNetSigningServer.Controllers
                 return Forbid();
             }
 
+            // Atomic claim: remove the presign row immediately so only ONE
+            // concurrent /api/sign can consume it. A losing double-submit gets 0
+            // rows and bails here — no double-sign / double-charge. (The in-memory
+            // `signingData` still holds the path/cert/hash we need to sign with.)
+            var claimed = await DbContext.SigningData
+                .Where(x => x.Id == input.Id)
+                .ExecuteDeleteAsync();
+            if (claimed == 0)
+            {
+                return Conflict(new { message = Localizer["SigningDataNotFound"].Value });
+            }
+
             try
             {
                 var tsaUsername = !string.IsNullOrEmpty(signingData.TsaUsername)
@@ -129,9 +142,18 @@ namespace DotNetSigningServer.Controllers
                     tsaUsername,
                     tsaPassword);
 
-                System.IO.File.Delete(signingData.PresignedPdfPath);
-                DbContext.SigningData.Remove(signingData);
-                await DebitUserAsync(user);
+                // Charge BEFORE delivering. If the balance raced to zero since the
+                // pre-check, or the concurrency tier multiplied the cost beyond it,
+                // the atomic debit returns false — don't hand over a free signature.
+                var debited = await DebitUserAsync(user);
+                if (!debited)
+                {
+                    return StatusCode(StatusCodes.Status402PaymentRequired,
+                        new { message = Localizer["NoCreditsRemaining"].Value });
+                }
+
+                try { System.IO.File.Delete(signingData.PresignedPdfPath); }
+                catch { /* best-effort; PresignCleanupService is the backstop */ }
 
                 return PdfOrJsonResult(result);
             }

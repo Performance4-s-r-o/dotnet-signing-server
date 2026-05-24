@@ -22,6 +22,11 @@ public class AutoRechargeService : IAutoRechargeService
 
     /// <summary>Tracks last failed auto-recharge attempt per user to implement cooldown.</summary>
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, DateTimeOffset> _failedAttempts = new();
+    // Per-user in-flight guard: stops two concurrent debits that both crossed the
+    // threshold from each creating a Stripe charge (per-PaymentIntent idempotency
+    // doesn't cover two distinct intents). In-process only — a multi-replica
+    // deployment would additionally need a DB/distributed lock.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte> _inFlight = new();
 
     public AutoRechargeService(
         ApplicationDbContext dbContext,
@@ -43,6 +48,13 @@ public class AutoRechargeService : IAutoRechargeService
 
     public async Task<AutoRechargeResult> TryAutoRechargeAsync(Guid userId)
     {
+        // Only one recharge per user may run at a time (see _inFlight).
+        if (!_inFlight.TryAdd(userId, 0))
+        {
+            return new AutoRechargeResult { Success = false, Error = "Auto-recharge already in progress" };
+        }
+        try
+        {
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
         if (user == null)
         {
@@ -158,6 +170,11 @@ public class AutoRechargeService : IAutoRechargeService
             _logger.LogError(ex, "Auto-recharge Stripe error for user {UserId}", userId);
             await SendRechargeFailedEmailAsync(user, $"Payment failed: {ex.Message}");
             return new AutoRechargeResult { Success = false, Error = ex.Message };
+        }
+        }
+        finally
+        {
+            _inFlight.TryRemove(userId, out _);
         }
     }
 

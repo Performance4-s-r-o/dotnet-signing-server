@@ -17,6 +17,9 @@ namespace DotNetSigningServer.Controllers
     [Route("api")]
     public class PdfUtilityApiController : ApiControllerBase
     {
+        // Max PDF pages rasterized by /api/find-codes (DoS guard — see usage).
+        private const int MaxFindCodesRasterPages = 30;
+
         private readonly PdfConversionService _pdfConversionService;
 
         public PdfUtilityApiController(
@@ -238,7 +241,11 @@ namespace DotNetSigningServer.Controllers
             var settings = new MagickReadSettings
             {
                 Density = new Density(300, 300),
-                Format = MagickFormat.Pdf
+                Format = MagickFormat.Pdf,
+                // DoS guard: only rasterize the first N pages. A 300-DPI render of
+                // every page (× several variants) of a 20 MB PDF can exhaust
+                // memory/CPU; barcodes are realistically on the leading pages.
+                FrameCount = MaxFindCodesRasterPages,
             };
 
             using (var ms = new MemoryStream(pdfBytes))
