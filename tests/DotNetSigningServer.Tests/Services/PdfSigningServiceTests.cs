@@ -4,6 +4,7 @@ using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Tests.Helpers;
 using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Signatures;
 using Org.BouncyCastle.Cms;
 using Org.BouncyCastle.Pkcs;
@@ -317,6 +318,110 @@ public class PdfSigningServiceTests : IDisposable
                 Location = "Test",
                 Reason = "Test"
             }));
+    }
+
+    [Fact]
+    public void StampTextFields_RendersValueIntoPage()
+    {
+        var pdfBytes = Convert.FromBase64String(TestHelpers.CreateMinimalPdfBase64());
+
+        var stamped = PdfTemplateService.StampTextFields(pdfBytes, new List<PreSignFieldInput>
+        {
+            new()
+            {
+                Value = "JOBTITLE42",
+                Definition = new PdfFieldDefinition
+                {
+                    FieldName = "job_title",
+                    Page = 1,
+                    Rect = new SignRect { X = 50, Y = 50, Width = 250, Height = 30 }
+                }
+            }
+        });
+
+        using var ms = new MemoryStream(stamped);
+        using var reader = new PdfReader(ms);
+        using var doc = new PdfDocument(reader);
+        var text = PdfTextExtractor.GetTextFromPage(doc.GetPage(1));
+        Assert.Contains("JOBTITLE42", text);
+    }
+
+    [Fact]
+    public void StampTextFields_EmptyValue_IsNoOp()
+    {
+        var pdfBytes = Convert.FromBase64String(TestHelpers.CreateMinimalPdfBase64());
+
+        var stamped = PdfTemplateService.StampTextFields(pdfBytes, new List<PreSignFieldInput>
+        {
+            new()
+            {
+                Value = "   ",
+                Definition = new PdfFieldDefinition { FieldName = "blank", Page = 1, Rect = new SignRect { X = 10, Y = 10, Width = 100, Height = 20 } }
+            }
+        });
+
+        Assert.Equal(pdfBytes, stamped);
+    }
+
+    [Fact]
+    public void HandlePreSign_WithFields_ThenSign_ValueIsPresentAndCoveredBySignature()
+    {
+        var pdfBase64 = TestHelpers.CreateMinimalPdfBase64();
+        var (certPem, pfxBase64, password) = TestHelpers.CreateTestCertificate();
+
+        // Presign with a filled custom field — value must be stamped before the hash.
+        var (path, hashHex) = _sut.HandlePreSign(new PreSignInput
+        {
+            PdfContent = pdfBase64,
+            CertificatePem = certPem,
+            Location = "Test",
+            Reason = "Field coverage test",
+            SignRect = new SignRect { X = 10, Y = 10, Width = 200, Height = 50 },
+            SignPageNumber = 1,
+            Fields = new List<PreSignFieldInput>
+            {
+                new()
+                {
+                    Value = "COVEREDVALUE",
+                    Definition = new PdfFieldDefinition
+                    {
+                        FieldName = "covered",
+                        Page = 1,
+                        Rect = new SignRect { X = 60, Y = 200, Width = 250, Height = 30 }
+                    }
+                }
+            }
+        }, "Signature1");
+        _tempFiles.Add(path);
+
+        var pfxBytes = Convert.FromBase64String(pfxBase64);
+        using var pfxMs = new MemoryStream(pfxBytes);
+        var store = new Pkcs12StoreBuilder().Build();
+        store.Load(pfxMs, password.ToCharArray());
+        var alias = store.Aliases.Cast<string>().First(store.IsKeyEntry);
+        var privateKey = store.GetKey(alias).Key;
+
+        var hashBytes = HexStringToByteArray(hashHex);
+        var signer = Org.BouncyCastle.Security.SignerUtilities.GetSigner("SHA256withRSA");
+        signer.Init(true, privateKey);
+        signer.BlockUpdate(hashBytes, 0, hashBytes.Length);
+        var signedHashHex = BitConverter.ToString(signer.GenerateSignature()).Replace("-", "").ToLowerInvariant();
+
+        var signedPdfBase64 = _sut.HandleSign(
+            new SignInput { Id = "test", SignedHash = signedHashHex },
+            path, certPem, "Signature1");
+
+        var signedBytes = Convert.FromBase64String(signedPdfBase64);
+        using var ms = new MemoryStream(signedBytes);
+        using var reader = new PdfReader(ms);
+        using var doc = new PdfDocument(reader);
+
+        // The stamped value is present...
+        Assert.Contains("COVEREDVALUE", PdfTextExtractor.GetTextFromPage(doc.GetPage(1)));
+        // ...and the signature covers the whole document, so the value is tamper-evident.
+        var util = new SignatureUtil(doc);
+        var sigName = util.GetSignatureNames().First();
+        Assert.True(util.SignatureCoversWholeDocument(sigName));
     }
 
     private static byte[] HexStringToByteArray(string hex)

@@ -30,6 +30,8 @@ namespace DotNetSigningServer.Models
         public bool? AutoHeight { get; set; }
         /// <summary>Display name used in the signer row. Overrides CN/GN+SN extracted from the cert chain when provided.</summary>
         public string? SignerName { get; set; }
+        /// <summary>Custom fillable text fields stamped into the PDF before the hash is computed, so they fall under this signature.</summary>
+        public List<PreSignFieldInput>? Fields { get; set; }
     }
 
     public class SignRect

@@ -156,9 +156,9 @@ public class PdfFieldDefinition
     // Text decoration (text fields)
     public bool Italic { get; set; } = false;
     public bool Underline { get; set; } = false;
-    /// <summary>Hex color string (#RRGGBB). Empty/null ⇒ default black.</summary>
+    /// <summary>Hex color string (#RRGGBB or #RRGGBBAA). Empty/null ⇒ default black.</summary>
     public string? TextColor { get; set; }
-    /// <summary>Hex color string (#RRGGBB). Empty/null ⇒ transparent.</summary>
+    /// <summary>Hex color string (#RRGGBB or #RRGGBBAA). Empty/null ⇒ transparent.</summary>
     public string? BackgroundColor { get; set; }
     /// <summary>Inner padding in PT applied uniformly to all four sides.</summary>
     public float Padding { get; set; } = 0;
@@ -169,8 +169,34 @@ public class PdfFieldDefinition
     /// <summary>Border style for text fields. "none" / "solid" / "dashed" / "dotted".</summary>
     public string? BorderStyle { get; set; }
     public float BorderWidth { get; set; } = 0;
-    /// <summary>Hex color string (#RRGGBB). Empty/null ⇒ default black.</summary>
+    /// <summary>Hex color string (#RRGGBB or #RRGGBBAA). Empty/null ⇒ default black.</summary>
     public string? BorderColor { get; set; }
+    /// <summary>Corner radius (PT) for the background fill + border. 0 ⇒ square corners.</summary>
+    public float BorderRadius { get; set; } = 0;
+    // ── Table-level styling (Type == table). Hex colors (#RRGGBB / #RRGGBBAA). ──
+    /// <summary>Row height in PT for the header + data rows. Null ⇒ auto.</summary>
+    public float? RowHeight { get; set; }
+    public string? HeaderBackgroundColor { get; set; }
+    public string? HeaderTextColor { get; set; }
+    public string? RowBackgroundColor { get; set; }
+    public string? RowTextColor { get; set; }
+    public string? AltRowBackgroundColor { get; set; }
+    public string? AltRowTextColor { get; set; }
+}
+
+/// <summary>
+/// A custom fillable text field placed on a sign request by its creator and filled by the
+/// assigned signer. Stamped into the PDF (always as text) during presign/seal so the value
+/// falls under that signer's signature. The engine does NOT validate the value — required-ness
+/// and type/format are enforced upstream by the v0 server when the signer fills the PDF.
+/// </summary>
+public class PreSignFieldInput
+{
+    /// <summary>Placement + presentation (rect, page, font, alignment, …). Always rendered as text.</summary>
+    [Required]
+    public PdfFieldDefinition Definition { get; set; } = new();
+    /// <summary>Value entered by the signer. Empty/whitespace fields are not stamped.</summary>
+    public string? Value { get; set; }
 }
 
 public class TableColumnDefinition
@@ -182,6 +208,8 @@ public class TableColumnDefinition
     public PdfBorderStyle? BorderStyle { get; set; } = PdfBorderStyle.None;
     public PdfHorizontalAlign? HorizontalAlign { get; set; } = PdfHorizontalAlign.Left;
     public PdfVerticalAlign? VerticalAlign { get; set; } = PdfVerticalAlign.Center;
+    /// <summary>Per-column font; falls back to the field font when null.</summary>
+    public PdfFontName? FontName { get; set; }
 }
 
 public class PdfFieldValue

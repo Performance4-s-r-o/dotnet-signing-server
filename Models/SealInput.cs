@@ -29,5 +29,7 @@ namespace DotNetSigningServer.Models
         public float? DesignHeight { get; set; }
         /// <summary>When true, signature box height grows to fit content regardless of DesignHeight.</summary>
         public bool? AutoHeight { get; set; }
+        /// <summary>Custom fillable text fields stamped into the PDF before sealing, so they fall under the seal signature.</summary>
+        public List<PreSignFieldInput>? Fields { get; set; }
     }
 }

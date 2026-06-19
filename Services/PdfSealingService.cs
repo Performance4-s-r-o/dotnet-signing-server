@@ -40,6 +40,13 @@ namespace DotNetSigningServer.Services
                 pdfContent = Convert.ToBase64String(pdfBytes);
             }
 
+            // Stamp custom fillable field values before sealing so they are covered by the seal signature.
+            if (input.Fields is { Count: > 0 })
+            {
+                byte[] withFields = PdfTemplateService.StampTextFields(Convert.FromBase64String(pdfContent), input.Fields);
+                pdfContent = Convert.ToBase64String(withFields);
+            }
+
             if (ShouldApplyVisibleOverlay(input))
             {
                 pdfContent = _visualSigningService.ApplyVisualSign(new VisualSignInput

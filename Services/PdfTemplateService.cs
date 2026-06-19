@@ -7,6 +7,7 @@ using iText.IO.Image;
 using iText.Kernel.Geom;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas;
+using iText.Kernel.Pdf.Extgstate;
 using iText.Layout;
 using iText.Layout.Element;
 using iText.Layout.Properties;
@@ -302,8 +303,9 @@ public class PdfTemplateService
     }
 
     /// <summary>
-    /// Parses a CSS-style hex color (#RRGGBB or #RGB). Returns null when the
-    /// input is empty/invalid so callers can fall back to a default.
+    /// Parses a CSS-style hex color (#RGB, #RRGGBB or #RRGGBBAA). Returns null when
+    /// the input is empty/invalid so callers can fall back to a default. Any alpha
+    /// suffix is ignored here (RGB only) — use <see cref="ParseColorAlpha"/> for it.
     /// </summary>
     private static DeviceRgb? ParseHexColor(string? hex)
     {
@@ -314,7 +316,7 @@ public class PdfTemplateService
             // #RGB → #RRGGBB
             s = $"{s[0]}{s[0]}{s[1]}{s[1]}{s[2]}{s[2]}";
         }
-        if (s.Length != 6) return null;
+        if (s.Length != 6 && s.Length != 8) return null;
         try
         {
             var r = Convert.ToInt32(s.Substring(0, 2), 16);
@@ -326,6 +328,80 @@ public class PdfTemplateService
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Extracts the alpha (0..1) from a #RRGGBBAA hex color. 6-digit / 3-digit /
+    /// invalid input ⇒ 1 (fully opaque).
+    /// </summary>
+    private static float ParseColorAlpha(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return 1f;
+        var s = hex.TrimStart('#');
+        if (s.Length != 8) return 1f;
+        try
+        {
+            return Convert.ToInt32(s.Substring(6, 2), 16) / 255f;
+        }
+        catch
+        {
+            return 1f;
+        }
+    }
+
+    /// <summary>Draw a rect path on the canvas — rounded when radius &gt; 0, else square.</summary>
+    private static void RectOrRoundRect(PdfCanvas canvas, Rectangle r, float radius)
+    {
+        if (radius > 0.01f)
+        {
+            // Clamp radius so it never exceeds half the shorter side.
+            var maxR = Math.Min(r.GetWidth(), r.GetHeight()) / 2f;
+            canvas.RoundRectangle(r.GetX(), r.GetY(), r.GetWidth(), r.GetHeight(), Math.Min(radius, maxR));
+        }
+        else
+        {
+            canvas.Rectangle(r.GetX(), r.GetY(), r.GetWidth(), r.GetHeight());
+        }
+    }
+
+    /// <summary>
+    /// Stamps custom fillable text fields onto an already-rendered PDF and returns the new bytes.
+    /// Used by the presign/seal flows to flatten signer-entered values into page content BEFORE the
+    /// signature hash is computed, so the values are covered (tamper-evident) by that signature.
+    /// Uses append mode so any signatures already present on the snapshot (prior signers) stay valid.
+    /// Empty/whitespace values are skipped. Shares the text-rendering path (<see cref="AddText"/>) with FillAsync.
+    /// </summary>
+    public static byte[] StampTextFields(byte[] pdfBytes, IEnumerable<PreSignFieldInput> fields)
+    {
+        var toStamp = (fields ?? Enumerable.Empty<PreSignFieldInput>())
+            .Where(f => f != null && !string.IsNullOrWhiteSpace(f.Value))
+            .ToList();
+        if (toStamp.Count == 0)
+        {
+            return pdfBytes;
+        }
+
+        using var msIn = new MemoryStream(pdfBytes);
+        using var msOut = new MemoryStream();
+        var reader = new PdfReader(msIn);
+        var writer = new PdfWriter(msOut);
+        var pdfDoc = new PdfDocument(reader, writer, new StampingProperties().UseAppendMode());
+
+        foreach (var entry in toStamp)
+        {
+            var def = entry.Definition ?? new PdfFieldDefinition();
+            var pageNumber = def.Page <= 0 ? 1 : def.Page;
+            if (pageNumber > pdfDoc.GetNumberOfPages())
+            {
+                pageNumber = pdfDoc.GetNumberOfPages();
+            }
+            var page = pdfDoc.GetPage(pageNumber);
+            var rect = NormalizeRectForRotation(page, new Rectangle(def.Rect.X, def.Rect.Y, def.Rect.Width, def.Rect.Height));
+            AddText(entry.Value!, pdfDoc, pageNumber, rect, def);
+        }
+
+        pdfDoc.Close();
+        return msOut.ToArray();
     }
 
     private static void AddText(string value, PdfDocument pdfDoc, int pageNumber, Rectangle rect, PdfFieldDefinition field)
@@ -368,6 +444,9 @@ public class PdfTemplateService
         if (field.Underline) paragraph.SetUnderline();
         var textColor = ParseHexColor(field.TextColor);
         if (textColor != null) paragraph.SetFontColor(textColor);
+        // Per-CSS, an alpha suffix on the text colour fades the glyphs.
+        var textAlpha = ParseColorAlpha(field.TextColor);
+        if (textAlpha < 1f) paragraph.SetProperty(Property.OPACITY, textAlpha);
         if (field.Multiline && field.LineHeight is { } lh && lh > 0)
         {
             paragraph.SetFixedLeading(lh);
@@ -381,13 +460,20 @@ public class PdfTemplateService
             ApplyFieldRotation(pdfCanvas, rect, field.Rotation);
 
             // Background fill + border are drawn in the rotated frame so the
-            // decoration follows the field's visual orientation.
+            // decoration follows the field's visual orientation. Both honour an
+            // optional alpha suffix on the colour and a corner radius.
+            var radius = Math.Max(0f, field.BorderRadius);
             var bgColor = ParseHexColor(field.BackgroundColor);
             if (bgColor != null)
             {
                 pdfCanvas.SaveState();
+                var bgAlpha = ParseColorAlpha(field.BackgroundColor);
+                if (bgAlpha < 1f)
+                {
+                    pdfCanvas.SetExtGState(new PdfExtGState().SetFillOpacity(bgAlpha));
+                }
                 pdfCanvas.SetFillColor(bgColor);
-                pdfCanvas.Rectangle(rect.GetX(), rect.GetY(), rect.GetWidth(), rect.GetHeight());
+                RectOrRoundRect(pdfCanvas, rect, radius);
                 pdfCanvas.Fill();
                 pdfCanvas.RestoreState();
             }
@@ -403,11 +489,16 @@ public class PdfTemplateService
             {
                 var borderColor = ParseHexColor(field.BorderColor) ?? new DeviceRgb(0, 0, 0);
                 pdfCanvas.SaveState();
+                var borderAlpha = ParseColorAlpha(field.BorderColor);
+                if (borderAlpha < 1f)
+                {
+                    pdfCanvas.SetExtGState(new PdfExtGState().SetStrokeOpacity(borderAlpha));
+                }
                 pdfCanvas.SetStrokeColor(borderColor);
                 pdfCanvas.SetLineWidth(field.BorderWidth);
                 if (borderStyle == "dashed") pdfCanvas.SetLineDash(6f, 4f);
                 else if (borderStyle == "dotted") pdfCanvas.SetLineDash(1.5f, 2.5f);
-                pdfCanvas.Rectangle(rect.GetX(), rect.GetY(), rect.GetWidth(), rect.GetHeight());
+                RectOrRoundRect(pdfCanvas, rect, radius);
                 pdfCanvas.Stroke();
                 pdfCanvas.RestoreState();
             }
@@ -526,16 +617,30 @@ public class PdfTemplateService
         table.SetPadding(0);
         table.SetMargin(0);
 
-        var effectiveRows = rows?.Count > 0
-            ? rows
-            : new List<List<string>> { columns.Select(c => c.Name ?? string.Empty).ToList() };
+        // Configurable styling (with optional alpha) — mirrors the builder preview.
+        var borderColor = ParseHexColor(field.BorderColor) ?? new DeviceRgb(166, 200, 255);
+        var borderW = field.BorderWidth > 0 ? field.BorderWidth : 1f;
+        var headerBg = ParseHexColor(field.HeaderBackgroundColor);
+        var headerBgA = ParseColorAlpha(field.HeaderBackgroundColor);
+        var headerText = ParseHexColor(field.HeaderTextColor);
+        var headerTextA = ParseColorAlpha(field.HeaderTextColor);
+        var rowBg = ParseHexColor(field.RowBackgroundColor);
+        var rowBgA = ParseColorAlpha(field.RowBackgroundColor);
+        var rowText = ParseHexColor(field.RowTextColor);
+        var rowTextA = ParseColorAlpha(field.RowTextColor);
+        var altBg = ParseHexColor(field.AltRowBackgroundColor);
+        var altBgA = ParseColorAlpha(field.AltRowBackgroundColor);
+        var altText = ParseHexColor(field.AltRowTextColor);
+        var altTextA = ParseColorAlpha(field.AltRowTextColor);
+        var rowHeight = field.RowHeight is { } rhv && rhv > 0 ? (float?)rhv : null;
 
-        foreach (var row in effectiveRows)
+        void AddCells(IReadOnlyList<string> values, bool header, int dataIndex)
         {
+            var alt = !header && dataIndex % 2 == 1;
             for (int i = 0; i < columnCount; i++)
             {
                 var col = columns[Math.Min(i, columns.Count - 1)];
-                var cellText = i < row.Count ? row[i] ?? string.Empty : string.Empty;
+                var cellText = i < values.Count ? values[i] ?? string.Empty : string.Empty;
                 var paragraph = new Paragraph(cellText)
                     .SetMargin(0)
                     .SetPadding(0)
@@ -548,7 +653,16 @@ public class PdfTemplateService
                     .SetFontSize(col.FontSize <= 0 ? field.FontSize : col.FontSize)
                     .SetMultipliedLeading(1.1f);
 
-                paragraph.SetFont(ResolveFont(field.FontName, col.FontWeight ?? field.FontWeight));
+                var weight = header ? PdfFontWeight.Bold : (col.FontWeight ?? field.FontWeight);
+                paragraph.SetFont(ResolveFont(col.FontName ?? field.FontName, weight));
+
+                var txtColor = header ? headerText : (alt ? (altText ?? rowText) : rowText);
+                var txtAlpha = header ? headerTextA : (alt && altText != null ? altTextA : rowTextA);
+                if (txtColor != null)
+                {
+                    paragraph.SetFontColor(txtColor);
+                    if (txtAlpha < 1f) paragraph.SetProperty(Property.OPACITY, txtAlpha);
+                }
 
                 var cell = new Cell().Add(paragraph)
                     .SetPadding(4)
@@ -559,26 +673,32 @@ public class PdfTemplateService
                         _ => VerticalAlignment.MIDDLE
                     });
 
+                if (rowHeight.HasValue) cell.SetHeight(rowHeight.Value);
+
+                var bg = header ? headerBg : (alt ? (altBg ?? rowBg) : rowBg);
+                var bgA = header ? headerBgA : (alt && altBg != null ? altBgA : rowBgA);
+                if (bg != null)
+                {
+                    if (bgA < 1f) cell.SetBackgroundColor(bg, bgA);
+                    else cell.SetBackgroundColor(bg);
+                }
+
                 var borderStyle = col.BorderStyle ?? PdfBorderStyle.None;
-                if (borderStyle == PdfBorderStyle.Dashed)
-                {
-                    cell.SetBorder(new DashedBorder(ColorConstants.BLACK, 1));
-                }
-                else if (borderStyle == PdfBorderStyle.Filled)
-                {
-                    cell.SetBorder(new SolidBorder(ColorConstants.BLACK, 1));
-                    cell.SetBackgroundColor(new DeviceRgb(240, 240, 240));
-                }
-                else
-                {
-                    cell.SetBorder(Border.NO_BORDER);
-                }
+                if (borderStyle == PdfBorderStyle.Dashed) cell.SetBorder(new DashedBorder(borderColor, borderW));
+                else if (borderStyle == PdfBorderStyle.Filled) cell.SetBorder(new SolidBorder(borderColor, borderW));
+                else cell.SetBorder(Border.NO_BORDER);
 
                 table.AddCell(cell);
             }
         }
 
-        // using var canvas = new Canvas(new PdfCanvas(page), rect);
+        // Header row (column names) + the filled data rows.
+        AddCells(columns.Select(c => c.Name ?? string.Empty).ToList(), header: true, dataIndex: -1);
+        var dataRows = rows ?? new List<List<string>>();
+        for (int r = 0; r < dataRows.Count; r++)
+        {
+            AddCells(dataRows[r], header: false, dataIndex: r);
+        }
 
         var pdfCanvas = new PdfCanvas(page);
         pdfCanvas.SaveState();

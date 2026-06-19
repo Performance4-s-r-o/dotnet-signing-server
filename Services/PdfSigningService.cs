@@ -43,6 +43,14 @@ namespace DotNetSigningServer.Services
                 originalPdf = PdfVerificationService.AddVerification(
                     originalPdf, input.VerificationUrl, input.VerificationMode ?? "disabled");
             }
+
+            // Stamp custom fillable field values BEFORE the placeholder + hash so they are
+            // covered by this signature (tamper-evident). Mirrors the AddVerification pattern above.
+            if (input.Fields is { Count: > 0 })
+            {
+                originalPdf = PdfTemplateService.StampTextFields(originalPdf, input.Fields);
+            }
+
             var preSignContainer = new DigestCalcBlankSigner(PdfName.Adobe_PPKLite, PdfName.Adbe_pkcs7_detached);
             var chain = PdfCryptoHelper.LoadCertificatesFromPemString(input.CertificatePem);
             preSignContainer.SetChain(chain);
