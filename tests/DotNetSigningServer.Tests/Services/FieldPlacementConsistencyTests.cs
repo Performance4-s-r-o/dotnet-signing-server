@@ -198,6 +198,63 @@ public class FieldPlacementConsistencyTests : IDisposable
         Assert.True(stamped.Length > pdf.Length);
     }
 
+    /// <summary>
+    /// A 1x1 transparent PNG as base64 — the smallest valid PNG that iText can decode.
+    /// </summary>
+    private const string MinimalPngBase64 =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+    [Fact]
+    public void StampTextFields_StampsImageField()
+    {
+        // Arrange: a PreSignFieldInput with Type = Image and a valid tiny base64 PNG.
+        var pdf = Convert.FromBase64String(TestHelpers.CreateMinimalPdfBase64());
+        var field = new PreSignFieldInput
+        {
+            Value = MinimalPngBase64,
+            Definition = new PdfFieldDefinition
+            {
+                FieldName = "img_field",
+                Type = PdfFieldType.Image,
+                Page = 1,
+                Rect = Rect,
+            },
+        };
+
+        // Act
+        var stamped = PdfTemplateService.StampTextFields(pdf, new List<PreSignFieldInput> { field });
+
+        // Assert 1: no exception + output bytes differ from input (image content was written).
+        Assert.NotEqual(pdf, stamped);
+
+        // Assert 2: the stamped page carries at least one image XObject in its resources.
+        using var ms = new MemoryStream(stamped);
+        using var reader = new iText.Kernel.Pdf.PdfReader(ms);
+        using var doc = new iText.Kernel.Pdf.PdfDocument(reader);
+        var page = doc.GetPage(1);
+        var resources = page.GetResources();
+        // Collect XObjects from all content streams (append mode may add incremental revisions).
+        bool hasImageXObject = false;
+        var xObjDict = resources.GetResource(iText.Kernel.Pdf.PdfName.XObject);
+        if (xObjDict != null)
+        {
+            foreach (var key in xObjDict.KeySet())
+            {
+                var xobj = xObjDict.GetAsStream(key);
+                if (xobj != null)
+                {
+                    var subtype = xobj.GetAsName(iText.Kernel.Pdf.PdfName.Subtype);
+                    if (iText.Kernel.Pdf.PdfName.Image.Equals(subtype))
+                    {
+                        hasImageXObject = true;
+                        break;
+                    }
+                }
+            }
+        }
+        Assert.True(hasImageXObject, "Expected at least one /Image XObject on page 1 after stamping an image field.");
+    }
+
     [Theory]
     [InlineData(PdfHorizontalAlign.Left)]
     [InlineData(PdfHorizontalAlign.Center)]

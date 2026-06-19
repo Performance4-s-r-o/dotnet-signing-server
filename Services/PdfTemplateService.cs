@@ -397,6 +397,11 @@ public class PdfTemplateService
             }
             var page = pdfDoc.GetPage(pageNumber);
             var rect = NormalizeRectForRotation(page, new Rectangle(def.Rect.X, def.Rect.Y, def.Rect.Width, def.Rect.Height));
+            if (def.Type == PdfFieldType.Image)
+            {
+                TryAddImage(entry.Value!, pdfDoc, pageNumber, rect, def.Rotation);
+                continue;
+            }
             AddText(entry.Value!, pdfDoc, pageNumber, rect, def);
         }
 
