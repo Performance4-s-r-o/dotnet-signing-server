@@ -540,9 +540,10 @@ public class PdfTemplateService
                 pdfCanvas.RestoreState();
             }
         }
-        catch
+        catch (Exception ex)
         {
             // ignore invalid image content and continue with the rest
+            Console.Error.WriteLine($"[TryAddImage] failed to stamp image field (invalid/oversized base64): {ex.Message}");
         }
     }
 
