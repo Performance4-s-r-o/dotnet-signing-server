@@ -439,6 +439,7 @@
   <data name="Error_PFX_NO_PRIVATE_KEY" xml:space="preserve"><value>V poskytnutém PFX souboru nebyl nalezen soukromý klíč.</value></data>
   <data name="Error_ENCRYPTION_NO_RECIPIENTS" xml:space="preserve"><value>Pro šifrování důkazů je vyžadován alespoň jeden certifikát příjemce.</value></data>
   <data name="Error_TSA_HTTPS_REQUIRED" xml:space="preserve"><value>URL adresa autority časových razítek musí používat HTTPS.</value></data>
+  <data name="Error_TSA_HOST_NOT_ALLOWED" xml:space="preserve"><value>Hostitel autority časových razítek není povolen.</value></data>
   <data name="Error_FIELD_NAME_INVALID" xml:space="preserve"><value>Název pole musí obsahovat pouze písmena, čísla, podtržítko nebo pomlčku.</value></data>
   <data name="Error_FIELD_TYPE_INVALID" xml:space="preserve"><value>Nepodporovaný typ pole. Povolené typy: text, image, barcode, signature, table.</value></data>
   <data name="Error_FIELD_HALIGN_INVALID" xml:space="preserve"><value>Horizontální zarovnání musí být jedno z: left, center, right.</value></data>

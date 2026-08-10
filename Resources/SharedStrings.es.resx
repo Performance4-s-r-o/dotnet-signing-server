@@ -429,6 +429,7 @@
   <data name="Error_PFX_NO_PRIVATE_KEY" xml:space="preserve"><value>No se encontró ninguna entrada de clave privada en el archivo PFX proporcionado.</value></data>
   <data name="Error_ENCRYPTION_NO_RECIPIENTS" xml:space="preserve"><value>Se requiere al menos un certificado de destinatario para el cifrado de evidencias.</value></data>
   <data name="Error_TSA_HTTPS_REQUIRED" xml:space="preserve"><value>La URL de la autoridad de sellado de tiempo debe usar HTTPS.</value></data>
+  <data name="Error_TSA_HOST_NOT_ALLOWED" xml:space="preserve"><value>El host de la autoridad de sellado de tiempo no está permitido.</value></data>
   <data name="Error_FIELD_NAME_INVALID" xml:space="preserve"><value>El nombre del campo solo puede contener letras, números, guión bajo o guión.</value></data>
   <data name="Error_FIELD_TYPE_INVALID" xml:space="preserve"><value>Tipo de campo no compatible. Permitidos: text, image, barcode, signature, table.</value></data>
   <data name="Error_FIELD_HALIGN_INVALID" xml:space="preserve"><value>La alineación horizontal debe ser una de: left, center, right.</value></data>

@@ -439,6 +439,7 @@
   <data name="Error_PFX_NO_PRIVATE_KEY" xml:space="preserve"><value>No private key entry found in the provided PFX file.</value></data>
   <data name="Error_ENCRYPTION_NO_RECIPIENTS" xml:space="preserve"><value>At least one recipient certificate is required for evidence encryption.</value></data>
   <data name="Error_TSA_HTTPS_REQUIRED" xml:space="preserve"><value>The timestamp authority URL must use HTTPS.</value></data>
+  <data name="Error_TSA_HOST_NOT_ALLOWED" xml:space="preserve"><value>The timestamp authority host is not allowed.</value></data>
   <data name="Error_FIELD_NAME_INVALID" xml:space="preserve"><value>Field name must contain only letters, numbers, underscore or dash.</value></data>
   <data name="Error_FIELD_TYPE_INVALID" xml:space="preserve"><value>Unsupported field type. Allowed: text, image, barcode, signature, table.</value></data>
   <data name="Error_FIELD_HALIGN_INVALID" xml:space="preserve"><value>Horizontal alignment must be one of: left, center, right.</value></data>
