@@ -64,7 +64,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
         ForwardedHeaders.XForwardedHost;
     options.ForwardLimit = 1; // Only trust the immediate reverse proxy
 
-    // The container runs behind Coolify/Caddy on a Docker bridge network, so
+    // The container runs behind a reverse proxy on a Docker bridge network, so
     // the proxy is never on 127.0.0.1. By default ASP.NET ignores forwarded
     // headers from non-loopback IPs and Request.Host stays the internal
     // container address — which breaks the CORS allow-list (it falls back to
@@ -104,7 +104,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     else
     {
         // Default: Docker/Kubernetes private ranges + loopback. Covers every
-        // documented deployment (Coolify/Caddy on a bridge network) while
+        // documented deployment (reverse proxy on a bridge network) while
         // rejecting forwarded headers from a directly exposed container.
         options.KnownNetworks.Add(new IPNetwork(System.Net.IPAddress.Parse("10.0.0.0"), 8));
         options.KnownNetworks.Add(new IPNetwork(System.Net.IPAddress.Parse("172.16.0.0"), 12));
@@ -356,7 +356,7 @@ builder.Services.AddOptions<EvidenceOptions>()
     .Bind(builder.Configuration.GetSection("Evidence"))
     .PostConfigure(options =>
     {
-        // Accept either raw PEM or a single-line base64 of the PEM (Coolify's
+        // Accept either raw PEM or a single-line base64 of the PEM (some platforms'
         // .env export mangles multi-line values, so base64 is the safe path).
         var pem = builder.Configuration["EVIDENCE_ENCRYPTION_CERTIFICATE_PEM"];
         var pemB64 = builder.Configuration["EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64"];
@@ -433,7 +433,7 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
 }
-// HTTPS redirect is handled by the reverse proxy (Caddy/Coolify). The
+// HTTPS redirect is handled by the reverse proxy. The
 // container only speaks HTTP internally, so UseHttpsRedirection would
 // just log "Failed to determine the https port" on every request.
 
@@ -567,7 +567,7 @@ using (var scope = app.Services.CreateScope())
         // so on a fresh database the history lookup would fail with 42P01.
         //
         // CREATE SCHEMA IF NOT EXISTS still needs CREATE on the database even when
-        // the schema already exists. Hosted environments (Coolify, RDS) often run
+        // the schema already exists. Managed database environments often run
         // the app as a least-privilege role that lacks DB-level CREATE — in which
         // case operators are expected to pre-create the schema with the right
         // ownership. Probe first, then attempt CREATE; tolerate 42501 if the
@@ -609,7 +609,7 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        // Fail fast so Coolify / the orchestrator sees a failed deploy.
+        // Fail fast so the orchestrator sees a failed deploy.
         // Serving against a half-migrated database silently breaks runtime queries.
         logger.LogCritical(ex, "Database migration failed — aborting startup.");
         throw;

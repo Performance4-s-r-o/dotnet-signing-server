@@ -46,7 +46,7 @@ public static class StructuredData
                 ["url"] = trimmed,
                 ["logo"] = $"{trimmed}/img/logo.png",
                 ["email"] = "support@performance4.cz",
-                ["sameAs"] = new[] { "https://github.com/janprasil/dotnet-signing-server/" },
+                ["sameAs"] = new[] { "https://github.com/Performance4-s-r-o/dotnet-signing-server/" },
             },
         }, Options);
     }

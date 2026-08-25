@@ -5,9 +5,8 @@ using Xunit;
 namespace DotNetSigningServer.Tests.Services;
 
 /// <summary>
-/// Locks the v0/SPFx → .NET wire contract for custom fillable fields. The TS side
-/// (lib/sharepoint/signing/types.ts PresignFieldPayload + toDotnetFieldProps, and
-/// the SPFx mirror) serialises camelCase JSON; ASP.NET Core controllers bind with
+/// Locks the client → .NET wire contract for custom fillable fields. Clients
+/// serialise camelCase JSON; ASP.NET Core controllers bind with
 /// System.Text.Json defaults (PropertyNameCaseInsensitive = true) and the enum
 /// converters declared on each enum. This test feeds the EXACT JSON the server
 /// receives and asserts every formatting prop reaches PdfFieldDefinition, so a

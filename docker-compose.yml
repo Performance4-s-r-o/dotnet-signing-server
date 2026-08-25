@@ -7,26 +7,27 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        # Git short SHA from Coolify; combined inside the Dockerfile with
-        # the build date (UTC) to form release name YYYY-MM-DD-<sha>. Empty
+        # Git short SHA supplied by the build pipeline; combined inside the
+        # Dockerfile with the build date (UTC) to form the release name
+        # YYYY-MM-DD-<sha>. Empty
         # disables it and Sentry falls back to its default detection.
         SENTRY_RELEASE_SHA: ${SENTRY_RELEASE_SHA:-}
     restart: unless-stopped
     volumes:
       - data_protection_keys:/app/data-protection-keys
-    # ports:
-    #   - "80:8085"
+    ports:
+      - "${HTTP_PORT:-8085}:8085"
     environment:
       - ASPNETCORE_URLS=http://+:8085
       - AllowedHosts=${ALLOWED_HOSTS:-*}
       - UseLocalDb=false
-      - FqdnServerName=${SERVICE_FQDN_SERVER:-localhost}
+      - FqdnServerName=${FQDN_SERVER:-localhost}
       - ConnectionStrings__DefaultConnection=Host=${DB_HOST};Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
       - TSA_URL=${TSA_URL:-}
       - TSA_USERNAME=${TSA_USERNAME:-}
       - TSA_PASSWORD=${TSA_PASSWORD:-}
       - Token__Secret=${TOKEN_SECRET:-}
-      # Internal preprocessing bypass — must match SIGN_API_ATTACHMENT_BILLING_BYPASS_KEY on v0
+      # Internal preprocessing bypass — must match the same key on the calling service
       - Billing__AttachmentDebitBypassKey=${BILLING_ATTACHMENT_DEBIT_BYPASS_KEY:-}
       # Seal (server-side PFX sealing for SES flow)
       - Seal__Enabled=${SEAL_ENABLED:-false}
@@ -58,10 +59,10 @@ services:
       - Loki__App=${LOKI_APP:-dotnet-signing-server}
       - Loki__Environment=${LOKI_ENVIRONMENT:-development}
       # Sentry error monitoring (DSN is public-safe; overridable via SENTRY_DSN)
-      - Sentry__Dsn=${SENTRY_DSN:-https://02d7cd2de1627b37a7c10591ad49b635@o4504337978163200.ingest.us.sentry.io/4511387894808576}
+      - Sentry__Dsn=${SENTRY_DSN:-}
       - Sentry__Debug=${SENTRY_DEBUG:-false}
       - Sentry__TracesSampleRate=${SENTRY_TRACES_SAMPLE_RATE:-0}
-      # Environment tag — set per Coolify deployment (test / production).
+      # Environment tag — set per deployment (e.g. test / production).
       # Defaults to "production" when unset.
       - Sentry__Environment=${SENTRY_ENVIRONMENT:-production}
       # AI (Google)
@@ -86,12 +87,6 @@ services:
       - Limits__RequestBodyLimitBytes=${REQUEST_BODY_LIMIT_BYTES:-41943040}
       - Limits__MaxConcurrentRequestsPerKey=${MAX_CONCURRENT_REQUESTS_PER_KEY:-25}
       - DATA_PROTECTION_KEYS_PATH=/app/data-protection-keys
-    labels:
-      - "caddy_0.handle=/*"
-      - "caddy_0.handle.0_reverse_proxy={{upstreams 8085}}"
-      - "caddy_0.handle.0_reverse_proxy.header_up_1=X-Forwarded-Proto https"
-      - "caddy_0.handle.0_reverse_proxy.header_up_0=X-Forwarded-For {remote_host}"
-      - "caddy_0.handle.0_reverse_proxy.header_up_2=X-Forwarded-Host {host}"
 
 volumes:
   data_protection_keys:

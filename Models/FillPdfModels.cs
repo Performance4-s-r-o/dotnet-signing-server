@@ -188,7 +188,7 @@ public class PdfFieldDefinition
 /// A custom fillable text field placed on a sign request by its creator and filled by the
 /// assigned signer. Stamped into the PDF (always as text) during presign/seal so the value
 /// falls under that signer's signature. The engine does NOT validate the value — required-ness
-/// and type/format are enforced upstream by the v0 server when the signer fills the PDF.
+/// and type/format are enforced upstream by the calling application when the signer fills the PDF.
 /// </summary>
 public class PreSignFieldInput
 {

@@ -186,7 +186,7 @@ namespace DotNetSigningServer.Services
         /// Probes a TSA URL by requesting a timestamp for a dummy hash. Throws
         /// <see cref="TsaCommunicationException"/> with a clean message when the
         /// TSA is unreachable or returns a non-RFC-3161 response. Used by the
-        /// admin settings save flow on v0.
+        /// admin settings save flow.
         /// </summary>
         public void ProbeTsa(string url, string? username, string? password)
         {

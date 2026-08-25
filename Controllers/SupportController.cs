@@ -13,8 +13,8 @@ using System.Security.Claims;
 namespace DotNetSigningServer.Controllers;
 
 /// <summary>
-/// In-app contact form for signed-in users. Mirrors the v0 portal's support
-/// flow (same osTicket helpdesk, same category/priority mapping). The whole
+/// In-app contact form for signed-in users, backed by an osTicket helpdesk.
+/// The whole
 /// feature is gated on the OsTicket configuration: with no Url/ApiKey the
 /// routes 404 and the nav entry is hidden.
 /// </summary>
