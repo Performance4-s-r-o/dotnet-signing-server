@@ -11,7 +11,8 @@ namespace DotNetSigningServer.Services
     //
     // Liberation fonts are bundled as Content files under Fonts/ and copied
     // next to the binary at build time.
-    public enum AppFontFamily {
+    public enum AppFontFamily
+    {
         Sans,
         Serif,
         Mono,

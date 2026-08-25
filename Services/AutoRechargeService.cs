@@ -55,122 +55,122 @@ public class AutoRechargeService : IAutoRechargeService
         }
         try
         {
-        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
-        if (user == null)
-        {
-            return new AutoRechargeResult { Success = false, Error = "User not found" };
-        }
-
-        if (!user.AutoRechargeEnabled || user.AutoRechargeQuantity <= 0)
-        {
-            return new AutoRechargeResult { Success = false, Error = "Auto-recharge not enabled" };
-        }
-
-        if (string.IsNullOrWhiteSpace(user.StripeCustomerId))
-        {
-            return new AutoRechargeResult { Success = false, Error = "No Stripe customer" };
-        }
-
-        // Trigger when balance drops below the fixed threshold (10 credits)
-        if (user.CreditsRemaining >= ThresholdCredits)
-        {
-            return new AutoRechargeResult { Success = false, Error = "Credits above threshold" };
-        }
-
-        // Cooldown: don't retry if the last attempt failed less than 15 minutes ago
-        if (_failedAttempts.TryGetValue(userId, out var lastFailed)
-            && DateTimeOffset.UtcNow - lastFailed < TimeSpan.FromMinutes(15))
-        {
-            _logger.LogDebug("Auto-recharge cooldown active for user {UserId}, last failure at {LastFailed}", userId, lastFailed);
-            return new AutoRechargeResult { Success = false, Error = "Cooldown active after previous failure" };
-        }
-
-        // Find a saved payment method
-        var paymentMethodId = await ResolvePaymentMethodAsync(user.StripeCustomerId);
-        if (string.IsNullOrWhiteSpace(paymentMethodId))
-        {
-            _logger.LogWarning("Auto-recharge failed for user {UserId}: no saved payment method", userId);
-            await SendRechargeFailedEmailAsync(user, "No saved payment method found. Please update your payment method.");
-            return new AutoRechargeResult { Success = false, Error = "No saved payment method" };
-        }
-
-        // Calculate amount using the CURRENT price (not the stored one)
-        var amount = _billingService.CalculateAmountForDocuments(user.AutoRechargeQuantity, _billingOptions.PricePer100);
-        var amountCents = (long)Math.Round(amount * 100, MidpointRounding.AwayFromZero);
-
-        try
-        {
-            var paymentIntentService = new PaymentIntentService();
-            var paymentIntent = await paymentIntentService.CreateAsync(new PaymentIntentCreateOptions
+            var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null)
             {
-                Amount = amountCents,
-                Currency = _billingOptions.Currency.ToLower(),
-                Customer = user.StripeCustomerId,
-                PaymentMethod = paymentMethodId,
-                OffSession = true,
-                Confirm = true,
-                Metadata = new Dictionary<string, string>
+                return new AutoRechargeResult { Success = false, Error = "User not found" };
+            }
+
+            if (!user.AutoRechargeEnabled || user.AutoRechargeQuantity <= 0)
+            {
+                return new AutoRechargeResult { Success = false, Error = "Auto-recharge not enabled" };
+            }
+
+            if (string.IsNullOrWhiteSpace(user.StripeCustomerId))
+            {
+                return new AutoRechargeResult { Success = false, Error = "No Stripe customer" };
+            }
+
+            // Trigger when balance drops below the fixed threshold (10 credits)
+            if (user.CreditsRemaining >= ThresholdCredits)
+            {
+                return new AutoRechargeResult { Success = false, Error = "Credits above threshold" };
+            }
+
+            // Cooldown: don't retry if the last attempt failed less than 15 minutes ago
+            if (_failedAttempts.TryGetValue(userId, out var lastFailed)
+                && DateTimeOffset.UtcNow - lastFailed < TimeSpan.FromMinutes(15))
+            {
+                _logger.LogDebug("Auto-recharge cooldown active for user {UserId}, last failure at {LastFailed}", userId, lastFailed);
+                return new AutoRechargeResult { Success = false, Error = "Cooldown active after previous failure" };
+            }
+
+            // Find a saved payment method
+            var paymentMethodId = await ResolvePaymentMethodAsync(user.StripeCustomerId);
+            if (string.IsNullOrWhiteSpace(paymentMethodId))
+            {
+                _logger.LogWarning("Auto-recharge failed for user {UserId}: no saved payment method", userId);
+                await SendRechargeFailedEmailAsync(user, "No saved payment method found. Please update your payment method.");
+                return new AutoRechargeResult { Success = false, Error = "No saved payment method" };
+            }
+
+            // Calculate amount using the CURRENT price (not the stored one)
+            var amount = _billingService.CalculateAmountForDocuments(user.AutoRechargeQuantity, _billingOptions.PricePer100);
+            var amountCents = (long)Math.Round(amount * 100, MidpointRounding.AwayFromZero);
+
+            try
+            {
+                var paymentIntentService = new PaymentIntentService();
+                var paymentIntent = await paymentIntentService.CreateAsync(new PaymentIntentCreateOptions
+                {
+                    Amount = amountCents,
+                    Currency = _billingOptions.Currency.ToLower(),
+                    Customer = user.StripeCustomerId,
+                    PaymentMethod = paymentMethodId,
+                    OffSession = true,
+                    Confirm = true,
+                    Metadata = new Dictionary<string, string>
                 {
                     { "type", "auto_recharge" },
                     { "userId", userId.ToString() },
                     { "documents", user.AutoRechargeQuantity.ToString() }
                 }
-            });
+                });
 
-            if (paymentIntent.Status != "succeeded")
-            {
-                _logger.LogWarning("Auto-recharge payment not succeeded for user {UserId}, status: {Status}",
-                    userId, paymentIntent.Status);
-                await SendRechargeFailedEmailAsync(user, "Payment was not completed. Please check your payment method.");
-                return new AutoRechargeResult { Success = false, Error = $"Payment status: {paymentIntent.Status}" };
+                if (paymentIntent.Status != "succeeded")
+                {
+                    _logger.LogWarning("Auto-recharge payment not succeeded for user {UserId}, status: {Status}",
+                        userId, paymentIntent.Status);
+                    await SendRechargeFailedEmailAsync(user, "Payment was not completed. Please check your payment method.");
+                    return new AutoRechargeResult { Success = false, Error = $"Payment status: {paymentIntent.Status}" };
+                }
+
+                // Grant credits atomically
+                await _dbContext.Database.ExecuteSqlRawAsync(
+                    "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" + {0} WHERE \"Id\" = {1}",
+                    user.AutoRechargeQuantity, user.Id);
+
+                // Record the payment
+                _dbContext.Payments.Add(new Payment
+                {
+                    UserId = user.Id,
+                    StripePaymentIntentId = paymentIntent.Id,
+                    AmountCents = (int)amountCents,
+                    Currency = _billingOptions.Currency,
+                    Status = "succeeded"
+                });
+
+                // Idempotency record
+                _dbContext.WebhookEvents.Add(new WebhookEvent
+                {
+                    EventId = $"auto_recharge_{paymentIntent.Id}",
+                    EventType = "auto_recharge",
+                    PayloadJson = $"{{\"documents\":{user.AutoRechargeQuantity},\"userId\":\"{userId}\"}}",
+                    ReceivedAt = DateTimeOffset.UtcNow,
+                    ProcessedAt = DateTimeOffset.UtcNow
+                });
+
+                await _dbContext.SaveChangesAsync();
+
+                // Clear cooldown on success
+                _failedAttempts.TryRemove(userId, out _);
+
+                _logger.LogInformation("Auto-recharge succeeded for user {UserId}: +{Credits} credits",
+                    userId, user.AutoRechargeQuantity);
+
+                await SendRechargeSuccessEmailAsync(user, user.AutoRechargeQuantity, amount);
+
+                return new AutoRechargeResult { Success = true, CreditsAdded = user.AutoRechargeQuantity };
             }
-
-            // Grant credits atomically
-            await _dbContext.Database.ExecuteSqlRawAsync(
-                "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" + {0} WHERE \"Id\" = {1}",
-                user.AutoRechargeQuantity, user.Id);
-
-            // Record the payment
-            _dbContext.Payments.Add(new Payment
+            catch (StripeException ex)
             {
-                UserId = user.Id,
-                StripePaymentIntentId = paymentIntent.Id,
-                AmountCents = (int)amountCents,
-                Currency = _billingOptions.Currency,
-                Status = "succeeded"
-            });
+                // Record failure timestamp for cooldown
+                _failedAttempts[userId] = DateTimeOffset.UtcNow;
 
-            // Idempotency record
-            _dbContext.WebhookEvents.Add(new WebhookEvent
-            {
-                EventId = $"auto_recharge_{paymentIntent.Id}",
-                EventType = "auto_recharge",
-                PayloadJson = $"{{\"documents\":{user.AutoRechargeQuantity},\"userId\":\"{userId}\"}}",
-                ReceivedAt = DateTimeOffset.UtcNow,
-                ProcessedAt = DateTimeOffset.UtcNow
-            });
-
-            await _dbContext.SaveChangesAsync();
-
-            // Clear cooldown on success
-            _failedAttempts.TryRemove(userId, out _);
-
-            _logger.LogInformation("Auto-recharge succeeded for user {UserId}: +{Credits} credits",
-                userId, user.AutoRechargeQuantity);
-
-            await SendRechargeSuccessEmailAsync(user, user.AutoRechargeQuantity, amount);
-
-            return new AutoRechargeResult { Success = true, CreditsAdded = user.AutoRechargeQuantity };
-        }
-        catch (StripeException ex)
-        {
-            // Record failure timestamp for cooldown
-            _failedAttempts[userId] = DateTimeOffset.UtcNow;
-
-            _logger.LogError(ex, "Auto-recharge Stripe error for user {UserId}", userId);
-            await SendRechargeFailedEmailAsync(user, $"Payment failed: {ex.Message}");
-            return new AutoRechargeResult { Success = false, Error = ex.Message };
-        }
+                _logger.LogError(ex, "Auto-recharge Stripe error for user {UserId}", userId);
+                await SendRechargeFailedEmailAsync(user, $"Payment failed: {ex.Message}");
+                return new AutoRechargeResult { Success = false, Error = ex.Message };
+            }
         }
         finally
         {

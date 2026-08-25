@@ -181,13 +181,13 @@ public class EmailTemplateRendererTests
         };
 
         foreach (var id in allIds)
-        foreach (var locale in new[] { "cs", "en" })
-        {
-            var result = renderer.Render(id, locale, new Dictionary<string, string?>());
-            Assert.False(string.IsNullOrWhiteSpace(result.Subject), $"{id}/{locale} has empty subject");
-            Assert.False(string.IsNullOrWhiteSpace(result.HtmlBody), $"{id}/{locale} has empty body");
-            Assert.DoesNotContain("{{body}}", result.HtmlBody);
-            Assert.DoesNotContain("{{footer_signature}}", result.HtmlBody);
-        }
+            foreach (var locale in new[] { "cs", "en" })
+            {
+                var result = renderer.Render(id, locale, new Dictionary<string, string?>());
+                Assert.False(string.IsNullOrWhiteSpace(result.Subject), $"{id}/{locale} has empty subject");
+                Assert.False(string.IsNullOrWhiteSpace(result.HtmlBody), $"{id}/{locale} has empty body");
+                Assert.DoesNotContain("{{body}}", result.HtmlBody);
+                Assert.DoesNotContain("{{footer_signature}}", result.HtmlBody);
+            }
     }
 }
