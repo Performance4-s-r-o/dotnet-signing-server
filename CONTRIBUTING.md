@@ -84,7 +84,7 @@ Match the surrounding code. The project uses standard .NET conventions and
 nullable reference types are enabled. Before pushing:
 
 ```bash
-dotnet format --verify-no-changes
+dotnet format dotnet-signing-server.sln --verify-no-changes
 ```
 
 ## Security issues

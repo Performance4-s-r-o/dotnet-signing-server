@@ -59,4 +59,4 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Verify formatting
-        run: dotnet format --verify-no-changes --verbosity diagnostic
+        run: dotnet format dotnet-signing-server.sln --verify-no-changes --verbosity diagnostic

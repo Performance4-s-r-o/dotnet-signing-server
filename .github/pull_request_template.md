@@ -9,7 +9,7 @@
 ## Checklist
 
 - [ ] `dotnet test tests/DotNetSigningServer.Tests/DotNetSigningServer.Tests.csproj` passes
-- [ ] `dotnet format --verify-no-changes` is clean
+- [ ] `dotnet format dotnet-signing-server.sln --verify-no-changes` is clean
 - [ ] Tests cover the changed behaviour
 - [ ] User-facing strings go through `Resources/SharedStrings.*.resx`, with **EN and CS both updated**
 - [ ] New configuration is documented in `README.md` and added to `.env.example`
