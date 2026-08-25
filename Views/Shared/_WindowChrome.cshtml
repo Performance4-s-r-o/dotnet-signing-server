@@ -1,0 +1,12 @@
+@model string
+@*
+  Shared window chrome: traffic-light dots plus a title.
+  Model is the already-localized title text.
+  Usage: @await Html.PartialAsync("_WindowChrome", L["SomeKey"].Value)
+*@
+<div class="win-chrome">
+  <span class="win-chrome-dot win-chrome-dot--red"></span>
+  <span class="win-chrome-dot win-chrome-dot--yellow"></span>
+  <span class="win-chrome-dot win-chrome-dot--green"></span>
+  <span class="win-chrome-title">@Model</span>
+</div>

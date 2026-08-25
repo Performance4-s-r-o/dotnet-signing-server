@@ -179,13 +179,14 @@
   <data name="UnexpectedError" xml:space="preserve"><value>Se produjo un error inesperado al procesar su solicitud.</value></data>
 
   <!-- Home / Landing page -->
-  <data name="HomeSignupSuccess" xml:space="preserve"><value>Su cuenta está lista. Bienvenido a P4PDF.</value></data>
+  <data name="HomeSignupSuccess" xml:space="preserve"><value>Su cuenta está lista. Bienvenido a Performance4PDF.</value></data>
   <data name="HomeHeroTitle" xml:space="preserve"><value>Genere, rellene, firme y procese documentos PDF con una sola API.</value></data>
-  <data name="HomeHeroDescription" xml:space="preserve"><value>P4PDF convierte sus datos en documentos PDF completos. Renderice plantillas, rellene campos dinámicos, aplique firmas digitales y sellos de tiempo, incruste archivos adjuntos y lea códigos QR o de barras, todo totalmente automatizado.</value></data>
+  <data name="HomeHeroDescription" xml:space="preserve"><value>Performance4PDF convierte sus datos en documentos PDF completos. Renderice plantillas, rellene campos dinámicos, aplique firmas digitales y sellos de tiempo, incruste archivos adjuntos y lea códigos QR o de barras, todo totalmente automatizado.</value></data>
   <data name="HomeApiDocs" xml:space="preserve"><value>Documentación de la API</value></data>
   <data name="HomeExampleIntegration" xml:space="preserve"><value>Ejemplo de integración</value></data>
-  <data name="HomeExampleApiRequest" xml:space="preserve"><value>Ejemplo de solicitud a la API</value></data>
-  <data name="HomeCodeFooter" xml:space="preserve"><value>Consulte la referencia completa en la documentación.</value></data>
+  <data name="HomeExampleApiRequest" xml:space="preserve"><value>Solicitud a la API</value></data>
+  <data name="HomeHeroSignedDocument" xml:space="preserve"><value>Documento PDF - signed.pdf</value></data>
+  <data name="HomeHeroSignatureVerified" xml:space="preserve"><value>Documento verificado</value></data>
   <data name="HomeFeatureGenerateTitle" xml:space="preserve"><value>Generar PDF a partir de plantillas</value></data>
   <data name="HomeFeatureGenerateDescription" xml:space="preserve"><value>Suba una plantilla PDF y defina campos dinámicos para texto, imágenes y códigos de barras. Asigne sus datos directamente a los marcadores y genere documentos coherentes a gran escala.</value></data>
   <data name="HomeVisualFieldMappingTitle" xml:space="preserve"><value>Asignación visual de campos</value></data>
@@ -273,6 +274,8 @@
 
   <!-- Account / Verify -->
   <data name="VerifyEmailTitle" xml:space="preserve"><value>Verificar correo electrónico</value></data>
+  <data name="ConfirmEmailVerification" xml:space="preserve"><value>Confirmar dirección de correo electrónico</value></data>
+  <data name="ConfirmEmailVerificationPrompt" xml:space="preserve"><value>Haga clic en el botón siguiente para completar la verificación de su dirección de correo electrónico.</value></data>
   <data name="VerifyEmailHeading" xml:space="preserve"><value>Verifique su correo electrónico</value></data>
   <data name="VerificationLinkSent" xml:space="preserve"><value>Le hemos enviado un enlace de verificación.</value></data>
   <data name="VerifyEmailConfirmedMsg" xml:space="preserve"><value>Éxito: su correo electrónico ha sido confirmado.</value></data>
@@ -363,7 +366,7 @@
 
   <!-- Legal / Index -->
   <data name="LegalTitle" xml:space="preserve"><value>Documentos legales</value></data>
-  <data name="LegalDescription" xml:space="preserve"><value>Aquí puede encontrar todos los documentos legales y de políticas relacionados con el uso del servicio P4PDF de Performance4 s.r.o.</value></data>
+  <data name="LegalDescription" xml:space="preserve"><value>Aquí puede encontrar todos los documentos legales y de políticas relacionados con el uso del servicio Performance4PDF de Performance4 s.r.o.</value></data>
   <data name="LegalTermsOfService" xml:space="preserve"><value>Condiciones de uso</value></data>
   <data name="LegalPrivacyPolicy" xml:space="preserve"><value>Política de privacidad</value></data>
   <data name="LegalDpa" xml:space="preserve"><value>Acuerdo de procesamiento de datos (DPA)</value></data>
@@ -404,6 +407,128 @@
   <data name="RequestsPrivacyNote" xml:space="preserve"><value>Privacidad: solo se almacenan los metadatos de las solicitudes (nombre de la operación, estado, créditos, duración). El contenido de los PDF, firmas, certificados y otros cuerpos de solicitud nunca se registran.</value></data>
   <data name="NavBilling" xml:space="preserve"><value>Facturación</value></data>
   <data name="NavAccount" xml:space="preserve"><value>Cuenta</value></data>
+  <data name="NavSettings" xml:space="preserve"><value>Configuración</value></data>
+  <data name="NavSupport" xml:space="preserve"><value>Soporte</value></data>
+  <data name="NotificationsSectionTitle" xml:space="preserve"><value>Notificaciones</value></data>
+  <data name="ConcurrencySettingsMoved" xml:space="preserve"><value>La concurrencia y el tiempo de espera de la cola se han movido a</value></data>
+  <data name="SupportTicketCreated" xml:space="preserve"><value>Su solicitud ha sido enviada. Le responderemos por correo electrónico.</value></data>
+  <data name="SupportTicketCreatedWithId" xml:space="preserve"><value>Su solicitud ha sido enviada (#{0}). Le responderemos por correo electrónico.</value></data>
+  <data name="SupportSubmitFailed" xml:space="preserve"><value>No se pudo enviar la solicitud. Inténtelo de nuevo.</value></data>
+  <data name="SupportUnavailable" xml:space="preserve"><value>El sistema de soporte no está disponible temporalmente. Inténtelo más tarde.</value></data>
+  <data name="SupportReplyToHint" xml:space="preserve"><value>Responderemos a {0}.</value></data>
+  <data name="MetaDescriptionDefault" xml:space="preserve"><value>Performance4PDF — one API to generate, fill, sign and timestamp PDF documents. PAdES signatures, RFC 3161 timestamps, PDF/A conversion and templates.</value></data>
+  <data name="HomeSeoTitle" xml:space="preserve"><value>PDF Signing &amp; Automation API</value></data>
+  <data name="HomeMetaDescription" xml:space="preserve"><value>Sign PDFs programmatically with one REST API. PAdES digital signatures, RFC 3161 timestamps, PDF/A conversion, templates and barcode extraction. EU-hosted.</value></data>
+  <data name="PricingMetaDescription" xml:space="preserve"><value>Performance4PDF pricing — pay per credit for PDF signing, timestamps, PDF/A conversion and template rendering. No seat licences, no minimum spend.</value></data>
+  <data name="ContactMetaDescription" xml:space="preserve"><value>Get in touch with the team behind Performance4PDF for questions about the PDF signing API, pricing or integration support.</value></data>
+  <data name="LegalMetaDescription" xml:space="preserve"><value>Terms, privacy policy, data processing agreement, SLA and other legal documents for the Performance4PDF service.</value></data>
+  <data name="LegalTermsOfServiceMeta" xml:space="preserve"><value>The terms governing your use of the Performance4PDF PDF signing and automation service.</value></data>
+  <data name="LegalPrivacyPolicyMeta" xml:space="preserve"><value>How Performance4PDF collects, processes and protects personal data, and what rights you have over it.</value></data>
+  <data name="LegalDpaMeta" xml:space="preserve"><value>The data processing agreement covering documents you send to Performance4PDF for processing.</value></data>
+  <data name="LegalSlaMeta" xml:space="preserve"><value>Availability and support commitments for the Performance4PDF API.</value></data>
+  <data name="LegalRefundPolicyMeta" xml:space="preserve"><value>When credits and subscriptions purchased from Performance4PDF can be refunded.</value></data>
+  <data name="LegalCookiesPolicyMeta" xml:space="preserve"><value>Which cookies Performance4PDF uses and what each one is for.</value></data>
+  <data name="LegalOpenSourceNoticesMeta" xml:space="preserve"><value>Open-source components used by Performance4PDF and their licences.</value></data>
+  <data name="LegalAgplLicenseMeta" xml:space="preserve"><value>The AGPL licence under which the Performance4PDF signing server is published.</value></data>
+  <data name="ApiDocsTitle" xml:space="preserve"><value>API Documentation</value></data>
+  <data name="ApiDocsMetaDescription" xml:space="preserve"><value>REST API reference for Performance4PDF — sign PDFs, apply RFC 3161 timestamps, convert to PDF/A, fill templates and read barcodes.</value></data>
+  <data name="ApiDocsIntroEndpoints" xml:space="preserve"><value>All endpoints live under</value></data>
+  <data name="ApiDocsIntroBase64" xml:space="preserve"><value>and expect JSON. PDFs, certificates and attachments are base64 strings.</value></data>
+  <data name="ApiDocsIntroAuth" xml:space="preserve"><value>Authenticate every request with</value></data>
+  <data name="ApiDocsCreditsTitle" xml:space="preserve"><value>Credits</value></data>
+  <data name="ApiDocsCreditsDescription" xml:space="preserve"><value>The table below lists the credit cost of every API call.</value></data>
+  <data name="ApiDocsLimitsTitle" xml:space="preserve"><value>Limits</value></data>
+  <data name="ApiDocsLimitsDescription" xml:space="preserve"><value>PDFs &amp; templates: 20MB. Images: 1MB. Attachments: 10MB. Request body limit: 40MB. Larger requests return “Request exceeded limit”.</value></data>
+  <data name="ApiDocsAbuseTitle" xml:space="preserve"><value>Abuse protection</value></data>
+  <data name="ApiDocsAbuseDescription" xml:space="preserve"><value>Concurrent API calls per user and IP are throttled; bursts return HTTP 429.</value></data>
+  <data name="ApiDocsOverviewTitle" xml:space="preserve"><value>Endpoint overview</value></data>
+  <data name="ApiDocsReferenceTitle" xml:space="preserve"><value>Endpoint reference</value></data>
+  <data name="ApiDocsOtherEndpoints" xml:space="preserve"><value>Other endpoints</value></data>
+  <data name="ApiDocsColumnMethod" xml:space="preserve"><value>Method</value></data>
+  <data name="ApiDocsColumnPath" xml:space="preserve"><value>Path</value></data>
+  <data name="ApiDocsColumnPurpose" xml:space="preserve"><value>Purpose</value></data>
+  <data name="ApiDocsColumnCredits" xml:space="preserve"><value>Credits</value></data>
+  <data name="ApiDocsRequestTitle" xml:space="preserve"><value>Request and response</value></data>
+  <data name="ApiDocsAuthTitle" xml:space="preserve"><value>Authentication</value></data>
+  <data name="ApiDocsCopyCurl" xml:space="preserve"><value>Copy cURL</value></data>
+  <data name="ApiDocsCopied" xml:space="preserve"><value>Copied</value></data>
+  <data name="ApiDocsCopyUnavailable" xml:space="preserve"><value>Copy not available</value></data>
+  <data name="ApiDocsHelp" xml:space="preserve"><value>Need help? Reach out with the endpoint path, timestamp and request ID from your logs.</value></data>
+  <data name="ApiDocPresignTitle" xml:space="preserve"><value>Presign a PDF</value></data>
+  <data name="ApiDocPresignPurpose" xml:space="preserve"><value>Prepare PDF and return hash to sign</value></data>
+  <data name="ApiDocPresignCredits" xml:space="preserve"><value>0</value></data>
+  <data name="ApiDocPresignMeta" xml:space="preserve"><value>Prepare a PDF for external signing and get back the hash to sign. The private key never leaves your device — Performance4PDF only ever sees the hash.</value></data>
+  <data name="ApiDocPresignIntro" xml:space="preserve"><value>Starts the two-step signing flow. Performance4PDF embeds a signature placeholder in the PDF, computes the digest over the signed byte ranges, and returns it. You sign that digest wherever the key lives — smart card, HSM, browser WebCrypto — and finish with /api/sign. The private key is never uploaded.</value></data>
+  <data name="ApiDocPresignNote1" xml:space="preserve"><value>Free — no credit is charged until the signature is finalised with /api/sign.</value></data>
+  <data name="ApiDocSignTitle" xml:space="preserve"><value>Finalize signing</value></data>
+  <data name="ApiDocSignPurpose" xml:space="preserve"><value>Finalize presigned PDF</value></data>
+  <data name="ApiDocSignCredits" xml:space="preserve"><value>1</value></data>
+  <data name="ApiDocSignMeta" xml:space="preserve"><value>Complete a two-step PDF signature by submitting the externally signed hash. Returns the finished PDF with an embedded PKCS#7 detached signature.</value></data>
+  <data name="ApiDocSignIntro" xml:space="preserve"><value>Second half of the external signing flow. Send back the id from /api/presign together with the signature you produced over the returned hash; Performance4PDF injects it into the reserved placeholder and returns the finished document.</value></data>
+  <data name="ApiDocSignPfxTitle" xml:space="preserve"><value>Sign with a PFX certificate</value></data>
+  <data name="ApiDocSignPfxPurpose" xml:space="preserve"><value>Sign directly with PFX</value></data>
+  <data name="ApiDocSignPfxCredits" xml:space="preserve"><value>1</value></data>
+  <data name="ApiDocSignPfxMeta" xml:space="preserve"><value>Sign a PDF in one call using a PKCS#12 (PFX/P12) certificate. One request in, signed PDF out — no two-step flow.</value></data>
+  <data name="ApiDocSignPfxIntro" xml:space="preserve"><value>All-in-one signing for server-side workflows where the certificate lives on the server anyway. Supply the PDF and the PKCS#12 file and Performance4PDF handles the whole signature in a single round trip. If you would rather not upload the key at all, use the presign flow instead.</value></data>
+  <data name="ApiDocTimestampTitle" xml:space="preserve"><value>Apply an RFC 3161 timestamp</value></data>
+  <data name="ApiDocTimestampPurpose" xml:space="preserve"><value>Apply TSA timestamp</value></data>
+  <data name="ApiDocTimestampCredits" xml:space="preserve"><value>1</value></data>
+  <data name="ApiDocTimestampMeta" xml:space="preserve"><value>Add a trusted RFC 3161 timestamp to a PDF from any TSA. Proves the document existed at a point in time, no signing certificate required.</value></data>
+  <data name="ApiDocTimestampIntro" xml:space="preserve"><value>Applies a timestamp from an RFC 3161 timestamping authority without signing the document with a personal certificate. Useful on its own as proof of existence, or combined with a signature for long-term validation.</value></data>
+  <data name="ApiDocAttachmentTitle" xml:space="preserve"><value>Embed a file attachment</value></data>
+  <data name="ApiDocAttachmentPurpose" xml:space="preserve"><value>Embed attachment</value></data>
+  <data name="ApiDocAttachmentCredits" xml:space="preserve"><value>1</value></data>
+  <data name="ApiDocAttachmentMeta" xml:space="preserve"><value>Embed any file inside a PDF as an attachment via API — invoices with XML payloads, terms, supporting documents.</value></data>
+  <data name="ApiDocAttachmentIntro" xml:space="preserve"><value>Attaches an arbitrary file to a PDF so the two travel as one document. Common for hybrid invoice formats where a machine-readable payload rides along inside the human-readable PDF.</value></data>
+  <data name="ApiDocConvertPdfaTitle" xml:space="preserve"><value>Convert a PDF to PDF/A</value></data>
+  <data name="ApiDocConvertPdfaPurpose" xml:space="preserve"><value>Convert PDF to PDF/A (PDF/A-2B default)</value></data>
+  <data name="ApiDocConvertPdfaCredits" xml:space="preserve"><value>1 credit / 3 pages</value></data>
+  <data name="ApiDocConvertPdfaMeta" xml:space="preserve"><value>Convert PDFs to PDF/A for archiving via API. Supports PDF/A-1, PDF/A-2, PDF/A-3 and PDF/A-4 conformance levels.</value></data>
+  <data name="ApiDocConvertPdfaIntro" xml:space="preserve"><value>Converts a document to the PDF/A archival profile, which is what most records-retention and public-sector rules require. Defaults to PDF/A-2B.</value></data>
+  <data name="ApiDocConvertPdfaNote1" xml:space="preserve"><value>Costs 1 credit per started 3 pages. Defaults to PDF/A-2B.</value></data>
+  <data name="ApiDocConvertPdfaNote2" xml:space="preserve"><value>Conformance options: PDF/A-1A, PDF/A-1B, PDF/A-2A, PDF/A-2B, PDF/A-2U, PDF/A-3A, PDF/A-3B, PDF/A-3U, PDF/A-4, PDF/A-4E, PDF/A-4F.</value></data>
+  <data name="ApiDocFillPdfTitle" xml:space="preserve"><value>Fill a PDF template with data</value></data>
+  <data name="ApiDocFillPdfPurpose" xml:space="preserve"><value>Fill a template with data</value></data>
+  <data name="ApiDocFillPdfCredits" xml:space="preserve"><value>1 credit / 3 pages / output</value></data>
+  <data name="ApiDocFillPdfMeta" xml:space="preserve"><value>Generate PDFs from a template and JSON data via API. One request produces a batch of filled documents — invoices, contracts, certificates.</value></data>
+  <data name="ApiDocFillPdfIntro" xml:space="preserve"><value>Renders a stored template into finished documents. Pass one data set per output and the response carries one PDF per set, so a whole batch costs a single round trip.</value></data>
+  <data name="ApiDocFillPdfNote1" xml:space="preserve"><value>Costs 1 credit per started 3 pages per generated output (dataset).</value></data>
+  <data name="ApiDocFindCodesTitle" xml:space="preserve"><value>Find barcodes and QR codes in a PDF</value></data>
+  <data name="ApiDocFindCodesPurpose" xml:space="preserve"><value>Scan for QR/DataMatrix/PDF417/Aztec</value></data>
+  <data name="ApiDocFindCodesCredits" xml:space="preserve"><value>1 credit / 3 pages</value></data>
+  <data name="ApiDocFindCodesMeta" xml:space="preserve"><value>Extract QR codes, DataMatrix, PDF417 and Aztec barcodes from a PDF via API, with the page number and position of every hit.</value></data>
+  <data name="ApiDocFindCodesIntro" xml:space="preserve"><value>Scans every page for machine-readable codes and returns their decoded value, type, page and position — enough to route or reconcile a document automatically.</value></data>
+  <data name="ApiDocFindCodesNote1" xml:space="preserve"><value>Costs 1 credit per started 3 pages.</value></data>
+  <data name="ApiDocTemplateCreateTitle" xml:space="preserve"><value>Create a PDF template</value></data>
+  <data name="ApiDocTemplateCreatePurpose" xml:space="preserve"><value>Store a PDF with named field positions</value></data>
+  <data name="ApiDocTemplateCreateCredits" xml:space="preserve"><value>0</value></data>
+  <data name="ApiDocTemplateCreateMeta" xml:space="preserve"><value>Create a reusable PDF template over the API: upload the PDF and define named fields at fixed positions, then fill it with data later.</value></data>
+  <data name="ApiDocTemplateCreateIntro" xml:space="preserve"><value>A template is a PDF plus named fields at fixed positions. Create one here and generate documents from it with /api/fill-pdf. Both pdfContent and at least one field are required. Managing templates is free — you are only charged when you render.</value></data>
+  <data name="ApiDocTemplateCreateNote1" xml:space="preserve"><value>Field types: text, image, signature, barcode, table. Coordinates use the PDF origin (bottom-left).</value></data>
+  <data name="ApiDocTemplateCreateNote2" xml:space="preserve"><value>Returns 400 when fields is empty or pdfContent is missing.</value></data>
+  <data name="ApiDocTemplateListTitle" xml:space="preserve"><value>List PDF templates</value></data>
+  <data name="ApiDocTemplateListPurpose" xml:space="preserve"><value>List your stored templates</value></data>
+  <data name="ApiDocTemplateListCredits" xml:space="preserve"><value>0</value></data>
+  <data name="ApiDocTemplateListMeta" xml:space="preserve"><value>List every PDF template stored on your account, with its id, name, creation date and field count.</value></data>
+  <data name="ApiDocTemplateListIntro" xml:space="preserve"><value>Returns the templates belonging to the authenticated account. Summaries only — the PDF itself is not included, so this stays cheap to poll. Fetch a single template to get its contents.</value></data>
+  <data name="ApiDocTemplateGetTitle" xml:space="preserve"><value>Get a PDF template</value></data>
+  <data name="ApiDocTemplateGetPurpose" xml:space="preserve"><value>Read one template with its PDF and fields</value></data>
+  <data name="ApiDocTemplateGetCredits" xml:space="preserve"><value>0</value></data>
+  <data name="ApiDocTemplateGetMeta" xml:space="preserve"><value>Retrieve a single PDF template by id, including the stored PDF as base64 and the full field definitions.</value></data>
+  <data name="ApiDocTemplateGetIntro" xml:space="preserve"><value>Returns one template in full: the base64 PDF and every field definition. This is what a template editor loads to render the document with its field overlays.</value></data>
+  <data name="ApiDocTemplateGetNote1" xml:space="preserve"><value>Templates are scoped to the account that created them; another account's id returns an error.</value></data>
+  <data name="ApiDocTemplateUpdateTitle" xml:space="preserve"><value>Update a PDF template</value></data>
+  <data name="ApiDocTemplateUpdatePurpose" xml:space="preserve"><value>Change a template's PDF, fields or name</value></data>
+  <data name="ApiDocTemplateUpdateCredits" xml:space="preserve"><value>0</value></data>
+  <data name="ApiDocTemplateUpdateMeta" xml:space="preserve"><value>Update a stored PDF template — replace its PDF, redefine its fields, or rename it. Send only the parts you want to change.</value></data>
+  <data name="ApiDocTemplateUpdateIntro" xml:space="preserve"><value>Partial update: send only what changes. Supplying fields replaces the whole field list rather than merging, so send the complete set. At least one of pdfContent, fields or templateName must be present.</value></data>
+  <data name="ApiDocTemplateUpdateNote1" xml:space="preserve"><value>Returns 400 when the body carries no change at all.</value></data>
+  <data name="ApiDocTemplateDeleteTitle" xml:space="preserve"><value>Delete a PDF template</value></data>
+  <data name="ApiDocTemplateDeletePurpose" xml:space="preserve"><value>Permanently remove a template</value></data>
+  <data name="ApiDocTemplateDeleteCredits" xml:space="preserve"><value>0</value></data>
+  <data name="ApiDocTemplateDeleteMeta" xml:space="preserve"><value>Delete a stored PDF template by id. Permanent — documents already generated from it are unaffected.</value></data>
+  <data name="ApiDocTemplateDeleteIntro" xml:space="preserve"><value>Removes the template and its stored PDF. Documents already generated from it are unaffected. Returns 204 with no body on success.</value></data>
+  <data name="ApiDocTemplateDeleteNote1" xml:space="preserve"><value>Permanent — there is no undo. Fill requests referencing the id will fail afterwards.</value></data>
   <data name="NavSignOut" xml:space="preserve"><value>Cerrar sesión</value></data>
   <data name="NavPricing" xml:space="preserve"><value>Precios</value></data>
   <data name="NavSignIn" xml:space="preserve"><value>Iniciar sesión</value></data>

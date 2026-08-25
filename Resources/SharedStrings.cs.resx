@@ -189,13 +189,14 @@
   <data name="Credits" xml:space="preserve"><value>Kredity</value></data>
 
   <!-- Home / Landing page -->
-  <data name="HomeSignupSuccess" xml:space="preserve"><value>Váš účet je připraven. Vítejte v P4PDF.</value></data>
+  <data name="HomeSignupSuccess" xml:space="preserve"><value>Váš účet je připraven. Vítejte v Performance4PDF.</value></data>
   <data name="HomeHeroTitle" xml:space="preserve"><value>Generujte, vyplňujte, podepisujte a zpracovávejte PDF dokumenty přes jediné API.</value></data>
-  <data name="HomeHeroDescription" xml:space="preserve"><value>P4PDF promění vaše data na kompletní PDF dokumenty. Renderujte šablony, vyplňujte dynamická pole, aplikujte digitální podpisy a časová razítka, vkládejte přílohy a čtěte QR nebo čárové kódy — plně automatizovaně.</value></data>
+  <data name="HomeHeroDescription" xml:space="preserve"><value>Performance4PDF promění vaše data na kompletní PDF dokumenty. Renderujte šablony, vyplňujte dynamická pole, aplikujte digitální podpisy a časová razítka, vkládejte přílohy a čtěte QR nebo čárové kódy — plně automatizovaně.</value></data>
   <data name="HomeApiDocs" xml:space="preserve"><value>Dokumentace API</value></data>
   <data name="HomeExampleIntegration" xml:space="preserve"><value>Ukázková integrace</value></data>
-  <data name="HomeExampleApiRequest" xml:space="preserve"><value>Ukázkový API požadavek</value></data>
-  <data name="HomeCodeFooter" xml:space="preserve"><value>Kompletní reference najdete v dokumentaci.</value></data>
+  <data name="HomeExampleApiRequest" xml:space="preserve"><value>API požadavek</value></data>
+  <data name="HomeHeroSignedDocument" xml:space="preserve"><value>PDF Dokument - signed.pdf</value></data>
+  <data name="HomeHeroSignatureVerified" xml:space="preserve"><value>Dokument ověřen</value></data>
   <data name="HomeFeatureGenerateTitle" xml:space="preserve"><value>Generování PDF ze šablon</value></data>
   <data name="HomeFeatureGenerateDescription" xml:space="preserve"><value>Nahrajte PDF šablonu a definujte dynamická pole pro text, obrázky a čárové kódy. Namapujte svá data přímo do zástupných symbolů a vytvářejte konzistentní dokumenty ve velkém měřítku.</value></data>
   <data name="HomeVisualFieldMappingTitle" xml:space="preserve"><value>Vizuální mapování polí</value></data>
@@ -283,6 +284,8 @@
 
   <!-- Account / Verify -->
   <data name="VerifyEmailTitle" xml:space="preserve"><value>Ověření e-mailu</value></data>
+  <data name="ConfirmEmailVerification" xml:space="preserve"><value>Potvrdit e-mailovou adresu</value></data>
+  <data name="ConfirmEmailVerificationPrompt" xml:space="preserve"><value>Kliknutím na tlačítko níže dokončíte ověření své e-mailové adresy.</value></data>
   <data name="VerifyEmailHeading" xml:space="preserve"><value>Ověřte svůj e-mail</value></data>
   <data name="VerificationLinkSent" xml:space="preserve"><value>Zaslali jsme vám ověřovací odkaz.</value></data>
   <data name="VerifyEmailConfirmedMsg" xml:space="preserve"><value>Úspěch: váš e-mail byl potvrzen.</value></data>
@@ -373,7 +376,7 @@
 
   <!-- Legal / Index -->
   <data name="LegalTitle" xml:space="preserve"><value>Právní dokumenty</value></data>
-  <data name="LegalDescription" xml:space="preserve"><value>Zde najdete všechny právní dokumenty a zásady týkající se používání služby P4PDF od Performance4 s.r.o.</value></data>
+  <data name="LegalDescription" xml:space="preserve"><value>Zde najdete všechny právní dokumenty a zásady týkající se používání služby Performance4PDF od Performance4 s.r.o.</value></data>
   <data name="LegalTermsOfService" xml:space="preserve"><value>Podmínky použití</value></data>
   <data name="LegalPrivacyPolicy" xml:space="preserve"><value>Zásady ochrany osobních údajů</value></data>
   <data name="LegalDpa" xml:space="preserve"><value>Smlouva o zpracování dat (DPA)</value></data>
@@ -414,6 +417,128 @@
   <data name="RequestsPrivacyNote" xml:space="preserve"><value>Soukromí: ukládáme pouze metadata požadavků (název operace, stav, kredity, dobu trvání). Obsah PDF, podpisy, certifikáty a další těla požadavků se nikdy nelogují.</value></data>
   <data name="NavBilling" xml:space="preserve"><value>Fakturace</value></data>
   <data name="NavAccount" xml:space="preserve"><value>Účet</value></data>
+  <data name="NavSettings" xml:space="preserve"><value>Nastavení</value></data>
+  <data name="NavSupport" xml:space="preserve"><value>Podpora</value></data>
+  <data name="NotificationsSectionTitle" xml:space="preserve"><value>Oznámení</value></data>
+  <data name="ConcurrencySettingsMoved" xml:space="preserve"><value>Paralelizace a timeout fronty se přesunuly do sekce</value></data>
+  <data name="SupportTicketCreated" xml:space="preserve"><value>Váš požadavek byl odeslán. Ozveme se vám e-mailem.</value></data>
+  <data name="SupportTicketCreatedWithId" xml:space="preserve"><value>Váš požadavek byl odeslán (#{0}). Ozveme se vám e-mailem.</value></data>
+  <data name="SupportSubmitFailed" xml:space="preserve"><value>Požadavek se nepodařilo odeslat. Zkuste to prosím znovu.</value></data>
+  <data name="SupportUnavailable" xml:space="preserve"><value>Systém podpory je dočasně nedostupný. Zkuste to prosím později.</value></data>
+  <data name="SupportReplyToHint" xml:space="preserve"><value>Odpovíme na adresu {0}.</value></data>
+  <data name="MetaDescriptionDefault" xml:space="preserve"><value>Performance4PDF — jedno API pro generování, vyplňování, podepisování a časová razítka PDF. Podpisy PAdES, razítka RFC 3161, převod do PDF/A a šablony.</value></data>
+  <data name="HomeSeoTitle" xml:space="preserve"><value>API pro podepisování a automatizaci PDF</value></data>
+  <data name="HomeMetaDescription" xml:space="preserve"><value>Podepisujte PDF programově přes jedno REST API. Digitální podpisy PAdES, časová razítka RFC 3161, převod do PDF/A, šablony a čtení čárových kódů. Hostováno v EU.</value></data>
+  <data name="PricingMetaDescription" xml:space="preserve"><value>Ceník Performance4PDF — platíte za kredity za podpisy, časová razítka, převod do PDF/A a generování ze šablon. Žádné licence na uživatele, žádné minimální odběry.</value></data>
+  <data name="ContactMetaDescription" xml:space="preserve"><value>Ozvěte se týmu za Performance4PDF s dotazy k API pro podepisování PDF, k cenám nebo k integraci.</value></data>
+  <data name="LegalMetaDescription" xml:space="preserve"><value>Podmínky, zásady ochrany osobních údajů, smlouva o zpracování dat, SLA a další právní dokumenty služby Performance4PDF.</value></data>
+  <data name="LegalTermsOfServiceMeta" xml:space="preserve"><value>Podmínky upravující užívání služby Performance4PDF pro podepisování a automatizaci PDF.</value></data>
+  <data name="LegalPrivacyPolicyMeta" xml:space="preserve"><value>Jak Performance4PDF shromažďuje, zpracovává a chrání osobní údaje a jaká k nim máte práva.</value></data>
+  <data name="LegalDpaMeta" xml:space="preserve"><value>Smlouva o zpracování dat vztahující se na dokumenty, které do Performance4PDF posíláte ke zpracování.</value></data>
+  <data name="LegalSlaMeta" xml:space="preserve"><value>Závazky dostupnosti a podpory pro API Performance4PDF.</value></data>
+  <data name="LegalRefundPolicyMeta" xml:space="preserve"><value>Kdy lze vrátit kredity a předplatné zakoupené od Performance4PDF.</value></data>
+  <data name="LegalCookiesPolicyMeta" xml:space="preserve"><value>Jaké cookies Performance4PDF používá a k čemu každá z nich slouží.</value></data>
+  <data name="LegalOpenSourceNoticesMeta" xml:space="preserve"><value>Open-source komponenty použité v Performance4PDF a jejich licence.</value></data>
+  <data name="LegalAgplLicenseMeta" xml:space="preserve"><value>Licence AGPL, pod kterou je podpisový server Performance4PDF zveřejněn.</value></data>
+  <data name="ApiDocsTitle" xml:space="preserve"><value>Dokumentace API</value></data>
+  <data name="ApiDocsMetaDescription" xml:space="preserve"><value>Referenční příručka REST API Performance4PDF — podepisování PDF, časová razítka RFC 3161, převod do PDF/A, vyplňování šablon a čtení čárových kódů.</value></data>
+  <data name="ApiDocsIntroEndpoints" xml:space="preserve"><value>Všechny endpointy jsou pod</value></data>
+  <data name="ApiDocsIntroBase64" xml:space="preserve"><value>a očekávají JSON. PDF, certifikáty a přílohy se předávají jako base64.</value></data>
+  <data name="ApiDocsIntroAuth" xml:space="preserve"><value>Každý požadavek autentizujte hlavičkou</value></data>
+  <data name="ApiDocsCreditsTitle" xml:space="preserve"><value>Kredity</value></data>
+  <data name="ApiDocsCreditsDescription" xml:space="preserve"><value>V tabulce níže najdete cenu v kreditech pro každé volání API.</value></data>
+  <data name="ApiDocsLimitsTitle" xml:space="preserve"><value>Limity</value></data>
+  <data name="ApiDocsLimitsDescription" xml:space="preserve"><value>PDF a šablony: 20 MB. Obrázky: 1 MB. Přílohy: 10 MB. Limit těla požadavku: 40 MB. Větší požadavky vrátí „Request exceeded limit“.</value></data>
+  <data name="ApiDocsAbuseTitle" xml:space="preserve"><value>Ochrana proti zneužití</value></data>
+  <data name="ApiDocsAbuseDescription" xml:space="preserve"><value>Souběžná volání API na uživatele a IP jsou omezována; překročení vrátí HTTP 429.</value></data>
+  <data name="ApiDocsOverviewTitle" xml:space="preserve"><value>Přehled endpointů</value></data>
+  <data name="ApiDocsReferenceTitle" xml:space="preserve"><value>Referenční příručka</value></data>
+  <data name="ApiDocsOtherEndpoints" xml:space="preserve"><value>Další endpointy</value></data>
+  <data name="ApiDocsColumnMethod" xml:space="preserve"><value>Metoda</value></data>
+  <data name="ApiDocsColumnPath" xml:space="preserve"><value>Cesta</value></data>
+  <data name="ApiDocsColumnPurpose" xml:space="preserve"><value>Účel</value></data>
+  <data name="ApiDocsColumnCredits" xml:space="preserve"><value>Kredity</value></data>
+  <data name="ApiDocsRequestTitle" xml:space="preserve"><value>Požadavek a odpověď</value></data>
+  <data name="ApiDocsAuthTitle" xml:space="preserve"><value>Autentizace</value></data>
+  <data name="ApiDocsCopyCurl" xml:space="preserve"><value>Kopírovat cURL</value></data>
+  <data name="ApiDocsCopied" xml:space="preserve"><value>Zkopírováno</value></data>
+  <data name="ApiDocsCopyUnavailable" xml:space="preserve"><value>Kopírování není k dispozici</value></data>
+  <data name="ApiDocsHelp" xml:space="preserve"><value>Potřebujete pomoc? Napište nám cestu endpointu, čas a ID požadavku z vašich logů.</value></data>
+  <data name="ApiDocPresignTitle" xml:space="preserve"><value>Předpodepsání PDF</value></data>
+  <data name="ApiDocPresignPurpose" xml:space="preserve"><value>Připraví PDF a vrátí hash k podpisu</value></data>
+  <data name="ApiDocPresignCredits" xml:space="preserve"><value>0</value></data>
+  <data name="ApiDocPresignMeta" xml:space="preserve"><value>Připravte PDF k externímu podpisu a získejte hash k podepsání. Privátní klíč neopustí vaše zařízení — Performance4PDF vidí jen hash.</value></data>
+  <data name="ApiDocPresignIntro" xml:space="preserve"><value>Zahajuje dvoukrokový podpisový tok. Performance4PDF vloží do PDF zástupné místo pro podpis, spočítá otisk podepisovaných rozsahů bajtů a vrátí ho. Ten otisk podepíšete tam, kde klíč leží — čipová karta, HSM, WebCrypto v prohlížeči — a dokončíte přes /api/sign. Privátní klíč se nikdy neodesílá.</value></data>
+  <data name="ApiDocPresignNote1" xml:space="preserve"><value>Zdarma — kredit se strhne až při dokončení podpisu přes /api/sign.</value></data>
+  <data name="ApiDocSignTitle" xml:space="preserve"><value>Dokončení podpisu</value></data>
+  <data name="ApiDocSignPurpose" xml:space="preserve"><value>Dokončí předpodepsané PDF</value></data>
+  <data name="ApiDocSignCredits" xml:space="preserve"><value>1</value></data>
+  <data name="ApiDocSignMeta" xml:space="preserve"><value>Dokončete dvoukrokový podpis PDF odesláním externě podepsaného hashe. Vrátí hotové PDF s vloženým odděleným podpisem PKCS#7.</value></data>
+  <data name="ApiDocSignIntro" xml:space="preserve"><value>Druhá půlka externího podpisového toku. Pošlete zpět id z /api/presign spolu s podpisem, který jste vytvořili nad vráceným hashem; Performance4PDF ho vloží do rezervovaného místa a vrátí hotový dokument.</value></data>
+  <data name="ApiDocSignPfxTitle" xml:space="preserve"><value>Podpis certifikátem PFX</value></data>
+  <data name="ApiDocSignPfxPurpose" xml:space="preserve"><value>Podepíše přímo pomocí PFX</value></data>
+  <data name="ApiDocSignPfxCredits" xml:space="preserve"><value>1</value></data>
+  <data name="ApiDocSignPfxMeta" xml:space="preserve"><value>Podepište PDF jedním voláním pomocí certifikátu PKCS#12 (PFX/P12). Jeden požadavek dovnitř, podepsané PDF ven — bez dvoukrokového toku.</value></data>
+  <data name="ApiDocSignPfxIntro" xml:space="preserve"><value>Podepsání vše-v-jednom pro serverové scénáře, kde certifikát na serveru stejně leží. Pošlete PDF a soubor PKCS#12 a Performance4PDF vyřídí celý podpis na jedno kolo. Pokud klíč nahrávat nechcete, použijte místo toho tok s předpodepsáním.</value></data>
+  <data name="ApiDocTimestampTitle" xml:space="preserve"><value>Časové razítko RFC 3161</value></data>
+  <data name="ApiDocTimestampPurpose" xml:space="preserve"><value>Připojí razítko od TSA</value></data>
+  <data name="ApiDocTimestampCredits" xml:space="preserve"><value>1</value></data>
+  <data name="ApiDocTimestampMeta" xml:space="preserve"><value>Připojte k PDF důvěryhodné časové razítko RFC 3161 od libovolné TSA. Prokazuje, že dokument v daném okamžiku existoval, bez podpisového certifikátu.</value></data>
+  <data name="ApiDocTimestampIntro" xml:space="preserve"><value>Připojí razítko od autority časových razítek podle RFC 3161, aniž by dokument podepsal osobním certifikátem. Užitečné samo o sobě jako důkaz existence, nebo v kombinaci s podpisem pro dlouhodobou ověřitelnost.</value></data>
+  <data name="ApiDocAttachmentTitle" xml:space="preserve"><value>Vložení přílohy</value></data>
+  <data name="ApiDocAttachmentPurpose" xml:space="preserve"><value>Vloží přílohu do PDF</value></data>
+  <data name="ApiDocAttachmentCredits" xml:space="preserve"><value>1</value></data>
+  <data name="ApiDocAttachmentMeta" xml:space="preserve"><value>Vložte přes API libovolný soubor do PDF jako přílohu — faktury s XML daty, podmínky, doprovodné dokumenty.</value></data>
+  <data name="ApiDocAttachmentIntro" xml:space="preserve"><value>Připojí k PDF libovolný soubor tak, aby oba putovaly jako jeden dokument. Běžné u hybridních formátů faktur, kde strojově čitelná data cestují uvnitř lidsky čitelného PDF.</value></data>
+  <data name="ApiDocConvertPdfaTitle" xml:space="preserve"><value>Převod PDF do PDF/A</value></data>
+  <data name="ApiDocConvertPdfaPurpose" xml:space="preserve"><value>Převede PDF do PDF/A (výchozí PDF/A-2B)</value></data>
+  <data name="ApiDocConvertPdfaCredits" xml:space="preserve"><value>1 kredit / 3 strany</value></data>
+  <data name="ApiDocConvertPdfaMeta" xml:space="preserve"><value>Převádějte PDF do archivního formátu PDF/A přes API. Podporuje úrovně shody PDF/A-1, PDF/A-2, PDF/A-3 a PDF/A-4.</value></data>
+  <data name="ApiDocConvertPdfaIntro" xml:space="preserve"><value>Převede dokument do archivního profilu PDF/A, který vyžaduje většina pravidel pro skartaci a spisovou službu i veřejná správa. Výchozí je PDF/A-2B.</value></data>
+  <data name="ApiDocConvertPdfaNote1" xml:space="preserve"><value>Stojí 1 kredit za každé započaté 3 strany. Výchozí je PDF/A-2B.</value></data>
+  <data name="ApiDocConvertPdfaNote2" xml:space="preserve"><value>Volby shody: PDF/A-1A, PDF/A-1B, PDF/A-2A, PDF/A-2B, PDF/A-2U, PDF/A-3A, PDF/A-3B, PDF/A-3U, PDF/A-4, PDF/A-4E, PDF/A-4F.</value></data>
+  <data name="ApiDocFillPdfTitle" xml:space="preserve"><value>Vyplnění šablony daty</value></data>
+  <data name="ApiDocFillPdfPurpose" xml:space="preserve"><value>Vyplní šablonu daty</value></data>
+  <data name="ApiDocFillPdfCredits" xml:space="preserve"><value>1 kredit / 3 strany / výstup</value></data>
+  <data name="ApiDocFillPdfMeta" xml:space="preserve"><value>Generujte PDF ze šablony a JSON dat přes API. Jeden požadavek vyrobí dávku vyplněných dokumentů — faktury, smlouvy, certifikáty.</value></data>
+  <data name="ApiDocFillPdfIntro" xml:space="preserve"><value>Vykreslí uloženou šablonu do hotových dokumentů. Pošlete jednu datovou sadu na každý výstup a odpověď nese jedno PDF na sadu — celá dávka tak stojí jedno kolo.</value></data>
+  <data name="ApiDocFillPdfNote1" xml:space="preserve"><value>Stojí 1 kredit za každé započaté 3 strany každého vygenerovaného výstupu (datové sady).</value></data>
+  <data name="ApiDocFindCodesTitle" xml:space="preserve"><value>Hledání čárových a QR kódů v PDF</value></data>
+  <data name="ApiDocFindCodesPurpose" xml:space="preserve"><value>Hledá QR/DataMatrix/PDF417/Aztec</value></data>
+  <data name="ApiDocFindCodesCredits" xml:space="preserve"><value>1 kredit / 3 strany</value></data>
+  <data name="ApiDocFindCodesMeta" xml:space="preserve"><value>Získejte z PDF přes API QR kódy, DataMatrix, PDF417 a Aztec, včetně čísla strany a pozice každého nálezu.</value></data>
+  <data name="ApiDocFindCodesIntro" xml:space="preserve"><value>Prohledá každou stranu na strojově čitelné kódy a vrátí jejich dekódovanou hodnotu, typ, stranu a pozici — dost na to, aby se dokument dal automaticky směrovat nebo párovat.</value></data>
+  <data name="ApiDocFindCodesNote1" xml:space="preserve"><value>Stojí 1 kredit za každé započaté 3 strany.</value></data>
+  <data name="ApiDocTemplateCreateTitle" xml:space="preserve"><value>Vytvoření šablony PDF</value></data>
+  <data name="ApiDocTemplateCreatePurpose" xml:space="preserve"><value>Uloží PDF s pojmenovanými pozicemi polí</value></data>
+  <data name="ApiDocTemplateCreateCredits" xml:space="preserve"><value>0</value></data>
+  <data name="ApiDocTemplateCreateMeta" xml:space="preserve"><value>Vytvořte přes API znovupoužitelnou šablonu PDF: nahrajte PDF a určete pojmenovaná pole na pevných pozicích, později ji vyplníte daty.</value></data>
+  <data name="ApiDocTemplateCreateIntro" xml:space="preserve"><value>Šablona je PDF plus pojmenovaná pole na pevných pozicích. Tady ji vytvoříte a dokumenty z ní pak generujete přes /api/fill-pdf. Povinné je pdfContent i alespoň jedno pole. Správa šablon je zdarma — platíte až za vykreslení.</value></data>
+  <data name="ApiDocTemplateCreateNote1" xml:space="preserve"><value>Typy polí: text, image, signature, barcode, table. Souřadnice vycházejí z počátku PDF (vlevo dole).</value></data>
+  <data name="ApiDocTemplateCreateNote2" xml:space="preserve"><value>Vrátí 400, když je fields prázdné nebo chybí pdfContent.</value></data>
+  <data name="ApiDocTemplateListTitle" xml:space="preserve"><value>Seznam šablon PDF</value></data>
+  <data name="ApiDocTemplateListPurpose" xml:space="preserve"><value>Vypíše vaše uložené šablony</value></data>
+  <data name="ApiDocTemplateListCredits" xml:space="preserve"><value>0</value></data>
+  <data name="ApiDocTemplateListMeta" xml:space="preserve"><value>Vypište všechny šablony PDF uložené na vašem účtu, včetně id, názvu, data vytvoření a počtu polí.</value></data>
+  <data name="ApiDocTemplateListIntro" xml:space="preserve"><value>Vrátí šablony patřící přihlášenému účtu. Jen přehledy — samotné PDF součástí není, takže se dá levně dotazovat opakovaně. Obsah získáte načtením konkrétní šablony.</value></data>
+  <data name="ApiDocTemplateGetTitle" xml:space="preserve"><value>Načtení šablony PDF</value></data>
+  <data name="ApiDocTemplateGetPurpose" xml:space="preserve"><value>Načte jednu šablonu s PDF a poli</value></data>
+  <data name="ApiDocTemplateGetCredits" xml:space="preserve"><value>0</value></data>
+  <data name="ApiDocTemplateGetMeta" xml:space="preserve"><value>Načtěte jednu šablonu PDF podle id, včetně uloženého PDF v base64 a úplných definic polí.</value></data>
+  <data name="ApiDocTemplateGetIntro" xml:space="preserve"><value>Vrátí jednu šablonu celou: PDF v base64 a všechny definice polí. Přesně tohle si načítá editor šablon, aby vykreslil dokument i s překryvy polí.</value></data>
+  <data name="ApiDocTemplateGetNote1" xml:space="preserve"><value>Šablony patří účtu, který je vytvořil; id z cizího účtu vrátí chybu.</value></data>
+  <data name="ApiDocTemplateUpdateTitle" xml:space="preserve"><value>Úprava šablony PDF</value></data>
+  <data name="ApiDocTemplateUpdatePurpose" xml:space="preserve"><value>Změní PDF, pole nebo název šablony</value></data>
+  <data name="ApiDocTemplateUpdateCredits" xml:space="preserve"><value>0</value></data>
+  <data name="ApiDocTemplateUpdateMeta" xml:space="preserve"><value>Upravte uloženou šablonu PDF — vyměňte PDF, předefinujte pole nebo ji přejmenujte. Posílejte jen to, co měníte.</value></data>
+  <data name="ApiDocTemplateUpdateIntro" xml:space="preserve"><value>Částečná úprava: posílejte jen to, co se mění. Pokud pošlete fields, nahradí se celý seznam polí, neslučuje se — pošlete tedy kompletní sadu. Musí být přítomno alespoň jedno z pdfContent, fields nebo templateName.</value></data>
+  <data name="ApiDocTemplateUpdateNote1" xml:space="preserve"><value>Vrátí 400, když tělo požadavku neobsahuje žádnou změnu.</value></data>
+  <data name="ApiDocTemplateDeleteTitle" xml:space="preserve"><value>Smazání šablony PDF</value></data>
+  <data name="ApiDocTemplateDeletePurpose" xml:space="preserve"><value>Trvale odstraní šablonu</value></data>
+  <data name="ApiDocTemplateDeleteCredits" xml:space="preserve"><value>0</value></data>
+  <data name="ApiDocTemplateDeleteMeta" xml:space="preserve"><value>Smažte uloženou šablonu PDF podle id. Trvale — už vygenerované dokumenty to nijak neovlivní.</value></data>
+  <data name="ApiDocTemplateDeleteIntro" xml:space="preserve"><value>Odstraní šablonu i její uložené PDF. Už vygenerované dokumenty to neovlivní. Při úspěchu vrací 204 bez těla.</value></data>
+  <data name="ApiDocTemplateDeleteNote1" xml:space="preserve"><value>Trvale — nelze vzít zpět. Požadavky na vyplnění s tímto id budou napříště selhávat.</value></data>
   <data name="NavSignOut" xml:space="preserve"><value>Odhlásit se</value></data>
   <data name="NavPricing" xml:space="preserve"><value>Ceník</value></data>
   <data name="NavSignIn" xml:space="preserve"><value>Přihlásit se</value></data>
