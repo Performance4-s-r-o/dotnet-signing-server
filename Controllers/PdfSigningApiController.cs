@@ -373,12 +373,14 @@ namespace DotNetSigningServer.Controllers
             if (error != null || user == null) return error!;
 
             var bypassDebitRequested = Request.Headers.ContainsKey(AttachmentDebitBypassHeader);
+            // Never log any part of the bypass key — not the caller's, not the
+            // configured one. head+tail+length+hash-prefix of a shared secret, emitted
+            // on every request and shipped to Loki, narrows brute-force considerably.
             Logger.LogInformation(
-                "[attachment] user={UserId} bypassHeaderPresent={HeaderPresent} providedFp={ProvidedFp} configuredFp={ConfiguredFp}",
+                "[attachment] user={UserId} bypassHeaderPresent={HeaderPresent} bypassKeyConfigured={KeyConfigured}",
                 user.Id,
                 bypassDebitRequested,
-                Fingerprint(Request.Headers[AttachmentDebitBypassHeader].ToString()),
-                Fingerprint(BillingOptions.AttachmentDebitBypassKey));
+                !string.IsNullOrWhiteSpace(BillingOptions.AttachmentDebitBypassKey));
             if (bypassDebitRequested && !IsAttachmentDebitBypassAuthorized())
             {
                 Logger.LogWarning("Attachment billing bypass rejected for user {UserId}", user.Id);
@@ -436,19 +438,5 @@ namespace DotNetSigningServer.Controllers
             return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(leftHash, rightHash);
         }
 
-        private static string Fingerprint(string? value)
-        {
-            if (string.IsNullOrEmpty(value)) return "<missing>";
-            var raw = value;
-            var trimmed = value.Trim();
-            var hadWs = raw.Length != trimmed.Length;
-            if (trimmed.Length == 0) return $"<whitespace-only len={raw.Length}>";
-            var head = trimmed.Length >= 4 ? trimmed[..4] : trimmed;
-            var tail = trimmed.Length >= 8 ? trimmed[^4..] : "";
-            var hash = Convert.ToHexString(
-                System.Security.Cryptography.SHA256.HashData(
-                    System.Text.Encoding.UTF8.GetBytes(trimmed)))[..8];
-            return $"{head}…{tail} len={trimmed.Length} sha256:{hash}{(hadWs ? " (had-ws)" : "")}";
-        }
     }
 }

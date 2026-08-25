@@ -1,4 +1,5 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Middleware;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Services.Email;
@@ -124,20 +125,28 @@ public class AccountController : Controller
         bool exists = await _dbContext.Users.AnyAsync(u => u.Email == model.Email);
         if (exists)
         {
-            ModelState.AddModelError(string.Empty, _localizer["EmailAlreadyRegistered"]);
-            return View(model);
+            // Do not reveal that the address is already registered — that turns signup
+            // into an account-enumeration oracle. Show the same "check your inbox"
+            // outcome as a fresh signup; the real owner already has an account and can
+            // sign in or use the password-reset flow.
+            TempData["Info"] = _localizer["CheckEmailVerification"].Value;
+            return RedirectToAction(nameof(Verify));
         }
 
-        var (hash, salt) = _authService.HashPassword(model.Password);
-        var verificationToken = Guid.NewGuid().ToString("N");
+        var (hash, salt, iterations) = _authService.HashPassword(model.Password);
+        var verificationToken = SecureTokens.Generate();
         var user = new User
         {
             Email = model.Email,
             PasswordHash = hash,
             PasswordSalt = salt,
+            PasswordIterations = iterations,
             IsActive = true,
             EmailVerified = false,
-            EmailVerificationToken = verificationToken,
+            // Only the hash is persisted — a DB dump must not yield usable
+            // account-takeover links.
+            EmailVerificationToken = SecureTokens.Hash(verificationToken),
+            EmailVerificationExpiresAt = DateTimeOffset.UtcNow.AddHours(24),
             CreditsRemaining = 10,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
@@ -166,25 +175,7 @@ public class AccountController : Controller
         return RedirectToAction(nameof(Verify));
     }
 
-    private string BuildAbsoluteUrl(string path)
-    {
-        var configuredHost = _appOptions.FqdnServerName?.TrimEnd('/');
-        if (!string.IsNullOrWhiteSpace(configuredHost))
-        {
-            if (configuredHost.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-                configuredHost.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            {
-                return $"{configuredHost}{path}";
-            }
-
-            var scheme = Request?.IsHttps == true ? "https" : "http";
-            return $"{scheme}://{configuredHost}{path}";
-        }
-
-        var fallbackScheme = Request?.Scheme ?? "https";
-        var host = Request?.Host.Value ?? "localhost";
-        return $"{fallbackScheme}://{host}{path}";
-    }
+    private string BuildAbsoluteUrl(string path) => _appOptions.AbsoluteUrl(path);
 
     [HttpGet("/Account/SignIn")]
     public IActionResult SignIn(string? returnUrl = null)
@@ -215,22 +206,38 @@ public class AccountController : Controller
         }
 
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == model.Email);
-        if (user == null || !_authService.VerifyPassword(model.Password, user.PasswordHash, user.PasswordSalt))
+        if (user == null || !_authService.VerifyPassword(model.Password, user.PasswordHash, user.PasswordSalt, user.PasswordIterations))
         {
             ModelState.AddModelError(string.Empty, _localizer["InvalidCredentials"]);
             return View(model);
         }
 
+        // Deactivated accounts get the generic message: a distinct one tells an
+        // attacker the address exists and the password is right.
         if (!user.IsActive)
         {
-            ModelState.AddModelError("", _localizer["AccountDeactivated"]);
+            ModelState.AddModelError(string.Empty, _localizer["InvalidCredentials"]);
             return View(new SignInViewModel { Email = model.Email });
         }
 
+        // Reaching this point already required the correct password, so naming the
+        // unverified state leaks nothing the caller doesn't have.
         if (!user.EmailVerified)
         {
             ModelState.AddModelError(string.Empty, _localizer["VerifyEmailFirst"]);
             return View(model);
+        }
+
+        // Upgrade hashes made with an older iteration count now that we hold the
+        // plaintext password.
+        if (user.PasswordIterations != _authService.Iterations)
+        {
+            var (upgradedHash, upgradedSalt, upgradedIterations) = _authService.HashPassword(model.Password);
+            user.PasswordHash = upgradedHash;
+            user.PasswordSalt = upgradedSalt;
+            user.PasswordIterations = upgradedIterations;
+            // Deliberately not touching UpdatedAt — it doubles as the session security
+            // stamp, and a rehash must not sign the user's other sessions out.
         }
 
         // Generate and send 2FA code
@@ -273,25 +280,17 @@ public class AccountController : Controller
     [HttpGet("/Account/Denied")]
     public IActionResult Denied() => Content(_localizer["AccessDenied"].Value);
 
+    // GET is deliberately read-only. Verifying and signing in straight from the link
+    // is login-CSRF: an attacker sends their own verification link to a victim, and
+    // one visit silently swaps the victim's session into the attacker's account, so
+    // everything the victim uploads or saves afterwards lands there. The link now
+    // just renders an antiforgery-protected confirm form.
     [HttpGet("/Account/Verify")]
-    public async Task<IActionResult> Verify(string? token = null)
+    public IActionResult Verify(string? token = null)
     {
         if (!string.IsNullOrWhiteSpace(token))
         {
-            var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.EmailVerificationToken == token);
-            if (user != null)
-            {
-                user.EmailVerified = true;
-                user.EmailVerificationToken = null;
-                user.UpdatedAt = DateTimeOffset.UtcNow;
-                await _dbContext.SaveChangesAsync();
-
-                await SignInUser(user, rememberMe: false);
-                TempData["Info"] = _localizer["EmailVerified"].Value;
-                return RedirectToAction("Index", "Home", new { signup = "success" });
-            }
-
-            TempData["Error"] = _localizer["InvalidVerificationToken"].Value;
+            ViewData["Token"] = token;
         }
 
         return View();
@@ -307,7 +306,13 @@ public class AccountController : Controller
             return RedirectToAction(nameof(Verify));
         }
 
-        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.EmailVerificationToken == token);
+        var now = DateTimeOffset.UtcNow;
+        var tokenHash = SecureTokens.Hash(token);
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u =>
+            u.EmailVerificationToken == tokenHash &&
+            u.EmailVerificationExpiresAt != null &&
+            u.EmailVerificationExpiresAt > now);
+
         if (user == null)
         {
             TempData["Error"] = _localizer["InvalidVerificationToken"].Value;
@@ -316,6 +321,7 @@ public class AccountController : Controller
 
         user.EmailVerified = true;
         user.EmailVerificationToken = null;
+        user.EmailVerificationExpiresAt = null;
         user.UpdatedAt = DateTimeOffset.UtcNow;
         await _dbContext.SaveChangesAsync();
 
@@ -431,8 +437,8 @@ public class AccountController : Controller
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == model.Email);
         if (user != null && user.IsActive && user.EmailVerified)
         {
-            var token = Guid.NewGuid().ToString("N");
-            user.PasswordResetToken = token;
+            var token = SecureTokens.Generate();
+            user.PasswordResetToken = SecureTokens.Hash(token);
             user.PasswordResetExpiresAt = DateTimeOffset.UtcNow.AddHours(1);
             user.UpdatedAt = DateTimeOffset.UtcNow;
             await _dbContext.SaveChangesAsync();
@@ -484,10 +490,12 @@ public class AccountController : Controller
         }
         if (!ModelState.IsValid) return View(model);
 
+        var now = DateTimeOffset.UtcNow;
+        var tokenHash = SecureTokens.Hash(model.Token ?? string.Empty);
         var user = await _dbContext.Users.FirstOrDefaultAsync(u =>
-            u.PasswordResetToken == model.Token &&
+            u.PasswordResetToken == tokenHash &&
             u.PasswordResetExpiresAt != null &&
-            u.PasswordResetExpiresAt > DateTimeOffset.UtcNow);
+            u.PasswordResetExpiresAt > now);
 
         if (user == null)
         {
@@ -495,9 +503,10 @@ public class AccountController : Controller
             return RedirectToAction(nameof(ForgotPassword));
         }
 
-        var (hash, salt) = _authService.HashPassword(model.Password);
+        var (hash, salt, iterations) = _authService.HashPassword(model.Password);
         user.PasswordHash = hash;
         user.PasswordSalt = salt;
+        user.PasswordIterations = iterations;
         user.PasswordResetToken = null;
         user.PasswordResetExpiresAt = null;
         user.UpdatedAt = DateTimeOffset.UtcNow;
@@ -536,6 +545,56 @@ public class AccountController : Controller
         await _dbContext.SaveChangesAsync();
 
         TempData["Info"] = _localizer["SettingsSaved"].Value;
+        return RedirectToAction(nameof(Settings));
+    }
+
+    [Authorize]
+    [HttpPost("/Account/Settings/MaxConcurrent")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateMaxConcurrent(int? maxConcurrent)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction(nameof(SignIn));
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null) return RedirectToAction(nameof(SignIn));
+
+        // Clamp to a sane range; NULL = use plan default
+        if (maxConcurrent.HasValue)
+        {
+            if (maxConcurrent.Value < 1 || maxConcurrent.Value > 50)
+            {
+                TempData["Error"] = _localizer["InvalidConcurrencyLimit"].Value;
+                return RedirectToAction(nameof(Settings));
+            }
+        }
+
+        user.MaxConcurrentOperations = maxConcurrent;
+        // Intentionally NOT touching UpdatedAt — it's used as the cookie security stamp
+        // (see Program.cs cookie OnValidatePrincipal). Bumping it here would sign the user out.
+        await _dbContext.SaveChangesAsync();
+        UserConcurrencyMiddleware.InvalidateLimitCache(user.Id);
+
+        TempData["Info"] = _localizer["ConcurrencyLimitUpdated"].Value;
+        return RedirectToAction(nameof(Settings));
+    }
+
+    [Authorize]
+    [HttpPost("/Account/Settings/QueueTimeout")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateQueueTimeout(int? queueTimeoutSeconds)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction(nameof(SignIn));
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null) return RedirectToAction(nameof(SignIn));
+
+        user.ConcurrencyQueueTimeoutSeconds = queueTimeoutSeconds < 0 ? null : queueTimeoutSeconds;
+        await _dbContext.SaveChangesAsync();
+        UserConcurrencyMiddleware.InvalidateLimitCache(user.Id);
+
+        TempData["Info"] = _localizer["ConcurrencyQueueTimeoutUpdated"].Value;
         return RedirectToAction(nameof(Settings));
     }
 
@@ -580,21 +639,22 @@ public class AccountController : Controller
             return View(model);
         }
 
-        if (!_authService.VerifyPassword(model.CurrentPassword, user.PasswordHash, user.PasswordSalt))
+        if (!_authService.VerifyPassword(model.CurrentPassword, user.PasswordHash, user.PasswordSalt, user.PasswordIterations))
         {
             ModelState.AddModelError(nameof(model.CurrentPassword), _localizer["CurrentPasswordIncorrect"]);
             return View(model);
         }
 
-        if (_authService.VerifyPassword(model.NewPassword, user.PasswordHash, user.PasswordSalt))
+        if (_authService.VerifyPassword(model.NewPassword, user.PasswordHash, user.PasswordSalt, user.PasswordIterations))
         {
             ModelState.AddModelError(nameof(model.NewPassword), _localizer["NewPasswordSameAsCurrent"]);
             return View(model);
         }
 
-        var (hash, salt) = _authService.HashPassword(model.NewPassword);
+        var (hash, salt, iterations) = _authService.HashPassword(model.NewPassword);
         user.PasswordHash = hash;
         user.PasswordSalt = salt;
+        user.PasswordIterations = iterations;
         user.UpdatedAt = DateTimeOffset.UtcNow;
         await _dbContext.SaveChangesAsync();
 

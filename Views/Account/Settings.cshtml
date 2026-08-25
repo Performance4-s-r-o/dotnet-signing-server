@@ -2,6 +2,8 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
     ViewData["Title"] = L["AccountSettingsTitle"].Value;
+    int? maxConcurrent = Model.MaxConcurrentOperations;
+    int? queueTimeout = Model.ConcurrencyQueueTimeoutSeconds;
 }
 
 <h1 class="content-box-title">@L["AccountSettingsTitle"]</h1>
@@ -15,17 +17,59 @@
     <div class="flash info">@TempData["Info"]</div>
 }
 
-<form method="post" class="auth-form">
-    @Html.AntiForgeryToken()
+<div class="tokens-form" style="margin-bottom:1.5rem">
+    <h2 class="tokens-form-title">@L["NotificationsSectionTitle"]</h2>
+    <form method="post" action="/Account/Settings">
+        @Html.AntiForgeryToken()
 
-    <div class="form-group">
-        <label class="form-check">
-            <input type="checkbox" name="emailNotificationsEnabled" value="true"
-                   @(Model.EmailNotificationsEnabled ? "checked" : "") />
-            @L["ReceiveEmailNotifications"]
-        </label>
-        <p class="text-small muted">@L["EmailNotificationsHint"]</p>
-    </div>
+        <div class="form-group">
+            <label class="form-check">
+                <input type="checkbox" name="emailNotificationsEnabled" value="true"
+                       @(Model.EmailNotificationsEnabled ? "checked" : "") />
+                @L["ReceiveEmailNotifications"]
+            </label>
+            <p class="text-small muted">@L["EmailNotificationsHint"]</p>
+        </div>
 
-    <button type="submit" class="btn btn-primary">@L["SaveSettingsButton"]</button>
-</form>
+        <button type="submit" class="btn btn-primary">@L["SaveSettingsButton"]</button>
+    </form>
+</div>
+
+<!-- Concurrency limit (per-user) -->
+<div class="tokens-form" style="margin-bottom:1.5rem">
+    <h2 class="tokens-form-title">@L["ConcurrencyLimitTitle"]</h2>
+    <p class="muted" style="margin-bottom:0.75rem">
+        @L["ConcurrencyLimitDescription"]
+        <a href="/Billing#pricing">@L["SeePricing"]</a>
+    </p>
+    <form method="post" action="/Account/Settings/MaxConcurrent" style="display:flex;gap:0.75rem;align-items:flex-end;flex-wrap:wrap">
+        @Html.AntiForgeryToken()
+        <div class="tokens-form-group" style="flex:0 0 auto">
+            <label for="max-concurrent" class="tokens-label">@L["MaxParallelRequests"]</label>
+            <input type="number" id="max-concurrent" name="maxConcurrent" class="tokens-input"
+                   min="1" max="50" placeholder="@L["ConcurrencyDefault"]"
+                   value="@(maxConcurrent?.ToString() ?? "")" style="width:120px" />
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-bottom:0.125rem">@L["SaveLimit"]</button>
+    </form>
+</div>
+
+<!-- Queue timeout (long polling vs 429) -->
+<div class="tokens-form" style="margin-bottom:1.5rem">
+    <h2 class="tokens-form-title">@L["ConcurrencyQueueTimeout"]</h2>
+    <p class="muted" style="margin-bottom:0.75rem">@L["ConcurrencyQueueTimeoutDescription"]</p>
+    <form method="post" action="/Account/Settings/QueueTimeout" style="display:flex;gap:0.75rem;align-items:flex-end;flex-wrap:wrap">
+        @Html.AntiForgeryToken()
+        <div class="tokens-form-group" style="flex:0 0 auto">
+            <label for="queue-timeout" class="tokens-label">@L["ConcurrencyQueueTimeout"]</label>
+            <input type="number" id="queue-timeout" name="queueTimeoutSeconds" class="tokens-input"
+                   min="0" placeholder="@L["ConcurrencyQueueDefault"]"
+                   value="@(queueTimeout?.ToString() ?? "")" style="width:120px" />
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-bottom:0.125rem">@L["SaveLimit"]</button>
+        @if (queueTimeout.HasValue)
+        {
+            <button type="submit" name="queueTimeoutSeconds" value="-1" class="btn" style="margin-bottom:0.125rem">@L["UseGlobalDefault"]</button>
+        }
+    </form>
+</div>

@@ -105,8 +105,10 @@ namespace DotNetSigningServer.Services
             }
 
             // Validate user-provided TSA URLs: only allow HTTPS (or the configured default URL)
-            if (!string.IsNullOrWhiteSpace(urlOverride)
-                && !string.Equals(urlOverride, tsaOptions?.Url, StringComparison.OrdinalIgnoreCase))
+            var isCallerSuppliedUrl = !string.IsNullOrWhiteSpace(urlOverride)
+                && !string.Equals(urlOverride, tsaOptions?.Url, StringComparison.OrdinalIgnoreCase);
+
+            if (isCallerSuppliedUrl)
             {
                 if (!Uri.TryCreate(urlOverride, UriKind.Absolute, out var parsedUri)
                     || !string.Equals(parsedUri.Scheme, "https", StringComparison.OrdinalIgnoreCase))
@@ -119,6 +121,11 @@ namespace DotNetSigningServer.Services
                 {
                     throw new ApiValidationException("TSA_HOST_NOT_ALLOWED");
                 }
+
+                // The check above resolves DNS once; the HTTP client would resolve
+                // again when it connects, leaving a rebinding window. PinnedIpTsaClient
+                // re-validates the address at socket-connect time and fails closed.
+                return new PinnedIpTsaClient(url, username, password);
             }
 
             return new TSAClientBouncyCastle(url, username, password);
@@ -155,6 +162,13 @@ namespace DotNetSigningServer.Services
             }
             return false;
         }
+
+        /// <summary>
+        /// Public entry point for the SSRF address guard — used by
+        /// <see cref="PinnedIpTsaClient"/> to re-check the resolved address at
+        /// socket-connect time.
+        /// </summary>
+        public static bool IsPrivateOrLocalAddress(System.Net.IPAddress ip) => IsPrivateOrLocal(ip);
 
         private static bool IsPrivateOrLocal(System.Net.IPAddress ip)
         {

@@ -75,7 +75,7 @@ namespace DotNetSigningServer.Services
                 .SetTextAlignment(TextAlignment.CENTER)
                 .SetMarginTop(60));
 
-            doc.Add(new Paragraph("This document was signed using P4PDF. " +
+            doc.Add(new Paragraph("This document was signed using Performance4PDF. " +
                 "Scan the QR code below or visit the verification URL to verify the document's integrity.")
                 .SetFont(font)
                 .SetFontSize(10)

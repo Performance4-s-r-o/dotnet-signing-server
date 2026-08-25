@@ -25,9 +25,9 @@ public class ResendEmailSender : IEmailSender
 
     public async Task SendAsync(string toEmail, string subject, string htmlBody)
     {
-        if (string.IsNullOrWhiteSpace(_options.ApiKey))
+        if (!_options.IsConfigured)
         {
-            _logger.LogWarning("Resend API key not configured. Skipping email send (subject: {Subject}).", subject);
+            _logger.LogWarning("Resend is not configured. Skipping email send (subject: {Subject}).", subject);
             return;
         }
 

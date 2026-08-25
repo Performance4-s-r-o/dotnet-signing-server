@@ -1,7 +1,13 @@
 @model DotNetSigningServer.Services.LegalDocumentRendered
+@* Model comes from LegalDocumentService (this platform's own DB), not from any
+   external CMS — the legal texts are owned here. *@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
     ViewData["Title"] = Model.Title;
+    // Prefer the editor's "key changes" note; fall back to the document title.
+    ViewData["MetaDescription"] = string.IsNullOrWhiteSpace(Model.Summary)
+        ? $"{Model.Title} — Performance4PDF"
+        : Model.Summary;
     var locale = string.Equals(Model.Locale, "cs", StringComparison.OrdinalIgnoreCase) ? "cs" : "en";
     var effectiveFromLabel = locale == "cs"
         ? $"Účinnost od {Model.EffectiveFrom.LocalDateTime:d. M. yyyy}"
@@ -21,7 +27,8 @@
         </div>
     }
 
-    @* Content was rendered server-side from Markdown by LegalDocumentsClient.
-       Source is the platform-controlled CMS — safe to emit as raw HTML. *@
+    @* Content was rendered server-side from Markdown by LegalDocumentService, whose
+       pipeline has DisableHtml() — raw HTML in the stored markdown is escaped, not
+       passed through, so the output here contains only Markdig-generated markup. *@
     @Html.Raw(Model.ContentHtml)
 </div>

@@ -32,8 +32,30 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["Sentry:Dsn"]))
 var dataProtectionPath = Environment.GetEnvironmentVariable("DATA_PROTECTION_KEYS_PATH")
                         ?? Path.Combine(builder.Environment.ContentRootPath, "data-protection-keys");
 Directory.CreateDirectory(dataProtectionPath);
-builder.Services.AddDataProtection()
+var dataProtection = builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionPath));
+
+// The data protection keys don't just cover cookies/antiforgery — PdfSigningApiController
+// encrypts per-request TSA usernames/passwords with them. Unprotected, the key ring is
+// plaintext XML in the volume, so volume access + DB access decrypts every stored
+// TSA credential. Encrypt the ring with a deployment-provided certificate when one is set.
+var keyProtectionCertBase64 = builder.Configuration["DataProtection:CertificateBase64"];
+var keyProtectionCertPassword = builder.Configuration["DataProtection:CertificatePassword"];
+if (!string.IsNullOrWhiteSpace(keyProtectionCertBase64))
+{
+    var certBytes = Convert.FromBase64String(
+        new string(keyProtectionCertBase64.Where(c => !char.IsWhiteSpace(c)).ToArray()));
+    var keyProtectionCert = new System.Security.Cryptography.X509Certificates.X509Certificate2(
+        certBytes, keyProtectionCertPassword);
+    dataProtection.ProtectKeysWithCertificate(keyProtectionCert);
+}
+else if (builder.Environment.IsProduction())
+{
+    Console.WriteLine(
+        "[startup] WARNING: DataProtection key ring is stored unencrypted at " +
+        $"{dataProtectionPath}. Set DataProtection__CertificateBase64 (+ __CertificatePassword) " +
+        "to encrypt it — the ring also protects stored TSA credentials.");
+}
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders =
@@ -47,11 +69,58 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     // headers from non-loopback IPs and Request.Host stays the internal
     // container address — which breaks the CORS allow-list (it falls back to
     // the request's own host) and produces 403s on same-origin browser calls.
-    // Clearing both lists trusts all upstreams; safe because the container
-    // is only reachable via the proxy on the isolated network.
+    //
+    // We must therefore widen the trusted set, but NOT to "everything":
+    // X-Forwarded-For drives the per-token IP whitelist, so a directly reachable
+    // container would let a caller spoof a whitelisted IP. Trust only the private
+    // ranges the reverse proxy actually lives in, or an explicit operator list.
     options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
+
+    var configuredNetworks = builder.Configuration["ForwardedHeaders:KnownNetworks"];
+    var configuredProxies = builder.Configuration["ForwardedHeaders:KnownProxies"];
+
+    if (!string.IsNullOrWhiteSpace(configuredNetworks) || !string.IsNullOrWhiteSpace(configuredProxies))
+    {
+        foreach (var entry in SplitConfigList(configuredNetworks))
+        {
+            var parts = entry.Split('/', 2);
+            if (System.Net.IPAddress.TryParse(parts[0], out var prefix)
+                && parts.Length == 2
+                && int.TryParse(parts[1], out var prefixLength))
+            {
+                options.KnownNetworks.Add(new IPNetwork(prefix, prefixLength));
+            }
+        }
+
+        foreach (var entry in SplitConfigList(configuredProxies))
+        {
+            if (System.Net.IPAddress.TryParse(entry, out var proxy))
+            {
+                options.KnownProxies.Add(proxy);
+            }
+        }
+    }
+    else
+    {
+        // Default: Docker/Kubernetes private ranges + loopback. Covers every
+        // documented deployment (Coolify/Caddy on a bridge network) while
+        // rejecting forwarded headers from a directly exposed container.
+        options.KnownNetworks.Add(new IPNetwork(System.Net.IPAddress.Parse("10.0.0.0"), 8));
+        options.KnownNetworks.Add(new IPNetwork(System.Net.IPAddress.Parse("172.16.0.0"), 12));
+        options.KnownNetworks.Add(new IPNetwork(System.Net.IPAddress.Parse("192.168.0.0"), 16));
+        options.KnownNetworks.Add(new IPNetwork(System.Net.IPAddress.Parse("127.0.0.0"), 8));
+        options.KnownNetworks.Add(new IPNetwork(System.Net.IPAddress.Parse("::1"), 128));
+        options.KnownNetworks.Add(new IPNetwork(System.Net.IPAddress.Parse("fc00::"), 7));
+    }
 });
+
+static IEnumerable<string> SplitConfigList(string? raw) =>
+    string.IsNullOrWhiteSpace(raw)
+        ? Enumerable.Empty<string>()
+        : raw.Split(new[] { ',', ';', ' ', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+             .Select(e => e.Trim())
+             .Where(e => e.Length > 0);
 
 // NOTE: Don't set ResourcesPath — SharedStrings.cs lives in DotNetSigningServer.Resources
 // namespace, so the default baseName "{RootNamespace}.{TypeFullName-without-rootNS}" =
@@ -59,7 +128,10 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 // Adding ResourcesPath="Resources" would result in the wrong baseName
 // "DotNetSigningServer.Resources.Resources.SharedStrings" and break all translations.
 builder.Services.AddLocalization();
-builder.Services.AddControllersWithViews()
+builder.Services.AddControllersWithViews(options =>
+    {
+        options.Filters.Add<DotNetSigningServer.Filters.NoIndexPrivatePagesFilter>();
+    })
     .AddViewLocalization()
     .AddDataAnnotationsLocalization();
 builder.Services.AddScoped<PdfVisualSigningService>();
@@ -92,10 +164,12 @@ builder.Services.AddSingleton<LokiClient>();
 // Ship all ILogger output (not just unhandled exceptions) to Loki.
 builder.Services.AddSingleton<ILoggerProvider, DotNetSigningServer.Logging.LokiLoggerProvider>();
 builder.Services.AddHttpClient<TemplateAiService>();
-builder.Services.AddHttpClient<LegalDocumentsClient>(client =>
+builder.Services.AddScoped<LegalDocumentService>();
+builder.Services.AddHttpClient("osticket", client =>
 {
-    client.Timeout = TimeSpan.FromSeconds(10);
-    client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/legal-cms-consumer");
+    var timeout = builder.Configuration.GetValue<int?>("OsTicket:TimeoutSeconds") ?? 10;
+    client.Timeout = TimeSpan.FromSeconds(timeout);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/support");
 });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -111,7 +185,19 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 builder.Services.Configure<BillingOptions>(builder.Configuration.GetSection("Billing"));
-builder.Services.Configure<StripeOptions>(builder.Configuration.GetSection("Stripe"));
+// /api/webhooks/stripe is [AllowAnonymous]; the signature check is its only gate.
+// The tracked appsettings.json ships WebhookSecret: "", and an empty HMAC key means
+// an attacker can compute a valid Stripe-Signature and mint credits via a forged
+// checkout.session.completed. Fail the deploy instead of serving unauthenticated.
+builder.Services.AddOptions<StripeOptions>()
+    .Bind(builder.Configuration.GetSection("Stripe"))
+    .Validate(
+        options => !builder.Environment.IsProduction()
+                   || (!string.IsNullOrWhiteSpace(options.WebhookSecret)
+                       && options.WebhookSecret.StartsWith("whsec_", StringComparison.Ordinal)),
+        "Stripe:WebhookSecret must be configured with the signing secret (whsec_...) in production. "
+        + "Set the Stripe__WebhookSecret environment variable.")
+    .ValidateOnStart();
 builder.Services.Configure<TokenOptions>(builder.Configuration.GetSection("Token"));
 builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection("Resend"));
 builder.Services.Configure<LokiOptions>(builder.Configuration.GetSection("Loki"));
@@ -119,7 +205,7 @@ builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("AI"));
 builder.Services.Configure<LimitsOptions>(builder.Configuration.GetSection("Limits"));
 builder.Services.Configure<SealOptions>(builder.Configuration.GetSection("Seal"));
 builder.Services.Configure<EvidenceOptions>(builder.Configuration.GetSection("Evidence"));
-builder.Services.Configure<LegalDocumentsCmsOptions>(builder.Configuration.GetSection("LegalDocumentsCms"));
+builder.Services.Configure<OsTicketOptions>(builder.Configuration.GetSection("OsTicket"));
 builder.Services.Configure<AppOptions>(builder.Configuration);
 builder.Services.AddAuthentication(options =>
     {
@@ -295,6 +381,27 @@ builder.Services.AddOptions<BillingOptions>()
 
 var app = builder.Build();
 
+// Fail fast on a missing public origin. Every absolute URL we emit — e-mail
+// links, canonical tags, the sitemap — derives from it, so a deployment without
+// it must not start rather than quietly ship dead links.
+{
+    var appOptions = app.Services
+        .GetRequiredService<Microsoft.Extensions.Options.IOptions<AppOptions>>().Value;
+    _ = appOptions.BaseUrl;
+
+    // E-mail is optional — with no API key the sender just logs and skips. But a
+    // key without a sender address is a misconfiguration that would fail one
+    // message at a time, so catch it here instead.
+    var resendOptions = app.Services
+        .GetRequiredService<Microsoft.Extensions.Options.IOptions<ResendOptions>>().Value;
+    if (!string.IsNullOrWhiteSpace(resendOptions.ApiKey) && string.IsNullOrWhiteSpace(resendOptions.From))
+    {
+        throw new InvalidOperationException(
+            "Resend:ApiKey is set but Resend:From is not. Set EMAIL_FROM to a sender on a domain "
+            + "verified in Resend, e.g. \"Performance4PDF <noreply@send.example.com>\".");
+    }
+}
+
 var appLogger = app.Services.GetRequiredService<ILogger<Program>>();
 
 if (postgresContainer != null)
@@ -409,7 +516,15 @@ app.UseRequestLocalization(options =>
     options.AddSupportedUICultures(supportedCultures);
     options.ApplyCurrentCultureToResponseHeaders = true;
 });
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        // Logo and stylesheet are content-stable and referenced from every page —
+        // let browsers and CDNs hold on to them instead of refetching per request.
+        ctx.Context.Response.Headers.CacheControl = "public, max-age=604800";
+    },
+});
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();

@@ -17,6 +17,9 @@ TestResults/
 *.sln.iml
 appsettings.Development.json
 appsettings.Production.json
+# Root-level patterns only match at the root; also exclude build-output copies.
+**/appsettings.Development.json
+**/appsettings.Production.json
 docker-compose*.yml
 Dockerfile
 .dockerignore

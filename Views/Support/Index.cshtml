@@ -16,6 +16,10 @@
 
 <div class="card">
     <h2>@L["SupportSubmitTicketTitle"]</h2>
+    @if (ViewData["UserEmail"] is string userEmail && !string.IsNullOrWhiteSpace(userEmail))
+    {
+        <p class="muted mb-3">@L["SupportReplyToHint", userEmail]</p>
+    }
     <form method="post" action="/support/ticket">
         @Html.AntiForgeryToken()
 

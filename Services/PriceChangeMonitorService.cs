@@ -75,7 +75,7 @@ public class PriceChangeMonitorService : BackgroundService
             string.Join(", ", affectedUsers.Select(u => u.AutoRechargePricePer100).Distinct()),
             currentPrice, affectedUsers.Count);
 
-        var baseUrl = appOptions.FqdnServerName?.TrimEnd('/') ?? "https://app.p4pdf.com";
+        var baseUrl = appOptions.BaseUrl;
 
         foreach (var user in affectedUsers)
         {

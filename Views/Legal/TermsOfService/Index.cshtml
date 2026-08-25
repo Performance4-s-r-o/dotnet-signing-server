@@ -1,6 +1,7 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
     ViewData["Title"] = L["LegalTermsOfService"].Value;
+    ViewData["MetaDescription"] = L["LegalTermsOfServiceMeta"].Value;
 }
 
 <div class="legal-document">
@@ -9,7 +10,7 @@
 
     <p>
         These Terms of Service (the "Terms") govern your use of the
-        <strong>P4PDF by Performance4 s.r.o.</strong> service (the "Service"), provided by
+        <strong>Performance4PDF</strong> service (the "Service"), provided by
         <strong>Performance4 s.r.o.</strong>, with registered office at
         <strong>Husova 429, 373 67, Borek, Czech Republic</strong>, company ID <strong>08415765</strong>,
         email: <a href="mailto:support@performance4.cz">support@performance4.cz</a> (the "Provider").
@@ -152,7 +153,7 @@
     </p>
     <p>
         As required by the AGPL, the complete corresponding source code of
-        the server-side software that forms part of P4PDF by Performance4 s.r.o. and communicates
+        the server-side software that forms part of Performance4PDF and communicates
         with users over a network is made available at:
         <a
             href="https://github.com/janprasil/dotnet-signing-server">https://github.com/janprasil/dotnet-signing-server</a>.

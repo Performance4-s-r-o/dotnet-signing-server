@@ -43,9 +43,12 @@ services:
       - Stripe__EnableTaxIdCollection=${STRIPE_ENABLE_TAX_ID_COLLECTION:-true}
       - Stripe__RequireBillingAddress=${STRIPE_REQUIRE_BILLING_ADDRESS:-true}
       - Stripe__EnableAutomaticTax=${STRIPE_ENABLE_AUTOMATIC_TAX:-true}
-      # Resend (transactional email) — replaces legacy SMTP
+      # Resend (transactional email) — replaces legacy SMTP.
+      # No default sender on purpose: EMAIL_FROM must name a domain verified in
+      # Resend. Empty RESEND_API_KEY disables e-mail; a key without EMAIL_FROM
+      # fails startup.
       - Resend__ApiKey=${RESEND_API_KEY:-}
-      - Resend__From=${EMAIL_FROM:-P4PDF <noreply@send.p4pdf.cz>}
+      - Resend__From=${EMAIL_FROM:-}
       - Resend__ReplyTo=${EMAIL_REPLY_TO:-}
       # Loki logging
       - Loki__Url=${LOKI_URL:-}
@@ -67,7 +70,8 @@ services:
       - AI__Google__ApiKey=${AI_GOOGLE_API_KEY:-}
       - AI__Google__Model=${AI_GOOGLE_MODEL:-gemini-1.5-flash}
       - AI__Google__Endpoint=${AI_GOOGLE_ENDPOINT:-https://generativelanguage.googleapis.com/v1beta}
-      # osTicket (support tickets). Without ApiKey /support/ticket falls back to console logging.
+      # osTicket (support tickets). Url + ApiKey both required — without them the
+      # /support contact form is hidden from the nav and its routes return 404.
       - OsTicket__Url=${OSTICKET_URL:-}
       - OsTicket__ApiKey=${OSTICKET_API_KEY:-}
       - OsTicket__Topic__signing=${OSTICKET_TOPIC_SIGNING:-1}

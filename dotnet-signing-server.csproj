@@ -28,6 +28,20 @@
 
   </ItemGroup>
 
+  <!--
+    Runtime data that lives inside the project directory. Postgres in particular
+    rewrites pg_control and friends on every transaction, which made `dotnet
+    watch` spin through "Loading projects…" continuously and eventually lose the
+    app process. These are all gitignored; keep the two lists in sync.
+  -->
+  <ItemGroup>
+    <Watch Remove="postgres-data/**" />
+    <Watch Remove="data-protection-keys/**" />
+    <Watch Remove="debug_images/**" />
+    <Watch Remove="signing-local.db*" />
+    <Watch Remove="certificates/**" />
+  </ItemGroup>
+
   <ItemGroup>
     <Content Include="Resources/srgb.icc">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

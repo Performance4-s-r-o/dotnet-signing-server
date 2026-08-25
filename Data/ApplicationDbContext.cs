@@ -18,6 +18,7 @@ namespace DotNetSigningServer.Data
         public DbSet<Payment> Payments { get; set; }
         public DbSet<WebhookEvent> WebhookEvents { get; set; }
         public DbSet<StoredPdfTemplate> StoredPdfTemplates { get; set; }
+        public DbSet<LegalDocument> LegalDocuments { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -48,6 +49,17 @@ namespace DotNetSigningServer.Data
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Email)
                 .IsUnique();
+
+            // One row per (slug, locale, version); the lookup then picks the
+            // newest non-draft row whose EffectiveFrom has already passed.
+            modelBuilder.Entity<LegalDocument>()
+                .HasIndex(d => new { d.Slug, d.Locale, d.Version })
+                .IsUnique();
+
+            // Equality columns first, the range column last — matches how
+            // LegalDocumentService filters and orders.
+            modelBuilder.Entity<LegalDocument>()
+                .HasIndex(d => new { d.Slug, d.Locale, d.IsDraft, d.EffectiveFrom });
 
             modelBuilder.Entity<ApiToken>()
                 .HasIndex(t => t.TokenHash);

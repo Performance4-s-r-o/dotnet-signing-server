@@ -18,7 +18,7 @@ namespace DotNetSigningServer.Models
         public string? TsaUsername { get; set; }
         public string? TsaPassword { get; set; }
         public Guid? TemplateId { get; set; }
-        /// <summary>Verification URL to embed in PDF (e.g. "https://verify.p4pdf.com/abc123").</summary>
+        /// <summary>Verification URL to embed in PDF (e.g. "https://verify.performance4pdf.com/abc123").</summary>
         public string? VerificationUrl { get; set; }
         /// <summary>"disabled" | "link" (PDF metadata) | "qr" (append QR page).</summary>
         public string? VerificationMode { get; set; }

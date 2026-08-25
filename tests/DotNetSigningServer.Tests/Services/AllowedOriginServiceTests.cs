@@ -1,13 +1,15 @@
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Tests.Helpers;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace DotNetSigningServer.Tests.Services;
 
 public class AllowedOriginServiceTests
 {
-    private static AllowedOriginService CreateService()
+    private static AllowedOriginService CreateService(string? environmentName = null)
     {
         // Create a service provider with an InMemory DbContext for LoadAllowedOrigins
         var services = new ServiceCollection();
@@ -15,7 +17,10 @@ public class AllowedOriginServiceTests
         services.AddDbContext<DotNetSigningServer.Data.ApplicationDbContext>(options =>
             Microsoft.EntityFrameworkCore.InMemoryDbContextOptionsExtensions.UseInMemoryDatabase(options, dbName));
         var sp = services.BuildServiceProvider();
-        return new AllowedOriginService(sp.GetRequiredService<IServiceScopeFactory>());
+        return new AllowedOriginService(
+            sp.GetRequiredService<IServiceScopeFactory>(),
+            new TestHostEnvironment { EnvironmentName = environmentName ?? Environments.Production },
+            new ConfigurationBuilder().Build());
     }
 
     [Theory]
@@ -51,6 +56,19 @@ public class AllowedOriginServiceTests
     }
 
     [Theory]
+    [InlineData("https://localhost.attacker.com")]
+    [InlineData("http://127.0.0.1.evil.com")]
+    [InlineData("http://localhostXYZ")]
+    [InlineData("https://localhost-evil.com")]
+    public void IsLocalOrigin_HostsMerelyPrefixedWithLocal_ReturnsFalse(string origin)
+    {
+        // A StartsWith prefix match would classify all of these as "local" and hand
+        // the attacker's domain both a CORS reflection and the per-token origin pass.
+        var sut = CreateService();
+        Assert.False(sut.IsLocalOrigin(origin));
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("not-a-url")]
@@ -61,13 +79,40 @@ public class AllowedOriginServiceTests
     }
 
     [Fact]
-    public void IsOriginAllowedForToken_LocalOrigin_AlwaysAllowed()
+    public void IsOriginAllowedForToken_LocalOrigin_AllowedInDevelopment()
     {
-        var sut = CreateService();
+        var sut = CreateService(Environments.Development);
         var token = new ApiToken
         {
             IsBrowserToken = true,
             AllowedOrigins = "https://example.com"
+        };
+        Assert.True(sut.IsOriginAllowedForToken("http://localhost:3000", token));
+    }
+
+    [Fact]
+    public void IsOriginAllowedForToken_LocalOrigin_RejectedInProduction()
+    {
+        // Origin is caller-controlled, so a localhost bypass would let a leaked
+        // browser token be replayed from anywhere.
+        var sut = CreateService(Environments.Production);
+        var token = new ApiToken
+        {
+            IsBrowserToken = true,
+            AllowedOrigins = "https://example.com"
+        };
+        Assert.False(sut.IsOriginAllowedForToken("http://localhost:3000", token));
+    }
+
+    [Fact]
+    public void IsOriginAllowedForToken_LocalOriginOnToken_AllowedInProduction()
+    {
+        // Explicitly whitelisted on the token → still allowed, even in production.
+        var sut = CreateService(Environments.Production);
+        var token = new ApiToken
+        {
+            IsBrowserToken = true,
+            AllowedOrigins = "http://localhost:3000"
         };
         Assert.True(sut.IsOriginAllowedForToken("http://localhost:3000", token));
     }
@@ -135,9 +180,22 @@ public class AllowedOriginServiceTests
     }
 
     [Fact]
-    public void IsOriginAllowedForToken_EmptyAllowedOrigins_OnlyLocalAllowed()
+    public void IsOriginAllowedForToken_EmptyAllowedOrigins_RejectsEverythingInProduction()
     {
-        var sut = CreateService();
+        var sut = CreateService(Environments.Production);
+        var token = new ApiToken
+        {
+            IsBrowserToken = true,
+            AllowedOrigins = null
+        };
+        Assert.False(sut.IsOriginAllowedForToken("https://example.com", token));
+        Assert.False(sut.IsOriginAllowedForToken("http://localhost", token));
+    }
+
+    [Fact]
+    public void IsOriginAllowedForToken_EmptyAllowedOrigins_OnlyLocalAllowedInDevelopment()
+    {
+        var sut = CreateService(Environments.Development);
         var token = new ApiToken
         {
             IsBrowserToken = true,

@@ -33,7 +33,10 @@ public class ApiAuthServiceTests : IDisposable
         services.AddDbContext<ApplicationDbContext>(options =>
             Microsoft.EntityFrameworkCore.InMemoryDbContextOptionsExtensions.UseInMemoryDatabase(options, _dbName));
         var sp = services.BuildServiceProvider();
-        _allowedOriginService = new AllowedOriginService(sp.GetRequiredService<IServiceScopeFactory>());
+        _allowedOriginService = new AllowedOriginService(
+            sp.GetRequiredService<IServiceScopeFactory>(),
+            new TestHostEnvironment { EnvironmentName = Microsoft.Extensions.Hosting.Environments.Production },
+            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         _ipWhitelistService = new IpWhitelistService();
 
         _sut = new ApiAuthService(_dbContext, _tokenService, _allowedOriginService, _ipWhitelistService, new MemoryCache(new MemoryCacheOptions()), Microsoft.Extensions.Logging.Abstractions.NullLogger<ApiAuthService>.Instance);
@@ -160,14 +163,25 @@ public class ApiAuthServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ValidateTokenAsync_BrowserToken_LocalOrigin_AllowedAlways()
+    public async Task ValidateTokenAsync_BrowserToken_LocalOriginNotOnToken_RejectedInProduction()
     {
-        var (user, token, _) = SeedUserWithToken(
+        // Origin is set freely by any non-browser client, so a blanket localhost pass
+        // would make a leaked browser token replayable from anywhere.
+        var (_, token, _) = SeedUserWithToken(
             isBrowserToken: true,
             allowedOrigins: "https://myapp.com");
         var result = await _sut.ValidateTokenAsync($"Bearer {token}", "http://localhost:3000");
-        Assert.NotNull(result);
-        Assert.Equal(user.Id, result.Id);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task ValidateTokenAsync_BrowserToken_SpoofedLocalPrefixOrigin_ReturnsNull()
+    {
+        var (_, token, _) = SeedUserWithToken(
+            isBrowserToken: true,
+            allowedOrigins: "https://myapp.com");
+        var result = await _sut.ValidateTokenAsync($"Bearer {token}", "https://localhost.attacker.com");
+        Assert.Null(result);
     }
 
     [Fact]

@@ -41,7 +41,10 @@ public class TemplateAiService
         var apiKey = _options.Google.ApiKey!;
         var model = _options.Google.Model ?? "gemini-1.5-flash";
         var endpointBase = _options.Google.Endpoint?.TrimEnd('/') ?? "https://generativelanguage.googleapis.com/v1beta";
-        var url = $"{endpointBase}/models/{model}:generateContent?key={apiKey}";
+        // The key goes in a header, never the query string: IHttpClientFactory logs
+        // the full request URI at Information on .NET 8 (query redaction landed in
+        // .NET 9), and LokiLoggerProvider ships everything >= Information off-box.
+        var url = $"{endpointBase}/models/{model}:generateContent";
 
         var systemPrompt = @"You extract form field coordinates from a PDF. Return a compact JSON array of fields with:
 [
@@ -82,6 +85,7 @@ Rules:
             {
                 Content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json")
             };
+            httpRequest.Headers.Add("x-goog-api-key", apiKey);
 
             using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
             response.EnsureSuccessStatusCode();
@@ -131,7 +135,10 @@ Rules:
         var apiKey = _options.Google.ApiKey!;
         var model = _options.Google.Model ?? "gemini-2.5-flash";
         var endpointBase = _options.Google.Endpoint?.TrimEnd('/') ?? "https://generativelanguage.googleapis.com/v1beta";
-        var url = $"{endpointBase}/models/{model}:generateContent?key={apiKey}";
+        // The key goes in a header, never the query string: IHttpClientFactory logs
+        // the full request URI at Information on .NET 8 (query redaction landed in
+        // .NET 9), and LokiLoggerProvider ships everything >= Information off-box.
+        var url = $"{endpointBase}/models/{model}:generateContent";
 
         var columnDefs = string.Join("\n", columns.Select(c =>
         {
@@ -188,6 +195,7 @@ Rules:
             {
                 Content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json")
             };
+            httpRequest.Headers.Add("x-goog-api-key", apiKey);
 
             using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
             response.EnsureSuccessStatusCode();

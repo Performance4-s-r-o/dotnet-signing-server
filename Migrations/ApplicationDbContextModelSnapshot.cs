@@ -143,6 +143,60 @@ namespace dotnetsigningserver.Migrations
                     b.ToTable("Invoices", "dotnet_signing");
                 });
 
+            modelBuilder.Entity("DotNetSigningServer.Models.LegalDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("EffectiveFrom")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDraft")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Locale")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Slug", "Locale", "Version")
+                        .IsUnique();
+
+                    b.HasIndex("Slug", "Locale", "IsDraft", "EffectiveFrom");
+
+                    b.ToTable("LegalDocuments", "dotnet_signing");
+                });
+
             modelBuilder.Entity("DotNetSigningServer.Models.Payment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -378,6 +432,9 @@ namespace dotnetsigningserver.Migrations
                     b.Property<DateTimeOffset?>("EmailOtpExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("EmailVerificationExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("EmailVerificationToken")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
@@ -403,6 +460,9 @@ namespace dotnetsigningserver.Migrations
                     b.Property<byte[]>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("bytea");
+
+                    b.Property<int>("PasswordIterations")
+                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset?>("PasswordResetExpiresAt")
                         .HasColumnType("timestamp with time zone");

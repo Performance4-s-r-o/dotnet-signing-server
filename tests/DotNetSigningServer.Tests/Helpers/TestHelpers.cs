@@ -116,13 +116,14 @@ public static class TestHelpers
     public static User CreateTestUser(string email = "test@example.com")
     {
         var authService = new DotNetSigningServer.Services.AuthService();
-        var (hash, salt) = authService.HashPassword("test-password");
+        var (hash, salt, iterations) = authService.HashPassword("test-password");
         return new User
         {
             Id = Guid.NewGuid(),
             Email = email,
             PasswordHash = hash,
             PasswordSalt = salt,
+            PasswordIterations = iterations,
             IsActive = true,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow

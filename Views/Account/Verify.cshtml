@@ -7,6 +7,19 @@
 
 @{
     var verified = ViewData["Verified"] as bool? ?? false;
+    var token = ViewData["Token"] as string;
+}
+
+@if (!string.IsNullOrWhiteSpace(token))
+{
+    @* The verification link only renders this form — the state change happens on
+       POST so it can't be triggered cross-site. *@
+    <p class="text-small">@L["ConfirmEmailVerificationPrompt"]</p>
+    <form method="post" action="/Account/Verify">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="token" value="@token" />
+        <button type="submit" class="btn btn-primary">@L["ConfirmEmailVerification"]</button>
+    </form>
 }
 
 <p class="text-small">

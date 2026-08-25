@@ -48,6 +48,14 @@ public class StripeWebhookController : ControllerBase
     [HttpPost("/api/webhooks/stripe")]
     public async Task<IActionResult> HandleWebhook()
     {
+        // Defence in depth behind the startup guard in Program.cs: an empty secret
+        // would make ConstructEvent accept an attacker-computed signature.
+        if (string.IsNullOrWhiteSpace(_stripeOptions.WebhookSecret))
+        {
+            _logger.LogError("Stripe webhook rejected: Stripe:WebhookSecret is not configured");
+            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Webhook secret not configured" });
+        }
+
         var json = await new StreamReader(HttpContext.Request.Body).ReadToEndAsync();
 
         Event stripeEvent;
@@ -367,7 +375,7 @@ public class StripeWebhookController : ControllerBase
         });
 
         var paymentType = paymentIntent.Metadata.TryGetValue("type", out var t) ? t : "purchase";
-        var baseUrl = _appOptions.FqdnServerName?.TrimEnd('/') ?? "https://app.p4pdf.com";
+        var baseUrl = _appOptions.BaseUrl;
         var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
         var rendered = _emailTemplates.Render(EmailTemplateId.PaymentFailed, locale, new Dictionary<string, string?>
         {

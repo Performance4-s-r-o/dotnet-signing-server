@@ -1,0 +1,90 @@
+@model DotNetSigningServer.Services.ApiEndpointDoc
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
+@{
+  // Title / MetaDescription / JsonLd are set by HomeController.ApiEndpointDocs.
+  var baseUrl = (ViewData["BaseUrl"]?.ToString() ?? string.Empty).TrimEnd('/');
+  var apiBase = string.IsNullOrWhiteSpace(baseUrl) ? "/api" : $"{baseUrl}/api";
+  var siblings = DotNetSigningServer.Services.ApiDocsCatalog.All(apiBase);
+}
+
+<nav class="muted text-small mb-2" aria-label="Breadcrumb">
+  <a href="/api/docs">@L["ApiDocsTitle"]</a> <span>/</span> <span>@L[Model.TitleKey]</span>
+</nav>
+
+<h1 class="content-box-title">@L[Model.TitleKey]</h1>
+
+<p class="muted">
+  <code>@Model.Method @Model.Path</code> · @L["ApiDocsColumnCredits"]: <strong>@L[Model.CreditsKey]</strong>
+</p>
+
+<p>@L[Model.IntroKey]</p>
+
+@if (Model.NoteKeys != null)
+{
+  foreach (var noteKey in Model.NoteKeys)
+  {
+    <p class="muted" style="margin:0 0 6px;">@L[noteKey]</p>
+  }
+}
+
+@* Reference reads as one continuous page: sections are separated by a rule
+   rather than each being boxed, which would fragment it. *@
+<hr class="section-divider" />
+
+<section>
+  <div class="flex justify-between items-center mb-2">
+    <h2 class="card-title" style="margin:0;">@L["ApiDocsRequestTitle"]</h2>
+    @if (!string.IsNullOrWhiteSpace(Model.Curl))
+    {
+      <div class="flex items-center gap-2">
+        <button type="button" class="btn btn-small" id="copy-curl">@L["ApiDocsCopyCurl"]</button>
+        <span id="curl-status" class="muted text-small" style="margin:0;"></span>
+      </div>
+    }
+  </div>
+  <pre class="code-block"><code>@Model.Sample</code></pre>
+</section>
+
+<hr class="section-divider" />
+
+<section>
+  <h2 class="card-title">@L["ApiDocsAuthTitle"]</h2>
+  <p class="muted" style="margin:6px 0 0;">
+    @L["ApiDocsIntroAuth"] <code>Authorization: Bearer &lt;token&gt;</code>.
+  </p>
+</section>
+
+<hr class="section-divider" />
+
+<section>
+  <h2 class="card-title">@L["ApiDocsOtherEndpoints"]</h2>
+  <ul class="endpoint-list">
+    @foreach (var endpoint in siblings.Where(e => e.Slug != Model.Slug))
+    {
+      <li>
+        <a href="/api/docs/@endpoint.Slug">@L[endpoint.TitleKey]</a>
+        <code class="muted">@endpoint.Method @endpoint.Path</code>
+      </li>
+    }
+  </ul>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Model.Curl))
+{
+  <script>
+    (() => {
+      const curl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Curl));
+      const btn = document.getElementById("copy-curl");
+      const status = document.getElementById("curl-status");
+      btn?.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(curl);
+          status.textContent = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ApiDocsCopied"].Value));
+          setTimeout(() => status.textContent = "", 2000);
+        } catch (e) {
+          status.textContent = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(L["ApiDocsCopyUnavailable"].Value));
+        }
+      });
+    })();
+  </script>
+}

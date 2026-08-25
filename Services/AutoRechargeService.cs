@@ -183,7 +183,13 @@ public class AutoRechargeService : IAutoRechargeService
         user.AutoRechargeEnabled = true;
         user.AutoRechargeQuantity = quantity;
         user.AutoRechargePricePer100 = pricePer100;
-        user.AutoRechargeCancelToken = Guid.NewGuid().ToString("N");
+        // CSPRNG, not Guid.NewGuid(). Stored in plaintext on purpose: the cancel link
+        // is rebuilt from the DB every time a price-change email goes out
+        // (PriceChangeMonitorService), so there is no plaintext to keep elsewhere.
+        // Worst case on a DB dump is that auto-recharge gets switched off — no
+        // account takeover — which is why this one isn't hashed like the reset and
+        // verification tokens.
+        user.AutoRechargeCancelToken = SecureTokens.Generate();
         user.PriceChangeNotifiedAt = null;
         await _dbContext.SaveChangesAsync();
 
@@ -253,7 +259,7 @@ public class AutoRechargeService : IAutoRechargeService
 
     private async Task SendRechargeSuccessEmailAsync(User user, int creditsAdded, decimal amount)
     {
-        var baseUrl = _appOptions.FqdnServerName?.TrimEnd('/') ?? "https://app.p4pdf.com";
+        var baseUrl = _appOptions.BaseUrl;
         var billingUrl = $"{baseUrl}/Billing";
         var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
         var rendered = _emailTemplates.Render(EmailTemplateId.AutoRechargeSuccess, locale, new Dictionary<string, string?>
@@ -277,7 +283,7 @@ public class AutoRechargeService : IAutoRechargeService
 
     private async Task SendRechargeFailedEmailAsync(User user, string reason)
     {
-        var baseUrl = _appOptions.FqdnServerName?.TrimEnd('/') ?? "https://app.p4pdf.com";
+        var baseUrl = _appOptions.BaseUrl;
         var billingUrl = $"{baseUrl}/Billing";
         var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
         var rendered = _emailTemplates.Render(EmailTemplateId.AutoRechargeFailed, locale, new Dictionary<string, string?>

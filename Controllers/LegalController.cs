@@ -6,11 +6,11 @@ namespace DotNetSigningServer.Controllers;
 [Route("Legal")]
 public class LegalController : Controller
 {
-    private readonly LegalDocumentsClient _cms;
+    private readonly LegalDocumentService _documents;
 
-    public LegalController(LegalDocumentsClient cms)
+    public LegalController(LegalDocumentService documents)
     {
-        _cms = cms;
+        _documents = documents;
     }
 
     [HttpGet("")]
@@ -49,19 +49,19 @@ public class LegalController : Controller
         => RenderAsync("license", "License/Index", ct);
 
     /// <summary>
-    /// Try to render the CMS-managed version of a legal document; on miss
+    /// Try to render the database-managed version of a legal document; on miss
     /// or any failure, fall back to the existing static Razor view.
     /// </summary>
     private async Task<IActionResult> RenderAsync(string slug, string staticViewName, CancellationToken ct)
     {
         var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.ToLowerInvariant();
-        var rendered = await _cms.TryGetAsync(slug, locale, ct);
+        var rendered = await _documents.TryGetAsync(slug, locale, ct);
 
         if (rendered is null && locale != "en")
         {
             // English is the platform-default locale and the most likely to
             // be authored — fall back to it before resorting to static.
-            rendered = await _cms.TryGetAsync(slug, "en", ct);
+            rendered = await _documents.TryGetAsync(slug, "en", ct);
         }
 
         if (rendered is not null)

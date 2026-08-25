@@ -94,12 +94,20 @@ public class EmailTemplateRenderer : IEmailTemplateRenderer
         return reader.ReadToEnd();
     }
 
+    private static readonly string[] SupportedLocales = { "en", "cs", "de", "es" };
+
     private static string NormalizeLocale(string? locale)
     {
         if (string.IsNullOrWhiteSpace(locale)) return DefaultLocale;
         var trimmed = locale.Trim().ToLowerInvariant();
         var dash = trimmed.IndexOf('-');
-        return dash > 0 ? trimmed[..dash] : trimmed;
+        var normalized = dash > 0 ? trimmed[..dash] : trimmed;
+
+        // The result becomes a directory segment in Path.Combine. Whitelist it so a
+        // caller-supplied locale can't traverse out of the templates root.
+        return SupportedLocales.Contains(normalized, StringComparer.Ordinal)
+            ? normalized
+            : DefaultLocale;
     }
 
     private static string Substitute(string template, IDictionary<string, string?> variables)
@@ -119,10 +127,10 @@ public class EmailTemplateRenderer : IEmailTemplateRenderer
         var vars = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
         {
             ["locale"] = normalized,
-            ["footer_signature"] = normalized == "cs" ? "Tým P4PDF" : "The P4PDF team",
+            ["footer_signature"] = normalized == "cs" ? "Tým Performance4PDF" : "The Performance4PDF team",
             ["footer_company"] = normalized == "cs"
-                ? "P4PDF provozuje Performance4 s.r.o."
-                : "P4PDF is operated by Performance4 s.r.o.",
+                ? "Performance4PDF provozuje Performance4 s.r.o."
+                : "Performance4PDF is operated by Performance4 s.r.o.",
             ["footer_unsubscribe"] = normalized == "cs"
                 ? "Nastavení emailů si můžete upravit v aplikaci."
                 : "You can manage email preferences inside the app.",

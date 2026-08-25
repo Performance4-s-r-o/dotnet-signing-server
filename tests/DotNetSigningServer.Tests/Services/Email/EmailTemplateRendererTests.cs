@@ -27,13 +27,13 @@ public class EmailTemplateRendererTests
             "cs",
             new Dictionary<string, string?>
             {
-                ["verificationUrl"] = "https://app.p4pdf.cz/verify?t=abc",
+                ["verificationUrl"] = "https://app.performance4pdf.com/verify?t=abc",
             });
 
-        Assert.Equal("Ověřte svůj email pro P4PDF", result.Subject);
-        Assert.Contains("https://app.p4pdf.cz/verify?t=abc", result.HtmlBody);
+        Assert.Equal("Ověřte svůj email pro Performance4PDF", result.Subject);
+        Assert.Contains("https://app.performance4pdf.com/verify?t=abc", result.HtmlBody);
         Assert.Contains("Aktivovat účet", result.HtmlBody); // cs CTA
-        Assert.Contains("Tým P4PDF", result.HtmlBody);      // cs footer
+        Assert.Contains("Tým Performance4PDF", result.HtmlBody);      // cs footer
         Assert.DoesNotContain("{{verificationUrl}}", result.HtmlBody);
         Assert.DoesNotContain("{{body}}", result.HtmlBody); // layout filled
     }
@@ -52,7 +52,7 @@ public class EmailTemplateRendererTests
                 ["amount"] = "29.00",
                 ["currency"] = "EUR",
                 ["failureReason"] = "Card declined",
-                ["billingUrl"] = "https://app.p4pdf.cz/Billing",
+                ["billingUrl"] = "https://app.performance4pdf.com/Billing",
             });
 
         Assert.Equal("Payment failed — action required", result.Subject);
@@ -60,8 +60,8 @@ public class EmailTemplateRendererTests
         Assert.Contains("29.00", result.HtmlBody);
         Assert.Contains("EUR", result.HtmlBody);
         Assert.Contains("Card declined", result.HtmlBody);
-        Assert.Contains("https://app.p4pdf.cz/Billing", result.HtmlBody);
-        Assert.Contains("The P4PDF team", result.HtmlBody); // en footer
+        Assert.Contains("https://app.performance4pdf.com/Billing", result.HtmlBody);
+        Assert.Contains("The Performance4PDF team", result.HtmlBody); // en footer
     }
 
     [Fact]
@@ -92,11 +92,11 @@ public class EmailTemplateRendererTests
             "en-US",
             new Dictionary<string, string?>
             {
-                ["resetUrl"] = "https://app.p4pdf.cz/reset?t=x",
+                ["resetUrl"] = "https://app.performance4pdf.com/reset?t=x",
                 ["expiryMinutes"] = "60",
             });
 
-        Assert.Contains("Reset your P4PDF password", result.Subject);
+        Assert.Contains("Reset your Performance4PDF password", result.Subject);
         Assert.Contains("60 minutes", result.HtmlBody);
     }
 
@@ -113,7 +113,7 @@ public class EmailTemplateRendererTests
             {
                 ["quantity"] = "200",
                 ["currentBalance"] = "5",
-                ["billingUrl"] = "https://app.p4pdf.cz/Billing",
+                ["billingUrl"] = "https://app.performance4pdf.com/Billing",
             });
 
         Assert.DoesNotContain("{{failureReason}}", result.HtmlBody);
@@ -160,9 +160,9 @@ public class EmailTemplateRendererTests
             EmailTemplateId.EmailVerification, "en",
             new Dictionary<string, string?> { ["verificationUrl"] = "https://x" });
 
-        Assert.Contains("Tým P4PDF", cs.HtmlBody);
+        Assert.Contains("Tým Performance4PDF", cs.HtmlBody);
         Assert.Contains("support@performance4.cz", cs.HtmlBody);
-        Assert.Contains("The P4PDF team", en.HtmlBody);
+        Assert.Contains("The Performance4PDF team", en.HtmlBody);
     }
 
     [Fact]

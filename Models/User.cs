@@ -18,17 +18,29 @@ public class User
     [Required]
     public byte[] PasswordSalt { get; set; } = Array.Empty<byte>();
 
+    /// <summary>
+    /// PBKDF2 iteration count this hash was produced with. 0 means the row predates
+    /// per-record counts and uses <see cref="Services.AuthService.LegacyIterations"/>;
+    /// such rows are rehashed on the owner's next successful sign-in.
+    /// </summary>
+    public int PasswordIterations { get; set; }
+
     [MaxLength(128)]
     public string? StripeCustomerId { get; set; }
 
     public bool IsActive { get; set; } = true;
     public bool EmailVerified { get; set; } = false;
+
+    /// <summary>SHA-256 hex of the emailed verification token — never the token itself.</summary>
     [MaxLength(128)]
     public string? EmailVerificationToken { get; set; }
+    public DateTimeOffset? EmailVerificationExpiresAt { get; set; }
+
     [MaxLength(16)]
     public string? EmailOtpCode { get; set; }
     public DateTimeOffset? EmailOtpExpiresAt { get; set; }
 
+    /// <summary>SHA-256 hex of the emailed reset token — never the token itself.</summary>
     [MaxLength(128)]
     public string? PasswordResetToken { get; set; }
     public DateTimeOffset? PasswordResetExpiresAt { get; set; }
