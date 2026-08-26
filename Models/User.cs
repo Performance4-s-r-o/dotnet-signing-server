@@ -36,7 +36,8 @@ public class User
     public string? EmailVerificationToken { get; set; }
     public DateTimeOffset? EmailVerificationExpiresAt { get; set; }
 
-    [MaxLength(16)]
+    /// <summary>SHA-256 of the code, hex — 64 chars, not the six digits.</summary>
+    [MaxLength(128)]
     public string? EmailOtpCode { get; set; }
     public DateTimeOffset? EmailOtpExpiresAt { get; set; }
 

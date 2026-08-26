@@ -23,4 +23,24 @@ public static class SecureTokens
     /// <summary>Lookup key for a presented token. 64 hex chars, fits the 128-char columns.</summary>
     public static string Hash(string token) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+
+    /// <summary>
+    /// Compares a presented secret against a stored hash without leaking, through
+    /// how long the comparison took, how much of it matched.
+    ///
+    /// With an attempt limiter in front, a six-digit code is not realistically
+    /// attackable this way — but the limiter is the thing that has to hold, and
+    /// constant-time comparison costs nothing.
+    /// </summary>
+    public static bool MatchesHash(string? presented, string? storedHash)
+    {
+        if (string.IsNullOrEmpty(presented) || string.IsNullOrEmpty(storedHash)) return false;
+
+        var candidate = Encoding.UTF8.GetBytes(Hash(presented.Trim()));
+        var expected = Encoding.UTF8.GetBytes(storedHash);
+        // FixedTimeEquals throws on unequal lengths; a stored value that is not a
+        // hash is a mismatch, not a crash.
+        return candidate.Length == expected.Length
+               && CryptographicOperations.FixedTimeEquals(candidate, expected);
+    }
 }
