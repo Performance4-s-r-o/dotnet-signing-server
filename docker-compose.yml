@@ -29,6 +29,7 @@ services:
       # Seal (server-side PFX sealing for SES flow)
       - Seal__Enabled=${SEAL_ENABLED:-false}
       - SEAL_PFX_PATH=${SEAL_PFX_PATH:-}
+      - Seal__Location=${SEAL_LOCATION:-}
       - SEAL_PFX_BASE64=${SEAL_PFX_BASE64:-}
       - SEAL_PFX_PASSWORD=${SEAL_PFX_PASSWORD:-}
       # Evidence encryption certificate (for SES evidence attachment encryption)
