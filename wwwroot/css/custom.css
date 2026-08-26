@@ -465,7 +465,8 @@
   display: block;
 }
 
-.lang-switcher .menu button {
+.lang-switcher .menu button,
+.lang-switcher .menu a {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -476,17 +477,20 @@
   color: #cbd5e1;
   font-size: 0.875rem;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
   border-radius: 6px;
   transition: background-color 150ms ease, color 150ms ease;
 }
 
-.lang-switcher .menu button:hover {
+.lang-switcher .menu button:hover,
+.lang-switcher .menu a:hover {
   background: rgba(255, 255, 255, 0.06);
   color: #ffffff;
 }
 
-.lang-switcher .menu button .check {
+.lang-switcher .menu button .check,
+.lang-switcher .menu a .check {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -495,7 +499,8 @@
   font-weight: 700;
 }
 
-.lang-switcher .menu button.active {
+.lang-switcher .menu button.active,
+.lang-switcher .menu a.active {
   color: #ffffff;
 }
 

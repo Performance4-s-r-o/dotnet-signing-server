@@ -18,6 +18,7 @@ namespace DotNetSigningServer.Controllers
     {
         private readonly PdfSigningService _signingService;
         private readonly PdfSealingService _sealingService;
+        private readonly PdfLtvService _ltvService;
         private readonly IDataProtector _dataProtector;
         private const string AttachmentDebitBypassHeader = "X-P4PDF-Attachment-Billing-Bypass";
 
@@ -25,6 +26,7 @@ namespace DotNetSigningServer.Controllers
             ApplicationDbContext dbContext,
             PdfSigningService signingService,
             PdfSealingService sealingService,
+            PdfLtvService ltvService,
             IApiAuthService apiAuthService,
             ILogger<PdfSigningApiController> logger,
             ContentLimitGuard limitGuard,
@@ -37,6 +39,7 @@ namespace DotNetSigningServer.Controllers
         {
             _signingService = signingService;
             _sealingService = sealingService;
+            _ltvService = ltvService;
             _dataProtector = dataProtectionProvider.CreateProtector("SigningData.TsaCredentials");
         }
 
@@ -247,6 +250,130 @@ namespace DotNetSigningServer.Controllers
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Timestamp failed");
                 return SafeProblem(Localizer["TimestampError"], ex);
+            }
+        }
+
+        /// <summary>
+        /// Raises an already-signed PDF to PAdES B-LT, or B-LTA when an archive
+        /// timestamp is asked for. Same call is used to enrol a document and to
+        /// renew it years later.
+        /// </summary>
+        [HttpPost("/api/extend-signature")]
+        public async Task<IActionResult> ExtendSignature([FromBody] ExtendSignatureInput input)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            try
+            {
+                LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Extend signature");
+            }
+            catch (ApiValidationException ex)
+            {
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
+            }
+
+            iText.Signatures.ITSAClient? tsaClient;
+            try
+            {
+                tsaClient = PdfCryptoHelper.CreateTsaClient(input.TsaUrl, input.TsaUsername, input.TsaPassword);
+            }
+            catch (ApiValidationException ex)
+            {
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
+            }
+
+            if (input.AddArchiveTimestamp && tsaClient == null)
+            {
+                // Silently downgrading to B-LT would hand back a document that
+                // claims less than the caller asked for, and a renewal that quietly
+                // adds no timestamp is exactly the failure this feature exists to
+                // prevent.
+                return BadRequest(new
+                {
+                    code = "TSA_REQUIRED_FOR_ARCHIVE_TIMESTAMP",
+                    message = Localizer["Error_TSA_REQUIRED_FOR_ARCHIVE_TIMESTAMP"].Value,
+                });
+            }
+
+            try
+            {
+                var pdfBytes = Convert.FromBase64String(input.PdfContent);
+                var extended = _ltvService.Extend(pdfBytes, tsaClient, input.AddArchiveTimestamp);
+
+                var debited = await DebitUserAsync(user);
+                if (!debited)
+                {
+                    return StatusCode(StatusCodes.Status402PaymentRequired,
+                        new { message = Localizer["NoCreditsRemaining"].Value });
+                }
+
+                return PdfOrJsonResult(Convert.ToBase64String(extended));
+            }
+            catch (FormatException)
+            {
+                return BadRequest(new { message = Localizer["InvalidBase64"].Value });
+            }
+            catch (ApiValidationException ex)
+            {
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
+            }
+            catch (TsaCommunicationException ex)
+            {
+                Logger.LogWarning(ex, "Extend signature failed: TSA communication error ({TsaUrl})", ex.TsaUrl);
+                return StatusCode(StatusCodes.Status502BadGateway, new { code = "TSA_UNREACHABLE", message = ex.Message, tsaUrl = ex.TsaUrl });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Extend signature failed");
+                return SafeProblem(Localizer["ExtendSignatureError"], ex);
+            }
+        }
+
+        /// <summary>
+        /// Reports what signatures a PDF already carries and when their timestamp
+        /// certificates expire. Free: a renewal watcher has to poll this to know
+        /// when a document is due, and charging for the check would make skipping
+        /// it the cheaper option.
+        /// </summary>
+        [HttpPost("/api/inspect-signatures")]
+        public async Task<IActionResult> InspectSignatures([FromBody] InspectSignaturesInput input)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            if (string.IsNullOrWhiteSpace(input.PdfContent))
+            {
+                return BadRequest(new { message = Localizer["PdfContentRequired"].Value });
+            }
+
+            try
+            {
+                LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Signature inspection");
+            }
+            catch (ApiValidationException ex)
+            {
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
+            }
+
+            byte[] pdfBytes;
+            try
+            {
+                pdfBytes = Convert.FromBase64String(input.PdfContent);
+            }
+            catch (FormatException)
+            {
+                return BadRequest(new { message = Localizer["InvalidBase64"].Value });
+            }
+
+            try
+            {
+                return Ok(PdfSignatureInspector.Inspect(pdfBytes));
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Signature inspection failed");
+                return SafeProblem(Localizer["InspectSignaturesError"], ex);
             }
         }
 

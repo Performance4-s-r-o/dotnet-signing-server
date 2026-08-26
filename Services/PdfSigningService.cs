@@ -18,17 +18,14 @@ namespace DotNetSigningServer.Services
 {
     public class PdfSigningService
     {
-        private readonly TimestampAuthorityOptions _tsaOptions;
         private readonly EvidenceOptions _evidenceOptions;
         private readonly PdfVisualSigningService _visualSigningService;
 
         public PdfSigningService(
-            IOptions<TimestampAuthorityOptions> tsaOptions,
             IOptions<SealOptions>? sealOptions = null,
             IOptions<EvidenceOptions>? evidenceOptions = null,
             PdfVisualSigningService? visualSigningService = null)
         {
-            _tsaOptions = tsaOptions?.Value ?? new TimestampAuthorityOptions();
             _evidenceOptions = evidenceOptions?.Value ?? new EvidenceOptions();
             _visualSigningService = visualSigningService ?? new PdfVisualSigningService();
         }
@@ -51,7 +48,7 @@ namespace DotNetSigningServer.Services
                 originalPdf = PdfTemplateService.StampTextFields(originalPdf, input.Fields);
             }
 
-            var preSignContainer = new DigestCalcBlankSigner(PdfName.Adobe_PPKLite, PdfName.Adbe_pkcs7_detached);
+            var preSignContainer = new DigestCalcBlankSigner(PdfName.Adobe_PPKLite, PdfCryptoHelper.SignatureSubFilter);
             var chain = PdfCryptoHelper.LoadCertificatesFromPemString(input.CertificatePem);
             preSignContainer.SetChain(chain);
             fieldName = PdfCryptoHelper.EnsureFieldName(fieldName);
@@ -91,7 +88,7 @@ namespace DotNetSigningServer.Services
             }
 
             byte[] preSignedPdf = File.ReadAllBytes(presignedPdfPath);
-            ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(_tsaOptions, tsaUrl, tsaUsername, tsaPassword, allowDefaultFallback: false);
+            ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(tsaUrl, tsaUsername, tsaPassword);
             var chain = PdfCryptoHelper.LoadCertificatesFromPemString(certificatePem);
             byte[] signatureBytes = PdfCryptoHelper.HexStringToByteArray(input.SignedHash);
             fieldName = PdfCryptoHelper.EnsureFieldName(fieldName);
@@ -119,9 +116,9 @@ namespace DotNetSigningServer.Services
                 input.BackgroundImageContent,
                 input.CompanyLogoContent,
                 visible: true,
-                tsaUrl: null,
-                tsaUsername: null,
-                tsaPassword: null,
+                tsaUrl: input.TsaUrl,
+                tsaUsername: input.TsaUsername,
+                tsaPassword: input.TsaPassword,
                 designWidth: input.DesignWidth,
                 designHeight: input.DesignHeight,
                 autoHeight: input.AutoHeight,
@@ -132,7 +129,7 @@ namespace DotNetSigningServer.Services
 
         public string ApplyDocumentTimestamp(DocumentTimestampInput input)
         {
-            ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(_tsaOptions, input.TsaUrl, input.TsaUsername, input.TsaPassword, allowDefaultFallback: false);
+            ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(input.TsaUrl, input.TsaUsername, input.TsaPassword);
             if (tsaClient == null)
             {
                 throw new ApiValidationException("TSA_NOT_CONFIGURED");
@@ -159,7 +156,7 @@ namespace DotNetSigningServer.Services
                 input.StampImageContent,
                 input.BackgroundImageContent,
                 input.CompanyLogoContent,
-                visible: true,
+                visible: input.Visible,
                 designWidth: input.DesignWidth,
                 designHeight: input.DesignHeight,
                 autoHeight: input.AutoHeight,
@@ -174,7 +171,7 @@ namespace DotNetSigningServer.Services
             catch (Exception ex) when (FindTspException(ex) is TspException tsp)
             {
                 throw new TsaCommunicationException(
-                    input.TsaUrl ?? "(configured TSA)",
+                    input.TsaUrl ?? "(none)",
                     BuildTsaErrorMessage(input.TsaUrl, tsp),
                     ex);
             }
@@ -199,11 +196,9 @@ namespace DotNetSigningServer.Services
             try
             {
                 tsaClient = PdfCryptoHelper.CreateTsaClient(
-                    new TimestampAuthorityOptions(),
                     url,
                     string.IsNullOrWhiteSpace(username) ? null : username,
-                    string.IsNullOrWhiteSpace(password) ? null : password,
-                    allowDefaultFallback: false);
+                    string.IsNullOrWhiteSpace(password) ? null : password);
             }
             catch (Exception ex)
             {
@@ -342,9 +337,9 @@ namespace DotNetSigningServer.Services
             float? designHeight = null,
             bool? autoHeight = null,
             string? signerNameOverride = null,
-            bool disableDefaultTsa = false)
+            bool disableTsa = false)
         {
-            var preSignContainer = new DigestCalcBlankSigner(PdfName.Adobe_PPKLite, PdfName.Adbe_pkcs7_detached);
+            var preSignContainer = new DigestCalcBlankSigner(PdfName.Adobe_PPKLite, PdfCryptoHelper.SignatureSubFilter);
             preSignContainer.SetChain(chain);
 
             byte[] pdfWithPlaceholder = CreatePreSignedPdf(
@@ -368,10 +363,13 @@ namespace DotNetSigningServer.Services
                 signerNameOverride);
 
             byte[] signatureBytes = PdfCryptoHelper.SignAuthenticatedAttributes(preSignContainer.GetDocBytesHash(), privateKey);
-            ITSAClient? tsaClient = disableDefaultTsa
+            // A timestamp is applied only when the caller asks for one. This server
+            // has no TSA of its own to fall back on — stamping with an authority the
+            // caller never chose isn't a decision that's ours to make.
+            ITSAClient? tsaClient = disableTsa
                 ? null
-                : PdfCryptoHelper.CreateTsaClient(_tsaOptions, tsaUrl, tsaUsername, tsaPassword);
-            var tsaUrlForError = !string.IsNullOrWhiteSpace(tsaUrl) ? tsaUrl : _tsaOptions.Url;
+                : PdfCryptoHelper.CreateTsaClient(tsaUrl, tsaUsername, tsaPassword);
+            var tsaUrlForError = tsaUrl;
             return InjectFinalSignature(pdfWithPlaceholder, signatureBytes, chain, fieldName, tsaClient, tsaUrlForErrorContext: tsaUrlForError);
         }
 
@@ -445,7 +443,7 @@ namespace DotNetSigningServer.Services
             catch (Exception ex) when (FindTspException(ex) is TspException tsp)
             {
                 throw new TsaCommunicationException(
-                    tsaUrlForErrorContext ?? "(configured TSA)",
+                    tsaUrlForErrorContext ?? "(none)",
                     BuildTsaErrorMessage(tsaUrlForErrorContext, tsp),
                     ex);
             }

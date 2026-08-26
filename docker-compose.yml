@@ -23,9 +23,6 @@ services:
       - UseLocalDb=false
       - FqdnServerName=${FQDN_SERVER:-localhost}
       - ConnectionStrings__DefaultConnection=Host=${DB_HOST};Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
-      - TSA_URL=${TSA_URL:-}
-      - TSA_USERNAME=${TSA_USERNAME:-}
-      - TSA_PASSWORD=${TSA_PASSWORD:-}
       - Token__Secret=${TOKEN_SECRET:-}
       # Internal preprocessing bypass — must match the same key on the calling service
       - Billing__AttachmentDebitBypassKey=${BILLING_ATTACHMENT_DEBIT_BYPASS_KEY:-}

@@ -169,14 +169,18 @@ public class HomeController : Controller
         }
     }
 
+    /// <summary>
+    /// Kept for links and bookmarks made before the language moved into the path.
+    /// The cookie is still written so an unprefixed entry point sends the visitor
+    /// to the right language, but the prefixed URL is what actually renders it.
+    /// </summary>
     [HttpPost("/set-language")]
     [ValidateAntiForgeryToken]
     public IActionResult SetLanguage(string culture, string? returnUrl)
     {
-        var supported = new[] { "en", "cs", "de", "es" };
-        if (string.IsNullOrWhiteSpace(culture) || !supported.Contains(culture))
+        if (!CultureUrls.IsSupported(culture))
         {
-            culture = "en";
+            culture = CultureUrls.Default;
         }
 
         Response.Cookies.Append(
@@ -188,14 +192,27 @@ public class HomeController : Controller
                 IsEssential = true,
                 SameSite = SameSiteMode.Lax,
                 Secure = Request.IsHttps,
-                HttpOnly = false
+                HttpOnly = false,
+                Path = "/",
             });
 
+        // returnUrl arrives with whatever prefix the page had; swap it for the one
+        // being switched to instead of stacking a second prefix on top.
+        var target = "/";
         if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
         {
-            return LocalRedirect(returnUrl);
+            var split = returnUrl.Split('?', 2);
+            var path = split[0];
+            CultureUrls.TrySplit(path, out _, out var rest);
+            target = CultureUrls.Absolute(string.Empty, rest.Value ?? "/", culture)
+                     + (split.Length > 1 ? "?" + split[1] : string.Empty);
         }
-        return Redirect("/");
+        else
+        {
+            target = CultureUrls.Absolute(string.Empty, "/", culture);
+        }
+
+        return LocalRedirect(target.Length == 0 ? "/" : target);
     }
 
     private string BuildBaseUrl() => _appOptions.BaseUrl;

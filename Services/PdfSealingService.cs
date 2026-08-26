@@ -92,7 +92,7 @@ namespace DotNetSigningServer.Services
                 designWidth: input.DesignWidth,
                 designHeight: input.DesignHeight,
                 autoHeight: input.AutoHeight,
-                disableDefaultTsa: input.DisableTsa);
+                disableTsa: input.DisableTsa);
 
             return Convert.ToBase64String(fullySignedPdf);
         }

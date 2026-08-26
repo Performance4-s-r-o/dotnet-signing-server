@@ -150,6 +150,109 @@ public class PdfSigningServiceTests : IDisposable
     }
 
     [Fact]
+    public void SignWithPfx_ProducesPadesSignatureThatVerifies()
+    {
+        var pdfBase64 = TestHelpers.CreateMinimalPdfBase64();
+        var (_, pfxBase64, password) = TestHelpers.CreateTestCertificate();
+
+        var result = _sut.SignWithPfx(new PfxSignInput
+        {
+            PdfContent = pdfBase64,
+            PfxContent = pfxBase64,
+            PfxPassword = password,
+            Location = "Test",
+            Reason = "PAdES",
+            FieldName = "Signature1",
+            SignRect = new SignRect { X = 10, Y = 10, Width = 200, Height = 50 }
+        });
+
+        AssertPadesSignature(Convert.FromBase64String(result), "Signature1");
+    }
+
+    /// <summary>
+    /// The two-phase path is where a PAdES mistake hides: presign hashes the signed
+    /// attributes and the client signs that hash, so if the finalising phase rebuilt
+    /// them under a different standard the signature would still embed cleanly and
+    /// only fail at verification time. Hence the integrity check, not just a subfilter
+    /// assertion.
+    /// </summary>
+    [Fact]
+    public void HandlePreSign_ThenHandleSign_ProducesPadesSignatureThatVerifies()
+    {
+        var pdfBase64 = TestHelpers.CreateMinimalPdfBase64();
+        var (certPem, pfxBase64, password) = TestHelpers.CreateTestCertificate();
+
+        var (path, hashHex) = _sut.HandlePreSign(new PreSignInput
+        {
+            PdfContent = pdfBase64,
+            CertificatePem = certPem,
+            Location = "Test",
+            Reason = "PAdES two-phase",
+            SignRect = new SignRect { X = 10, Y = 10, Width = 200, Height = 50 },
+            SignPageNumber = 1
+        }, "Signature1");
+        _tempFiles.Add(path);
+
+        var signedHashHex = SignHashWithPfxKey(hashHex, pfxBase64, password);
+
+        var signedPdfBase64 = _sut.HandleSign(
+            new SignInput { Id = "test", SignedHash = signedHashHex },
+            path,
+            certPem,
+            "Signature1");
+
+        AssertPadesSignature(Convert.FromBase64String(signedPdfBase64), "Signature1");
+    }
+
+    /// <summary>
+    /// PAdES baseline: subfilter ETSI.CAdES.detached, a signing-certificate-v2 signed
+    /// attribute binding the signature to the certificate, and a container that actually
+    /// verifies. No timestamp is applied here, so this is level B-B.
+    /// </summary>
+    private static void AssertPadesSignature(byte[] pdfBytes, string fieldName)
+    {
+        using var ms = new MemoryStream(pdfBytes);
+        using var reader = new PdfReader(ms);
+        using var doc = new PdfDocument(reader);
+
+        var util = new SignatureUtil(doc);
+        var signatureDictionary = util.GetSignatureDictionary(fieldName);
+        Assert.NotNull(signatureDictionary);
+        Assert.Equal("ETSI.CAdES.detached", signatureDictionary.GetAsName(PdfName.SubFilter).GetValue());
+
+        var pkcs7 = util.ReadSignatureData(fieldName);
+        Assert.True(pkcs7.VerifySignatureIntegrityAndAuthenticity(), "PAdES signature failed integrity verification");
+
+        // /Contents is a fixed-size reservation, so the container is followed by zero
+        // padding. Re-encoding the first ASN.1 object drops it; BouncyCastle rejects
+        // the raw bytes with "extra data found after object".
+        var container = signatureDictionary.GetAsString(PdfName.Contents).GetValueBytes();
+        using var asn1 = new Org.BouncyCastle.Asn1.Asn1InputStream(container);
+        var der = asn1.ReadObject().GetEncoded();
+
+        var signedData = new CmsSignedData(new CmsProcessableByteArray(Array.Empty<byte>()), der);
+        var signerInfo = signedData.GetSignerInfos().GetSigners().Cast<SignerInformation>().Single();
+        Assert.NotNull(signerInfo.SignedAttributes);
+        Assert.NotNull(signerInfo.SignedAttributes[
+            Org.BouncyCastle.Asn1.Pkcs.PkcsObjectIdentifiers.IdAASigningCertificateV2]);
+    }
+
+    private static string SignHashWithPfxKey(string hashHex, string pfxBase64, string password)
+    {
+        using var pfxMs = new MemoryStream(Convert.FromBase64String(pfxBase64));
+        var store = new Pkcs12StoreBuilder().Build();
+        store.Load(pfxMs, password.ToCharArray());
+        var alias = store.Aliases.Cast<string>().First(store.IsKeyEntry);
+        var privateKey = store.GetKey(alias).Key;
+
+        var hashBytes = HexStringToByteArray(hashHex);
+        var signer = Org.BouncyCastle.Security.SignerUtilities.GetSigner("SHA256withRSA");
+        signer.Init(true, privateKey);
+        signer.BlockUpdate(hashBytes, 0, hashBytes.Length);
+        return BitConverter.ToString(signer.GenerateSignature()).Replace("-", "").ToLowerInvariant();
+    }
+
+    [Fact]
     public void HandleSign_MissingPresignedFile_Throws()
     {
         var (certPem, _, _) = TestHelpers.CreateTestCertificate();
@@ -439,7 +542,6 @@ public class PdfSigningServiceTests : IDisposable
         SealOptions? sealOptions = null)
     {
         return new PdfSigningService(
-            TestHelpers.WrapOptions(new TimestampAuthorityOptions()),
             TestHelpers.WrapOptions(sealOptions ?? new SealOptions()),
             TestHelpers.WrapOptions(evidenceOptions ?? new EvidenceOptions()),
             new PdfVisualSigningService());
