@@ -123,8 +123,11 @@ Content-Type: application/json
   "signRect": { "x": 40, "y": 100, "width": 180, "height": 45 },
   "signPageNumber": 1,
   "signImageContent": null,
-  "fieldName": "Signature1"
+  "fieldName": "Signature1",
+  "tsaUrl": "https://timestamp.example.com"
 }
+
+tsaUrl is optional — omit it and the signature carries no timestamp.
 
 Response:
 { "result": "base64-pdf-with-signature" }
@@ -159,6 +162,81 @@ Response:
 { "result": "base64-pdf-with-timestamp" }
 """,
                 Curl: $$"""curl -X POST {{b}}/timestamp -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"pdfContent":"base64-pdf","fieldName":"Timestamp1","tsaUrl":"https://freetsa.org/tsr"}'"""),
+
+            new ApiEndpointDoc(
+                Slug: "inspect-signatures",
+                Method: "POST",
+                Path: "/api/inspect-signatures",
+                TitleKey: "ApiDocInspectTitle",
+                PurposeKey: "ApiDocInspectPurpose",
+                CreditsKey: "ApiDocInspectCredits",
+                MetaKey: "ApiDocInspectMeta",
+                IntroKey: "ApiDocInspectIntro",
+                Sample: """
+POST /api/inspect-signatures
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "pdfContent": "base64-pdf"
+}
+
+Response:
+{
+  "signatures": [
+    {
+      "fieldName": "Signature1",
+      "subFilter": "ETSI.CAdES.detached",
+      "isDocumentTimestamp": false,
+      "level": "B-T",
+      "signerName": "CN=Jane Doe, O=Example",
+      "signedAt": "2026-08-25T10:12:04Z",
+      "digestAlgorithm": "SHA256",
+      "signatureAlgorithm": "RSA",
+      "coversWholeDocument": true,
+      "integrityVerified": true,
+      "hasTimestamp": true,
+      "timestampedAt": "2026-08-25T10:12:06Z",
+      "timestampCertificateNotBefore": "2021-05-01T00:00:00Z",
+      "timestampCertificateNotAfter": "2031-04-30T23:59:59Z",
+      "signingCertificateNotAfter": "2027-08-25T00:00:00Z"
+    }
+  ],
+  "hasDss": false,
+  "archiveTimestampCount": 0,
+  "earliestTimestampCertificateExpiry": "2031-04-30T23:59:59Z"
+}
+""",
+                Curl: $$"""curl -X POST {{b}}/inspect-signatures -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"pdfContent":"base64-pdf"}'""",
+                NoteKeys: new[] { "ApiDocInspectNote1", "ApiDocInspectNote2" }),
+
+            new ApiEndpointDoc(
+                Slug: "extend-signature",
+                Method: "POST",
+                Path: "/api/extend-signature",
+                TitleKey: "ApiDocExtendTitle",
+                PurposeKey: "ApiDocExtendPurpose",
+                CreditsKey: "ApiDocExtendCredits",
+                MetaKey: "ApiDocExtendMeta",
+                IntroKey: "ApiDocExtendIntro",
+                Sample: """
+POST /api/extend-signature
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "pdfContent": "base64-signed-pdf",
+  "addArchiveTimestamp": true,
+  "tsaUrl": "https://freetsa.org/tsr"
+}
+
+addArchiveTimestamp: true -> B-LTA (requires tsaUrl), false -> B-LT only
+
+Response:
+{ "result": "base64-pdf-with-validation-data" }
+""",
+                Curl: $$"""curl -X POST {{b}}/extend-signature -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"pdfContent":"base64-signed-pdf","addArchiveTimestamp":true,"tsaUrl":"https://freetsa.org/tsr"}'""",
+                NoteKeys: new[] { "ApiDocExtendNote1", "ApiDocExtendNote2", "ApiDocExtendNote3" }),
 
             new ApiEndpointDoc(
                 Slug: "attachment",
@@ -272,7 +350,7 @@ Response:
 }
 """,
                 Curl: $$"""curl -X POST {{b}}/find-codes -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"pdfContent":"base64-pdf","codeType":"any"}'""",
-                NoteKeys: new[] { "ApiDocFindCodesNote1" }),
+                NoteKeys: new[] { "ApiDocFindCodesNote1", "ApiDocFindCodesNote2" }),
 
             new ApiEndpointDoc(
                 Slug: "pdf-template-create",

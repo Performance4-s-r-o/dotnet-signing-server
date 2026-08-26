@@ -1,6 +1,5 @@
 using System.Net;
 using DotNetSigningServer.Exceptions;
-using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
 
 namespace DotNetSigningServer.Tests.Services;
@@ -11,13 +10,6 @@ namespace DotNetSigningServer.Tests.Services;
 /// </summary>
 public class TsaSsrfGuardTests
 {
-    private static readonly TimestampAuthorityOptions ConfiguredTsa = new()
-    {
-        Url = "https://freetsa.org/tsr",
-        Username = "configured-user",
-        Password = "configured-password"
-    };
-
     [Theory]
     [InlineData("127.0.0.1")]
     [InlineData("::1")]
@@ -54,7 +46,7 @@ public class TsaSsrfGuardTests
     public void CreateTsaClient_CallerSuppliedNonHttpsUrl_Throws(string url)
     {
         var ex = Assert.Throws<ApiValidationException>(() =>
-            PdfCryptoHelper.CreateTsaClient(ConfiguredTsa, url, null, null, allowDefaultFallback: false));
+            PdfCryptoHelper.CreateTsaClient(url, null, null));
         Assert.Equal("TSA_HTTPS_REQUIRED", ex.Code);
     }
 
@@ -66,7 +58,7 @@ public class TsaSsrfGuardTests
     public void CreateTsaClient_CallerSuppliedInternalHost_Throws(string url)
     {
         var ex = Assert.Throws<ApiValidationException>(() =>
-            PdfCryptoHelper.CreateTsaClient(ConfiguredTsa, url, null, null, allowDefaultFallback: false));
+            PdfCryptoHelper.CreateTsaClient(url, null, null));
         Assert.Equal("TSA_HOST_NOT_ALLOWED", ex.Code);
     }
 
@@ -75,9 +67,8 @@ public class TsaSsrfGuardTests
     {
         var ex = Assert.Throws<ApiValidationException>(() =>
             PdfCryptoHelper.CreateTsaClient(
-                ConfiguredTsa,
                 "https://no-such-host.invalid/tsr",
-                null, null, allowDefaultFallback: false));
+                null, null));
         Assert.Equal("TSA_HOST_NOT_ALLOWED", ex.Code);
     }
 
@@ -88,20 +79,19 @@ public class TsaSsrfGuardTests
         // resolutions, so a zero-TTL attacker domain could answer public then private.
         // Caller-supplied URLs must go through the client that re-checks at connect time.
         // IP literal so the guard resolves without a DNS round-trip — keeps the test offline.
-        var client = PdfCryptoHelper.CreateTsaClient(
-            ConfiguredTsa, "https://8.8.8.8/tsr", null, null, allowDefaultFallback: false);
+        var client = PdfCryptoHelper.CreateTsaClient("https://8.8.8.8/tsr", null, null);
 
         Assert.IsType<PinnedIpTsaClient>(client);
     }
 
     [Fact]
-    public void CreateTsaClient_ConfiguredUrl_IsNotTreatedAsCallerSupplied()
+    public void CreateTsaClient_NoUrl_ReturnsNull()
     {
-        // The operator-configured TSA is trusted and must not be subjected to the
-        // caller-supplied guard (nor lose its credentials).
-        var client = PdfCryptoHelper.CreateTsaClient(ConfiguredTsa, null, null, null);
+        // Timestamping is the caller's decision, and this server has no TSA of its
+        // own to fall back on — no URL in the request means no timestamp, so a
+        // document is never stamped by an authority the caller didn't name.
+        var client = PdfCryptoHelper.CreateTsaClient(null, null, null);
 
-        Assert.NotNull(client);
-        Assert.IsNotType<PinnedIpTsaClient>(client);
+        Assert.Null(client);
     }
 }

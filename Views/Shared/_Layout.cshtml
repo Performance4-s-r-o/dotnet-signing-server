@@ -19,10 +19,10 @@
     var isAuthenticated = User?.Identity?.IsAuthenticated == true;
     var displayName = isAuthenticated ? User?.Identity?.Name : null;
     var currentCulture = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.ToLowerInvariant();
-    var supportedCultures = new[] { "en", "cs", "de", "es" };
-    if (!supportedCultures.Contains(currentCulture))
+    var supportedCultures = DotNetSigningServer.Services.CultureUrls.Supported;
+    if (!DotNetSigningServer.Services.CultureUrls.IsSupported(currentCulture))
     {
-        currentCulture = "en";
+        currentCulture = DotNetSigningServer.Services.CultureUrls.Default;
     }
     var cultureLabels = new Dictionary<string, string>
     {
@@ -38,26 +38,29 @@
         { "de", "Deutsch" },
         { "es", "Español" }
     };
-    var currentReturnUrl = request != null ? (request.Path + request.QueryString) : "/";
+    // Carries the locale prefix, so posting a form and coming back keeps the language.
+    var currentReturnUrl = request != null ? (request.PathBase + request.Path + request.QueryString) : "/";
     var controllerName = ViewContext?.RouteData?.Values?["controller"]?.ToString() ?? string.Empty;
     var isAccountPage = controllerName.Equals("Account", StringComparison.OrdinalIgnoreCase);
     var isHomePage = string.Equals(ViewContext?.HttpContext?.Request?.Path.Value, "/", StringComparison.Ordinal);
 
-    // Locale lives in the `culture` query string (handled out of the box by
-    // QueryStringRequestCultureProvider), so every language has its own URL that
-    // a crawler can reach without a cookie. English is the default and keeps the
-    // clean URL, which is also the x-default target.
+    // Each language has its own path prefix (/cs/pricing, /de/pricing …); English
+    // is the default and keeps the clean URL, which is also the x-default target.
+    // The prefix lives in PathBase, so request.Path here is already locale-free.
     string LocaleUrl(string culture)
     {
         if (request == null) return string.Empty;
-        var kept = request.Query
-            .Where(q => !string.Equals(q.Key, "culture", StringComparison.OrdinalIgnoreCase)
-                        && !string.Equals(q.Key, "ui-culture", StringComparison.OrdinalIgnoreCase))
-            .SelectMany(q => q.Value.Select(v => $"{Uri.EscapeDataString(q.Key)}={Uri.EscapeDataString(v ?? string.Empty)}"))
-            .ToList();
-        if (culture != "en") kept.Insert(0, $"culture={culture}");
-        var query = kept.Count > 0 ? "?" + string.Join("&", kept) : string.Empty;
-        return $"{origin}{request.Path}{query}";
+        var query = request.QueryString.HasValue ? request.QueryString.Value : string.Empty;
+        return DotNetSigningServer.Services.CultureUrls.Absolute(origin, request.Path.Value ?? "/", culture) + query;
+    }
+
+    // Same URL, relative — the switcher must work on whatever host is serving,
+    // including localhost, where the configured public origin doesn't apply.
+    string LocalePath(string culture)
+    {
+        if (request == null) return "/";
+        var query = request.QueryString.HasValue ? request.QueryString.Value : string.Empty;
+        return DotNetSigningServer.Services.CultureUrls.Absolute(string.Empty, request.Path.Value ?? "/", culture) + query;
     }
 
     var canonicalUrl = LocaleUrl(currentCulture);
@@ -171,18 +174,18 @@
                                 </svg>
                                 <span>@cultureLabels[currentCulture]</span>
                             </summary>
+                            @* Plain links, not a POST: each language is a real URL a
+                               crawler can follow, and the prefix itself is what stores
+                               the choice (CulturePrefixMiddleware writes the cookie). *@
                             <div class="menu">
                                 @foreach (var loc in supportedCultures)
                                 {
-                                    <form method="post" action="/set-language" style="margin:0;">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="culture" value="@loc" />
-                                        <input type="hidden" name="returnUrl" value="@currentReturnUrl" />
-                                        <button type="submit" class="@(loc == currentCulture ? "active" : "")">
-                                            <span class="check">@(loc == currentCulture ? "✓" : "")</span>
-                                            <span>@cultureNames[loc]</span>
-                                        </button>
-                                    </form>
+                                    <a href="@LocalePath(loc)" hreflang="@loc" data-locale-link
+                                       class="@(loc == currentCulture ? "active" : "")"
+                                       rel="@(loc == currentCulture ? null : "alternate")">
+                                        <span class="check">@(loc == currentCulture ? "✓" : "")</span>
+                                        <span>@cultureNames[loc]</span>
+                                    </a>
                                 }
                             </div>
                         </details>

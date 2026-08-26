@@ -18,6 +18,23 @@ namespace DotNetSigningServer.Services
     {
         private const string DEFAULT_FIELD_NAME = "Signature1";
 
+        /// <summary>
+        /// The signature format this server produces: PAdES baseline (ETSI EN 319 142) —
+        /// subfilter ETSI.CAdES.detached carrying CAdES signed attributes, which is what
+        /// eIDAS and EU public-sector validators expect. Without a timestamp the result is
+        /// PAdES B-B, with one it is B-T; the caller decides by supplying a TSA or not.
+        /// </summary>
+        public static readonly iText.Kernel.Pdf.PdfName SignatureSubFilter =
+            iText.Kernel.Pdf.PdfName.ETSI_CAdES_DETACHED;
+
+        /// <summary>
+        /// Must stay in lockstep with <see cref="SignatureSubFilter"/> and be identical in
+        /// both signing phases. Presign hashes the signed attributes and the client signs
+        /// that hash; if the finalising phase rebuilt the attributes under a different
+        /// standard, the signature would embed cleanly and then fail every verification.
+        /// </summary>
+        public const PdfSigner.CryptoStandard SignatureCryptoStandard = PdfSigner.CryptoStandard.CADES;
+
         public static (IX509Certificate[] Chain, ICipherParameters PrivateKey) LoadFromPfx(string pfxContent, string password)
         {
             byte[] pfxBytes = Convert.FromBase64String(pfxContent);
@@ -82,53 +99,41 @@ namespace DotNetSigningServer.Services
             return ((X509CertificateBC)certificates[0]).GetCertificate();
         }
 
+        /// <summary>
+        /// Builds a TSA client for the URL the caller asked for, or null when they asked
+        /// for no timestamp.
+        ///
+        /// This server has no TSA of its own. Every URL arrives from the request and is
+        /// treated as untrusted, so all of them face the same checks — there is no
+        /// configured address that gets to skip them.
+        /// </summary>
         public static ITSAClient? CreateTsaClient(
-            TimestampAuthorityOptions? tsaOptions,
-            string? urlOverride = null,
-            string? usernameOverride = null,
-            string? passwordOverride = null,
-            bool allowDefaultFallback = true)
+            string? url = null,
+            string? username = null,
+            string? password = null)
         {
-            string? url = !string.IsNullOrWhiteSpace(urlOverride)
-                ? urlOverride
-                : (allowDefaultFallback ? tsaOptions?.Url : null);
-            string? username = !string.IsNullOrWhiteSpace(urlOverride)
-                ? usernameOverride
-                : (allowDefaultFallback ? tsaOptions?.Username : null);
-            string? password = !string.IsNullOrWhiteSpace(urlOverride)
-                ? passwordOverride
-                : (allowDefaultFallback ? tsaOptions?.Password : null);
-
             if (string.IsNullOrWhiteSpace(url))
             {
                 return null;
             }
 
-            // Validate user-provided TSA URLs: only allow HTTPS (or the configured default URL)
-            var isCallerSuppliedUrl = !string.IsNullOrWhiteSpace(urlOverride)
-                && !string.Equals(urlOverride, tsaOptions?.Url, StringComparison.OrdinalIgnoreCase);
-
-            if (isCallerSuppliedUrl)
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var parsedUri)
+                || !string.Equals(parsedUri.Scheme, "https", StringComparison.OrdinalIgnoreCase))
             {
-                if (!Uri.TryCreate(urlOverride, UriKind.Absolute, out var parsedUri)
-                    || !string.Equals(parsedUri.Scheme, "https", StringComparison.OrdinalIgnoreCase))
-                {
-                    throw new ApiValidationException("TSA_HTTPS_REQUIRED");
-                }
-                // SSRF guard: a caller-supplied TSA URL must not point at an
-                // internal/loopback/link-local address. Public TSAs are unaffected.
-                if (ResolvesToPrivateAddress(parsedUri.DnsSafeHost))
-                {
-                    throw new ApiValidationException("TSA_HOST_NOT_ALLOWED");
-                }
-
-                // The check above resolves DNS once; the HTTP client would resolve
-                // again when it connects, leaving a rebinding window. PinnedIpTsaClient
-                // re-validates the address at socket-connect time and fails closed.
-                return new PinnedIpTsaClient(url, username, password);
+                throw new ApiValidationException("TSA_HTTPS_REQUIRED");
             }
 
-            return new TSAClientBouncyCastle(url, username, password);
+            // SSRF guard: the URL must not point at an internal/loopback/link-local
+            // address. Public TSAs are unaffected.
+            if (ResolvesToPrivateAddress(parsedUri.DnsSafeHost))
+            {
+                throw new ApiValidationException("TSA_HOST_NOT_ALLOWED");
+            }
+
+            // The check above resolves DNS once; the HTTP client would resolve again
+            // when it connects, leaving a rebinding window. PinnedIpTsaClient
+            // re-validates the address at socket-connect time and fails closed.
+            return new PinnedIpTsaClient(url, username, password);
         }
 
         /// <summary>
@@ -136,7 +141,7 @@ namespace DotNetSigningServer.Services
         /// unique-local address — blocked to prevent SSRF into the internal network.
         /// Fails closed (returns true) if the host cannot be resolved.
         /// </summary>
-        private static bool ResolvesToPrivateAddress(string host)
+        internal static bool ResolvesToPrivateAddress(string host)
         {
             System.Net.IPAddress[] addresses;
             if (System.Net.IPAddress.TryParse(host, out var literal))

@@ -40,7 +40,7 @@ public class SeoController : Controller
     };
 
     /// <summary>Locales that get their own sitemap entry and hreflang alternates.</summary>
-    private static readonly string[] Locales = { "en", "cs", "de", "es" };
+    private static readonly string[] Locales = CultureUrls.Supported;
 
     [HttpGet("/robots.txt")]
     [ResponseCache(Duration = 3600, Location = ResponseCacheLocation.Any)]
@@ -50,17 +50,20 @@ public class SeoController : Controller
         var sb = new StringBuilder();
         sb.AppendLine("User-agent: *");
         // Everything below is behind authentication or is a one-off action —
-        // no search value, and crawling it only burns crawl budget.
-        sb.AppendLine("Disallow: /Account/");
-        sb.AppendLine("Disallow: /Admin");
-        sb.AppendLine("Disallow: /ApiTokens");
-        sb.AppendLine("Disallow: /Billing");
-        sb.AppendLine("Disallow: /Requests");
-        sb.AppendLine("Disallow: /support");
-        sb.AppendLine("Disallow: /templates");
-        sb.AppendLine("Disallow: /template-builder");
-        sb.AppendLine("Disallow: /debug/");
-        sb.AppendLine("Disallow: /swagger");
+        // no search value, and crawling it only burns crawl budget. Each entry is
+        // repeated per locale prefix, since /cs/Billing is a real URL too.
+        string[] privatePaths =
+        {
+            "/Account/", "/Admin", "/ApiTokens", "/Billing", "/Requests",
+            "/support", "/templates", "/template-builder", "/debug/", "/swagger",
+        };
+        foreach (var locale in Locales)
+        {
+            foreach (var path in privatePaths)
+            {
+                sb.AppendLine($"Disallow: {CultureUrls.Prefix(locale)}{path}");
+            }
+        }
         sb.AppendLine();
         sb.AppendLine($"Sitemap: {origin}/sitemap.xml");
 
@@ -82,37 +85,41 @@ public class SeoController : Controller
         var urlset = new XElement(ns + "urlset",
             new XAttribute(XNamespace.Xmlns + "xhtml", xhtml.NamespaceName));
 
+        // Every language version is its own <url> entry carrying the full set of
+        // alternates — the shape Google asks for. Listing only the English URL
+        // would leave the translated pages undiscovered.
         foreach (var (path, changeFreq, priority) in paths)
         {
-            var url = new XElement(ns + "url",
-                new XElement(ns + "loc", LocaleUrl(origin, path, "en")),
-                new XElement(ns + "changefreq", changeFreq),
-                new XElement(ns + "priority", priority));
-
-            // Declare every language variant of this page to each other, so a
-            // crawler that finds one finds them all.
-            foreach (var locale in Locales)
+            foreach (var entryLocale in Locales)
             {
+                var url = new XElement(ns + "url",
+                    new XElement(ns + "loc", LocaleUrl(origin, path, entryLocale)),
+                    new XElement(ns + "changefreq", changeFreq),
+                    new XElement(ns + "priority", priority));
+
+                foreach (var locale in Locales)
+                {
+                    url.Add(new XElement(xhtml + "link",
+                        new XAttribute("rel", "alternate"),
+                        new XAttribute("hreflang", locale),
+                        new XAttribute("href", LocaleUrl(origin, path, locale))));
+                }
                 url.Add(new XElement(xhtml + "link",
                     new XAttribute("rel", "alternate"),
-                    new XAttribute("hreflang", locale),
-                    new XAttribute("href", LocaleUrl(origin, path, locale))));
-            }
-            url.Add(new XElement(xhtml + "link",
-                new XAttribute("rel", "alternate"),
-                new XAttribute("hreflang", "x-default"),
-                new XAttribute("href", LocaleUrl(origin, path, "en"))));
+                    new XAttribute("hreflang", "x-default"),
+                    new XAttribute("href", LocaleUrl(origin, path, CultureUrls.Default))));
 
-            urlset.Add(url);
+                urlset.Add(url);
+            }
         }
 
         var document = new XDocument(new XDeclaration("1.0", "utf-8", null), urlset);
         return Content(document.Declaration + Environment.NewLine + document, "application/xml; charset=utf-8");
     }
 
-    /// <summary>English keeps the clean URL; other locales carry ?culture=xx.</summary>
+    /// <summary>English keeps the clean URL; other locales live under /xx.</summary>
     private static string LocaleUrl(string origin, string path, string locale) =>
-        locale == "en" ? $"{origin}{path}" : $"{origin}{path}?culture={locale}";
+        CultureUrls.Absolute(origin, path, locale);
 
     /// <summary>
     /// The configured public origin — not the request host. A sitemap or

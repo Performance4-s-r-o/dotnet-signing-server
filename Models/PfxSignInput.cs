@@ -24,5 +24,13 @@ namespace DotNetSigningServer.Models
         public bool? AutoHeight { get; set; }
         /// <summary>Display name used in the signer row. Overrides CN/GN+SN extracted from the cert chain when provided.</summary>
         public string? SignerName { get; set; }
+        /// <summary>
+        /// RFC 3161 timestamping authority. Optional: leave it out and the signature
+        /// carries no timestamp. The server never substitutes a TSA of its own —
+        /// whether the document is timestamped, and by whom, is the caller's call.
+        /// </summary>
+        public string? TsaUrl { get; set; }
+        public string? TsaUsername { get; set; }
+        public string? TsaPassword { get; set; }
     }
 }

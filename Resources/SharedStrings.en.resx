@@ -157,6 +157,11 @@
   <data name="SignError" xml:space="preserve"><value>An error occurred during the final signing process</value></data>
   <data name="PfxSignError" xml:space="preserve"><value>An error occurred during the PFX signing process</value></data>
   <data name="TimestampError" xml:space="preserve"><value>An error occurred while applying the timestamp</value></data>
+  <data name="InspectSignaturesError" xml:space="preserve"><value>An error occurred while inspecting the document's signatures</value></data>
+  <data name="ExtendSignatureError" xml:space="preserve"><value>An error occurred while extending the document's signatures</value></data>
+  <data name="Error_TSA_REQUIRED_FOR_ARCHIVE_TIMESTAMP" xml:space="preserve"><value>An archive timestamp needs a timestamping authority — supply tsaUrl, or set addArchiveTimestamp to false for B-LT only.</value></data>
+  <data name="Error_NO_SIGNATURE_TO_EXTEND" xml:space="preserve"><value>The document carries no signature to extend.</value></data>
+  <data name="Error_NO_REVOCATION_DATA_AVAILABLE" xml:space="preserve"><value>No revocation data could be retrieved for the signing certificates, so no long-term validation information was embedded.</value></data>
   <data name="VisualSignError" xml:space="preserve"><value>An error occurred while applying the visual signature</value></data>
   <data name="SealError" xml:space="preserve"><value>An error occurred while applying the seal</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>An error occurred while adding the attachment</value></data>
@@ -191,7 +196,7 @@
   <!-- Home / Landing page -->
   <data name="HomeSignupSuccess" xml:space="preserve"><value>Your account is ready. Welcome to Performance4PDF.</value></data>
   <data name="HomeHeroTitle" xml:space="preserve"><value>Generate, fill, sign and process PDF documents with one API.</value></data>
-  <data name="HomeHeroDescription" xml:space="preserve"><value>Performance4PDF turns your data into complete PDF documents. Render templates, fill dynamic fields, apply digital signatures and timestamps, embed attachments, and read QR or barcodes — all fully automated.</value></data>
+  <data name="HomeHeroDescription" xml:space="preserve"><value>Performance4PDF turns your data into complete PDF documents. Render templates, fill dynamic fields, apply digital signatures and timestamps, embed attachments, and read QR and 2D codes — all fully automated.</value></data>
   <data name="HomeApiDocs" xml:space="preserve"><value>API Documentation</value></data>
   <data name="HomeExampleIntegration" xml:space="preserve"><value>Example Integration</value></data>
   <data name="HomeExampleApiRequest" xml:space="preserve"><value>API request</value></data>
@@ -204,7 +209,7 @@
   <data name="HomeDynamicDataBindingTitle" xml:space="preserve"><value>Dynamic data binding</value></data>
   <data name="HomeDynamicDataBindingDescription" xml:space="preserve"><value>Fill templates using structured JSON — no manual formatting.</value></data>
   <data name="HomeFeatureSigningTitle" xml:space="preserve"><value>Digital signatures &amp; timestamps</value></data>
-  <data name="HomeFeatureSigningDescription" xml:space="preserve"><value>Apply certificate-based signatures, add trusted timestamps (TSA), and automate hashing workflows with full cryptographic integrity.</value></data>
+  <data name="HomeFeatureSigningDescription" xml:space="preserve"><value>PAdES baseline signatures (ETSI EN 319 142) with your own certificates. Add an RFC 3161 timestamp to reach B-T, or sign in two steps so the private key never leaves the signer's device.</value></data>
   <data name="HomeCertificateSigningTitle" xml:space="preserve"><value>Certificate-based signing</value></data>
   <data name="HomeCertificateSigningDescription" xml:space="preserve"><value>Support for external signers, HSM, smartcards or custom clients.</value></data>
   <data name="HomeTrustedTimestampsTitle" xml:space="preserve"><value>Trusted timestamps</value></data>
@@ -212,21 +217,21 @@
   <data name="HomeMultipleSignaturesTitle" xml:space="preserve"><value>Multiple signatures</value></data>
   <data name="HomeMultipleSignaturesDescription" xml:space="preserve"><value>Support for multi-party, multi-step signing workflows.</value></data>
   <data name="HomeFeatureAttachmentsTitle" xml:space="preserve"><value>Embed file attachments</value></data>
-  <data name="HomeFeatureAttachmentsDescription" xml:space="preserve"><value>Store supporting documentation such as raw data, reports or logs directly inside the PDF to create verifiable document bundles.</value></data>
+  <data name="HomeFeatureAttachmentsDescription" xml:space="preserve"><value>Carry the source data, an XML payload or a report inside the PDF itself. Attachments are written as an incremental update, so signatures already on the document stay valid.</value></data>
   <data name="HomeAnyFileTypeTitle" xml:space="preserve"><value>Any file type</value></data>
-  <data name="HomeAnyFileTypeDescription" xml:space="preserve"><value>Attach binary files, datasets or custom audit outputs.</value></data>
-  <data name="HomeEvidenceBundlesTitle" xml:space="preserve"><value>Evidence bundles</value></data>
-  <data name="HomeEvidenceBundlesDescription" xml:space="preserve"><value>Keep measurements, logs and certificates in a single container.</value></data>
-  <data name="HomeMetadataSupportTitle" xml:space="preserve"><value>Metadata support</value></data>
-  <data name="HomeMetadataSupportDescription" xml:space="preserve"><value>Store attachment metadata for validation or audit trails.</value></data>
-  <data name="HomeFeatureCodesTitle" xml:space="preserve"><value>Read QR &amp; barcodes</value></data>
-  <data name="HomeFeatureCodesDescription" xml:space="preserve"><value>Detect and extract QR codes, Datamatrix and other barcode types from any PDF page, including coordinates and orientation.</value></data>
+  <data name="HomeAnyFileTypeDescription" xml:space="preserve"><value>Any binary, embedded with its own filename, MIME type and description.</value></data>
+  <data name="HomeEncryptedAttachmentsTitle" xml:space="preserve"><value>Encrypted attachments</value></data>
+  <data name="HomeEncryptedAttachmentsDescription" xml:space="preserve"><value>Encrypt the payload to a recipient certificate (CMS) before embedding — only the holder of the private key can open it.</value></data>
+  <data name="HomeSignatureSafeTitle" xml:space="preserve"><value>Signature-safe</value></data>
+  <data name="HomeSignatureSafeDescription" xml:space="preserve"><value>Attach after signing. Duplicate filenames are resolved automatically when several parties add their own file.</value></data>
+  <data name="HomeFeatureCodesTitle" xml:space="preserve"><value>Read QR &amp; 2D codes</value></data>
+  <data name="HomeFeatureCodesDescription" xml:space="preserve"><value>Detect and decode QR, Data Matrix, PDF417 and Aztec codes on the pages of a PDF — every hit comes back with its value, type, page number and position.</value></data>
   <data name="HomeMultiCodeTitle" xml:space="preserve"><value>Multi-code detection</value></data>
-  <data name="HomeMultiCodeDescription" xml:space="preserve"><value>Scan pages with multiple QR/Datamatrix codes.</value></data>
-  <data name="HomeCoordinatesTitle" xml:space="preserve"><value>Coordinates &amp; bounds</value></data>
-  <data name="HomeCoordinatesDescription" xml:space="preserve"><value>Extract the exact x/y position and size of each code.</value></data>
-  <data name="HomeErrorCorrectionTitle" xml:space="preserve"><value>Error correction</value></data>
-  <data name="HomeErrorCorrectionDescription" xml:space="preserve"><value>Robust decoding of damaged or low-quality codes.</value></data>
+  <data name="HomeMultiCodeDescription" xml:space="preserve"><value>Reads every code on a page, not just the first one.</value></data>
+  <data name="HomeCoordinatesTitle" xml:space="preserve"><value>Position &amp; page</value></data>
+  <data name="HomeCoordinatesDescription" xml:space="preserve"><value>Every code is returned with its page number and x/y position on that page.</value></data>
+  <data name="HomeScanToleranceTitle" xml:space="preserve"><value>Scan-tolerant decoding</value></data>
+  <data name="HomeScanToleranceDescription" xml:space="preserve"><value>Pages are rendered at 300 DPI and retried with contrast, sharpening, upscaling and inversion, so codes off a scan or a photocopy still read.</value></data>
 
   <!-- Account / SignIn -->
   <data name="SignInTitle" xml:space="preserve"><value>Sign in</value></data>
@@ -426,9 +431,9 @@
   <data name="SupportSubmitFailed" xml:space="preserve"><value>The ticket could not be submitted. Please try again.</value></data>
   <data name="SupportUnavailable" xml:space="preserve"><value>The support system is temporarily unavailable. Please try again later.</value></data>
   <data name="SupportReplyToHint" xml:space="preserve"><value>We will reply to {0}.</value></data>
-  <data name="MetaDescriptionDefault" xml:space="preserve"><value>Performance4PDF — one API to generate, fill, sign and timestamp PDF documents. PAdES signatures, RFC 3161 timestamps, PDF/A conversion and templates.</value></data>
+  <data name="MetaDescriptionDefault" xml:space="preserve"><value>Performance4PDF — one API to generate, fill, sign and timestamp PDF documents. PAdES baseline signatures, RFC 3161 timestamps, PDF/A conversion and templates.</value></data>
   <data name="HomeSeoTitle" xml:space="preserve"><value>PDF Signing &amp; Automation API</value></data>
-  <data name="HomeMetaDescription" xml:space="preserve"><value>Sign PDFs programmatically with one REST API. PAdES digital signatures, RFC 3161 timestamps, PDF/A conversion, templates and barcode extraction. EU-hosted.</value></data>
+  <data name="HomeMetaDescription" xml:space="preserve"><value>Sign PDFs programmatically with one REST API. PAdES baseline digital signatures, RFC 3161 timestamps, PDF/A conversion, templates and 2D code extraction. EU-hosted.</value></data>
   <data name="PricingMetaDescription" xml:space="preserve"><value>Performance4PDF pricing — pay per credit for PDF signing, timestamps, PDF/A conversion and template rendering. No seat licences, no minimum spend.</value></data>
   <data name="ContactMetaDescription" xml:space="preserve"><value>Get in touch with the team behind Performance4PDF for questions about the PDF signing API, pricing or integration support.</value></data>
   <data name="LegalMetaDescription" xml:space="preserve"><value>Terms, privacy policy, data processing agreement, SLA and other legal documents for the Performance4PDF service.</value></data>
@@ -441,7 +446,7 @@
   <data name="LegalOpenSourceNoticesMeta" xml:space="preserve"><value>Open-source components used by Performance4PDF and their licences.</value></data>
   <data name="LegalAgplLicenseMeta" xml:space="preserve"><value>The AGPL licence under which the Performance4PDF signing server is published.</value></data>
   <data name="ApiDocsTitle" xml:space="preserve"><value>API Documentation</value></data>
-  <data name="ApiDocsMetaDescription" xml:space="preserve"><value>REST API reference for Performance4PDF — sign PDFs, apply RFC 3161 timestamps, convert to PDF/A, fill templates and read barcodes.</value></data>
+  <data name="ApiDocsMetaDescription" xml:space="preserve"><value>REST API reference for Performance4PDF — sign PDFs, apply RFC 3161 timestamps, convert to PDF/A, fill templates and read QR and 2D codes.</value></data>
   <data name="ApiDocsIntroEndpoints" xml:space="preserve"><value>All endpoints live under</value></data>
   <data name="ApiDocsIntroBase64" xml:space="preserve"><value>and expect JSON. PDFs, certificates and attachments are base64 strings.</value></data>
   <data name="ApiDocsIntroAuth" xml:space="preserve"><value>Authenticate every request with</value></data>
@@ -473,7 +478,7 @@
   <data name="ApiDocSignTitle" xml:space="preserve"><value>Finalize signing</value></data>
   <data name="ApiDocSignPurpose" xml:space="preserve"><value>Finalize presigned PDF</value></data>
   <data name="ApiDocSignCredits" xml:space="preserve"><value>1</value></data>
-  <data name="ApiDocSignMeta" xml:space="preserve"><value>Complete a two-step PDF signature by submitting the externally signed hash. Returns the finished PDF with an embedded PKCS#7 detached signature.</value></data>
+  <data name="ApiDocSignMeta" xml:space="preserve"><value>Complete a two-step PDF signature by submitting the externally signed hash. Returns the finished PDF with an embedded PAdES (CAdES) signature.</value></data>
   <data name="ApiDocSignIntro" xml:space="preserve"><value>Second half of the external signing flow. Send back the id from /api/presign together with the signature you produced over the returned hash; Performance4PDF injects it into the reserved placeholder and returns the finished document.</value></data>
   <data name="ApiDocSignPfxTitle" xml:space="preserve"><value>Sign with a PFX certificate</value></data>
   <data name="ApiDocSignPfxPurpose" xml:space="preserve"><value>Sign directly with PFX</value></data>
@@ -485,6 +490,21 @@
   <data name="ApiDocTimestampCredits" xml:space="preserve"><value>1</value></data>
   <data name="ApiDocTimestampMeta" xml:space="preserve"><value>Add a trusted RFC 3161 timestamp to a PDF from any TSA. Proves the document existed at a point in time, no signing certificate required.</value></data>
   <data name="ApiDocTimestampIntro" xml:space="preserve"><value>Applies a timestamp from an RFC 3161 timestamping authority without signing the document with a personal certificate. Useful on its own as proof of existence, or combined with a signature for long-term validation.</value></data>
+  <data name="ApiDocInspectTitle" xml:space="preserve"><value>Inspect the signatures in a PDF</value></data>
+  <data name="ApiDocInspectPurpose" xml:space="preserve"><value>List signatures, levels and expiry dates</value></data>
+  <data name="ApiDocInspectCredits" xml:space="preserve"><value>Free</value></data>
+  <data name="ApiDocInspectMeta" xml:space="preserve"><value>Read back the signatures already in a PDF via API: PAdES level, signer, algorithms, and when the certificates behind the timestamps expire.</value></data>
+  <data name="ApiDocInspectIntro" xml:space="preserve"><value>Reports what a document already carries rather than changing it: every signature field, its PAdES level, whether it still verifies, and the expiry dates behind it. A long-term-validation workflow reads timestampCertificateNotAfter from here to know when the document has to be re-timestamped.</value></data>
+  <data name="ApiDocInspectNote1" xml:space="preserve"><value>Free — nothing is charged, so a monitoring job can poll without cost.</value></data>
+  <data name="ApiDocInspectNote2" xml:space="preserve"><value>The level is a structural reading of what the document contains, not a conformance verdict from a qualified validator.</value></data>
+  <data name="ApiDocExtendTitle" xml:space="preserve"><value>Extend a signature for long-term validity</value></data>
+  <data name="ApiDocExtendPurpose" xml:space="preserve"><value>Raise a signed PDF to PAdES B-LT or B-LTA</value></data>
+  <data name="ApiDocExtendCredits" xml:space="preserve"><value>1 credit + TSA</value></data>
+  <data name="ApiDocExtendMeta" xml:space="preserve"><value>Embed revocation data and an archive timestamp into an already-signed PDF, so the signature stays verifiable after its certificate expires.</value></data>
+  <data name="ApiDocExtendIntro" xml:space="preserve"><value>A timestamp proves when a document was signed; it does not prove the certificate was valid at that moment. That needs revocation data, which is only available online and which certificate authorities stop publishing once a certificate expires. This call freezes that evidence into the document (B-LT) and timestamps the result (B-LTA), so it can be verified years later from the file alone. Run it again before the archive timestamp's own certificate expires to renew the chain.</value></data>
+  <data name="ApiDocExtendNote1" xml:space="preserve"><value>Costs 1 credit plus the timestamp surcharge when an archive timestamp is requested.</value></data>
+  <data name="ApiDocExtendNote2" xml:space="preserve"><value>Set addArchiveTimestamp to false for B-LT only; with true, tsaUrl is required and the request is refused rather than quietly downgraded.</value></data>
+  <data name="ApiDocExtendNote3" xml:space="preserve"><value>Fails when no revocation data can be retrieved, rather than returning a document that appears long-term valid without being so.</value></data>
   <data name="ApiDocAttachmentTitle" xml:space="preserve"><value>Embed a file attachment</value></data>
   <data name="ApiDocAttachmentPurpose" xml:space="preserve"><value>Embed attachment</value></data>
   <data name="ApiDocAttachmentCredits" xml:space="preserve"><value>1</value></data>
@@ -503,11 +523,11 @@
   <data name="ApiDocFillPdfMeta" xml:space="preserve"><value>Generate PDFs from a template and JSON data via API. One request produces a batch of filled documents — invoices, contracts, certificates.</value></data>
   <data name="ApiDocFillPdfIntro" xml:space="preserve"><value>Renders a stored template into finished documents. Pass one data set per output and the response carries one PDF per set, so a whole batch costs a single round trip.</value></data>
   <data name="ApiDocFillPdfNote1" xml:space="preserve"><value>Costs 1 credit per started 3 pages per generated output (dataset).</value></data>
-  <data name="ApiDocFindCodesTitle" xml:space="preserve"><value>Find barcodes and QR codes in a PDF</value></data>
+  <data name="ApiDocFindCodesTitle" xml:space="preserve"><value>Find QR and 2D codes in a PDF</value></data>
   <data name="ApiDocFindCodesPurpose" xml:space="preserve"><value>Scan for QR/DataMatrix/PDF417/Aztec</value></data>
   <data name="ApiDocFindCodesCredits" xml:space="preserve"><value>1 credit / 3 pages</value></data>
   <data name="ApiDocFindCodesMeta" xml:space="preserve"><value>Extract QR codes, DataMatrix, PDF417 and Aztec barcodes from a PDF via API, with the page number and position of every hit.</value></data>
-  <data name="ApiDocFindCodesIntro" xml:space="preserve"><value>Scans every page for machine-readable codes and returns their decoded value, type, page and position — enough to route or reconcile a document automatically.</value></data>
+  <data name="ApiDocFindCodesIntro" xml:space="preserve"><value>Scans the document for machine-readable codes and returns their decoded value, type, page and position — enough to route or reconcile a document automatically.</value></data>
   <data name="ApiDocFindCodesNote1" xml:space="preserve"><value>Costs 1 credit per started 3 pages.</value></data>
   <data name="ApiDocTemplateCreateTitle" xml:space="preserve"><value>Create a PDF template</value></data>
   <data name="ApiDocTemplateCreatePurpose" xml:space="preserve"><value>Store a PDF with named field positions</value></data>
@@ -583,4 +603,5 @@
   <data name="Error_TABLE_COLUMN_VALIGN_INVALID" xml:space="preserve"><value>Table column vertical alignment must be one of: top, center, bottom.</value></data>
   <data name="Error_TABLE_COLUMN_BORDER_INVALID" xml:space="preserve"><value>Table column border must be one of: none, dashed, filled.</value></data>
   <data name="Error_TABLE_NO_COLUMNS" xml:space="preserve"><value>Table field must define at least one column.</value></data>
+  <data name="ApiDocFindCodesNote2" xml:space="preserve"><value>Only the first 30 pages of a document are scanned.</value></data>
 </root>

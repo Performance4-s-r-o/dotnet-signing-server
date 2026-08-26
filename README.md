@@ -98,7 +98,6 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `FqdnServerName` | yes | Public hostname, used in generated links |
 | `AllowedHosts` | recommended | Host filtering, `*` by default |
 | `Cors__AllowedOrigins` | recommended | Comma-separated browser origins |
-| `TimestampAuthority__Url` | | TSA endpoint; also `__Username` / `__Password` |
 | `Seal__Enabled` | | Server-side sealing; needs `Seal__PfxBase64` + `Seal__PfxPassword` |
 | `Stripe__ApiKey` / `Stripe__WebhookSecret` | for billing | Payments; the webhook secret must start with `whsec_` in production |
 | `Resend__ApiKey` / `Resend__From` | for email | Transactional email |

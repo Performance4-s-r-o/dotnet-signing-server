@@ -137,6 +137,7 @@ builder.Services.AddControllersWithViews(options =>
 builder.Services.AddScoped<PdfVisualSigningService>();
 builder.Services.AddScoped<PdfSealingService>();
 builder.Services.AddScoped<PdfSigningService>();
+builder.Services.AddScoped<PdfLtvService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IBillingService, BillingService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -333,15 +334,6 @@ else
         }));
 }
 
-builder.Services.AddOptions<TimestampAuthorityOptions>()
-    .Bind(builder.Configuration.GetSection("TimestampAuthority"))
-    .PostConfigure(options =>
-    {
-        options.Url = builder.Configuration["TSA_URL"] ?? options.Url;
-        options.Username = builder.Configuration["TSA_USERNAME"] ?? options.Username;
-        options.Password = builder.Configuration["TSA_PASSWORD"] ?? options.Password;
-    });
-
 builder.Services.AddOptions<SealOptions>()
     .Bind(builder.Configuration.GetSection("Seal"))
     .PostConfigure(options =>
@@ -440,6 +432,11 @@ if (!app.Environment.IsDevelopment())
 app.UseMiddleware<LokiExceptionMiddleware>();
 app.UseMiddleware<BodySizeLimitMiddleware>();
 
+// Moves a "/cs" style locale prefix into PathBase before anything else inspects
+// the path, so every later check ("/Account", "/api", routing itself) sees the
+// same path regardless of language. Must stay ahead of UseRequestLocalization.
+app.UseMiddleware<DotNetSigningServer.Middleware.CulturePrefixMiddleware>();
+
 // Swagger only in non-production environments
 if (!app.Environment.IsProduction())
 {
@@ -508,13 +505,19 @@ app.Use(async (context, next) =>
         logger.LogWarning("Request {Path} returned {Status}. Authenticated: {Auth}, Cookie count: {CookieCount}, User: {UserId}", path, context.Response.StatusCode, context.User?.Identity?.IsAuthenticated, context.Request.Cookies?.Count ?? 0, context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "none");
     }
 });
-var supportedCultures = new[] { "en", "cs", "de", "es" };
+var supportedCultures = DotNetSigningServer.Services.CultureUrls.Supported;
 app.UseRequestLocalization(options =>
 {
-    options.SetDefaultCulture("en");
+    options.SetDefaultCulture(DotNetSigningServer.Services.CultureUrls.Default);
     options.AddSupportedCultures(supportedCultures);
     options.AddSupportedUICultures(supportedCultures);
     options.ApplyCurrentCultureToResponseHeaders = true;
+    // The URL alone decides the language of a response. Cookie and Accept-Language
+    // still steer which URL a visitor is sent to (see CulturePrefixMiddleware), but
+    // letting them override the content here would mean /pricing rendering in Czech
+    // while its canonical and hreflang tags claim it is the English page.
+    options.RequestCultureProviders.Clear();
+    options.RequestCultureProviders.Add(new DotNetSigningServer.Middleware.PathCultureProvider());
 });
 app.UseStaticFiles(new StaticFileOptions
 {

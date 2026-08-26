@@ -31,7 +31,11 @@ namespace DotNetSigningServer.ExternalSignatures
             byte[] hash = DigestAlgorithms.Digest(docBytes, DigestAlgorithms.SHA256);
 
             var signature = new PdfPKCS7(null, _chain, "SHA256", false);
-            _docBytesHash = signature.GetAuthenticatedAttributeBytes(hash, PdfSigner.CryptoStandard.CMS, null, null);
+            // CAdES puts the signing certificate's own hash (signing-certificate-v2)
+            // inside the signed attributes, which is why the chain has to be known
+            // here, at presign, and not only when the signature comes back.
+            _docBytesHash = signature.GetAuthenticatedAttributeBytes(
+                hash, Services.PdfCryptoHelper.SignatureCryptoStandard, null, null);
             return _docBytesHash;
         }
 
@@ -67,7 +71,9 @@ namespace DotNetSigningServer.ExternalSignatures
                 _ => "RSA"
             };
             sgn.SetExternalSignatureValue(_signature, null, algorithm);
-            return sgn.GetEncodedPKCS7(hash, PdfSigner.CryptoStandard.CMS, _tsaClient, null, null);
+            // Same standard as the presign phase used — see PdfCryptoHelper.SignatureCryptoStandard.
+            // A TSA client here adds the signature timestamp that lifts B-B to B-T.
+            return sgn.GetEncodedPKCS7(hash, Services.PdfCryptoHelper.SignatureCryptoStandard, _tsaClient, null, null);
         }
 
         public void ModifySigningDictionary(PdfDictionary signDic) { }
