@@ -242,7 +242,9 @@ public class AccountController : Controller
 
         // Generate and send 2FA code
         var otp = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
-        user.EmailOtpCode = otp;
+        // Stored hashed, like every other single-use secret here: reading the
+        // database must not be enough to walk through someone's second factor.
+        user.EmailOtpCode = SecureTokens.Hash(otp);
         user.EmailOtpExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
         await _dbContext.SaveChangesAsync();
 
@@ -385,7 +387,7 @@ public class AccountController : Controller
             return RedirectToAction(nameof(SignIn));
         }
 
-        if (user.EmailOtpExpiresAt < DateTimeOffset.UtcNow || !string.Equals(user.EmailOtpCode, code.Trim(), StringComparison.Ordinal))
+        if (user.EmailOtpExpiresAt < DateTimeOffset.UtcNow || !SecureTokens.MatchesHash(code, user.EmailOtpCode))
         {
             TempData["Error"] = _localizer["VerificationCodeInvalid"].Value;
             return RedirectToAction(nameof(SignIn));
