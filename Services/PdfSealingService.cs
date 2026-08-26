@@ -1,6 +1,7 @@
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
 using iText.Commons.Bouncycastle.Cert;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Org.BouncyCastle.Crypto;
 
@@ -11,12 +12,15 @@ namespace DotNetSigningServer.Services
         private readonly SealOptions _sealOptions;
         private readonly PdfSigningService _pdfSigningService;
         private readonly PdfVisualSigningService _visualSigningService;
+        private readonly ILogger<PdfSealingService>? _logger;
 
         public PdfSealingService(
             IOptions<SealOptions>? sealOptions,
             PdfSigningService pdfSigningService,
-            PdfVisualSigningService visualSigningService)
+            PdfVisualSigningService visualSigningService,
+            ILogger<PdfSealingService>? logger = null)
         {
+            _logger = logger;
             _sealOptions = sealOptions?.Value ?? new SealOptions();
             _pdfSigningService = pdfSigningService;
             _visualSigningService = visualSigningService;
@@ -96,6 +100,48 @@ namespace DotNetSigningServer.Services
 
             return Convert.ToBase64String(fullySignedPdf);
         }
+
+        /// <summary>
+        /// What the caller can find out about sealing before committing a user to
+        /// a wizard that ends in it.
+        ///
+        /// Without this the only way to learn that no certificate is configured is
+        /// to submit a document and have <see cref="ApplySeal"/> refuse it at the
+        /// last step. On the hosted service that is a one-time setup mistake; on a
+        /// self-hosted install it is the state every deployment starts in.
+        /// </summary>
+        public SealCapability DescribeCapability()
+        {
+            if (!_sealOptions.Enabled) return new SealCapability { Enabled = false };
+
+            try
+            {
+                var (chain, _) = LoadSealCredentials();
+                var signing = chain.FirstOrDefault();
+                if (signing == null) return new SealCapability { Enabled = false };
+
+                return new SealCapability
+                {
+                    Enabled = true,
+                    // The certificate is the honest source for whose seal this is —
+                    // a configured display name can drift from it over years.
+                    Subject = signing.GetSubjectDN()?.ToString(),
+                    Issuer = signing.GetIssuerDN()?.ToString(),
+                    NotBefore = ToOffset(signing.GetNotBefore()),
+                    NotAfter = ToOffset(signing.GetNotAfter()),
+                };
+            }
+            catch (Exception ex)
+            {
+                // Configured but unusable — a wrong password or an unreadable file.
+                // Saying so beats reporting the feature as available.
+                _logger?.LogWarning(ex, "[seal] certificate is configured but could not be loaded");
+                return new SealCapability { Enabled = false, Error = "SEAL_CERTIFICATE_UNREADABLE" };
+            }
+        }
+
+        private static DateTimeOffset? ToOffset(DateTime value) =>
+            value == default ? null : new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Utc));
 
         public static bool ShouldApplyVisibleOverlay(SealInput input)
         {
