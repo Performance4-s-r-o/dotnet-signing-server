@@ -336,6 +336,20 @@ namespace DotNetSigningServer.Controllers
         /// when a document is due, and charging for the check would make skipping
         /// it the cheaper option.
         /// </summary>
+        /// <summary>
+        /// What this server can do, before a caller commits a user to a flow that
+        /// depends on it. Free and side-effect free: a client that had to pay to
+        /// ask would simply not ask, which defeats the point.
+        /// </summary>
+        [HttpGet("/api/capabilities")]
+        public async Task<IActionResult> Capabilities()
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            return Ok(new ServerCapabilities { Seal = _sealingService.DescribeCapability() });
+        }
+
         [HttpPost("/api/inspect-signatures")]
         public async Task<IActionResult> InspectSignatures([FromBody] InspectSignaturesInput input)
         {
