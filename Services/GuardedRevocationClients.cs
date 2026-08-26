@@ -1,4 +1,6 @@
+using System.Net.Http.Headers;
 using iText.Commons.Bouncycastle.Cert;
+using iText.IO.Resolver.Resource;
 using iText.Signatures;
 
 namespace DotNetSigningServer.Services;
@@ -38,6 +40,80 @@ internal static class RevocationEndpointGuard
 }
 
 /// <summary>
+/// The transport iText uses to fetch revocation data, with the destination address
+/// re-checked at socket-connect time.
+///
+/// <see cref="RevocationEndpointGuard"/> resolves the host once before the fetch;
+/// the stock retriever then resolves it again when it connects. This subclass hands
+/// iText a connection we opened ourselves, so a zero-TTL domain cannot answer with a
+/// public address during the check and an internal one at connect time.
+///
+/// Everything above the socket — building the OCSP request, parsing the response,
+/// verifying signatures — stays iText's job.
+/// </summary>
+internal sealed class GuardedResourceRetriever : DefaultResourceRetriever
+{
+    private const string OcspRequestContentType = "application/ocsp-request";
+
+    private static readonly HttpClient Client =
+        PinnedIpHttp.CreateClient("REVOCATION_HOST_NOT_ALLOWED", TimeSpan.FromSeconds(20));
+
+    /// <summary>iText's own pre-fetch hook — the cheap check, before any socket.</summary>
+    protected override bool UrlFilter(Uri url) => RevocationEndpointGuard.IsFetchable(url?.ToString());
+
+    /// <summary>
+    /// One entry point for both protocols: OCSP posts a request body, CRL fetches
+    /// with none.
+    /// </summary>
+    public override Stream? Get(Uri url, byte[]? body, IDictionary<string, string>? headers)
+    {
+        if (!UrlFilter(url)) return null;
+
+        using var request = new HttpRequestMessage(
+            body is null ? HttpMethod.Get : HttpMethod.Post, url);
+
+        if (body is not null)
+        {
+            request.Content = new ByteArrayContent(body);
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue(OcspRequestContentType);
+        }
+
+        if (headers is not null)
+        {
+            foreach (var header in headers)
+            {
+                // Content headers are rejected on the request object; the content type
+                // above is the only one either protocol actually needs.
+                request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+        }
+
+        var response = Client.Send(request);
+        if (!response.IsSuccessStatusCode)
+        {
+            response.Dispose();
+            return null;
+        }
+
+        // The stream is read by iText and must outlive this call, so the response is
+        // not disposed here — closing the stream releases the connection.
+        return response.Content.ReadAsStream();
+    }
+
+    public override Stream? GetInputStreamByUrl(Uri url) => Get(url, null, null);
+
+    public override byte[]? GetByteArrayByUrl(Uri url)
+    {
+        using var stream = GetInputStreamByUrl(url);
+        if (stream is null) return null;
+
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+        return buffer.ToArray();
+    }
+}
+
+/// <summary>
 /// OCSP client that refuses to call an endpoint pointing into private address
 /// space. Delegates to iText once the URL passes.
 /// </summary>
@@ -47,7 +123,7 @@ internal sealed class GuardedOcspClient : IOcspClient
 
     internal GuardedOcspClient(IOcspClient? inner = null)
     {
-        _inner = inner ?? new OcspClientBouncyCastle();
+        _inner = inner ?? new OcspClientBouncyCastle().WithResourceRetriever(new GuardedResourceRetriever());
     }
 
     public byte[]? GetEncoded(IX509Certificate checkCert, IX509Certificate issuerCert, string url)
@@ -88,7 +164,7 @@ internal sealed class GuardedCrlClient : ICrlClient
 
     internal GuardedCrlClient(ICrlClient? inner = null)
     {
-        _inner = inner ?? new CrlClientOnline();
+        _inner = inner ?? new CrlClientOnline().WithResourceRetriever(new GuardedResourceRetriever());
     }
 
     public ICollection<byte[]> GetEncoded(IX509Certificate checkCert, string url)

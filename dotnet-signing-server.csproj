@@ -8,6 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The SSRF guards are internal on purpose — they are plumbing, not API — but
+         they are exactly the code that has to be tested directly. -->
+    <InternalsVisibleTo Include="DotNetSigningServer.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <PackageReference Include="itext" Version="9.7.0" />
     <PackageReference Include="itext.bouncy-castle-adapter" Version="9.7.0" />

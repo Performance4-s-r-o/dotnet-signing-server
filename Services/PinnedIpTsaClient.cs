@@ -1,8 +1,5 @@
-using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Sockets;
 using System.Text;
-using DotNetSigningServer.Exceptions;
 using iText.Signatures;
 
 namespace DotNetSigningServer.Services;
@@ -17,11 +14,9 @@ namespace DotNetSigningServer.Services;
 /// a public address during validation and an internal one (169.254.169.254, RFC1918)
 /// at connect time.
 ///
-/// This client re-checks the actual <see cref="IPEndPoint"/> inside
-/// <see cref="SocketsHttpHandler.ConnectCallback"/> — i.e. at the moment the socket
-/// is opened — and fails closed if it points anywhere private/local. Host and SNI
-/// stay intact because HTTPS is negotiated by <see cref="HttpClient"/> on top of the
-/// raw stream we hand back.
+/// The pinning itself lives in <see cref="PinnedIpHttp"/>, shared with the client
+/// that fetches revocation data — both face the same caller-chosen-destination
+/// problem, and one implementation is one place to get it right.
 /// </summary>
 public class PinnedIpTsaClient : TSAClientBouncyCastle
 {
@@ -74,50 +69,6 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
         return responseBytes;
     }
 
-    private static HttpClient CreateGuardedClient()
-    {
-        var handler = new SocketsHttpHandler
-        {
-            PooledConnectionLifetime = TimeSpan.FromMinutes(2),
-            ConnectCallback = async (context, cancellationToken) =>
-            {
-                var host = context.DnsEndPoint.Host;
-
-                IPAddress[] addresses;
-                if (IPAddress.TryParse(host, out var literal))
-                {
-                    addresses = new[] { literal };
-                }
-                else
-                {
-                    addresses = await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
-                }
-
-                // Fail closed: every candidate must be public, and the one we connect
-                // to is re-checked immediately before the socket is opened.
-                var target = addresses.FirstOrDefault(a => !PdfCryptoHelper.IsPrivateOrLocalAddress(a))
-                             ?? throw new ApiValidationException("TSA_HOST_NOT_ALLOWED");
-
-                if (PdfCryptoHelper.IsPrivateOrLocalAddress(target))
-                {
-                    throw new ApiValidationException("TSA_HOST_NOT_ALLOWED");
-                }
-
-                var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
-                try
-                {
-                    await socket.ConnectAsync(new IPEndPoint(target, context.DnsEndPoint.Port), cancellationToken)
-                        .ConfigureAwait(false);
-                    return new NetworkStream(socket, ownsSocket: true);
-                }
-                catch
-                {
-                    socket.Dispose();
-                    throw;
-                }
-            }
-        };
-
-        return new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
-    }
+    private static HttpClient CreateGuardedClient() =>
+        PinnedIpHttp.CreateClient("TSA_HOST_NOT_ALLOWED", TimeSpan.FromSeconds(30));
 }
