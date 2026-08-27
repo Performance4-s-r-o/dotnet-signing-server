@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace dotnetsigningserver.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260826171241_WidenEmailOtpCodeForHash")]
+    [Migration("20260827071414_WidenEmailOtpCodeForHash")]
     partial class WidenEmailOtpCodeForHash
     {
         /// <inheritdoc />
@@ -429,8 +429,8 @@ namespace dotnetsigningserver.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<string>("EmailOtpCode")
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<DateTimeOffset?>("EmailOtpExpiresAt")
                         .HasColumnType("timestamp with time zone");

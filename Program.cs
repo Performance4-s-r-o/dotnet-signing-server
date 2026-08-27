@@ -128,9 +128,21 @@ static IEnumerable<string> SplitConfigList(string? raw) =>
 // Adding ResourcesPath="Resources" would result in the wrong baseName
 // "DotNetSigningServer.Resources.Resources.SharedStrings" and break all translations.
 builder.Services.AddLocalization();
+var privateServer = builder.Configuration.GetSection("PrivateServer")
+    .Get<DotNetSigningServer.Options.PrivateServerOptions>() ?? new();
+builder.Services.Configure<DotNetSigningServer.Options.PrivateServerOptions>(
+    builder.Configuration.GetSection("PrivateServer"));
+
 builder.Services.AddControllersWithViews(options =>
     {
         options.Filters.Add<DotNetSigningServer.Filters.NoIndexPrivatePagesFilter>();
+
+        // Applied as a convention rather than a filter: the routes are removed
+        // rather than answered, so nothing can reach them at all.
+        if (privateServer.Enabled)
+        {
+            options.Conventions.Add(new DotNetSigningServer.Conventions.PrivateServerConvention());
+        }
     })
     .AddViewLocalization()
     .AddDataAnnotationsLocalization();
@@ -617,6 +629,15 @@ using (var scope = app.Services.CreateScope())
         logger.LogCritical(ex, "Database migration failed — aborting startup.");
         throw;
     }
+
+    // After the schema exists: a self-hosted installation has signing up switched
+    // off, so without this there would be no way to obtain the first account.
+    await DotNetSigningServer.Services.PrivateServerStartupChecks.EnsureAdministratorAsync(
+        privateServer,
+        builder.Configuration,
+        dbContext,
+        scope.ServiceProvider.GetRequiredService<DotNetSigningServer.Services.IAuthService>(),
+        logger);
 }
 
 app.Run();
