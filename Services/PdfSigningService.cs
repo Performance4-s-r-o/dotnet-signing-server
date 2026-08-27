@@ -135,6 +135,16 @@ namespace DotNetSigningServer.Services
                 throw new ApiValidationException("TSA_NOT_CONFIGURED");
             }
 
+            return ApplyDocumentTimestamp(input, tsaClient);
+        }
+
+        /// <summary>
+        /// The timestamping itself, with the authority handed in. Exists so tests
+        /// can drive the real path against an in-process TSA instead of the
+        /// network.
+        /// </summary>
+        internal string ApplyDocumentTimestamp(DocumentTimestampInput input, ITSAClient tsaClient)
+        {
             string fieldName = PdfCryptoHelper.EnsureFieldName(input.FieldName, $"Timestamp_{Guid.NewGuid():N}");
             using var msIn = new MemoryStream(Convert.FromBase64String(input.PdfContent));
             using var msOut = new MemoryStream();
