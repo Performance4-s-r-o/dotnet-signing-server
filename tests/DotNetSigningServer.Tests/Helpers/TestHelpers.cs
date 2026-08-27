@@ -90,6 +90,35 @@ public static class TestHelpers
     }
 
     /// <summary>
+    /// Creates a self-signed certificate that is allowed to issue RFC 3161 tokens.
+    /// BouncyCastle refuses to build a timestamp token unless the certificate
+    /// carries a critical timeStamping extended key usage, so this cannot reuse
+    /// <see cref="CreateTestCertificate"/>.
+    /// </summary>
+    public static (Org.BouncyCastle.X509.X509Certificate Certificate, AsymmetricKeyParameter PrivateKey) CreateTsaCertificate()
+    {
+        var keyPairGen = new RsaKeyPairGenerator();
+        keyPairGen.Init(new KeyGenerationParameters(new SecureRandom(), 2048));
+        AsymmetricCipherKeyPair keyPair = keyPairGen.GenerateKeyPair();
+
+        var certGen = new X509V3CertificateGenerator();
+        var dn = new X509Name("CN=Test TSA, O=Unit Tests");
+        certGen.SetSerialNumber(BigInteger.ProbablePrime(120, new Random()));
+        certGen.SetIssuerDN(dn);
+        certGen.SetSubjectDN(dn);
+        certGen.SetNotBefore(DateTime.UtcNow.AddDays(-1));
+        certGen.SetNotAfter(DateTime.UtcNow.AddYears(1));
+        certGen.SetPublicKey(keyPair.Public);
+        certGen.AddExtension(
+            X509Extensions.ExtendedKeyUsage,
+            critical: true,
+            new ExtendedKeyUsage(KeyPurposeID.IdKPTimeStamping));
+
+        var certificate = certGen.Generate(new Asn1SignatureFactory("SHA256WithRSA", keyPair.Private));
+        return (certificate, keyPair.Private);
+    }
+
+    /// <summary>
     /// Creates a fresh InMemory EF Core ApplicationDbContext with a unique database name.
     /// </summary>
     public static ApplicationDbContext CreateInMemoryDbContext()

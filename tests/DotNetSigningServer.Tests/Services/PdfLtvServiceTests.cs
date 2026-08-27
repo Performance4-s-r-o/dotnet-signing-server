@@ -59,6 +59,50 @@ public class PdfLtvServiceTests
     private static byte[] SignedPdf() => SignedPdfWithCrl().Pdf;
 
     /// <summary>
+    /// A document that has been through two rounds — a server seal and a
+    /// signature — so extending it has to leave both intact. Both use the same
+    /// certificate, which keeps a single CRL sufficient as revocation evidence.
+    /// </summary>
+    private static (byte[] Pdf, byte[] Crl) SealedAndSignedPdfWithCrl()
+    {
+        var (_, pfxBase64, password) = TestHelpers.CreateTestCertificate();
+        var sealOptions = new SealOptions
+        {
+            Enabled = true,
+            PfxBase64 = pfxBase64,
+            PfxPassword = password,
+            Visible = false,
+        };
+        var signingService = new PdfSigningService(
+            TestHelpers.WrapOptions(sealOptions),
+            TestHelpers.WrapOptions(new EvidenceOptions()),
+            new PdfVisualSigningService());
+
+        var sealingService = new PdfSealingService(
+            TestHelpers.WrapOptions(sealOptions),
+            signingService,
+            new PdfVisualSigningService());
+
+        var sealed_ = sealingService.ApplySeal(new SealInput
+        {
+            PdfContent = TestHelpers.CreateMinimalPdfBase64(),
+            VerificationUrl = "https://example.test/verify/seal",
+            VerificationMode = "qr",
+        });
+
+        var signed = signingService.SignWithPfx(new PfxSignInput
+        {
+            PdfContent = sealed_,
+            PfxContent = pfxBase64,
+            PfxPassword = password,
+            FieldName = "Signature1",
+            SignRect = new SignRect { X = 10, Y = 10, Width = 200, Height = 50 },
+        });
+
+        return (Convert.FromBase64String(signed), BuildCrl(pfxBase64, password));
+    }
+
+    /// <summary>
     /// A genuine, signed CRL listing no revocations. iText parses and validates
     /// whatever the revocation clients hand back, so a stub returning arbitrary
     /// bytes is silently discarded — the evidence has to be real for the DSS to
@@ -143,22 +187,17 @@ public class PdfLtvServiceTests
     }
 
     /// <summary>
-    /// A real archive timestamp needs an RFC 3161 authority, so this runs only
-    /// when one is named — the suite must not depend on the network.
-    ///
-    /// Run with: TSA_INTEGRATION_URL=https://freetsa.org/tsr dotnet test
+    /// The archive timestamp comes from an in-process RFC 3161 authority, so the
+    /// whole B-LTA path is covered without the suite touching the network. Only
+    /// the transport is faked; iText builds and embeds the token for real.
     /// </summary>
     [Fact]
     public void Extend_WithTsa_ProducesBltaWithAnInvisibleArchiveTimestamp()
     {
-        var tsaUrl = Environment.GetEnvironmentVariable("TSA_INTEGRATION_URL");
-        if (string.IsNullOrWhiteSpace(tsaUrl)) return;
-
         var (pdf, crl) = SignedPdfWithCrl();
         var service = new PdfLtvService(new StubOcspClient(null), new StubCrlClient(crl));
-        var tsaClient = PdfCryptoHelper.CreateTsaClient(tsaUrl);
 
-        var extended = service.Extend(pdf, tsaClient, addArchiveTimestamp: true);
+        var extended = service.Extend(pdf, new LocalTsaClient(), addArchiveTimestamp: true);
 
         var result = PdfSignatureInspector.Inspect(extended);
         Assert.True(result.HasDss);
@@ -182,12 +221,9 @@ public class PdfLtvServiceTests
     [Fact]
     public void Extend_RunTwice_ChainsASecondArchiveTimestamp()
     {
-        var tsaUrl = Environment.GetEnvironmentVariable("TSA_INTEGRATION_URL");
-        if (string.IsNullOrWhiteSpace(tsaUrl)) return;
-
         var (pdf, crl) = SignedPdfWithCrl();
         var service = new PdfLtvService(new StubOcspClient(null), new StubCrlClient(crl));
-        var tsaClient = PdfCryptoHelper.CreateTsaClient(tsaUrl);
+        var tsaClient = new LocalTsaClient();
 
         var first = service.Extend(pdf, tsaClient, addArchiveTimestamp: true);
         var renewed = service.Extend(first, tsaClient, addArchiveTimestamp: true);
@@ -195,5 +231,30 @@ public class PdfLtvServiceTests
         var result = PdfSignatureInspector.Inspect(renewed);
         Assert.Equal(2, result.ArchiveTimestampCount);
         Assert.All(result.Signatures, s => Assert.True(s.IntegrityVerified));
+    }
+
+    /// <summary>
+    /// Renewal on a document that several parties have already signed: the
+    /// validation data and the archive timestamp are incremental updates, so
+    /// every earlier signature must still verify afterwards.
+    /// </summary>
+    [Fact]
+    public void Extend_OnASealedAndSignedDocument_KeepsEveryEarlierSignatureValid()
+    {
+        var (pdf, crl) = SealedAndSignedPdfWithCrl();
+        var service = new PdfLtvService(new StubOcspClient(null), new StubCrlClient(crl));
+
+        var extended = service.Extend(pdf, new LocalTsaClient(), addArchiveTimestamp: true);
+
+        var result = PdfSignatureInspector.Inspect(extended);
+        Assert.True(result.HasDss);
+        Assert.Equal(1, result.ArchiveTimestampCount);
+
+        // The seal, the signature and the fresh archive timestamp.
+        Assert.Equal(3, result.Signatures.Count);
+        Assert.All(result.Signatures, s => Assert.True(s.IntegrityVerified, $"{s.FieldName} no longer verifies"));
+        Assert.All(
+            result.Signatures.Where(s => !s.IsDocumentTimestamp),
+            s => Assert.Equal("B-LTA", s.Level));
     }
 }
