@@ -164,6 +164,15 @@
   <data name="Error_NO_REVOCATION_DATA_AVAILABLE" xml:space="preserve"><value>No se pudieron obtener datos de revocación para los certificados de firma, por lo que no se incrustó información de validación a largo plazo.</value></data>
   <data name="VisualSignError" xml:space="preserve"><value>Se produjo un error al aplicar la firma visual</value></data>
   <data name="SealError" xml:space="preserve"><value>Se produjo un error al aplicar el sello</value></data>
+  <data name="SealNotPermitted" xml:space="preserve"><value>El sellado no está habilitado para esta cuenta.</value></data>
+  <data name="SealAllowed" xml:space="preserve"><value>Sellado</value></data>
+  <data name="SealAllowedDescription" xml:space="preserve"><value>Permite a esta cuenta llamar a /api/seal, que firma con nuestro propio certificado. Desactivado por defecto: un documento sellado así se verifica como nuestro en cualquier lector.</value></data>
+  <data name="EnableSealAllowed" xml:space="preserve"><value>Habilitar sellado</value></data>
+  <data name="DisableSealAllowed" xml:space="preserve"><value>Deshabilitar sellado</value></data>
+  <data name="ConfirmEnableSealAllowed" xml:space="preserve"><value>¿Permitir que esta cuenta firme con nuestro certificado?</value></data>
+  <data name="ConfirmDisableSealAllowed" xml:space="preserve"><value>¿Retirar a esta cuenta el acceso al sellado?</value></data>
+  <data name="SealAllowedEnabled" xml:space="preserve"><value>Sellado habilitado para esta cuenta.</value></data>
+  <data name="SealAllowedDisabled" xml:space="preserve"><value>Sellado deshabilitado para esta cuenta.</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>Se produjo un error al añadir el archivo adjunto</value></data>
   <data name="ProvidePdfOrFillPdf" xml:space="preserve"><value>Proporcione PdfContents o FillPdf.</value></data>
   <data name="SignaturesRequired" xml:space="preserve"><value>Las firmas son obligatorias.</value></data>

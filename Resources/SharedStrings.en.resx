@@ -164,6 +164,15 @@
   <data name="Error_NO_REVOCATION_DATA_AVAILABLE" xml:space="preserve"><value>No revocation data could be retrieved for the signing certificates, so no long-term validation information was embedded.</value></data>
   <data name="VisualSignError" xml:space="preserve"><value>An error occurred while applying the visual signature</value></data>
   <data name="SealError" xml:space="preserve"><value>An error occurred while applying the seal</value></data>
+  <data name="SealNotPermitted" xml:space="preserve"><value>Sealing is not enabled for this account.</value></data>
+  <data name="SealAllowed" xml:space="preserve"><value>Sealing</value></data>
+  <data name="SealAllowedDescription" xml:space="preserve"><value>Lets this account call /api/seal, which signs with our own certificate. Off by default — a document sealed here verifies as ours in any reader.</value></data>
+  <data name="EnableSealAllowed" xml:space="preserve"><value>Enable sealing</value></data>
+  <data name="DisableSealAllowed" xml:space="preserve"><value>Disable sealing</value></data>
+  <data name="ConfirmEnableSealAllowed" xml:space="preserve"><value>Allow this account to sign with our certificate?</value></data>
+  <data name="ConfirmDisableSealAllowed" xml:space="preserve"><value>Withdraw this account's access to sealing?</value></data>
+  <data name="SealAllowedEnabled" xml:space="preserve"><value>Sealing enabled for this account.</value></data>
+  <data name="SealAllowedDisabled" xml:space="preserve"><value>Sealing disabled for this account.</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>An error occurred while adding the attachment</value></data>
   <data name="ProvidePdfOrFillPdf" xml:space="preserve"><value>Provide PdfContents or FillPdf.</value></data>
   <data name="SignaturesRequired" xml:space="preserve"><value>Signatures are required.</value></data>

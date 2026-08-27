@@ -347,7 +347,15 @@ namespace DotNetSigningServer.Controllers
             var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
 
-            return Ok(new ServerCapabilities { Seal = _sealingService.DescribeCapability() });
+            // A caller without the grant learns nothing about the certificate —
+            // not that one exists, not whose it is. Reporting it would hand a
+            // would-be forger the subject to aim at, and the answer is "no" for
+            // them either way.
+            var seal = user.SealAllowed
+                ? _sealingService.DescribeCapability()
+                : new SealCapability { Enabled = false };
+
+            return Ok(new ServerCapabilities { Seal = seal });
         }
 
         [HttpPost("/api/inspect-signatures")]
@@ -468,11 +476,28 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
+        /// <summary>
+        /// Signs with the operator's own certificate, so a valid token and a
+        /// credit balance are not enough — every other endpoint signs with
+        /// material the caller supplied, this one lends our identity. Gated on
+        /// <see cref="User.SealAllowed"/>, granted per account from /Admin.
+        /// </summary>
         [HttpPost("/api/seal")]
         public async Task<IActionResult> ApplySeal([FromBody] SealInput input)
         {
             var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
+
+            if (!user.SealAllowed)
+            {
+                Logger.LogWarning(
+                    Logging.LoggingEvents.AuthFailed,
+                    "Seal refused for user {UserId} — SealAllowed is not granted",
+                    user.Id);
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    new { code = "SEAL_NOT_PERMITTED", message = Localizer["SealNotPermitted"].Value });
+            }
 
             try
             {

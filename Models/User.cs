@@ -76,6 +76,18 @@ public class User
     public bool IsEnterprise { get; set; } = false;
 
     /// <summary>
+    /// Whether this account may call <c>/api/seal</c>, which signs with the
+    /// operator's OWN certificate rather than one the caller supplied.
+    ///
+    /// Off by default, and deliberately not tied to credits: every other endpoint
+    /// signs with something the caller brought, so paying for it is the whole
+    /// check. Sealing lends the operator's identity, and a document that carries
+    /// it verifies as theirs in any reader — so it is granted per account, never
+    /// earned by signing up.
+    /// </summary>
+    public bool SealAllowed { get; set; } = false;
+
+    /// <summary>
     /// Timestamp when enterprise mode was last enabled. Usage shown in the enterprise billing
     /// view is filtered to records created at or after this time — usage before the switch is
     /// considered separately (pay-as-you-go credits). NULL = enterprise was never enabled, or

@@ -53,6 +53,7 @@ public class AdminController : Controller
                 IsActive = u.IsActive,
                 IsAdmin = u.IsAdmin,
                 IsEnterprise = u.IsEnterprise,
+                SealAllowed = u.SealAllowed,
                 CreditsRemaining = u.CreditsRemaining,
                 AutoRechargeEnabled = u.AutoRechargeEnabled,
                 CreatedAt = u.CreatedAt,
@@ -195,6 +196,36 @@ public class AdminController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    /// <summary>
+    /// Grants or withdraws access to /api/seal. Kept separate from the enterprise
+    /// toggle on purpose: that one is about how an account is billed, this one is
+    /// about whether it may sign with our certificate.
+    /// </summary>
+    [HttpPost("/Admin/Users/{id:guid}/ToggleSealAllowed")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ToggleSealAllowed(Guid id)
+    {
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (user == null)
+        {
+            TempData["Error"] = _localizer["UserNotFound"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+
+        user.SealAllowed = !user.SealAllowed;
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        await _dbContext.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Seal permission for user {UserId} set to {SealAllowed}", user.Id, user.SealAllowed);
+
+        TempData["Info"] = user.SealAllowed
+            ? _localizer["SealAllowedEnabled"].Value
+            : _localizer["SealAllowedDisabled"].Value;
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
     [HttpPost("/Admin/Users/{id:guid}/SetConcurrencyQueueTimeout")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SetConcurrencyQueueTimeout(Guid id, [FromForm] int? queueTimeoutSeconds)
@@ -221,6 +252,7 @@ public class AdminController : Controller
         public bool IsActive { get; set; }
         public bool IsAdmin { get; set; }
         public bool IsEnterprise { get; set; }
+        public bool SealAllowed { get; set; }
         public int CreditsRemaining { get; set; }
         public bool AutoRechargeEnabled { get; set; }
         public DateTimeOffset CreatedAt { get; set; }

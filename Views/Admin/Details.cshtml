@@ -71,6 +71,28 @@
                     </button>
                 }
             </form>
+
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:1.25rem 0" />
+
+            <h3 class="billing-pricing-title">@L["SealAllowed"]</h3>
+            <p class="muted" style="font-size:0.875rem;margin-bottom:0.75rem">@L["SealAllowedDescription"]</p>
+            <form method="post" action="/Admin/Users/@Model.User.Id/ToggleSealAllowed">
+                @Html.AntiForgeryToken()
+                @if (Model.User.SealAllowed)
+                {
+                    <button type="submit" class="btn-small btn-secondary" style="color:#dc2626;border-color:#fca5a5"
+                            onclick="return confirm('@L["ConfirmDisableSealAllowed"]')">
+                        @L["DisableSealAllowed"]
+                    </button>
+                }
+                else
+                {
+                    <button type="submit" class="btn-small btn-secondary"
+                            onclick="return confirm('@L["ConfirmEnableSealAllowed"]')">
+                        @L["EnableSealAllowed"]
+                    </button>
+                }
+            </form>
         </div>
 
         <div class="card">

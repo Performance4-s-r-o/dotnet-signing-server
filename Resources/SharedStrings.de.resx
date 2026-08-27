@@ -164,6 +164,15 @@
   <data name="Error_NO_REVOCATION_DATA_AVAILABLE" xml:space="preserve"><value>Für die Signaturzertifikate konnten keine Sperrinformationen abgerufen werden, daher wurden keine Daten für die Langzeitvalidierung eingebettet.</value></data>
   <data name="VisualSignError" xml:space="preserve"><value>Beim Anbringen der visuellen Signatur ist ein Fehler aufgetreten</value></data>
   <data name="SealError" xml:space="preserve"><value>Beim Anbringen des Siegels ist ein Fehler aufgetreten</value></data>
+  <data name="SealNotPermitted" xml:space="preserve"><value>Das Siegeln ist für dieses Konto nicht freigeschaltet.</value></data>
+  <data name="SealAllowed" xml:space="preserve"><value>Siegeln</value></data>
+  <data name="SealAllowedDescription" xml:space="preserve"><value>Erlaubt diesem Konto den Aufruf von /api/seal, das mit unserem eigenen Zertifikat signiert. Standardmäßig aus — ein so gesiegeltes Dokument gilt in jedem Reader als unseres.</value></data>
+  <data name="EnableSealAllowed" xml:space="preserve"><value>Siegeln aktivieren</value></data>
+  <data name="DisableSealAllowed" xml:space="preserve"><value>Siegeln deaktivieren</value></data>
+  <data name="ConfirmEnableSealAllowed" xml:space="preserve"><value>Diesem Konto das Signieren mit unserem Zertifikat erlauben?</value></data>
+  <data name="ConfirmDisableSealAllowed" xml:space="preserve"><value>Diesem Konto den Zugriff auf das Siegeln entziehen?</value></data>
+  <data name="SealAllowedEnabled" xml:space="preserve"><value>Siegeln für dieses Konto aktiviert.</value></data>
+  <data name="SealAllowedDisabled" xml:space="preserve"><value>Siegeln für dieses Konto deaktiviert.</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>Beim Hinzufügen des Anhangs ist ein Fehler aufgetreten</value></data>
   <data name="ProvidePdfOrFillPdf" xml:space="preserve"><value>Geben Sie PdfContents oder FillPdf an.</value></data>
   <data name="SignaturesRequired" xml:space="preserve"><value>Signaturen sind erforderlich.</value></data>

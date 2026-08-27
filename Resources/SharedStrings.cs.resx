@@ -164,6 +164,15 @@
   <data name="Error_NO_REVOCATION_DATA_AVAILABLE" xml:space="preserve"><value>Pro podpisové certifikáty se nepodařilo získat revokační data, takže nebyly vloženy žádné informace pro dlouhodobé ověřování.</value></data>
   <data name="VisualSignError" xml:space="preserve"><value>Při aplikaci vizuálního podpisu došlo k chybě</value></data>
   <data name="SealError" xml:space="preserve"><value>Při aplikaci pečeti došlo k chybě</value></data>
+  <data name="SealNotPermitted" xml:space="preserve"><value>Pečetění není pro tento účet povoleno.</value></data>
+  <data name="SealAllowed" xml:space="preserve"><value>Pečetění</value></data>
+  <data name="SealAllowedDescription" xml:space="preserve"><value>Povolí tomuto účtu volat /api/seal, které podepisuje naším vlastním certifikátem. Ve výchozím stavu vypnuto — takto zapečetěný dokument se v každé čtečce ověří jako náš.</value></data>
+  <data name="EnableSealAllowed" xml:space="preserve"><value>Povolit pečetění</value></data>
+  <data name="DisableSealAllowed" xml:space="preserve"><value>Zakázat pečetění</value></data>
+  <data name="ConfirmEnableSealAllowed" xml:space="preserve"><value>Povolit tomuto účtu podepisovat naším certifikátem?</value></data>
+  <data name="ConfirmDisableSealAllowed" xml:space="preserve"><value>Odebrat tomuto účtu přístup k pečetění?</value></data>
+  <data name="SealAllowedEnabled" xml:space="preserve"><value>Pečetění pro tento účet povoleno.</value></data>
+  <data name="SealAllowedDisabled" xml:space="preserve"><value>Pečetění pro tento účet zakázáno.</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>Při přidávání přílohy došlo k chybě</value></data>
   <data name="ProvidePdfOrFillPdf" xml:space="preserve"><value>Zadejte PdfContents nebo FillPdf.</value></data>
   <data name="SignaturesRequired" xml:space="preserve"><value>Podpisy jsou povinné.</value></data>
