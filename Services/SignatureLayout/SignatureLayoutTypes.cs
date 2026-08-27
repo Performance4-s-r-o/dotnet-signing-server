@@ -1,6 +1,6 @@
 namespace DotNetSigningServer.Services.SignatureLayout
 {
-    // 1:1 port of v0-share-point-document-signing/lib/signature-layout/types.ts
+    // 1:1 port of performance4pdf-portal/lib/signature-layout/types.ts
     // Keep structurally identical — shared-spec refactors land here and on the TS side together.
 
     public enum ColumnKind { Left, Middle, Right }

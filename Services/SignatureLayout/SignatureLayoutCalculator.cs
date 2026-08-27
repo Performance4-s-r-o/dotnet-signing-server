@@ -1,7 +1,7 @@
 namespace DotNetSigningServer.Services.SignatureLayout
 {
     /// <summary>
-    /// 1:1 port of v0-share-point-document-signing/lib/signature-layout/.
+    /// 1:1 port of performance4pdf-portal/lib/signature-layout/.
     /// Produces the same LayoutResult as the TS module given identical input
     /// — that's how SPFx preview, v0 WYSIWYG, and this iText renderer stay in
     /// sync. Refactor in lockstep with the TS version.
