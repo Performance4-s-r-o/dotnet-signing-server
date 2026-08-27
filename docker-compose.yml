@@ -27,6 +27,9 @@ services:
       # Internal preprocessing bypass — must match the same key on the calling service
       - Billing__AttachmentDebitBypassKey=${BILLING_ATTACHMENT_DEBIT_BYPASS_KEY:-}
       # Seal (server-side PFX sealing for SES flow)
+      - PrivateServer__Enabled=${PRIVATE_SERVER:-false}
+      - SeedAdmin__Email=${SEED_ADMIN_EMAIL:-}
+      - SeedAdmin__Password=${SEED_ADMIN_PASSWORD:-}
       - Seal__Enabled=${SEAL_ENABLED:-false}
       - SEAL_PFX_PATH=${SEAL_PFX_PATH:-}
       - Seal__Location=${SEAL_LOCATION:-}
