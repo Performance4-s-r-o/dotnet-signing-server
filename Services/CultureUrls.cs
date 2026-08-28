@@ -50,6 +50,35 @@ public static class CultureUrls
         return false;
     }
 
+    /// <summary>
+    /// Splits "/en/pricing" into "/pricing". The default locale is served from the
+    /// clean URL, so this form is never a page of its own — it only appears when a
+    /// visitor asks for the default language out loud (the switcher), which the
+    /// caller turns into a stored choice plus a redirect to the canonical URL.
+    /// </summary>
+    public static bool TrySplitDefault(PathString path, out PathString rest)
+    {
+        if (path.StartsWithSegments($"/{Default}", StringComparison.OrdinalIgnoreCase, out var remaining))
+        {
+            rest = remaining.HasValue ? remaining : new PathString("/");
+            return true;
+        }
+
+        rest = path;
+        return false;
+    }
+
+    /// <summary>Strips a locale prefix of either form, leaving the locale-free path.</summary>
+    public static PathString StripLocale(PathString path)
+    {
+        if (TrySplit(path, out _, out var rest))
+        {
+            return rest;
+        }
+
+        return TrySplitDefault(path, out var defaultRest) ? defaultRest : path;
+    }
+
     /// <summary>Absolute URL of <paramref name="path"/> in one locale.</summary>
     public static string Absolute(string origin, string path, string culture)
     {
@@ -58,6 +87,22 @@ public static class CultureUrls
         // "/cs" alone (not "/cs/") is the canonical home page of a locale.
         var tail = normalized == "/" && prefix.Length > 0 ? string.Empty : normalized;
         return $"{origin.TrimEnd('/')}{prefix}{tail}";
+    }
+
+    /// <summary>
+    /// URL that picks <paramref name="culture"/> deliberately — what the language
+    /// switcher links to. Identical to <see cref="Absolute"/> for the prefixed
+    /// locales; for the default one it keeps the "/en" prefix, because the clean
+    /// URL carries no locale and so cannot express "I want English" to a visitor
+    /// who is currently remembered as speaking something else.
+    /// </summary>
+    public static string SwitchUrl(string origin, string path, string culture)
+    {
+        var locale = IsSupported(culture) ? culture.ToLowerInvariant() : Default;
+        var normalized = string.IsNullOrEmpty(path) ? "/" : path;
+        // "/es" alone (not "/es/") is the canonical home page of a locale.
+        var tail = normalized == "/" ? string.Empty : normalized;
+        return $"{origin.TrimEnd('/')}/{locale}{tail}";
     }
 
     /// <summary>

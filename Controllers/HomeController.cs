@@ -203,7 +203,7 @@ public class HomeController : Controller
         {
             var split = returnUrl.Split('?', 2);
             var path = split[0];
-            CultureUrls.TrySplit(path, out _, out var rest);
+            var rest = CultureUrls.StripLocale(path);
             target = CultureUrls.Absolute(string.Empty, rest.Value ?? "/", culture)
                      + (split.Length > 1 ? "?" + split[1] : string.Empty);
         }
