@@ -56,11 +56,15 @@
 
     // Same URL, relative — the switcher must work on whatever host is serving,
     // including localhost, where the configured public origin doesn't apply.
+    // Always the prefixed form, English included: "/pricing" is indistinguishable
+    // from "no preference", so a visitor remembered as Spanish would be redirected
+    // straight back. "/en/pricing" says it out loud and the middleware records it
+    // before sending them on to the clean URL.
     string LocalePath(string culture)
     {
         if (request == null) return "/";
         var query = request.QueryString.HasValue ? request.QueryString.Value : string.Empty;
-        return DotNetSigningServer.Services.CultureUrls.Absolute(string.Empty, request.Path.Value ?? "/", culture) + query;
+        return DotNetSigningServer.Services.CultureUrls.SwitchUrl(string.Empty, request.Path.Value ?? "/", culture) + query;
     }
 
     var canonicalUrl = LocaleUrl(currentCulture);

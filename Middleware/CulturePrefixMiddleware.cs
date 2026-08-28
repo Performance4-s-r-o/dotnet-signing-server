@@ -45,6 +45,31 @@ public class CulturePrefixMiddleware
 
         context.Items[CultureItemKey] = CultureUrls.Default;
 
+        // "/en/pricing" is not an address of its own — English is served from the
+        // clean URL. Reaching it means the visitor asked for English by hand, which
+        // is the one choice the URL alone cannot record: an unprefixed URL looks
+        // exactly like "no opinion", so a remembered Spanish would bounce them
+        // straight back. Store the choice, then send them to the canonical URL.
+        if (CultureUrls.TrySplitDefault(request.Path, out var defaultRest))
+        {
+            RememberChoice(context, CultureUrls.Default);
+            request.Path = defaultRest;
+
+            if (HttpMethods.IsGet(request.Method) || HttpMethods.IsHead(request.Method))
+            {
+                // Temporary and uncacheable: the redirect exists to carry the cookie,
+                // so a stored copy — in the browser or a shared cache — would either
+                // skip the write or hand one visitor's language to the next.
+                context.Response.Headers.CacheControl = "no-store";
+                context.Response.Redirect($"{request.PathBase}{defaultRest}{request.QueryString}", permanent: false);
+                return;
+            }
+
+            // A non-GET would lose its body to a redirect; serve it in place.
+            await _next(context);
+            return;
+        }
+
         if (IsRedirectCandidate(context))
         {
             // The response differs per visitor, so a shared cache must not serve
@@ -172,8 +197,10 @@ public class CulturePrefixMiddleware
         }
 
         var path = request.Path.HasValue ? request.Path.Value! : "/";
-        var tail = path == "/" ? string.Empty : path;
-        return $"{request.PathBase}{CultureUrls.Prefix(culture)}{tail}{query}";
+        // Always the prefixed form, English included: landing on the prefix is what
+        // records the choice, so a legacy "?culture=en" link switches for real
+        // instead of dropping the visitor on a URL their cookie reads as Spanish.
+        return CultureUrls.SwitchUrl(request.PathBase.Value ?? string.Empty, path, culture) + query.ToString();
     }
 }
 

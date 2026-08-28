@@ -64,6 +64,9 @@ public class SeoController : Controller
                 sb.AppendLine($"Disallow: {CultureUrls.Prefix(locale)}{path}");
             }
         }
+        // "/en/…" holds no content: it only records an explicit English choice and
+        // redirects to the clean URL the sitemap already lists.
+        sb.AppendLine($"Disallow: /{CultureUrls.Default}/");
         sb.AppendLine();
         sb.AppendLine($"Sitemap: {origin}/sitemap.xml");
 

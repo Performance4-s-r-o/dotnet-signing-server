@@ -29,8 +29,8 @@ public class CulturePrefixTagHelper : TagHelper
 
     /// <summary>
     /// Marks a link that already names its own locale — the language switcher.
-    /// Without it, the switcher's English entry ("/pricing") would be rewritten
-    /// back to the current locale and never actually switch anything.
+    /// Without it, the switcher's English entry ("/en/pricing") would be rewritten
+    /// to "/es/en/pricing" and never actually switch anything.
     /// </summary>
     public const string OptOutAttribute = "data-locale-link";
 
@@ -83,8 +83,9 @@ public class CulturePrefixTagHelper : TagHelper
         }
 
         // Any locale prefix counts as already-localized — the language switcher
-        // links to the other languages by their own prefix.
-        if (CultureUrls.TrySplit(url.Split('?')[0], out _, out _))
+        // links to the other languages by their own prefix, "/en" included.
+        var path = url.Split('?')[0];
+        if (CultureUrls.TrySplit(path, out _, out _) || CultureUrls.TrySplitDefault(path, out _))
         {
             return false;
         }
