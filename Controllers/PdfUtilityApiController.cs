@@ -61,7 +61,7 @@ namespace DotNetSigningServer.Controllers
             {
                 var pageCount = CountPagesFromBase64(input.PdfContent);
                 var requiredCredits = CalculateCreditsForPages(pageCount);
-                if (requiredCredits > 0 && user.CreditsRemaining < requiredCredits)
+                if (LacksCredits(user, requiredCredits))
                 {
                     return PaymentRequired(user, requiredCredits);
                 }
@@ -123,7 +123,7 @@ namespace DotNetSigningServer.Controllers
             {
                 var (pdfBase64, pageCount) = await ResolvePdfForFillAsync(input, user.Id);
                 var requiredCredits = CalculateCreditsForPages(pageCount) * (input.Data?.Count ?? 0);
-                if (requiredCredits > 0 && user.CreditsRemaining < requiredCredits)
+                if (LacksCredits(user, requiredCredits))
                 {
                     return PaymentRequired(user, requiredCredits);
                 }
@@ -167,14 +167,24 @@ namespace DotNetSigningServer.Controllers
             {
                 var pageCount = CountPagesFromBase64(input.PdfContent);
                 var requiredCredits = CalculateCreditsForPages(pageCount);
-                if (requiredCredits > 0 && user.CreditsRemaining < requiredCredits)
+                if (LacksCredits(user, requiredCredits))
                 {
                     return PaymentRequired(user, requiredCredits);
                 }
 
                 var results = await DetectCodesAsync(input.PdfContent, formats);
-                await DebitUserAsync(user, requiredCredits);
-                return Ok(new { results });
+                await DebitUserAsync(user, requiredCredits, operation: "find-codes");
+                // `pages`/`credits` let the portal bill its own tenant at the same
+                // rate without opening the PDF a second time. `credits` is the base
+                // rate before any concurrency tier — the tier is this server's own
+                // throttle and must not leak into the caller's price list.
+                return Ok(new
+                {
+                    results,
+                    pages = pageCount,
+                    credits = requiredCredits,
+                    truncated = pageCount > MaxFindCodesRasterPages,
+                });
             }
             catch (Exception ex)
             {

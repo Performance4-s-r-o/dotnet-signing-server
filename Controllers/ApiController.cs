@@ -113,8 +113,7 @@ namespace DotNetSigningServer.Controllers
                 return (null, Unauthorized());
             }
 
-            // Enterprise users bypass the credits check (billed manually based on tracked usage)
-            if (requiredCredits > 0 && !user.IsEnterprise && user.CreditsRemaining < requiredCredits)
+            if (LacksCredits(user, requiredCredits))
             {
                 Logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Credits insufficient for user {UserId}", user.Id);
                 return (null, StatusCode(StatusCodes.Status402PaymentRequired, new { message = Localizer["NoCreditsRemaining"].Value }));
@@ -259,6 +258,21 @@ namespace DotNetSigningServer.Controllers
         {
             Logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Credits insufficient for user {UserId}", user.Id);
             return StatusCode(StatusCodes.Status402PaymentRequired, new { message = Localizer["NotEnoughCredits", requiredCredits].Value });
+        }
+
+        /// <summary>
+        /// Whether the caller must be refused for lack of credits.
+        ///
+        /// Enterprise users are exempt: they are billed manually from tracked
+        /// usage, so CreditsRemaining is meaningless for them (see User.IsEnterprise
+        /// and DebitUserAsync, which skips the decrement but still writes a
+        /// UsageRecord). The per-endpoint page-count pre-checks used to test
+        /// CreditsRemaining directly and so refused exempt callers anyway — route
+        /// every such check through here instead.
+        /// </summary>
+        protected static bool LacksCredits(User user, int requiredCredits)
+        {
+            return requiredCredits > 0 && !user.IsEnterprise && user.CreditsRemaining < requiredCredits;
         }
 
         protected static int CalculateCreditsForPages(int pageCount)
