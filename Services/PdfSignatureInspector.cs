@@ -159,6 +159,7 @@ public static class PdfSignatureInspector
             entry.TimestampedAt = Normalize(token.TimeStampInfo.GenTime);
 
             var tsaCertificate = FindSignerCertificate(token);
+            entry.TimestampAuthority = tsaCertificate?.SubjectDN?.ToString();
             entry.TimestampCertificateNotAfter = NotAfter(tsaCertificate);
             entry.TimestampCertificateNotBefore =
                 tsaCertificate == null ? null : Normalize(tsaCertificate.NotBefore);

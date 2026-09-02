@@ -58,6 +58,7 @@ public class PdfSignatureInspectorTests
         // No TSA was supplied, so the signature stops at the baseline level.
         Assert.Equal("B-B", signature.Level);
         Assert.False(signature.HasTimestamp);
+        Assert.Null(signature.TimestampAuthority);
         Assert.False(signature.IsDocumentTimestamp);
     }
 
@@ -138,6 +139,10 @@ public class PdfSignatureInspectorTests
         Assert.Equal("B-T", signature.Level);
         Assert.True(signature.HasTimestamp);
         Assert.NotNull(signature.TimestampedAt);
+
+        // Who vouched for the time, read out of the document rather than out of
+        // the request that asked for it — that is the whole point of naming it.
+        Assert.False(string.IsNullOrWhiteSpace(signature.TimestampAuthority));
 
         // The dates a renewal schedule is built from: the deadline and the span
         // the safety margin is scaled against.

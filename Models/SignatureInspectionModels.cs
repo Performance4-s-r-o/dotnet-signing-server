@@ -24,6 +24,13 @@ public class SignatureInspectionEntry
     public bool HasTimestamp { get; set; }
     public DateTime? TimestampedAt { get; set; }
     /// <summary>
+    /// Subject of the certificate the timestamp authority signed the token with.
+    /// It is the only place the document itself says WHO vouched for the time —
+    /// the request-time configuration says who was asked, which is a different
+    /// claim and not what a third party reading the file can check.
+    /// </summary>
+    public string? TimestampAuthority { get; set; }
+    /// <summary>
     /// Expiry of the certificate the timestamp authority used. A B-LTA document
     /// must be re-timestamped before this date: afterwards no fresh revocation
     /// data can be obtained for the token and the evidence chain cannot be repaired.
