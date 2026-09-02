@@ -24,10 +24,16 @@ public class SignatureInspectionEntry
     public bool HasTimestamp { get; set; }
     public DateTime? TimestampedAt { get; set; }
     /// <summary>
-    /// Subject of the certificate the timestamp authority signed the token with.
-    /// It is the only place the document itself says WHO vouched for the time —
-    /// the request-time configuration says who was asked, which is a different
-    /// claim and not what a third party reading the file can check.
+    /// Who the token SAYS signed it — the subject of the embedded signer
+    /// certificate, or the TSA name inside TSTInfo when no certificate travels
+    /// with the token.
+    ///
+    /// Asserted by the document, not proven by us. Nothing here validates a
+    /// trust chain, and the bytes come from whatever file the caller uploaded,
+    /// so a hand-made token can carry any subject its author likes. It is still
+    /// worth reporting — it is the only place the document itself names an
+    /// authority, where the request-time configuration only says who was asked
+    /// — but a caller must treat it as a claim to check, never as a verdict.
     /// </summary>
     public string? TimestampAuthority { get; set; }
     /// <summary>
