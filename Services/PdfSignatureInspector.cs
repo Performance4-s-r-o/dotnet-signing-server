@@ -159,6 +159,12 @@ public static class PdfSignatureInspector
             entry.TimestampedAt = Normalize(token.TimeStampInfo.GenTime);
 
             var tsaCertificate = FindSignerCertificate(token);
+            // The certificate is the better name when it is there, but a TSA
+            // answering with certReq=false embeds none — and then TSTInfo still
+            // names itself. Falling back keeps those documents from reading as
+            // "authority not stated" when the document does state one.
+            entry.TimestampAuthority =
+                tsaCertificate?.SubjectDN?.ToString() ?? TsaNameFromTokenInfo(token);
             entry.TimestampCertificateNotAfter = NotAfter(tsaCertificate);
             entry.TimestampCertificateNotBefore =
                 tsaCertificate == null ? null : Normalize(tsaCertificate.NotBefore);
@@ -167,6 +173,23 @@ public static class PdfSignatureInspector
         {
             // Leave the timestamp fields unset — an unreadable token must not
             // make the whole document unreadable.
+        }
+    }
+
+    /// <summary>
+    /// The authority named inside TSTInfo. Optional in RFC 3161 and, like the
+    /// certificate subject, asserted by the document rather than proven.
+    /// </summary>
+    private static string? TsaNameFromTokenInfo(TimeStampToken token)
+    {
+        try
+        {
+            return token.TimeStampInfo.Tsa?.Name?.ToString();
+        }
+        catch (Exception)
+        {
+            // A malformed GeneralName is not a reason to lose the rest.
+            return null;
         }
     }
 

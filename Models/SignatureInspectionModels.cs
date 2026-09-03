@@ -24,6 +24,19 @@ public class SignatureInspectionEntry
     public bool HasTimestamp { get; set; }
     public DateTime? TimestampedAt { get; set; }
     /// <summary>
+    /// Who the token SAYS signed it — the subject of the embedded signer
+    /// certificate, or the TSA name inside TSTInfo when no certificate travels
+    /// with the token.
+    ///
+    /// Asserted by the document, not proven by us. Nothing here validates a
+    /// trust chain, and the bytes come from whatever file the caller uploaded,
+    /// so a hand-made token can carry any subject its author likes. It is still
+    /// worth reporting — it is the only place the document itself names an
+    /// authority, where the request-time configuration only says who was asked
+    /// — but a caller must treat it as a claim to check, never as a verdict.
+    /// </summary>
+    public string? TimestampAuthority { get; set; }
+    /// <summary>
     /// Expiry of the certificate the timestamp authority used. A B-LTA document
     /// must be re-timestamped before this date: afterwards no fresh revocation
     /// data can be obtained for the token and the evidence chain cannot be repaired.

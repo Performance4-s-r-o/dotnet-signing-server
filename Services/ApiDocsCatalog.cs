@@ -197,6 +197,7 @@ Response:
       "integrityVerified": true,
       "hasTimestamp": true,
       "timestampedAt": "2026-08-25T10:12:06Z",
+      "timestampAuthority": "CN=Performance4 TSA, O=Performance4 s.r.o.",
       "timestampCertificateNotBefore": "2021-05-01T00:00:00Z",
       "timestampCertificateNotAfter": "2031-04-30T23:59:59Z",
       "signingCertificateNotAfter": "2027-08-25T00:00:00Z"
