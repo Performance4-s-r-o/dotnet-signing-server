@@ -174,6 +174,7 @@ namespace DotNetSigningServer.Services
                 signerNameOverride: input.SignerName);
 
             signer.SetSignerProperties(signerProperties);
+            ApplySignerName(signer, input.SignerName);
             try
             {
                 signer.Timestamp(tsaClient, fieldName);
@@ -432,6 +433,7 @@ namespace DotNetSigningServer.Services
                 signerNameOverride: signerNameOverride);
 
             signer.SetSignerProperties(signerProperties);
+            ApplySignerName(signer, signerNameOverride);
             // Reserve extra space so the deferred signature can include TSA timestamp tokens when present.
             signer.SignExternalContainer(container, 32768);
 
@@ -459,6 +461,21 @@ namespace DotNetSigningServer.Services
             }
 
             return msOut.ToArray();
+        }
+
+        /// <summary>
+        /// Puts the signer into the signature dictionary so a reader's
+        /// "Signed by" agrees with what the appearance shows.
+        ///
+        /// Empty is left alone rather than written as an empty string: an
+        /// absent /Name lets the reader fall back to the certificate, which is
+        /// at least true, whereas a blank one says the document was signed by
+        /// nobody.
+        /// </summary>
+        private static void ApplySignerName(PdfSigner signer, string? signerName)
+        {
+            if (string.IsNullOrWhiteSpace(signerName)) return;
+            signer.SetSignatureEvent(new SignerNameEvent(signerName));
         }
 
         private static TspException? FindTspException(Exception ex)
