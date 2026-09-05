@@ -89,6 +89,14 @@ public enum PdfBorderStyle
     Filled
 }
 
+/// <summary>
+/// Symbology of a barcode field, as it travels in JSON.
+///
+/// The names here are the ids and aliases from <see cref="CodeFormats"/> — that list
+/// is what says which symbologies exist and which direction each one works in. A test
+/// holds the two in step; adding a value here without a matching entry there fails
+/// the build's test run rather than shipping a format nothing can render.
+/// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum PdfBarcodeFormat
 {
@@ -131,7 +139,15 @@ public enum PdfBarcodeFormat
     [JsonStringEnumMemberName("interleaved2of5")]
     Interleaved2Of5,
     [JsonStringEnumMemberName("i2of5")]
-    I2Of5
+    I2Of5,
+    [JsonStringEnumMemberName("upce")]
+    UpcE,
+    [JsonStringEnumMemberName("upc-e")]
+    UpcEHyphen,
+    [JsonStringEnumMemberName("codabar")]
+    Codabar,
+    [JsonStringEnumMemberName("coda-bar")]
+    CodabarHyphen
 }
 
 public class PdfFieldDefinition

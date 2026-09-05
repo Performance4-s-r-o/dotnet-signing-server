@@ -560,8 +560,10 @@ public class PdfTemplateService
                 PdfBarcodeFormat.Ean13 or PdfBarcodeFormat.Ean13Hyphen => CreateEan(pdfDoc, value, BarcodeEAN.EAN13),
                 PdfBarcodeFormat.Ean8 or PdfBarcodeFormat.Ean8Hyphen => CreateEan(pdfDoc, value, BarcodeEAN.EAN8),
                 PdfBarcodeFormat.Upc or PdfBarcodeFormat.UpcA or PdfBarcodeFormat.UpcAHyphen => CreateEan(pdfDoc, value, BarcodeEAN.UPCA),
+                PdfBarcodeFormat.UpcE or PdfBarcodeFormat.UpcEHyphen => CreateEan(pdfDoc, value, BarcodeEAN.UPCE),
                 PdfBarcodeFormat.Code39 or PdfBarcodeFormat.Code39Hyphen => CreateCode39(pdfDoc, value),
                 PdfBarcodeFormat.Itf or PdfBarcodeFormat.Interleaved2Of5 or PdfBarcodeFormat.I2Of5 => CreateInterleaved25(pdfDoc, value),
+                PdfBarcodeFormat.Codabar or PdfBarcodeFormat.CodabarHyphen => CreateCodabar(pdfDoc, value),
                 _ => CreateCode128(pdfDoc, value),
             };
 
@@ -773,6 +775,23 @@ public class PdfTemplateService
     {
         var barcode = new BarcodeInter25(pdfDoc);
         barcode.SetCode(value);
+        var form = barcode.CreateFormXObject(pdfDoc);
+        return new Image(form);
+    }
+
+    private static Image CreateCodabar(PdfDocument pdfDoc, string value)
+    {
+        var barcode = new BarcodeCodabar(pdfDoc);
+        // Codabar wants a start and a stop character (A-D) around the payload.
+        // iText refuses a code without them, so a caller who just types digits —
+        // which is what everyone does — would get an exception instead of a
+        // barcode. A/A is the conventional pair.
+        var code = value.Trim();
+        var hasDelimiters =
+            code.Length >= 2 &&
+            "ABCD".Contains(char.ToUpperInvariant(code[0])) &&
+            "ABCD".Contains(char.ToUpperInvariant(code[^1]));
+        barcode.SetCode(hasDelimiters ? code.ToUpperInvariant() : $"A{code}A");
         var form = barcode.CreateFormXObject(pdfDoc);
         return new Image(form);
     }

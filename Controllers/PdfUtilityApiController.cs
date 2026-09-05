@@ -142,6 +142,36 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
+        /// <summary>
+        /// Which symbologies this engine knows, and which direction each one works in.
+        ///
+        /// Published so the portal and the SharePoint extension can offer exactly what
+        /// the engine supports rather than each keeping a guess. The three lists used
+        /// to disagree: the builder offered QR, Data Matrix and "barcode" and collapsed
+        /// everything else to Code 128 on save, quietly changing the symbology of a
+        /// template somebody had already set up.
+        ///
+        /// Open on purpose — it is a capability list, not data. Requiring a key would
+        /// mean the extension could not render its dropdown before the user is set up.
+        /// </summary>
+        [HttpGet("/api/code-formats")]
+        public IActionResult GetCodeFormats()
+        {
+            return Ok(new
+            {
+                formats = CodeFormats.All.Select(f => new
+                {
+                    id = f.Id,
+                    aliases = f.Aliases,
+                    dimension = f.Dimension == CodeDimension.TwoD ? "2d" : "1d",
+                    canWrite = f.CanWrite,
+                    canRead = f.CanRead,
+                    selfChecking = f.SelfChecking,
+                    maxLength = f.MaxLength,
+                }),
+            });
+        }
+
         [HttpPost("/api/find-codes")]
         public async Task<IActionResult> FindCodes([FromBody] FindCodesInput input)
         {
@@ -195,126 +225,34 @@ namespace DotNetSigningServer.Controllers
 
         #region Private helpers
 
-        /// <summary>2D symbologies. Always safe to scan for: their error correction
-        /// makes a false positive on rasterized text practically impossible.</summary>
-        private static readonly BarcodeFormat[] TwoDimensionalFormats =
-        {
-            BarcodeFormat.QR_CODE,
-            BarcodeFormat.DATA_MATRIX,
-            BarcodeFormat.PDF_417,
-            BarcodeFormat.AZTEC
-        };
-
-        /// <summary>Linear symbologies that carry a check digit, so a misread is
-        /// rejected by the decoder rather than returned as a value. These join the
-        /// default scan.</summary>
-        private static readonly BarcodeFormat[] CheckedLinearFormats =
-        {
-            BarcodeFormat.CODE_128,
-            BarcodeFormat.EAN_13,
-            BarcodeFormat.EAN_8,
-            BarcodeFormat.UPC_A,
-            BarcodeFormat.UPC_E
-        };
-
-        /// <summary>Linear symbologies with no mandatory check digit. Any run of
-        /// bars can decode to *something*, so scanning for these by default would
-        /// turn tables and underlines on a 300 DPI render into "codes". Available
-        /// only when the caller names them.</summary>
-        private static readonly BarcodeFormat[] UncheckedLinearFormats =
-        {
-            BarcodeFormat.CODE_39,
-            BarcodeFormat.CODE_93,
-            BarcodeFormat.ITF,
-            BarcodeFormat.CODABAR
-        };
-
         /// <summary>
         /// Which symbologies to look for.
         ///
-        /// Reading a linear barcode used to be impossible here: the list held only
-        /// the four 2D formats, including in the "any" branch, so Code128 — which
-        /// this server can WRITE — came back as "no codes found".
+        /// The list itself lives in <see cref="CodeFormats"/>, alongside what the
+        /// engine can WRITE — those two used to be separate and disagreed, so a
+        /// Code 128 this server had stamped came back as "no codes found".
         ///
-        /// The default now also covers the linear formats that carry a check digit.
-        /// The unchecked ones stay opt-in, because they decode noise: on a page of
-        /// rasterized text they would report values that are not there, and a
-        /// confident wrong answer is worse than a missing one.
+        /// An unnamed scan covers the self-checking formats only. The rest decode
+        /// noise: on a 300 DPI render of an ordinary page a table rule reads as a
+        /// Code 39 value that is not there. Naming one, or asking for "1d", is the
+        /// caller saying the page really does hold them.
         /// </summary>
         internal static IList<BarcodeFormat> ParseFormats(string codeType)
         {
-            var formats = new List<BarcodeFormat>();
-            var normalized = (codeType ?? "any").Trim().ToLowerInvariant();
-            if (normalized == "qr")
+            var named = CodeFormats.Find(codeType);
+            if (named is { CanRead: true, ReadFormat: not null })
             {
-                formats.Add(BarcodeFormat.QR_CODE);
-            }
-            else if (normalized is "datamatrix" or "data-matrix" or "dm")
-            {
-                formats.Add(BarcodeFormat.DATA_MATRIX);
-            }
-            else if (normalized == "pdf417")
-            {
-                formats.Add(BarcodeFormat.PDF_417);
-            }
-            else if (normalized == "aztec")
-            {
-                formats.Add(BarcodeFormat.AZTEC);
-            }
-            else if (normalized is "code128" or "code-128")
-            {
-                formats.Add(BarcodeFormat.CODE_128);
-            }
-            else if (normalized is "code39" or "code-39")
-            {
-                formats.Add(BarcodeFormat.CODE_39);
-            }
-            else if (normalized is "code93" or "code-93")
-            {
-                formats.Add(BarcodeFormat.CODE_93);
-            }
-            else if (normalized is "ean13" or "ean-13")
-            {
-                formats.Add(BarcodeFormat.EAN_13);
-            }
-            else if (normalized is "ean8" or "ean-8")
-            {
-                formats.Add(BarcodeFormat.EAN_8);
-            }
-            else if (normalized is "upca" or "upc-a")
-            {
-                formats.Add(BarcodeFormat.UPC_A);
-            }
-            else if (normalized is "upce" or "upc-e")
-            {
-                formats.Add(BarcodeFormat.UPC_E);
-            }
-            else if (normalized == "itf")
-            {
-                formats.Add(BarcodeFormat.ITF);
-            }
-            else if (normalized == "codabar")
-            {
-                formats.Add(BarcodeFormat.CODABAR);
-            }
-            else if (normalized is "1d" or "linear" or "barcode")
-            {
-                // Asking for linear codes explicitly is the one place the unchecked
-                // formats belong: the caller has said the page holds barcodes.
-                formats.AddRange(CheckedLinearFormats);
-                formats.AddRange(UncheckedLinearFormats);
-            }
-            else if (normalized == "2d")
-            {
-                formats.AddRange(TwoDimensionalFormats);
-            }
-            else
-            {
-                formats.AddRange(TwoDimensionalFormats);
-                formats.AddRange(CheckedLinearFormats);
+                return new List<BarcodeFormat> { named.ReadFormat.Value };
             }
 
-            return formats;
+            var group = CodeFormats.FindGroup(codeType);
+            var specs = group ?? CodeFormats.ScanDefault;
+
+            return specs
+                .Where(f => f.ReadFormat.HasValue)
+                .Select(f => f.ReadFormat!.Value)
+                .Distinct()
+                .ToList();
         }
 
         [NonAction]

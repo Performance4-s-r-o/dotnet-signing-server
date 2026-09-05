@@ -4,15 +4,15 @@ using ZXing;
 namespace DotNetSigningServer.Tests.Services;
 
 /// <summary>
-/// Reading codes off a page: which symbologies are looked for, and where the
-/// answer says they are.
+/// Where a scan says a code is.
 ///
-/// Both halves were broken in ways that looked like they worked. The format list
-/// held only 2D symbologies, so a Code128 — which this server can WRITE — came
-/// back as "no codes found" rather than as an error. And the position was the
-/// first decoder point in 300 DPI raster pixels, straight into a field callers
-/// read as PDF units: about four times too far, measured from the wrong edge,
-/// and taken from whichever enlarged variant happened to decode.
+/// The position used to be the first decoder point in 300 DPI raster pixels,
+/// straight into a field callers read as PDF units: about four times too far,
+/// measured from the wrong edge, and taken from whichever enlarged variant
+/// happened to decode.
+///
+/// Which symbologies get looked for is checked in CodeFormatsTests, next to the
+/// catalogue that decides it.
 /// </summary>
 public class FindCodesTests
 {
@@ -28,55 +28,6 @@ public class FindCodesTests
             new ResultPoint(right, bottom),
             new ResultPoint(left, bottom),
         };
-
-    [Fact]
-    public void ParseFormats_Default_FindsLinearCodesToo()
-    {
-        var formats = PdfUtilityApiController.ParseFormats("any");
-
-        // The actual reported gap: Code128 was unreadable.
-        Assert.Contains(BarcodeFormat.CODE_128, formats);
-        Assert.Contains(BarcodeFormat.QR_CODE, formats);
-        Assert.Contains(BarcodeFormat.EAN_13, formats);
-    }
-
-    [Fact]
-    public void ParseFormats_Default_LeavesOutTheOnesThatDecodeNoise()
-    {
-        var formats = PdfUtilityApiController.ParseFormats("any");
-
-        // No mandatory check digit: on a 300 DPI render of a table these report
-        // values that are not on the page. A confident wrong answer is worse
-        // than a missing one, so they are opt-in.
-        Assert.DoesNotContain(BarcodeFormat.CODE_39, formats);
-        Assert.DoesNotContain(BarcodeFormat.ITF, formats);
-        Assert.DoesNotContain(BarcodeFormat.CODABAR, formats);
-    }
-
-    [Fact]
-    public void ParseFormats_AskingForLinearCodes_IncludesTheUncheckedOnes()
-    {
-        var formats = PdfUtilityApiController.ParseFormats("1d");
-
-        Assert.Contains(BarcodeFormat.CODE_39, formats);
-        Assert.Contains(BarcodeFormat.ITF, formats);
-        Assert.Contains(BarcodeFormat.CODE_128, formats);
-        // Asking for linear codes must not quietly scan for QR as well.
-        Assert.DoesNotContain(BarcodeFormat.QR_CODE, formats);
-    }
-
-    [Theory]
-    [InlineData("code128", BarcodeFormat.CODE_128)]
-    [InlineData("code-128", BarcodeFormat.CODE_128)]
-    [InlineData("ean13", BarcodeFormat.EAN_13)]
-    [InlineData("qr", BarcodeFormat.QR_CODE)]
-    public void ParseFormats_NamedFormat_IsTheOnlyOneScannedFor(string codeType, BarcodeFormat expected)
-    {
-        var formats = PdfUtilityApiController.ParseFormats(codeType);
-
-        Assert.Single(formats);
-        Assert.Equal(expected, formats[0]);
-    }
 
     [Fact]
     public void ToPdfBoundingBox_ConvertsPixelsToPointsAndFlipsTheAxis()
