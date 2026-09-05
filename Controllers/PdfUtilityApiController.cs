@@ -195,7 +195,53 @@ namespace DotNetSigningServer.Controllers
 
         #region Private helpers
 
-        private static IList<BarcodeFormat> ParseFormats(string codeType)
+        /// <summary>2D symbologies. Always safe to scan for: their error correction
+        /// makes a false positive on rasterized text practically impossible.</summary>
+        private static readonly BarcodeFormat[] TwoDimensionalFormats =
+        {
+            BarcodeFormat.QR_CODE,
+            BarcodeFormat.DATA_MATRIX,
+            BarcodeFormat.PDF_417,
+            BarcodeFormat.AZTEC
+        };
+
+        /// <summary>Linear symbologies that carry a check digit, so a misread is
+        /// rejected by the decoder rather than returned as a value. These join the
+        /// default scan.</summary>
+        private static readonly BarcodeFormat[] CheckedLinearFormats =
+        {
+            BarcodeFormat.CODE_128,
+            BarcodeFormat.EAN_13,
+            BarcodeFormat.EAN_8,
+            BarcodeFormat.UPC_A,
+            BarcodeFormat.UPC_E
+        };
+
+        /// <summary>Linear symbologies with no mandatory check digit. Any run of
+        /// bars can decode to *something*, so scanning for these by default would
+        /// turn tables and underlines on a 300 DPI render into "codes". Available
+        /// only when the caller names them.</summary>
+        private static readonly BarcodeFormat[] UncheckedLinearFormats =
+        {
+            BarcodeFormat.CODE_39,
+            BarcodeFormat.CODE_93,
+            BarcodeFormat.ITF,
+            BarcodeFormat.CODABAR
+        };
+
+        /// <summary>
+        /// Which symbologies to look for.
+        ///
+        /// Reading a linear barcode used to be impossible here: the list held only
+        /// the four 2D formats, including in the "any" branch, so Code128 — which
+        /// this server can WRITE — came back as "no codes found".
+        ///
+        /// The default now also covers the linear formats that carry a check digit.
+        /// The unchecked ones stay opt-in, because they decode noise: on a page of
+        /// rasterized text they would report values that are not there, and a
+        /// confident wrong answer is worse than a missing one.
+        /// </summary>
+        internal static IList<BarcodeFormat> ParseFormats(string codeType)
         {
             var formats = new List<BarcodeFormat>();
             var normalized = (codeType ?? "any").Trim().ToLowerInvariant();
@@ -215,15 +261,57 @@ namespace DotNetSigningServer.Controllers
             {
                 formats.Add(BarcodeFormat.AZTEC);
             }
+            else if (normalized is "code128" or "code-128")
+            {
+                formats.Add(BarcodeFormat.CODE_128);
+            }
+            else if (normalized is "code39" or "code-39")
+            {
+                formats.Add(BarcodeFormat.CODE_39);
+            }
+            else if (normalized is "code93" or "code-93")
+            {
+                formats.Add(BarcodeFormat.CODE_93);
+            }
+            else if (normalized is "ean13" or "ean-13")
+            {
+                formats.Add(BarcodeFormat.EAN_13);
+            }
+            else if (normalized is "ean8" or "ean-8")
+            {
+                formats.Add(BarcodeFormat.EAN_8);
+            }
+            else if (normalized is "upca" or "upc-a")
+            {
+                formats.Add(BarcodeFormat.UPC_A);
+            }
+            else if (normalized is "upce" or "upc-e")
+            {
+                formats.Add(BarcodeFormat.UPC_E);
+            }
+            else if (normalized == "itf")
+            {
+                formats.Add(BarcodeFormat.ITF);
+            }
+            else if (normalized == "codabar")
+            {
+                formats.Add(BarcodeFormat.CODABAR);
+            }
+            else if (normalized is "1d" or "linear" or "barcode")
+            {
+                // Asking for linear codes explicitly is the one place the unchecked
+                // formats belong: the caller has said the page holds barcodes.
+                formats.AddRange(CheckedLinearFormats);
+                formats.AddRange(UncheckedLinearFormats);
+            }
+            else if (normalized == "2d")
+            {
+                formats.AddRange(TwoDimensionalFormats);
+            }
             else
             {
-                formats.AddRange(new[]
-                {
-                    BarcodeFormat.QR_CODE,
-                    BarcodeFormat.DATA_MATRIX,
-                    BarcodeFormat.PDF_417,
-                    BarcodeFormat.AZTEC
-                });
+                formats.AddRange(TwoDimensionalFormats);
+                formats.AddRange(CheckedLinearFormats);
             }
 
             return formats;
@@ -292,34 +380,44 @@ namespace DotNetSigningServer.Controllers
                 baseVariant.Alpha(AlphaOption.Remove);
 
                 var variants = CreateVariants(baseVariant);
+                var pageHeightPx = (double)baseVariant.Height;
 
                 try
                 {
                     foreach (var variant in variants)
                     {
 
-                        var decoded = TryDecodeVariant(variant, reader);
+                        var decoded = TryDecodeVariant(variant.Image, reader);
                         if (decoded.Count == 0) continue;
 
                         foreach (var code in decoded)
                         {
                             var text = code.Text ?? "";
                             var format = code.BarcodeFormat.ToString();
-                            var key = $"{pageIndex + 1}|{format}|{text}|{code.ResultPoints?.FirstOrDefault()?.X}|{code.ResultPoints?.FirstOrDefault()?.Y}";
 
-                            if (!seen.Add(key))
+                            // Deduplicate on the VALUE and page, not on coordinates.
+                            // The same code is found again in the enlarged variants,
+                            // where its points land at different numbers, so a
+                            // coordinate in the key let every code through several
+                            // times over.
+                            if (!seen.Add($"{pageIndex + 1}|{format}|{text}"))
                                 continue;
 
-                            var point = code.ResultPoints?.FirstOrDefault();
+                            var box = ToPdfBoundingBox(code.ResultPoints, variant.Scale, pageHeightPx);
                             results.Add(new
                             {
                                 value = text,
                                 codeType = format,
-                                position = new
-                                {
-                                    x = point?.X ?? 0,
-                                    y = point?.Y ?? 0
-                                },
+                                // Where the code is, in PDF points with the origin at
+                                // the bottom-left corner — the same units and the same
+                                // corner the rest of the API places things in. Null when
+                                // the decoder returned no usable points; a made-up zero
+                                // would read as "top-left corner of the page".
+                                boundingBox = box,
+                                // Kept for callers written against the old shape. It is
+                                // the bottom-left of the box, no longer a raw raster
+                                // pixel.
+                                position = box == null ? null : new { x = box.X, y = box.Y },
                                 page = pageIndex + 1
                             });
                         }
@@ -328,7 +426,7 @@ namespace DotNetSigningServer.Controllers
                 finally
                 {
                     foreach (var v in variants)
-                        v.Dispose();
+                        v.Image.Dispose();
 
                     baseVariant.Dispose();
                 }
@@ -337,35 +435,105 @@ namespace DotNetSigningServer.Controllers
             return results;
         }
 
-        private static List<IMagickImage> CreateVariants(IMagickImage baseVariant)
-        {
-            var variants = new List<IMagickImage>();
+        /// <summary>
+        /// One rendering of a page, plus what was done to it.
+        ///
+        /// The scale matters because coordinates come back in the pixel space of
+        /// whichever variant happened to decode. Two of these are enlarged copies,
+        /// so a point found there is 1.5× or 2× off from the page unless it is
+        /// divided back — which is why the old single-point position could not be
+        /// trusted even before it was converted to PDF units.
+        /// </summary>
+        private sealed record CodeVariant(IMagickImage Image, double Scale);
 
-            variants.Add(((MagickImage)baseVariant).Clone());
+        /// <summary>Rectangle on a page, in PDF points, origin bottom-left.</summary>
+        public sealed record CodeBoundingBox(double X, double Y, double Width, double Height);
+
+        /// <summary>Points per inch of the raster the codes are decoded from.</summary>
+        private const double FindCodesRasterDpi = 300.0;
+
+        /// <summary>
+        /// Decoder points to a rectangle on the page.
+        ///
+        /// Three conversions, and leaving any of them out is what made the old
+        /// value unusable:
+        ///
+        /// 1. **All the points, not the first one.** ZXing returns two to four
+        ///    corners; one of them is a corner of the code, which on its own says
+        ///    nothing about where the code ends or how big it is.
+        /// 2. **Undo the variant's enlargement.** A code found in the 2× copy is at
+        ///    twice the coordinates of the page.
+        /// 3. **Pixels to points, and flip the Y axis.** The raster is 300 DPI with
+        ///    Y growing downwards; PDF is 72 points to the inch with Y growing up
+        ///    from the bottom. Reporting raster pixels as if they were PDF units put
+        ///    the answer roughly four times too far, upside down.
+        /// </summary>
+        internal static CodeBoundingBox? ToPdfBoundingBox(ResultPoint[]? points, double scale, double pageHeightPx)
+        {
+            if (points == null || points.Length == 0) return null;
+
+            var minX = double.MaxValue;
+            var minY = double.MaxValue;
+            var maxX = double.MinValue;
+            var maxY = double.MinValue;
+            foreach (var point in points)
+            {
+                if (point == null) continue;
+                var x = point.X / scale;
+                var y = point.Y / scale;
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+            }
+            if (minX > maxX) return null;
+
+            const double pxToPt = 72.0 / FindCodesRasterDpi;
+            var pageHeightPt = pageHeightPx * pxToPt;
+
+            var left = minX * pxToPt;
+            var right = maxX * pxToPt;
+            // maxY is the LOWEST point on the page, so it becomes the bottom edge
+            // once the axis is flipped.
+            var bottom = pageHeightPt - (maxY * pxToPt);
+            var top = pageHeightPt - (minY * pxToPt);
+
+            return new CodeBoundingBox(
+                Math.Round(left, 2),
+                Math.Round(bottom, 2),
+                Math.Round(right - left, 2),
+                Math.Round(top - bottom, 2));
+        }
+
+        private static List<CodeVariant> CreateVariants(IMagickImage baseVariant)
+        {
+            var variants = new List<CodeVariant>();
+
+            variants.Add(new CodeVariant(((MagickImage)baseVariant).Clone(), 1.0));
 
             var gray = ((MagickImage)baseVariant).Clone();
             gray.ColorType = ColorType.Grayscale;
             gray.Contrast();
-            variants.Add(gray);
+            variants.Add(new CodeVariant(gray, 1.0));
 
             var sharpen = gray.Clone();
             sharpen.AdaptiveSharpen();
-            variants.Add(sharpen);
+            variants.Add(new CodeVariant(sharpen, 1.0));
 
             if (baseVariant.Width < 2000 || baseVariant.Height < 2000)
             {
                 var scaled1 = gray.Clone();
                 scaled1.Resize((uint)(baseVariant.Width * 1.5), (uint)(baseVariant.Height * 1.5));
-                variants.Add(scaled1);
+                variants.Add(new CodeVariant(scaled1, 1.5));
 
                 var scaled2 = gray.Clone();
                 scaled2.Resize((uint)(baseVariant.Width * 2.0), (uint)(baseVariant.Height * 2.0));
-                variants.Add(scaled2);
+                variants.Add(new CodeVariant(scaled2, 2.0));
             }
 
             var threshold = gray.Clone();
             threshold.Threshold(new Percentage(60));
-            variants.Add(threshold);
+            variants.Add(new CodeVariant(threshold, 1.0));
 
             return variants;
         }
