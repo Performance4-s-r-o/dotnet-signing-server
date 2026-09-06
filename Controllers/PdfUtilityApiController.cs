@@ -142,6 +142,36 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
+        /// <summary>
+        /// Which symbologies this engine knows, and which direction each one works in.
+        ///
+        /// Published so the portal and the SharePoint extension can offer exactly what
+        /// the engine supports rather than each keeping a guess. The three lists used
+        /// to disagree: the builder offered QR, Data Matrix and "barcode" and collapsed
+        /// everything else to Code 128 on save, quietly changing the symbology of a
+        /// template somebody had already set up.
+        ///
+        /// Open on purpose — it is a capability list, not data. Requiring a key would
+        /// mean the extension could not render its dropdown before the user is set up.
+        /// </summary>
+        [HttpGet("/api/code-formats")]
+        public IActionResult GetCodeFormats()
+        {
+            return Ok(new
+            {
+                formats = CodeFormats.All.Select(f => new
+                {
+                    id = f.Id,
+                    aliases = f.Aliases,
+                    dimension = f.Dimension == CodeDimension.TwoD ? "2d" : "1d",
+                    canWrite = f.CanWrite,
+                    canRead = f.CanRead,
+                    selfChecking = f.SelfChecking,
+                    maxLength = f.MaxLength,
+                }),
+            });
+        }
+
         [HttpPost("/api/find-codes")]
         public async Task<IActionResult> FindCodes([FromBody] FindCodesInput input)
         {
@@ -162,7 +192,7 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
-            var formats = ParseFormats(input.CodeType);
+            var plan = ParseFormats(input.CodeType);
             try
             {
                 var pageCount = CountPagesFromBase64(input.PdfContent);
@@ -172,7 +202,7 @@ namespace DotNetSigningServer.Controllers
                     return PaymentRequired(user, requiredCredits);
                 }
 
-                var results = await DetectCodesAsync(input.PdfContent, formats);
+                var results = await DetectCodesAsync(input.PdfContent, plan);
                 await DebitUserAsync(user, requiredCredits, operation: "find-codes");
                 // `pages`/`credits` let the portal bill its own tenant at the same
                 // rate without opening the PDF a second time. `credits` is the base
@@ -195,45 +225,57 @@ namespace DotNetSigningServer.Controllers
 
         #region Private helpers
 
-        private static IList<BarcodeFormat> ParseFormats(string codeType)
+        /// <summary>
+        /// A scan: which symbologies, and whether the caller named one.
+        /// </summary>
+        /// <param name="Specs">Symbologies to look for.</param>
+        /// <param name="Guarded">The caller did NOT name a single format, so the ones
+        /// with no mandatory check digit are only reported when the extra evidence is
+        /// there. Naming a format is the caller saying the page holds it; a group
+        /// ("1d") is not specific enough to be that claim.</param>
+        internal sealed record ScanPlan(IReadOnlyList<CodeFormatSpec> Specs, bool Guarded)
         {
-            var formats = new List<BarcodeFormat>();
-            var normalized = (codeType ?? "any").Trim().ToLowerInvariant();
-            if (normalized == "qr")
+            public IList<BarcodeFormat> Formats =>
+                Specs.Where(f => f.ReadFormat.HasValue).Select(f => f.ReadFormat!.Value).Distinct().ToList();
+        }
+
+        /// <summary>
+        /// Which symbologies to look for, and how carefully.
+        ///
+        /// The list itself lives in <see cref="CodeFormats"/>, alongside what the
+        /// engine can WRITE — those two used to be separate and disagreed, so a
+        /// Code 128 this server had stamped came back as "no codes found".
+        ///
+        /// Every readable format is scanned for. The four without a mandatory check
+        /// digit used to be excluded outright, which meant a page really carrying a
+        /// Code 39 came back empty; they are included now, but guarded, because a run
+        /// of regular rules decodes to a value that is not on the page. Naming a
+        /// format lifts the guards.
+        /// </summary>
+        internal static ScanPlan ParseFormats(string codeType)
+        {
+            var named = CodeFormats.Find(codeType);
+            if (named is { CanRead: true, ReadFormat: not null })
             {
-                formats.Add(BarcodeFormat.QR_CODE);
-            }
-            else if (normalized is "datamatrix" or "data-matrix" or "dm")
-            {
-                formats.Add(BarcodeFormat.DATA_MATRIX);
-            }
-            else if (normalized == "pdf417")
-            {
-                formats.Add(BarcodeFormat.PDF_417);
-            }
-            else if (normalized == "aztec")
-            {
-                formats.Add(BarcodeFormat.AZTEC);
-            }
-            else
-            {
-                formats.AddRange(new[]
-                {
-                    BarcodeFormat.QR_CODE,
-                    BarcodeFormat.DATA_MATRIX,
-                    BarcodeFormat.PDF_417,
-                    BarcodeFormat.AZTEC
-                });
+                // The caller said what is on the page. Take them at their word.
+                return new ScanPlan(new[] { named }, Guarded: false);
             }
 
-            return formats;
+            var group = CodeFormats.FindGroup(codeType);
+            return new ScanPlan((group ?? CodeFormats.ScanDefault).ToList(), Guarded: true);
         }
 
         [NonAction]
-        public async Task<IReadOnlyList<object>> DetectCodesAsync(
+        internal async Task<IReadOnlyList<object>> DetectCodesAsync(
             string base64Pdf,
-            IEnumerable<BarcodeFormat> formats)
+            ScanPlan plan)
         {
+            var formats = plan.Formats;
+            // Which spec produced a hit, so the guards can be applied to it by name.
+            var specByFormat = plan.Specs
+                .Where(f => f.ReadFormat.HasValue)
+                .ToDictionary(f => f.ReadFormat!.Value, f => f);
+
             byte[] pdfBytes;
             try
             {
@@ -275,7 +317,13 @@ namespace DotNetSigningServer.Controllers
                     TryInverted = true,
                     PureBarcode = false,
                     ReturnCodabarStartEnd = true,
-                    UseCode39ExtendedMode = true
+                    UseCode39ExtendedMode = true,
+                    // Code 39's check digit is optional in the standard, so demanding
+                    // it is a choice — and the right one whenever nobody named the
+                    // format. It rejects the READ, not the result, which is stronger
+                    // than any filter downstream: a stray bar pattern has to also
+                    // satisfy modulo 43, which most do not.
+                    AssumeCode39CheckDigit = CodeFormats.RequiresCode39CheckDigit(plan.Specs, plan.Guarded),
                 },
                 AutoRotate = true,
             };
@@ -292,34 +340,56 @@ namespace DotNetSigningServer.Controllers
                 baseVariant.Alpha(AlphaOption.Remove);
 
                 var variants = CreateVariants(baseVariant);
+                var pageHeightPx = (double)baseVariant.Height;
 
                 try
                 {
                     foreach (var variant in variants)
                     {
 
-                        var decoded = TryDecodeVariant(variant, reader);
+                        var decoded = TryDecodeVariant(variant.Image, reader);
                         if (decoded.Count == 0) continue;
 
                         foreach (var code in decoded)
                         {
                             var text = code.Text ?? "";
                             var format = code.BarcodeFormat.ToString();
-                            var key = $"{pageIndex + 1}|{format}|{text}|{code.ResultPoints?.FirstOrDefault()?.X}|{code.ResultPoints?.FirstOrDefault()?.Y}";
 
-                            if (!seen.Add(key))
+                            // Deduplicate on the VALUE and page, not on coordinates.
+                            // The same code is found again in the enlarged variants,
+                            // where its points land at different numbers, so a
+                            // coordinate in the key let every code through several
+                            // times over.
+                            if (!seen.Add($"{pageIndex + 1}|{format}|{text}"))
                                 continue;
 
-                            var point = code.ResultPoints?.FirstOrDefault();
+                            // Length floor for the symbologies with no check digit of
+                            // their own, and only when nobody asked for them. Noise
+                            // decodes short; a real shipping or membership number does
+                            // not. It narrows the odds, it does not close them — which
+                            // is why naming the format is what lifts it.
+                            if (plan.Guarded &&
+                                specByFormat.TryGetValue(code.BarcodeFormat, out var spec) &&
+                                !CodeFormats.IsPlausibleWhenUnnamed(spec, text))
+                            {
+                                continue;
+                            }
+
+                            var box = ToPdfBoundingBox(code.ResultPoints, variant.Scale, pageHeightPx);
                             results.Add(new
                             {
                                 value = text,
                                 codeType = format,
-                                position = new
-                                {
-                                    x = point?.X ?? 0,
-                                    y = point?.Y ?? 0
-                                },
+                                // Where the code is, in PDF points with the origin at
+                                // the bottom-left corner — the same units and the same
+                                // corner the rest of the API places things in. Null when
+                                // the decoder returned no usable points; a made-up zero
+                                // would read as "top-left corner of the page".
+                                boundingBox = box,
+                                // Kept for callers written against the old shape. It is
+                                // the bottom-left of the box, no longer a raw raster
+                                // pixel.
+                                position = box == null ? null : new { x = box.X, y = box.Y },
                                 page = pageIndex + 1
                             });
                         }
@@ -328,7 +398,7 @@ namespace DotNetSigningServer.Controllers
                 finally
                 {
                     foreach (var v in variants)
-                        v.Dispose();
+                        v.Image.Dispose();
 
                     baseVariant.Dispose();
                 }
@@ -337,35 +407,105 @@ namespace DotNetSigningServer.Controllers
             return results;
         }
 
-        private static List<IMagickImage> CreateVariants(IMagickImage baseVariant)
-        {
-            var variants = new List<IMagickImage>();
+        /// <summary>
+        /// One rendering of a page, plus what was done to it.
+        ///
+        /// The scale matters because coordinates come back in the pixel space of
+        /// whichever variant happened to decode. Two of these are enlarged copies,
+        /// so a point found there is 1.5× or 2× off from the page unless it is
+        /// divided back — which is why the old single-point position could not be
+        /// trusted even before it was converted to PDF units.
+        /// </summary>
+        private sealed record CodeVariant(IMagickImage Image, double Scale);
 
-            variants.Add(((MagickImage)baseVariant).Clone());
+        /// <summary>Rectangle on a page, in PDF points, origin bottom-left.</summary>
+        public sealed record CodeBoundingBox(double X, double Y, double Width, double Height);
+
+        /// <summary>Points per inch of the raster the codes are decoded from.</summary>
+        private const double FindCodesRasterDpi = 300.0;
+
+        /// <summary>
+        /// Decoder points to a rectangle on the page.
+        ///
+        /// Three conversions, and leaving any of them out is what made the old
+        /// value unusable:
+        ///
+        /// 1. **All the points, not the first one.** ZXing returns two to four
+        ///    corners; one of them is a corner of the code, which on its own says
+        ///    nothing about where the code ends or how big it is.
+        /// 2. **Undo the variant's enlargement.** A code found in the 2× copy is at
+        ///    twice the coordinates of the page.
+        /// 3. **Pixels to points, and flip the Y axis.** The raster is 300 DPI with
+        ///    Y growing downwards; PDF is 72 points to the inch with Y growing up
+        ///    from the bottom. Reporting raster pixels as if they were PDF units put
+        ///    the answer roughly four times too far, upside down.
+        /// </summary>
+        internal static CodeBoundingBox? ToPdfBoundingBox(ResultPoint[]? points, double scale, double pageHeightPx)
+        {
+            if (points == null || points.Length == 0) return null;
+
+            var minX = double.MaxValue;
+            var minY = double.MaxValue;
+            var maxX = double.MinValue;
+            var maxY = double.MinValue;
+            foreach (var point in points)
+            {
+                if (point == null) continue;
+                var x = point.X / scale;
+                var y = point.Y / scale;
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+            }
+            if (minX > maxX) return null;
+
+            const double pxToPt = 72.0 / FindCodesRasterDpi;
+            var pageHeightPt = pageHeightPx * pxToPt;
+
+            var left = minX * pxToPt;
+            var right = maxX * pxToPt;
+            // maxY is the LOWEST point on the page, so it becomes the bottom edge
+            // once the axis is flipped.
+            var bottom = pageHeightPt - (maxY * pxToPt);
+            var top = pageHeightPt - (minY * pxToPt);
+
+            return new CodeBoundingBox(
+                Math.Round(left, 2),
+                Math.Round(bottom, 2),
+                Math.Round(right - left, 2),
+                Math.Round(top - bottom, 2));
+        }
+
+        private static List<CodeVariant> CreateVariants(IMagickImage baseVariant)
+        {
+            var variants = new List<CodeVariant>();
+
+            variants.Add(new CodeVariant(((MagickImage)baseVariant).Clone(), 1.0));
 
             var gray = ((MagickImage)baseVariant).Clone();
             gray.ColorType = ColorType.Grayscale;
             gray.Contrast();
-            variants.Add(gray);
+            variants.Add(new CodeVariant(gray, 1.0));
 
             var sharpen = gray.Clone();
             sharpen.AdaptiveSharpen();
-            variants.Add(sharpen);
+            variants.Add(new CodeVariant(sharpen, 1.0));
 
             if (baseVariant.Width < 2000 || baseVariant.Height < 2000)
             {
                 var scaled1 = gray.Clone();
                 scaled1.Resize((uint)(baseVariant.Width * 1.5), (uint)(baseVariant.Height * 1.5));
-                variants.Add(scaled1);
+                variants.Add(new CodeVariant(scaled1, 1.5));
 
                 var scaled2 = gray.Clone();
                 scaled2.Resize((uint)(baseVariant.Width * 2.0), (uint)(baseVariant.Height * 2.0));
-                variants.Add(scaled2);
+                variants.Add(new CodeVariant(scaled2, 2.0));
             }
 
             var threshold = gray.Clone();
             threshold.Threshold(new Percentage(60));
-            variants.Add(threshold);
+            variants.Add(new CodeVariant(threshold, 1.0));
 
             return variants;
         }
