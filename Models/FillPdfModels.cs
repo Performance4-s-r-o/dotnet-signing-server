@@ -102,6 +102,8 @@ public enum PdfBarcodeFormat
 {
     [JsonStringEnumMemberName("code128")]
     Code128,
+    [JsonStringEnumMemberName("code-128")]
+    Code128Hyphen,
     [JsonStringEnumMemberName("qr")]
     Qr,
     [JsonStringEnumMemberName("qrcode")]
@@ -116,6 +118,8 @@ public enum PdfBarcodeFormat
     Dm,
     [JsonStringEnumMemberName("pdf417")]
     Pdf417,
+    [JsonStringEnumMemberName("pdf-417")]
+    Pdf417Hyphen,
     [JsonStringEnumMemberName("ean13")]
     Ean13,
     [JsonStringEnumMemberName("ean-13")]

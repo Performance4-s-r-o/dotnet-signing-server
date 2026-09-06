@@ -556,7 +556,7 @@ public class PdfTemplateService
             {
                 PdfBarcodeFormat.Qr or PdfBarcodeFormat.QrCode or PdfBarcodeFormat.QrCodeHyphen => CreateQrCode(pdfDoc, value),
                 PdfBarcodeFormat.DataMatrix or PdfBarcodeFormat.DataMatrixHyphen or PdfBarcodeFormat.Dm => CreateDataMatrix(pdfDoc, value),
-                PdfBarcodeFormat.Pdf417 => CreatePdf417(pdfDoc, value),
+                PdfBarcodeFormat.Pdf417 or PdfBarcodeFormat.Pdf417Hyphen => CreatePdf417(pdfDoc, value),
                 PdfBarcodeFormat.Ean13 or PdfBarcodeFormat.Ean13Hyphen => CreateEan(pdfDoc, value, BarcodeEAN.EAN13),
                 PdfBarcodeFormat.Ean8 or PdfBarcodeFormat.Ean8Hyphen => CreateEan(pdfDoc, value, BarcodeEAN.EAN8),
                 PdfBarcodeFormat.Upc or PdfBarcodeFormat.UpcA or PdfBarcodeFormat.UpcAHyphen => CreateEan(pdfDoc, value, BarcodeEAN.UPCA),
@@ -564,6 +564,11 @@ public class PdfTemplateService
                 PdfBarcodeFormat.Code39 or PdfBarcodeFormat.Code39Hyphen => CreateCode39(pdfDoc, value),
                 PdfBarcodeFormat.Itf or PdfBarcodeFormat.Interleaved2Of5 or PdfBarcodeFormat.I2Of5 => CreateInterleaved25(pdfDoc, value),
                 PdfBarcodeFormat.Codabar or PdfBarcodeFormat.CodabarHyphen => CreateCodabar(pdfDoc, value),
+                // Code 128 is both a real case and the fallback. Spelling it out so
+                // the default arm is visibly "anything unmapped", not "Code 128 plus
+                // whatever nobody handled" — that is how a new symbology would end up
+                // stamped as the wrong one.
+                PdfBarcodeFormat.Code128 or PdfBarcodeFormat.Code128Hyphen => CreateCode128(pdfDoc, value),
                 _ => CreateCode128(pdfDoc, value),
             };
 
@@ -791,7 +796,11 @@ public class PdfTemplateService
             code.Length >= 2 &&
             "ABCD".Contains(char.ToUpperInvariant(code[0])) &&
             "ABCD".Contains(char.ToUpperInvariant(code[^1]));
-        barcode.SetCode(hasDelimiters ? code.ToUpperInvariant() : $"A{code}A");
+        // Uppercase either way. The delimiters are only valid as A-D, and iText
+        // rejects the code if the ones it is handed are lowercase — so wrapping a
+        // payload without uppercasing it produced "Aa1234A" and an exception.
+        var upper = code.ToUpperInvariant();
+        barcode.SetCode(hasDelimiters ? upper : $"A{upper}A");
         var form = barcode.CreateFormXObject(pdfDoc);
         return new Image(form);
     }

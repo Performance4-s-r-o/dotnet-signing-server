@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Text.Json.Serialization;
 using DotNetSigningServer.Controllers;
 using DotNetSigningServer.Models;
 using ZXing;
@@ -20,25 +22,39 @@ public class CodeFormatsTests
         PdfUtilityApiController.ParseFormats(codeType).Formats;
 
     [Fact]
-    public void EveryWireNameResolvesToAFormat()
+    public void EveryWritableNameDeserialisesToTheWireEnum()
     {
-        // PdfBarcodeFormat is the public JSON contract. A value there with no entry
-        // in the catalogue is a symbology callers may ask for and nothing can
-        // render — it would fall through the switch to Code 128 and silently stamp
-        // the wrong barcode.
-        var wireNames = new[]
-        {
-            "code128", "code-128", "qr", "qrcode", "qr-code",
-            "datamatrix", "data-matrix", "dm", "pdf417",
-            "ean13", "ean-13", "ean8", "ean-8",
-            "upc", "upca", "upc-a", "upce", "upc-e",
-            "code39", "code-39", "itf", "interleaved2of5", "i2of5",
-            "codabar", "coda-bar",
-        };
+        // Derived from the catalogue, not typed out: the hand-written list this
+        // replaced was missing "pdf-417" and "code-128", so the catalogue accepted
+        // spellings the JSON enum rejected — a template saved with one of them
+        // failed to deserialize and the fill returned 400.
+        var wireNames = new HashSet<string>(
+            typeof(PdfBarcodeFormat).GetFields(BindingFlags.Public | BindingFlags.Static)
+                .SelectMany(f => f.GetCustomAttributes<JsonStringEnumMemberNameAttribute>())
+                .Select(a => a.Name));
 
-        foreach (var name in wireNames)
+        foreach (var format in CodeFormats.Writable)
         {
-            Assert.True(CodeFormats.Find(name) != null, $"no catalogue entry for '{name}'");
+            foreach (var spelling in new[] { format.Id }.Concat(format.Aliases))
+            {
+                Assert.True(wireNames.Contains(spelling),
+                    $"PdfBarcodeFormat has no member for '{spelling}' ({format.Id})");
+            }
+        }
+    }
+
+    [Fact]
+    public void EveryWireNameResolvesToACatalogueEntry()
+    {
+        // The other direction: a name the enum accepts but the catalogue does not
+        // know would be stamped by the switch and then invisible to every scan.
+        foreach (var field in typeof(PdfBarcodeFormat).GetFields(BindingFlags.Public | BindingFlags.Static))
+        {
+            foreach (var attr in field.GetCustomAttributes<JsonStringEnumMemberNameAttribute>())
+            {
+                Assert.True(CodeFormats.Find(attr.Name) != null,
+                    $"no catalogue entry for wire name '{attr.Name}'");
+            }
         }
     }
 
