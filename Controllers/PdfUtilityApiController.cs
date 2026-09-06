@@ -192,7 +192,7 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
-            var formats = ParseFormats(input.CodeType);
+            var plan = ParseFormats(input.CodeType);
             try
             {
                 var pageCount = CountPagesFromBase64(input.PdfContent);
@@ -202,7 +202,7 @@ namespace DotNetSigningServer.Controllers
                     return PaymentRequired(user, requiredCredits);
                 }
 
-                var results = await DetectCodesAsync(input.PdfContent, formats);
+                var results = await DetectCodesAsync(input.PdfContent, plan);
                 await DebitUserAsync(user, requiredCredits, operation: "find-codes");
                 // `pages`/`credits` let the portal bill its own tenant at the same
                 // rate without opening the PDF a second time. `credits` is the base
@@ -226,40 +226,56 @@ namespace DotNetSigningServer.Controllers
         #region Private helpers
 
         /// <summary>
-        /// Which symbologies to look for.
+        /// A scan: which symbologies, and whether the caller named one.
+        /// </summary>
+        /// <param name="Specs">Symbologies to look for.</param>
+        /// <param name="Guarded">The caller did NOT name a single format, so the ones
+        /// with no mandatory check digit are only reported when the extra evidence is
+        /// there. Naming a format is the caller saying the page holds it; a group
+        /// ("1d") is not specific enough to be that claim.</param>
+        internal sealed record ScanPlan(IReadOnlyList<CodeFormatSpec> Specs, bool Guarded)
+        {
+            public IList<BarcodeFormat> Formats =>
+                Specs.Where(f => f.ReadFormat.HasValue).Select(f => f.ReadFormat!.Value).Distinct().ToList();
+        }
+
+        /// <summary>
+        /// Which symbologies to look for, and how carefully.
         ///
         /// The list itself lives in <see cref="CodeFormats"/>, alongside what the
         /// engine can WRITE — those two used to be separate and disagreed, so a
         /// Code 128 this server had stamped came back as "no codes found".
         ///
-        /// An unnamed scan covers the self-checking formats only. The rest decode
-        /// noise: on a 300 DPI render of an ordinary page a table rule reads as a
-        /// Code 39 value that is not there. Naming one, or asking for "1d", is the
-        /// caller saying the page really does hold them.
+        /// Every readable format is scanned for. The four without a mandatory check
+        /// digit used to be excluded outright, which meant a page really carrying a
+        /// Code 39 came back empty; they are included now, but guarded, because a run
+        /// of regular rules decodes to a value that is not on the page. Naming a
+        /// format lifts the guards.
         /// </summary>
-        internal static IList<BarcodeFormat> ParseFormats(string codeType)
+        internal static ScanPlan ParseFormats(string codeType)
         {
             var named = CodeFormats.Find(codeType);
             if (named is { CanRead: true, ReadFormat: not null })
             {
-                return new List<BarcodeFormat> { named.ReadFormat.Value };
+                // The caller said what is on the page. Take them at their word.
+                return new ScanPlan(new[] { named }, Guarded: false);
             }
 
             var group = CodeFormats.FindGroup(codeType);
-            var specs = group ?? CodeFormats.ScanDefault;
-
-            return specs
-                .Where(f => f.ReadFormat.HasValue)
-                .Select(f => f.ReadFormat!.Value)
-                .Distinct()
-                .ToList();
+            return new ScanPlan((group ?? CodeFormats.ScanDefault).ToList(), Guarded: true);
         }
 
         [NonAction]
-        public async Task<IReadOnlyList<object>> DetectCodesAsync(
+        internal async Task<IReadOnlyList<object>> DetectCodesAsync(
             string base64Pdf,
-            IEnumerable<BarcodeFormat> formats)
+            ScanPlan plan)
         {
+            var formats = plan.Formats;
+            // Which spec produced a hit, so the guards can be applied to it by name.
+            var specByFormat = plan.Specs
+                .Where(f => f.ReadFormat.HasValue)
+                .ToDictionary(f => f.ReadFormat!.Value, f => f);
+
             byte[] pdfBytes;
             try
             {
@@ -301,7 +317,13 @@ namespace DotNetSigningServer.Controllers
                     TryInverted = true,
                     PureBarcode = false,
                     ReturnCodabarStartEnd = true,
-                    UseCode39ExtendedMode = true
+                    UseCode39ExtendedMode = true,
+                    // Code 39's check digit is optional in the standard, so demanding
+                    // it is a choice — and the right one whenever nobody named the
+                    // format. It rejects the READ, not the result, which is stronger
+                    // than any filter downstream: a stray bar pattern has to also
+                    // satisfy modulo 43, which most do not.
+                    AssumeCode39CheckDigit = CodeFormats.RequiresCode39CheckDigit(plan.Specs, plan.Guarded),
                 },
                 AutoRotate = true,
             };
@@ -340,6 +362,18 @@ namespace DotNetSigningServer.Controllers
                             // times over.
                             if (!seen.Add($"{pageIndex + 1}|{format}|{text}"))
                                 continue;
+
+                            // Length floor for the symbologies with no check digit of
+                            // their own, and only when nobody asked for them. Noise
+                            // decodes short; a real shipping or membership number does
+                            // not. It narrows the odds, it does not close them — which
+                            // is why naming the format is what lifts it.
+                            if (plan.Guarded &&
+                                specByFormat.TryGetValue(code.BarcodeFormat, out var spec) &&
+                                !CodeFormats.IsPlausibleWhenUnnamed(spec, text))
+                            {
+                                continue;
+                            }
 
                             var box = ToPdfBoundingBox(code.ResultPoints, variant.Scale, pageHeightPx);
                             results.Add(new
