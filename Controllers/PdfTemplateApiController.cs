@@ -144,6 +144,8 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { message = Localizer["PdfContentRequired"].Value });
             }
 
+            // Reject bad input before payment (400 before 402), matching the
+            // convert/fill/find-codes ordering.
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "AI detect");
@@ -153,9 +155,20 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
+            // An AI call invokes an LLM, a real cost. Refuse before the call when
+            // the caller cannot pay.
+            var aiCost = BillingOptions.AiCallCredits;
+            if (LacksCredits(user, aiCost)) return PaymentRequired(user, aiCost);
+
             try
             {
                 var fields = await _templateAiService.DetectFieldsAsync(input.PdfContent, input.Prompt, HttpContext.RequestAborted);
+                // Charge before delivering. If the balance raced to zero since the
+                // pre-check, or the concurrency tier multiplied the cost beyond it,
+                // the atomic debit returns false — don't hand over a free LLM
+                // result. Enterprise always returns true here.
+                if (!await DebitUserAsync(user, aiCost, operation: "ai-detect-fields"))
+                    return PaymentRequired(user, aiCost);
                 return Ok(new AiDetectFieldsResponse { Fields = fields.ToList() });
             }
             catch (Exception ex)
@@ -186,6 +199,8 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { message = Localizer["ColumnsRequired"].Value });
             }
 
+            // Reject bad input before payment (400 before 402), matching the
+            // convert/fill/find-codes ordering.
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "AI extract-data");
@@ -195,9 +210,20 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
+            // An AI call invokes an LLM, a real cost. Refuse before the call when
+            // the caller cannot pay.
+            var aiCost = BillingOptions.AiCallCredits;
+            if (LacksCredits(user, aiCost)) return PaymentRequired(user, aiCost);
+
             try
             {
                 var values = await _templateAiService.ExtractDataAsync(input.PdfContent, input.Columns, HttpContext.RequestAborted);
+                // Charge before delivering. If the balance raced to zero since the
+                // pre-check, or the concurrency tier multiplied the cost beyond it,
+                // the atomic debit returns false — don't hand over a free LLM
+                // result. Enterprise always returns true here.
+                if (!await DebitUserAsync(user, aiCost, operation: "ai-extract-data"))
+                    return PaymentRequired(user, aiCost);
                 return Ok(new AiExtractDataResponse { Values = values.ToList() });
             }
             catch (Exception ex)
