@@ -144,6 +144,11 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { message = Localizer["PdfContentRequired"].Value });
             }
 
+            // An AI call invokes an LLM, a real cost. Refuse before the call when
+            // the caller cannot pay; debit only on success, below.
+            var aiCost = BillingOptions.AiCallCredits;
+            if (LacksCredits(user, aiCost)) return PaymentRequired(user, aiCost);
+
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "AI detect");
@@ -156,6 +161,7 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 var fields = await _templateAiService.DetectFieldsAsync(input.PdfContent, input.Prompt, HttpContext.RequestAborted);
+                await DebitUserAsync(user, aiCost, operation: "ai-detect-fields");
                 return Ok(new AiDetectFieldsResponse { Fields = fields.ToList() });
             }
             catch (Exception ex)
@@ -186,6 +192,11 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { message = Localizer["ColumnsRequired"].Value });
             }
 
+            // An AI call invokes an LLM, a real cost. Refuse before the call when
+            // the caller cannot pay; debit only on success, below.
+            var aiCost = BillingOptions.AiCallCredits;
+            if (LacksCredits(user, aiCost)) return PaymentRequired(user, aiCost);
+
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "AI extract-data");
@@ -198,6 +209,7 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 var values = await _templateAiService.ExtractDataAsync(input.PdfContent, input.Columns, HttpContext.RequestAborted);
+                await DebitUserAsync(user, aiCost, operation: "ai-extract-data");
                 return Ok(new AiExtractDataResponse { Values = values.ToList() });
             }
             catch (Exception ex)

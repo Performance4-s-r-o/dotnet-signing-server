@@ -10,6 +10,16 @@ public class BillingOptions
     public string? AttachmentDebitBypassKey { get; set; }
 
     /// <summary>
+    /// Credits charged per AI call (/api/ai/detect-fields, /api/ai/extract-data).
+    /// These invoke an LLM — a real cost — so they must not be free for direct
+    /// API customers. Mirrors the portal's own AI_EXTRACTION_CREDITS (2). The
+    /// exact figure is provisional pending the platform-wide re-pricing; set via
+    /// appsettings/env without a code change. 0 makes AI calls free again and
+    /// must be a deliberate choice.
+    /// </summary>
+    public int AiCallCredits { get; set; } = 2;
+
+    /// <summary>
     /// Number of parallel slots per tier. Example: 5 means slots 1–5 cost 1×,
     /// slots 6–10 cost 2×, slots 11–15 cost 3×, etc.
     /// </summary>
