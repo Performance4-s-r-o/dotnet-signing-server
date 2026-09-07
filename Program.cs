@@ -165,6 +165,7 @@ builder.Services.AddSingleton<DotNetSigningServer.Services.Email.IEmailTemplateR
 builder.Services.AddScoped<PdfTemplateService>();
 builder.Services.AddScoped<PdfConversionService>();
 builder.Services.AddSingleton<ContentLimitGuard>();
+builder.Services.AddSingleton<PdfSafetyGuard>();
 builder.Services.AddScoped<IAutoRechargeService, AutoRechargeService>();
 builder.Services.AddHostedService<PresignCleanupService>();
 builder.Services.AddHostedService<PriceChangeMonitorService>();

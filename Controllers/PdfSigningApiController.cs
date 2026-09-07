@@ -52,6 +52,7 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Presign");
+                SafetyGuard.EnsureSafePdf(input.PdfContent, "Presign");
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }
             catch (ApiValidationException ex)
@@ -502,6 +503,7 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Seal");
+                SafetyGuard.EnsureSafePdf(input.PdfContent, "Seal");
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature");
                 LimitGuard.EnsureImageWithinLimit(input.StampImageContent, "Stamp");
                 LimitGuard.EnsureImageWithinLimit(input.CompanyLogoContent, "Company logo");

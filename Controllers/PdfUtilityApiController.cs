@@ -112,6 +112,7 @@ namespace DotNetSigningServer.Controllers
                 if (hasContent)
                 {
                     LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Fill PDF");
+                    SafetyGuard.EnsureSafePdf(input.PdfContent, "Fill PDF");
                 }
             }
             catch (ApiValidationException ex)
@@ -186,6 +187,7 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Barcode scan");
+                SafetyGuard.EnsureSafePdf(input.PdfContent, "Barcode scan");
             }
             catch (ApiValidationException ex)
             {

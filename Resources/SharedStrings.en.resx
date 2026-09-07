@@ -580,6 +580,10 @@
   <!-- Validation Error Codes -->
   <data name="Error_PDF_SIZE_EXCEEDED" xml:space="preserve"><value>The PDF file exceeds the maximum allowed size.</value></data>
   <data name="Error_IMAGE_SIZE_EXCEEDED" xml:space="preserve"><value>The image file exceeds the maximum allowed size.</value></data>
+  <data name="Error_PDF_INVALID" xml:space="preserve"><value>The file is not a valid PDF.</value></data>
+  <data name="Error_PDF_ENCRYPTED" xml:space="preserve"><value>The PDF is encrypted. Remove the password and try again.</value></data>
+  <data name="Error_PDF_TOO_MANY_PAGES" xml:space="preserve"><value>The PDF has more pages than allowed.</value></data>
+  <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>The PDF contains active content (a launch action or JavaScript that runs on open) and was refused.</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>The attachment exceeds the maximum allowed size.</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>PDF content is required.</value></data>
   <data name="Error_FIELDS_REQUIRED" xml:space="preserve"><value>At least one field definition is required.</value></data>

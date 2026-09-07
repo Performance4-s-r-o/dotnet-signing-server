@@ -570,6 +570,10 @@
   <!-- Validation Error Codes -->
   <data name="Error_PDF_SIZE_EXCEEDED" xml:space="preserve"><value>Die PDF-Datei überschreitet die maximal zulässige Größe.</value></data>
   <data name="Error_IMAGE_SIZE_EXCEEDED" xml:space="preserve"><value>Die Bilddatei überschreitet die maximal zulässige Größe.</value></data>
+  <data name="Error_PDF_INVALID" xml:space="preserve"><value>Die Datei ist kein gültiges PDF.</value></data>
+  <data name="Error_PDF_ENCRYPTED" xml:space="preserve"><value>Das PDF ist verschlüsselt. Entfernen Sie das Passwort und versuchen Sie es erneut.</value></data>
+  <data name="Error_PDF_TOO_MANY_PAGES" xml:space="preserve"><value>Das PDF hat mehr Seiten als erlaubt.</value></data>
+  <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>Das PDF enthält aktive Inhalte (eine Launch-Aktion oder beim Öffnen ausgeführtes JavaScript) und wurde abgelehnt.</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>Der Anhang überschreitet die maximal zulässige Größe.</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>PDF-Inhalt ist erforderlich.</value></data>
   <data name="Error_FIELDS_REQUIRED" xml:space="preserve"><value>Mindestens eine Felddefinition ist erforderlich.</value></data>
