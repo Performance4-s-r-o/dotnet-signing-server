@@ -30,6 +30,15 @@ namespace DotNetSigningServer.Controllers
         protected readonly PdfTemplateService PdfTemplateService;
         protected readonly IStringLocalizer<SharedStrings> Localizer;
 
+        /// <summary>
+        /// Opens an incoming PDF and refuses encrypted, oversized-by-pages or
+        /// script-bearing files. Resolved from the request scope rather than
+        /// the constructor so that every derived controller keeps its
+        /// constructor untouched.
+        /// </summary>
+        protected PdfSafetyGuard SafetyGuard =>
+            HttpContext.RequestServices.GetRequiredService<PdfSafetyGuard>();
+
         protected ApiControllerBase(
             ApplicationDbContext dbContext,
             IApiAuthService apiAuthService,

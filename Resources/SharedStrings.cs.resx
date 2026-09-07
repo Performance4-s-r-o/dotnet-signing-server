@@ -580,6 +580,10 @@
   <!-- Validation Error Codes -->
   <data name="Error_PDF_SIZE_EXCEEDED" xml:space="preserve"><value>Soubor PDF překračuje maximální povolenou velikost.</value></data>
   <data name="Error_IMAGE_SIZE_EXCEEDED" xml:space="preserve"><value>Soubor s obrázkem překračuje maximální povolenou velikost.</value></data>
+  <data name="Error_PDF_INVALID" xml:space="preserve"><value>Soubor není platné PDF.</value></data>
+  <data name="Error_PDF_ENCRYPTED" xml:space="preserve"><value>PDF je šifrované. Odstraňte heslo a zkuste to znovu.</value></data>
+  <data name="Error_PDF_TOO_MANY_PAGES" xml:space="preserve"><value>PDF má víc stran, než je povoleno.</value></data>
+  <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>PDF obsahuje aktivní obsah (akci Launch nebo JavaScript spouštěný při otevření) a bylo odmítnuto.</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>Příloha překračuje maximální povolenou velikost.</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>Obsah PDF je povinný.</value></data>
   <data name="Error_FIELDS_REQUIRED" xml:space="preserve"><value>Je vyžadována alespoň jedna definice pole.</value></data>

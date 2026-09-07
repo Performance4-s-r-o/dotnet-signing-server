@@ -204,6 +204,7 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "AI extract-data");
+                SafetyGuard.EnsureSafePdf(input.PdfContent, "AI extract-data");
             }
             catch (ApiValidationException ex)
             {
