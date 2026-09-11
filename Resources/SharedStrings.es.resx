@@ -589,7 +589,7 @@
   <data name="Error_TSA_HTTPS_REQUIRED" xml:space="preserve"><value>La URL de la autoridad de sellado de tiempo debe usar HTTPS.</value></data>
   <data name="Error_TSA_HOST_NOT_ALLOWED" xml:space="preserve"><value>El host de la autoridad de sellado de tiempo no está permitido.</value></data>
   <data name="Error_FIELD_NAME_INVALID" xml:space="preserve"><value>El nombre del campo solo puede contener letras, números, guión bajo o guión.</value></data>
-  <data name="Error_FIELD_TYPE_INVALID" xml:space="preserve"><value>Tipo de campo no compatible. Permitidos: text, image, barcode, signature, table.</value></data>
+  <data name="Error_FIELD_TYPE_INVALID" xml:space="preserve"><value>Tipo de campo no compatible. Permitidos: text, image, barcode, signature, table, checkbox.</value></data>
   <data name="Error_FIELD_HALIGN_INVALID" xml:space="preserve"><value>La alineación horizontal debe ser una de: left, center, right.</value></data>
   <data name="Error_FIELD_VALIGN_INVALID" xml:space="preserve"><value>La alineación vertical debe ser una de: top, center, bottom.</value></data>
   <data name="Error_FIELD_FONTSIZE_INVALID" xml:space="preserve"><value>El tamaño de fuente debe estar entre 5 y 128.</value></data>

@@ -251,6 +251,14 @@ public class PdfTemplateService
             var page = pdfDoc.GetPage(pageNumber);
             var rect = NormalizeRectForRotation(page, new Rectangle(field.Rect.X, field.Rect.Y, field.Rect.Width, field.Rect.Height));
 
+            if (field.Type == PdfFieldType.Checkbox)
+            {
+                if (IsCheckboxChecked(value))
+                {
+                    AddCheckMark(pdfDoc, pageNumber, rect, field);
+                }
+                continue;
+            }
             if (field.Type == PdfFieldType.Image)
             {
                 if (!string.IsNullOrWhiteSpace(value))
@@ -375,6 +383,8 @@ public class PdfTemplateService
     {
         var toStamp = (fields ?? Enumerable.Empty<PreSignFieldInput>())
             .Where(f => f != null && !string.IsNullOrWhiteSpace(f.Value))
+            // An unticked checkbox draws nothing, so it must not force a rewrite either.
+            .Where(f => f.Definition?.Type != PdfFieldType.Checkbox || IsCheckboxChecked(f.Value))
             .ToList();
         if (toStamp.Count == 0)
         {
@@ -400,6 +410,11 @@ public class PdfTemplateService
             if (def.Type == PdfFieldType.Image)
             {
                 TryAddImage(entry.Value!, pdfDoc, pageNumber, rect, def.Rotation);
+                continue;
+            }
+            if (def.Type == PdfFieldType.Checkbox)
+            {
+                AddCheckMark(pdfDoc, pageNumber, rect, def);
                 continue;
             }
             AddText(entry.Value!, pdfDoc, pageNumber, rect, def);
@@ -507,6 +522,59 @@ public class PdfTemplateService
                 pdfCanvas.Stroke();
                 pdfCanvas.RestoreState();
             }
+        }
+        finally
+        {
+            pdfCanvas.RestoreState();
+        }
+    }
+
+    /// <summary>
+    /// Whether a checkbox value means "ticked". The portal sends "true"/"false", but a
+    /// Power Automate expression or an older client can deliver "1", "yes", "on" or the
+    /// Czech "ano" — the same set the portal accepts when it evaluates field conditions.
+    /// </summary>
+    internal static bool IsCheckboxChecked(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        return value.Trim().ToLowerInvariant() is "true" or "1" or "yes" or "on" or "ano";
+    }
+
+    /// <summary>
+    /// Draws a check mark centred in the field rect. A vector path rather than a glyph:
+    /// it scales with the rect and needs no font that covers U+2713. Colour follows
+    /// <see cref="PdfFieldDefinition.TextColor"/>, rotation and padding follow the field.
+    /// </summary>
+    private static void AddCheckMark(PdfDocument pdfDoc, int pageNumber, Rectangle rect, PdfFieldDefinition field)
+    {
+        var pad = Math.Max(0f, field.Padding);
+        var side = Math.Min(rect.GetWidth(), rect.GetHeight()) - 2 * pad;
+        if (side < 1f)
+        {
+            return;
+        }
+        var x = rect.GetX() + (rect.GetWidth() - side) / 2f;
+        var y = rect.GetY() + (rect.GetHeight() - side) / 2f;
+
+        var page = pdfDoc.GetPage(pageNumber);
+        var pdfCanvas = new PdfCanvas(page);
+        pdfCanvas.SaveState();
+        try
+        {
+            ApplyFieldRotation(pdfCanvas, rect, field.Rotation);
+            var alpha = ParseColorAlpha(field.TextColor);
+            if (alpha < 1f)
+            {
+                pdfCanvas.SetExtGState(new PdfExtGState().SetStrokeOpacity(alpha));
+            }
+            pdfCanvas.SetStrokeColor(ParseHexColor(field.TextColor) ?? new DeviceRgb(0, 0, 0));
+            pdfCanvas.SetLineWidth(Math.Max(0.75f, side * 0.12f));
+            pdfCanvas.SetLineCapStyle(PdfCanvasConstants.LineCapStyle.ROUND);
+            pdfCanvas.SetLineJoinStyle(PdfCanvasConstants.LineJoinStyle.ROUND);
+            pdfCanvas.MoveTo(x + side * 0.18f, y + side * 0.52f);
+            pdfCanvas.LineTo(x + side * 0.42f, y + side * 0.26f);
+            pdfCanvas.LineTo(x + side * 0.84f, y + side * 0.76f);
+            pdfCanvas.Stroke();
         }
         finally
         {

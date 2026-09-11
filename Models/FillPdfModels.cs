@@ -15,7 +15,13 @@ public enum PdfFieldType
     [JsonStringEnumMemberName("signature")]
     Signature,
     [JsonStringEnumMemberName("table")]
-    Table
+    Table,
+    /// <summary>
+    /// Ticked = a check mark drawn inside the rect; unticked = nothing (the box
+    /// itself belongs to the template artwork). Value on the wire is "true"/"false".
+    /// </summary>
+    [JsonStringEnumMemberName("checkbox")]
+    Checkbox
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -206,13 +212,14 @@ public class PdfFieldDefinition
 
 /// <summary>
 /// A custom fillable text field placed on a sign request by its creator and filled by the
-/// assigned signer. Stamped into the PDF (always as text) during presign/seal so the value
+/// assigned signer. Stamped into the PDF (as text, or as an image / check mark when the
+/// definition says so) during presign/seal so the value
 /// falls under that signer's signature. The engine does NOT validate the value — required-ness
 /// and type/format are enforced upstream by the calling application when the signer fills the PDF.
 /// </summary>
 public class PreSignFieldInput
 {
-    /// <summary>Placement + presentation (rect, page, font, alignment, …). Always rendered as text.</summary>
+    /// <summary>Placement + presentation (rect, page, font, alignment, …). Rendered as text unless Type is image or checkbox.</summary>
     [Required]
     public PdfFieldDefinition Definition { get; set; } = new();
     /// <summary>Value entered by the signer. Empty/whitespace fields are not stamped.</summary>

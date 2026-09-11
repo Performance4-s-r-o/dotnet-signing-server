@@ -599,7 +599,7 @@
   <data name="Error_TSA_HTTPS_REQUIRED" xml:space="preserve"><value>The timestamp authority URL must use HTTPS.</value></data>
   <data name="Error_TSA_HOST_NOT_ALLOWED" xml:space="preserve"><value>The timestamp authority host is not allowed.</value></data>
   <data name="Error_FIELD_NAME_INVALID" xml:space="preserve"><value>Field name must contain only letters, numbers, underscore or dash.</value></data>
-  <data name="Error_FIELD_TYPE_INVALID" xml:space="preserve"><value>Unsupported field type. Allowed: text, image, barcode, signature, table.</value></data>
+  <data name="Error_FIELD_TYPE_INVALID" xml:space="preserve"><value>Unsupported field type. Allowed: text, image, barcode, signature, table, checkbox.</value></data>
   <data name="Error_FIELD_HALIGN_INVALID" xml:space="preserve"><value>Horizontal alignment must be one of: left, center, right.</value></data>
   <data name="Error_FIELD_VALIGN_INVALID" xml:space="preserve"><value>Vertical alignment must be one of: top, center, bottom.</value></data>
   <data name="Error_FIELD_FONTSIZE_INVALID" xml:space="preserve"><value>Font size must be between 5 and 128.</value></data>
