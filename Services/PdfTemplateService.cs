@@ -12,9 +12,12 @@ using iText.Layout;
 using iText.Layout.Element;
 using iText.Layout.Properties;
 using iText.Layout.Borders;
+using iText.Layout.Layout;
 using iText.Kernel.Colors;
 using iText.Barcodes;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Localization;
+using DotNetSigningServer.Resources;
 using System.Text.RegularExpressions;
 
 namespace DotNetSigningServer.Services;
@@ -24,12 +27,20 @@ public class PdfTemplateService
     private readonly ApplicationDbContext _dbContext;
     private readonly ILogger<PdfTemplateService> _logger;
     private readonly ContentLimitGuard _limitGuard;
+    // Text, který jde DO PDF (odkaz na pokračování tabulky, nadpis generované
+    // stránky). Řídí se jazykem požadavku — jiný jazyk dokument nenese.
+    private readonly IStringLocalizer _strings;
 
-    public PdfTemplateService(ApplicationDbContext dbContext, ILogger<PdfTemplateService> logger, ContentLimitGuard limitGuard)
+    public PdfTemplateService(
+        ApplicationDbContext dbContext,
+        ILogger<PdfTemplateService> logger,
+        ContentLimitGuard limitGuard,
+        IStringLocalizerFactory localizerFactory)
     {
         _dbContext = dbContext;
         _logger = logger;
         _limitGuard = limitGuard;
+        _strings = localizerFactory.Create(typeof(SharedStrings));
     }
 
     public async Task<CreateTemplateResponse> CreateTemplateAsync(CreateTemplateInput input, Guid userId, CancellationToken cancellationToken = default)
@@ -95,7 +106,11 @@ public class PdfTemplateService
 
         foreach (var dataset in input.Data)
         {
-            var filled = FillSingle(templateBytes, fields, dataset);
+            var filled = FillSingle(
+                templateBytes, fields, dataset,
+                _strings["TableContinuesOnGeneratedPage"].Value,
+                _strings["GeneratedTableTitle"].Value,
+                _logger);
             results.Add(Convert.ToBase64String(filled));
         }
 
@@ -216,7 +231,13 @@ public class PdfTemplateService
         return template;
     }
 
-    private static byte[] FillSingle(byte[] templateBytes, IReadOnlyCollection<PdfFieldDefinition> fields, FillDataSet dataSet)
+    private static byte[] FillSingle(
+        byte[] templateBytes,
+        IReadOnlyCollection<PdfFieldDefinition> fields,
+        FillDataSet dataSet,
+        string continuationNote,
+        string generatedTableTitle,
+        ILogger logger)
     {
         var valueLookup = (dataSet?.Data ?? new List<PdfFieldValue>()).ToDictionary(
             k => k.FieldName,
@@ -228,6 +249,8 @@ public class PdfTemplateService
         var reader = new PdfReader(msIn);
         var writer = new PdfWriter(msOut);
         var pdfDoc = new PdfDocument(reader, writer, new StampingProperties().UseAppendMode());
+
+        var overflowTables = new List<PendingTableOverflow>();
 
         foreach (var field in fields)
         {
@@ -279,7 +302,16 @@ public class PdfTemplateService
             {
                 if (provided.TableValue != null)
                 {
-                    TryAddTable(provided.TableValue, pdfDoc, pageNumber, rect, field);
+                    var overflow = TryAddTable(
+                        provided.TableValue, pdfDoc, pageNumber, rect, field,
+                        overflowTables.Count + 1, continuationNote);
+                    if (overflow != null)
+                    {
+                        logger.LogInformation(
+                            "[fill] table {Field} does not fit its box; {Rows} rows continue on an appended page",
+                            field.FieldName, provided.TableValue.Count);
+                        overflowTables.Add(overflow);
+                    }
                 }
                 continue;
             }
@@ -290,6 +322,8 @@ public class PdfTemplateService
             }
             AddText(value, pdfDoc, pageNumber, rect, field);
         }
+
+        AppendOverflowTables(pdfDoc, overflowTables, generatedTableTitle);
 
         pdfDoc.Close();
         return msOut.ToArray();
@@ -667,22 +701,42 @@ public class PdfTemplateService
         }
     }
 
-    private static void TryAddTable(List<List<string>> rows, PdfDocument pdfDoc, int pageNumber, Rectangle rect, PdfFieldDefinition field)
+    /// <summary>
+    /// Tabulka, která se do svého pole nevešla. Stránky s pokračováním se
+    /// přidávají až po vyplnění všech polí — přidat je uprostřed by posunulo
+    /// počet stránek pod nohama polím, která se na stránku odkazují číslem.
+    /// </summary>
+    private sealed record PendingTableOverflow(
+        int Index,
+        PdfFieldDefinition Field,
+        List<TableColumnDefinition> Columns,
+        List<List<string>> Rows,
+        Rectangle PageSize);
+
+    /// <summary>Sloupce pole; prázdný seznam dostane jeden bezejmenný.</summary>
+    private static List<TableColumnDefinition> NormalizeColumns(PdfFieldDefinition field)
     {
-        var page = pdfDoc.GetPage(pageNumber);
         var columns = field.TableColumns ?? new List<TableColumnDefinition>();
         if (columns.Count == 0)
         {
-            columns.Add(new TableColumnDefinition
+            columns = new List<TableColumnDefinition>
             {
-                Name = "Column 1",
-                WidthPercent = 100,
-                FontSize = field.FontSize,
-                FontWeight = field.FontWeight ?? PdfFontWeight.Normal,
-                BorderStyle = PdfBorderStyle.None
-            });
+                new TableColumnDefinition
+                {
+                    Name = "Column 1",
+                    WidthPercent = 100,
+                    FontSize = field.FontSize,
+                    FontWeight = field.FontWeight ?? PdfFontWeight.Normal,
+                    BorderStyle = PdfBorderStyle.None
+                }
+            };
         }
+        return columns;
+    }
 
+    /// <summary>Šířky sloupců v bodech pro danou šířku tabulky.</summary>
+    private static float[] ColumnWidths(List<TableColumnDefinition> columns, float totalWidth)
+    {
         var columnCount = Math.Max(1, columns.Count);
         var widths = columns.Select(c => c.WidthPercent ?? (100f / columnCount)).ToList();
         var widthSum = widths.Sum();
@@ -690,10 +744,25 @@ public class PdfTemplateService
         {
             widthSum = 100f;
         }
-        var normalized = widths.Select(w => (float)(rect.GetWidth() * (w / widthSum))).ToArray();
+        return widths.Select(w => (float)(totalWidth * (w / widthSum))).ToArray();
+    }
 
-        var table = new Table(normalized);
-        table.SetFixedPosition(pageNumber, rect.GetX(), rect.GetY(), rect.GetWidth());
+    /// <summary>
+    /// Tabulka z hlavičky a zadaných řádků. `footerNote` přidá přes celou šířku
+    /// poslední řádek s odkazem na pokračování; `repeatHeader` udělá z hlavičky
+    /// skutečnou hlavičku, která se opakuje na každé stránce.
+    /// </summary>
+    private static Table BuildTable(
+        IReadOnlyList<List<string>> rows,
+        List<TableColumnDefinition> columns,
+        PdfFieldDefinition field,
+        float totalWidth,
+        bool repeatHeader,
+        string? footerNote)
+    {
+        var columnCount = Math.Max(1, columns.Count);
+        var table = new Table(ColumnWidths(columns, totalWidth));
+        table.SetWidth(totalWidth);
         table.SetBorder(Border.NO_BORDER);
         table.SetPadding(0);
         table.SetMargin(0);
@@ -715,6 +784,58 @@ public class PdfTemplateService
         var altTextA = ParseColorAlpha(field.AltRowTextColor);
         var rowHeight = field.RowHeight is { } rhv && rhv > 0 ? (float?)rhv : null;
 
+        Cell BuildCell(TableColumnDefinition col, string cellText, bool header, bool alt)
+        {
+            var paragraph = new Paragraph(cellText)
+                .SetMargin(0)
+                .SetPadding(0)
+                .SetTextAlignment((col.HorizontalAlign ?? PdfHorizontalAlign.Left) switch
+                {
+                    PdfHorizontalAlign.Center => TextAlignment.CENTER,
+                    PdfHorizontalAlign.Right => TextAlignment.RIGHT,
+                    _ => TextAlignment.LEFT
+                })
+                .SetFontSize(col.FontSize <= 0 ? field.FontSize : col.FontSize)
+                .SetMultipliedLeading(1.1f);
+
+            var weight = header ? PdfFontWeight.Bold : (col.FontWeight ?? field.FontWeight);
+            paragraph.SetFont(ResolveFont(col.FontName ?? field.FontName, weight));
+
+            var txtColor = header ? headerText : (alt ? (altText ?? rowText) : rowText);
+            var txtAlpha = header ? headerTextA : (alt && altText != null ? altTextA : rowTextA);
+            if (txtColor != null)
+            {
+                paragraph.SetFontColor(txtColor);
+                if (txtAlpha < 1f) paragraph.SetProperty(Property.OPACITY, txtAlpha);
+            }
+
+            var cell = new Cell().Add(paragraph)
+                .SetPadding(4)
+                .SetVerticalAlignment((col.VerticalAlign ?? PdfVerticalAlign.Center) switch
+                {
+                    PdfVerticalAlign.Top => VerticalAlignment.TOP,
+                    PdfVerticalAlign.Bottom => VerticalAlignment.BOTTOM,
+                    _ => VerticalAlignment.MIDDLE
+                });
+
+            if (rowHeight.HasValue) cell.SetHeight(rowHeight.Value);
+
+            var bg = header ? headerBg : (alt ? (altBg ?? rowBg) : rowBg);
+            var bgA = header ? headerBgA : (alt && altBg != null ? altBgA : rowBgA);
+            if (bg != null)
+            {
+                if (bgA < 1f) cell.SetBackgroundColor(bg, bgA);
+                else cell.SetBackgroundColor(bg);
+            }
+
+            var borderStyle = col.BorderStyle ?? PdfBorderStyle.None;
+            if (borderStyle == PdfBorderStyle.Dashed) cell.SetBorder(new DashedBorder(borderColor, borderW));
+            else if (borderStyle == PdfBorderStyle.Filled) cell.SetBorder(new SolidBorder(borderColor, borderW));
+            else cell.SetBorder(Border.NO_BORDER);
+
+            return cell;
+        }
+
         void AddCells(IReadOnlyList<string> values, bool header, int dataIndex)
         {
             var alt = !header && dataIndex % 2 == 1;
@@ -722,71 +843,95 @@ public class PdfTemplateService
             {
                 var col = columns[Math.Min(i, columns.Count - 1)];
                 var cellText = i < values.Count ? values[i] ?? string.Empty : string.Empty;
-                var paragraph = new Paragraph(cellText)
-                    .SetMargin(0)
-                    .SetPadding(0)
-                    .SetTextAlignment((col.HorizontalAlign ?? PdfHorizontalAlign.Left) switch
-                    {
-                        PdfHorizontalAlign.Center => TextAlignment.CENTER,
-                        PdfHorizontalAlign.Right => TextAlignment.RIGHT,
-                        _ => TextAlignment.LEFT
-                    })
-                    .SetFontSize(col.FontSize <= 0 ? field.FontSize : col.FontSize)
-                    .SetMultipliedLeading(1.1f);
-
-                var weight = header ? PdfFontWeight.Bold : (col.FontWeight ?? field.FontWeight);
-                paragraph.SetFont(ResolveFont(col.FontName ?? field.FontName, weight));
-
-                var txtColor = header ? headerText : (alt ? (altText ?? rowText) : rowText);
-                var txtAlpha = header ? headerTextA : (alt && altText != null ? altTextA : rowTextA);
-                if (txtColor != null)
-                {
-                    paragraph.SetFontColor(txtColor);
-                    if (txtAlpha < 1f) paragraph.SetProperty(Property.OPACITY, txtAlpha);
-                }
-
-                var cell = new Cell().Add(paragraph)
-                    .SetPadding(4)
-                    .SetVerticalAlignment((col.VerticalAlign ?? PdfVerticalAlign.Center) switch
-                    {
-                        PdfVerticalAlign.Top => VerticalAlignment.TOP,
-                        PdfVerticalAlign.Bottom => VerticalAlignment.BOTTOM,
-                        _ => VerticalAlignment.MIDDLE
-                    });
-
-                if (rowHeight.HasValue) cell.SetHeight(rowHeight.Value);
-
-                var bg = header ? headerBg : (alt ? (altBg ?? rowBg) : rowBg);
-                var bgA = header ? headerBgA : (alt && altBg != null ? altBgA : rowBgA);
-                if (bg != null)
-                {
-                    if (bgA < 1f) cell.SetBackgroundColor(bg, bgA);
-                    else cell.SetBackgroundColor(bg);
-                }
-
-                var borderStyle = col.BorderStyle ?? PdfBorderStyle.None;
-                if (borderStyle == PdfBorderStyle.Dashed) cell.SetBorder(new DashedBorder(borderColor, borderW));
-                else if (borderStyle == PdfBorderStyle.Filled) cell.SetBorder(new SolidBorder(borderColor, borderW));
-                else cell.SetBorder(Border.NO_BORDER);
-
-                table.AddCell(cell);
+                var cell = BuildCell(col, cellText, header, alt);
+                if (header && repeatHeader) table.AddHeaderCell(cell);
+                else table.AddCell(cell);
             }
         }
 
         // Header row (column names) + the filled data rows.
         AddCells(columns.Select(c => c.Name ?? string.Empty).ToList(), header: true, dataIndex: -1);
-        var dataRows = rows ?? new List<List<string>>();
-        for (int r = 0; r < dataRows.Count; r++)
+        for (int r = 0; r < rows.Count; r++)
         {
-            AddCells(dataRows[r], header: false, dataIndex: r);
+            AddCells(rows[r], header: false, dataIndex: r);
         }
 
-        var pdfCanvas = new PdfCanvas(page);
-        pdfCanvas.SaveState();
+        if (!string.IsNullOrWhiteSpace(footerNote))
+        {
+            var note = new Paragraph(footerNote)
+                .SetMargin(0)
+                .SetPadding(0)
+                .SetFontSize(Math.Max(5f, field.FontSize - 1f))
+                .SetFont(ResolveFont(field.FontName, PdfFontWeight.Normal, italic: true))
+                .SetMultipliedLeading(1.1f);
+            var cell = new Cell(1, columnCount).Add(note).SetPadding(4).SetBorder(Border.NO_BORDER);
+            table.AddCell(cell);
+        }
 
+        return table;
+    }
+
+    /// <summary>
+    /// Vejde se tabulka celá do dané plochy? Měří se rozvržením, nekreslí se nic.
+    ///
+    /// `null` znamená, že se to zjistit nepodařilo — volající pak jede po staru.
+    /// Tvrdit „nevejde se" na základě chyby měření by přidalo stránky dokumentu,
+    /// který je v pořádku.
+    /// </summary>
+    private static bool? FitsInArea(Table table, PdfDocument pdfDoc, int pageNumber, Rectangle area)
+    {
         try
         {
-            ApplyFieldRotation(pdfCanvas, rect, field.Rotation);
+            var document = new iText.Layout.Document(pdfDoc, new PageSize(area.GetWidth(), area.GetHeight()), false);
+            var renderer = table.CreateRendererSubTree().SetParent(document.GetRenderer());
+            var result = renderer.Layout(new LayoutContext(new LayoutArea(pageNumber, area)));
+            return result.GetStatus() == LayoutResult.FULL;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Nejvyšší počet řádků od začátku, který se i s poznámkou o pokračování
+    /// ještě vejde. Půlením intervalu, aby se tisíc řádků neměřilo tisíckrát.
+    /// </summary>
+    private static int LargestFittingRowCount(
+        List<List<string>> rows,
+        List<TableColumnDefinition> columns,
+        PdfFieldDefinition field,
+        PdfDocument pdfDoc,
+        int pageNumber,
+        Rectangle area,
+        string? footerNote)
+    {
+        int low = 0, high = rows.Count, best = 0;
+        while (low <= high)
+        {
+            var mid = (low + high) / 2;
+            var candidate = BuildTable(rows.Take(mid).ToList(), columns, field, area.GetWidth(), false, footerNote);
+            if (FitsInArea(candidate, pdfDoc, pageNumber, area) == true)
+            {
+                best = mid;
+                low = mid + 1;
+            }
+            else
+            {
+                high = mid - 1;
+            }
+        }
+        return best;
+    }
+
+    private static void DrawTable(Table table, PdfDocument pdfDoc, int pageNumber, Rectangle rect, float rotation)
+    {
+        var page = pdfDoc.GetPage(pageNumber);
+        var pdfCanvas = new PdfCanvas(page);
+        pdfCanvas.SaveState();
+        try
+        {
+            ApplyFieldRotation(pdfCanvas, rect, rotation);
             var canvas = new Canvas(pdfCanvas, rect);
             canvas.Add(table);
             canvas.Close();
@@ -794,6 +939,100 @@ public class PdfTemplateService
         finally
         {
             pdfCanvas.RestoreState();
+        }
+    }
+
+    /// <summary>
+    /// Vykreslí tabulku do pole. Když se nevejde, nakreslí jen tolik řádků,
+    /// kolik se vejde, přidá pod ně odkaz na pokračování a vrátí popis toho, co
+    /// patří na konec dokumentu.
+    ///
+    /// Dřív se celá tabulka poslala do plátna omezeného obdélníkem pole a iText
+    /// zbytek mlčky uřízl — padesát řádků dat do pole na osm znamenalo čtyřicet
+    /// dva zmizelých řádků a dokument, který vypadal hotově.
+    /// </summary>
+    private static PendingTableOverflow? TryAddTable(
+        List<List<string>> rows,
+        PdfDocument pdfDoc,
+        int pageNumber,
+        Rectangle rect,
+        PdfFieldDefinition field,
+        int overflowIndex,
+        string continuationNoteFormat)
+    {
+        var columns = NormalizeColumns(field);
+        var dataRows = rows ?? new List<List<string>>();
+
+        var full = BuildTable(dataRows, columns, field, rect.GetWidth(), false, null);
+        var fits = FitsInArea(full, pdfDoc, pageNumber, rect);
+        if (fits != false)
+        {
+            // Vejde se — nebo se to nepodařilo změřit a jedeme po staru.
+            DrawTable(full, pdfDoc, pageNumber, rect, field.Rotation);
+            return null;
+        }
+
+        var note = string.Format(continuationNoteFormat, overflowIndex);
+        var keep = LargestFittingRowCount(dataRows, columns, field, pdfDoc, pageNumber, rect, note);
+        var shown = BuildTable(dataRows.Take(keep).ToList(), columns, field, rect.GetWidth(), false, note);
+        DrawTable(shown, pdfDoc, pageNumber, rect, field.Rotation);
+
+        return new PendingTableOverflow(
+            overflowIndex,
+            field,
+            columns,
+            dataRows,
+            pdfDoc.GetPage(pageNumber).GetPageSize());
+    }
+
+
+    /// <summary>
+    /// Stránky s pokračováním na konec dokumentu — jedna tabulka může zabrat
+    /// víc stránek. Přidávají se až po vyplnění všech polí: uprostřed by
+    /// posunuly počet stránek pod nohama polím, která se na stránku odkazují
+    /// číslem.
+    /// </summary>
+    private static void AppendOverflowTables(
+        PdfDocument pdfDoc,
+        List<PendingTableOverflow> pending,
+        string titleFormat)
+    {
+        const float margin = 36f;
+        const float titleBand = 26f;
+
+        foreach (var item in pending)
+        {
+            var title = string.Format(titleFormat, item.Index);
+            var index = 0;
+            while (index < item.Rows.Count)
+            {
+                var page = pdfDoc.AddNewPage(new PageSize(item.PageSize));
+                var pageNumber = pdfDoc.GetPageNumber(page);
+                var width = item.PageSize.GetWidth() - 2 * margin;
+                var top = item.PageSize.GetHeight() - margin;
+
+                var titleRect = new Rectangle(margin, top - titleBand, width, titleBand);
+                var titleCanvas = new Canvas(new PdfCanvas(page), titleRect);
+                titleCanvas.Add(
+                    new Paragraph(title)
+                        .SetMargin(0)
+                        .SetPadding(0)
+                        .SetFontSize(Math.Max(8f, item.Field.FontSize))
+                        .SetFont(ResolveFont(item.Field.FontName, PdfFontWeight.Bold)));
+                titleCanvas.Close();
+
+                var tableRect = new Rectangle(margin, margin, width, top - titleBand - margin);
+                var rest = item.Rows.Skip(index).ToList();
+                var take = LargestFittingRowCount(rest, item.Columns, item.Field, pdfDoc, pageNumber, tableRect, null);
+                // Ani jeden řádek se nevejde (obří buňka, drobná stránka).
+                // Vzít nulu by cyklilo donekonečna, takže se jeden vykreslí
+                // i za cenu oříznutí — jinak by se dokument nikdy nedopočítal.
+                if (take <= 0) take = 1;
+
+                var chunk = BuildTable(rest.Take(take).ToList(), item.Columns, item.Field, width, true, null);
+                DrawTable(chunk, pdfDoc, pageNumber, tableRect, 0f);
+                index += take;
+            }
         }
     }
 

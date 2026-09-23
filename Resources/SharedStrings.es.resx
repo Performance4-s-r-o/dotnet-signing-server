@@ -23,6 +23,8 @@
   <data name="CheckEmailVerification" xml:space="preserve"><value>Por favor, revise su correo electrónico para obtener el enlace de verificación.</value></data>
   <data name="VerificationEmailFailed" xml:space="preserve"><value>No se pudo enviar el correo de verificación. Por favor, contacte con soporte o inténtelo de nuevo más tarde.</value></data>
   <data name="TooManySignInAttempts" xml:space="preserve"><value>Demasiados intentos de inicio de sesión. Por favor, inténtelo de nuevo en un minuto.</value></data>
+  <data name="TableContinuesOnGeneratedPage" xml:space="preserve"><value>La tabla completa está al final del documento — Tabla generada {0}</value></data>
+  <data name="GeneratedTableTitle" xml:space="preserve"><value>Tabla generada {0}</value></data>
   <data name="InvalidCredentials" xml:space="preserve"><value>Credenciales no válidas.</value></data>
   <data name="AccountDeactivated" xml:space="preserve"><value>Su cuenta ha sido desactivada.</value></data>
   <data name="VerifyEmailFirst" xml:space="preserve"><value>Por favor, verifique su correo electrónico antes de iniciar sesión.</value></data>

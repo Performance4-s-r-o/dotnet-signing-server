@@ -23,6 +23,8 @@
   <data name="CheckEmailVerification" xml:space="preserve"><value>Please check your email for a verification link.</value></data>
   <data name="VerificationEmailFailed" xml:space="preserve"><value>We could not send a verification email. Please contact support or try again later.</value></data>
   <data name="TooManySignInAttempts" xml:space="preserve"><value>Too many sign-in attempts. Please try again in a minute.</value></data>
+  <data name="TableContinuesOnGeneratedPage" xml:space="preserve"><value>The full table is at the end of the document — Generated table {0}</value></data>
+  <data name="GeneratedTableTitle" xml:space="preserve"><value>Generated table {0}</value></data>
   <data name="InvalidCredentials" xml:space="preserve"><value>Invalid credentials.</value></data>
   <data name="AccountDeactivated" xml:space="preserve"><value>Your account has been deactivated.</value></data>
   <data name="VerifyEmailFirst" xml:space="preserve"><value>Please verify your email before signing in.</value></data>

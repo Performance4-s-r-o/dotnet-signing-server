@@ -36,7 +36,8 @@ public class FieldPlacementConsistencyTests : IDisposable
         _service = new PdfTemplateService(
             _dbContext,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<PdfTemplateService>.Instance,
-            limitGuard);
+            limitGuard,
+            new KeyEchoLocalizerFactory());
     }
 
     public void Dispose() => _dbContext.Dispose();

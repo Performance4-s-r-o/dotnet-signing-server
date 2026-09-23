@@ -23,6 +23,8 @@
   <data name="CheckEmailVerification" xml:space="preserve"><value>Bitte prüfen Sie Ihr E-Mail-Postfach für den Bestätigungslink.</value></data>
   <data name="VerificationEmailFailed" xml:space="preserve"><value>Die Bestätigungs-E-Mail konnte nicht gesendet werden. Bitte kontaktieren Sie den Support oder versuchen Sie es später erneut.</value></data>
   <data name="TooManySignInAttempts" xml:space="preserve"><value>Zu viele Anmeldeversuche. Bitte versuchen Sie es in einer Minute erneut.</value></data>
+  <data name="TableContinuesOnGeneratedPage" xml:space="preserve"><value>Die vollständige Tabelle steht am Ende des Dokuments — Generierte Tabelle {0}</value></data>
+  <data name="GeneratedTableTitle" xml:space="preserve"><value>Generierte Tabelle {0}</value></data>
   <data name="InvalidCredentials" xml:space="preserve"><value>Ungültige Anmeldedaten.</value></data>
   <data name="AccountDeactivated" xml:space="preserve"><value>Ihr Konto wurde deaktiviert.</value></data>
   <data name="VerifyEmailFirst" xml:space="preserve"><value>Bitte bestätigen Sie Ihre E-Mail-Adresse, bevor Sie sich anmelden.</value></data>

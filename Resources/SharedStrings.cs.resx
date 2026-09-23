@@ -23,6 +23,8 @@
   <data name="CheckEmailVerification" xml:space="preserve"><value>Zkontrolujte prosím svůj e-mail, kde najdete ověřovací odkaz.</value></data>
   <data name="VerificationEmailFailed" xml:space="preserve"><value>Nepodařilo se odeslat ověřovací e-mail. Kontaktujte prosím podporu nebo to zkuste znovu později.</value></data>
   <data name="TooManySignInAttempts" xml:space="preserve"><value>Příliš mnoho pokusů o přihlášení. Zkuste to prosím znovu za minutu.</value></data>
+  <data name="TableContinuesOnGeneratedPage" xml:space="preserve"><value>Celá tabulka je na konci dokumentu — Generovaná tabulka {0}</value></data>
+  <data name="GeneratedTableTitle" xml:space="preserve"><value>Generovaná tabulka {0}</value></data>
   <data name="InvalidCredentials" xml:space="preserve"><value>Neplatné přihlašovací údaje.</value></data>
   <data name="AccountDeactivated" xml:space="preserve"><value>Váš účet byl deaktivován.</value></data>
   <data name="VerifyEmailFirst" xml:space="preserve"><value>Před přihlášením prosím ověřte svůj e-mail.</value></data>

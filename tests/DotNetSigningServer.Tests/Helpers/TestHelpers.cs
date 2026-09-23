@@ -4,6 +4,7 @@ using System.Text;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
+using Microsoft.Extensions.Localization;
 using iText.Kernel.Geom;
 using iText.Kernel.Pdf;
 using Microsoft.EntityFrameworkCore;
@@ -190,5 +191,25 @@ public static class TestHelpers
         var env = CreateMockEnvironment(environmentName);
         var logger = NullLogger<TokenService>.Instance;
         return new TokenService(options, env, logger);
+    }
+}
+
+/// <summary>
+/// Lokalizátor pro testy: vrací klíč jako text. Tabulka, která se nevejde,
+/// tím dostane do PDF „TableContinuesOnGeneratedPage" místo věty — testům
+/// stačí, že text existuje a je vidět, a nemusí se aktualizovat s překladem.
+/// </summary>
+public sealed class KeyEchoLocalizerFactory : IStringLocalizerFactory
+{
+    public IStringLocalizer Create(Type resourceSource) => new KeyEchoLocalizer();
+    public IStringLocalizer Create(string baseName, string location) => new KeyEchoLocalizer();
+
+    private sealed class KeyEchoLocalizer : IStringLocalizer
+    {
+        public LocalizedString this[string name] => new(name, name, resourceNotFound: false);
+        public LocalizedString this[string name, params object[] arguments] =>
+            new(name, string.Format(name, arguments), resourceNotFound: false);
+        public IEnumerable<LocalizedString> GetAllStrings(bool includeParentCultures) =>
+            Array.Empty<LocalizedString>();
     }
 }

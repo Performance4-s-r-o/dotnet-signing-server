@@ -29,7 +29,7 @@ public class CheckboxFieldTests : IDisposable
     {
         _dbContext = TestHelpers.CreateInMemoryDbContext();
         var limitGuard = new ContentLimitGuard(TestHelpers.WrapOptions(new LimitsOptions()));
-        _service = new PdfTemplateService(_dbContext, NullLogger<PdfTemplateService>.Instance, limitGuard);
+        _service = new PdfTemplateService(_dbContext, NullLogger<PdfTemplateService>.Instance, limitGuard, new KeyEchoLocalizerFactory());
     }
 
     public void Dispose() => _dbContext.Dispose();

@@ -19,7 +19,7 @@ public class PdfTemplateServiceTests : IDisposable
         _dbContext = TestHelpers.CreateInMemoryDbContext();
         var logger = NullLogger<PdfTemplateService>.Instance;
         var limitGuard = new ContentLimitGuard(TestHelpers.WrapOptions(new LimitsOptions()));
-        _sut = new PdfTemplateService(_dbContext, logger, limitGuard);
+        _sut = new PdfTemplateService(_dbContext, logger, limitGuard, new KeyEchoLocalizerFactory());
     }
 
     public void Dispose()
