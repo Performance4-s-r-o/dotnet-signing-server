@@ -312,7 +312,7 @@ public class PdfTemplateService
                     }
                     var overflow = TryAddTable(
                         provided.TableValue, pdfDoc, pageNumber, rect, field,
-                        overflowTables.Count + 1, continuationNote);
+                        overflowTables.Count + 1, continuationNote, logger);
                     if (overflow != null)
                     {
                         logger.LogInformation(
@@ -331,7 +331,7 @@ public class PdfTemplateService
             AddText(value, pdfDoc, pageNumber, rect, field);
         }
 
-        AppendOverflowTables(pdfDoc, overflowTables, generatedTableTitle);
+        AppendOverflowTables(pdfDoc, overflowTables, generatedTableTitle, logger);
 
         pdfDoc.Close();
         return msOut.ToArray();
@@ -952,7 +952,7 @@ public class PdfTemplateService
     /// Tvrdit „nevejde se" na základě chyby měření by přidalo stránky dokumentu,
     /// který je v pořádku.
     /// </summary>
-    private static bool? FitsInArea(Table table, PdfDocument pdfDoc, int pageNumber, Rectangle area)
+    private static bool? FitsInArea(Table table, PdfDocument pdfDoc, int pageNumber, Rectangle area, ILogger logger)
     {
         try
         {
@@ -961,8 +961,12 @@ public class PdfTemplateService
             var result = renderer.Layout(new LayoutContext(new LayoutArea(pageNumber, area)));
             return result.GetStatus() == LayoutResult.FULL;
         }
-        catch
+        catch (Exception ex)
         {
+            // Ticho je přesně to, co tahle změna odstraňuje. Nevyjde-li měření,
+            // tabulka se nakreslí po staru a iText ji může uříznout — musí to
+            // tedy být vidět v logu, ne jen na dokumentu.
+            logger.LogWarning(ex, "[fill] could not measure a table; drawing it unchecked, rows may be clipped");
             return null;
         }
     }
@@ -978,14 +982,15 @@ public class PdfTemplateService
         PdfDocument pdfDoc,
         int pageNumber,
         Rectangle area,
-        string? footerNote)
+        string? footerNote,
+        ILogger logger)
     {
         int low = 0, high = rows.Count, best = 0;
         while (low <= high)
         {
             var mid = (low + high) / 2;
             var candidate = BuildTable(rows.Take(mid).ToList(), columns, field, area.GetWidth(), false, footerNote);
-            if (FitsInArea(candidate, pdfDoc, pageNumber, area) == true)
+            if (FitsInArea(candidate, pdfDoc, pageNumber, area, logger) == true)
             {
                 best = mid;
                 low = mid + 1;
@@ -1032,13 +1037,14 @@ public class PdfTemplateService
         Rectangle rect,
         PdfFieldDefinition field,
         int overflowIndex,
-        string continuationNoteFormat)
+        string continuationNoteFormat,
+        ILogger logger)
     {
         var columns = NormalizeColumns(field);
         var dataRows = SortRows(rows ?? new List<List<string>>(), field);
 
         var full = BuildTable(dataRows, columns, field, rect.GetWidth(), false, null);
-        var fits = FitsInArea(full, pdfDoc, pageNumber, rect);
+        var fits = FitsInArea(full, pdfDoc, pageNumber, rect, logger);
         if (fits != false)
         {
             // Vejde se — nebo se to nepodařilo změřit a jedeme po staru.
@@ -1047,7 +1053,7 @@ public class PdfTemplateService
         }
 
         var note = string.Format(continuationNoteFormat, overflowIndex);
-        var keep = LargestFittingRowCount(dataRows, columns, field, pdfDoc, pageNumber, rect, note);
+        var keep = LargestFittingRowCount(dataRows, columns, field, pdfDoc, pageNumber, rect, note, logger);
         var shown = BuildTable(dataRows.Take(keep).ToList(), columns, field, rect.GetWidth(), false, note);
         DrawTable(shown, pdfDoc, pageNumber, rect, field.Rotation);
 
@@ -1069,7 +1075,8 @@ public class PdfTemplateService
     private static void AppendOverflowTables(
         PdfDocument pdfDoc,
         List<PendingTableOverflow> pending,
-        string titleFormat)
+        string titleFormat,
+        ILogger logger)
     {
         const float margin = 36f;
         const float titleBand = 26f;
@@ -1097,11 +1104,20 @@ public class PdfTemplateService
 
                 var tableRect = new Rectangle(margin, margin, width, top - titleBand - margin);
                 var rest = item.Rows.Skip(index).ToList();
-                var take = LargestFittingRowCount(rest, item.Columns, item.Field, pdfDoc, pageNumber, tableRect, null);
+                var take = LargestFittingRowCount(rest, item.Columns, item.Field, pdfDoc, pageNumber, tableRect, null, logger);
                 // Ani jeden řádek se nevejde (obří buňka, drobná stránka).
                 // Vzít nulu by cyklilo donekonečna, takže se jeden vykreslí
                 // i za cenu oříznutí — jinak by se dokument nikdy nedopočítal.
-                if (take <= 0) take = 1;
+                if (take <= 0)
+                {
+                    // Řádek, který se nevejde ani na celou prázdnou stránku
+                    // (obří buňka). Kreslí se přesto, aby se výpočet dopočítal —
+                    // ale iText ho může uříznout, takže o tom musí být záznam.
+                    logger.LogWarning(
+                        "[fill] row {Row} of the generated table {Index} does not fit a whole page; it may be clipped",
+                        index + 1, item.Index);
+                    take = 1;
+                }
 
                 var chunk = BuildTable(rest.Take(take).ToList(), item.Columns, item.Field, width, true, null);
                 DrawTable(chunk, pdfDoc, pageNumber, tableRect, 0f);
