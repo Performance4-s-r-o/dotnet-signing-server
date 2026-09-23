@@ -34,13 +34,15 @@ public class TableOverflowTests : IDisposable
 
     public void Dispose() => _dbContext.Dispose();
 
-    private static PdfFieldDefinition TableField(float height) => new()
+    private static PdfFieldDefinition TableField(float height, int? sortColumn = null, bool desc = false) => new()
     {
         FieldName = "items",
         Type = PdfFieldType.Table,
         Rect = new SignRect { X = 40, Y = 600, Width = 300, Height = height },
         Page = 1,
         FontSize = 9,
+        SortColumn = sortColumn,
+        SortDescending = desc,
         TableColumns = new List<TableColumnDefinition>
         {
             new() { Name = "Polozka", WidthPercent = 60, FontSize = 9 },
@@ -53,11 +55,17 @@ public class TableOverflowTests : IDisposable
         var rows = Enumerable.Range(1, rowCount)
             .Select(i => new List<string> { $"Radek-{i}", $"{i}00" })
             .ToList();
+        return await FillRows(boxHeight, rows);
+    }
+
+    private async Task<byte[]> FillRows(
+        float boxHeight, List<List<string>> rows, int? sortColumn = null, bool desc = false)
+    {
 
         var result = await _service.FillAsync(new FillPdfInput
         {
             PdfContent = TestHelpers.CreateMinimalPdfBase64(),
-            Fields = new List<PdfFieldDefinition> { TableField(boxHeight) },
+            Fields = new List<PdfFieldDefinition> { TableField(boxHeight, sortColumn, desc) },
             Data = new List<FillDataSet>
             {
                 new() { Data = new List<PdfFieldValue> { new() { FieldName = "items", TableValue = rows } } },
@@ -110,5 +118,48 @@ public class TableOverflowTests : IDisposable
         // Lokalizátor v testech vrací klíč — stačí, že je věta v dokumentu.
         Assert.Contains("TableContinuesOnGeneratedPage", text);
         Assert.Contains("GeneratedTableTitle", text);
+    }
+
+    [Fact]
+    public async Task Rows_are_sorted_by_the_chosen_column()
+    {
+        var rows = new List<List<string>>
+        {
+            new() { "Kolo", "9" },
+            new() { "Auto", "10" },
+            new() { "Lod", "2" },
+        };
+        // Podle druhého sloupce vzestupně: 2, 9, 10 — ne 10, 2, 9, jak by
+        // dopadlo porovnání řetězců.
+        var (_, text) = Read(await FillRows(200, rows, sortColumn: 2));
+        Assert.True(text.IndexOf("Lod") < text.IndexOf("Kolo"));
+        Assert.True(text.IndexOf("Kolo") < text.IndexOf("Auto"));
+    }
+
+    [Fact]
+    public async Task Empty_values_go_last_whichever_way_it_is_sorted()
+    {
+        var rows = new List<List<string>>
+        {
+            new() { "Bez ceny", "" },
+            new() { "S cenou", "5" },
+        };
+        foreach (var desc in new[] { false, true })
+        {
+            var (_, text) = Read(await FillRows(200, rows, sortColumn: 2, desc: desc));
+            Assert.True(text.IndexOf("S cenou") < text.IndexOf("Bez ceny"));
+        }
+    }
+
+    [Fact]
+    public async Task More_than_a_thousand_rows_is_refused()
+    {
+        var rows = Enumerable.Range(1, PdfTemplateService.MaxTableRows + 1)
+            .Select(i => new List<string> { $"R{i}", $"{i}" })
+            .ToList();
+
+        var ex = await Assert.ThrowsAsync<DotNetSigningServer.Exceptions.ApiValidationException>(
+            () => FillRows(200, rows));
+        Assert.Contains("TABLE_TOO_MANY_ROWS", ex.Message);
     }
 }

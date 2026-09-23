@@ -19,6 +19,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using DotNetSigningServer.Resources;
 using System.Text.RegularExpressions;
+using System.Globalization;
 
 namespace DotNetSigningServer.Services;
 
@@ -302,6 +303,13 @@ public class PdfTemplateService
             {
                 if (provided.TableValue != null)
                 {
+                    // Strop. `data` je pole, takže jedno volání umí poslat
+                    // desetitisíce řádků; sazba každého z nich se měří a
+                    // stránky s pokračováním by se sypaly donekonečna.
+                    if (provided.TableValue.Count > MaxTableRows)
+                    {
+                        throw new ApiValidationException("TABLE_TOO_MANY_ROWS");
+                    }
                     var overflow = TryAddTable(
                         provided.TableValue, pdfDoc, pageNumber, rect, field,
                         overflowTables.Count + 1, continuationNote);
@@ -713,6 +721,72 @@ public class PdfTemplateService
         List<List<string>> Rows,
         Rectangle PageSize);
 
+    /// <summary>
+    /// Nejvyšší počet řádků jedné tabulky. Bez stropu umí jedno volání poslat
+    /// desetitisíce řádků — každý se měří a stránky s pokračováním přibývají,
+    /// dokud nedojde čas nebo paměť.
+    /// </summary>
+    public const int MaxTableRows = 1000;
+
+    /// <summary>
+    /// Řádky seřazené podle nastavení pole. Hodnoty jsou řetězce, takže se
+    /// zkusí nejdřív číslo, pak datum a nakonec text v jazyce prostředí —
+    /// „10" má stát za „9", ne před „2".
+    ///
+    /// Prázdné hodnoty jsou vždy na konci, vzestupně i sestupně: „nevyplněno"
+    /// není nejmenší hodnota, je to chybějící hodnota.
+    /// </summary>
+    private static List<List<string>> SortRows(List<List<string>> rows, PdfFieldDefinition field)
+    {
+        var column = (field.SortColumn ?? 0) - 1;
+        if (column < 0 || rows.Count < 2) return rows;
+
+        string Cell(List<string> row) => column < row.Count ? (row[column] ?? string.Empty).Trim() : string.Empty;
+
+        static int CompareValues(string x, string y)
+        {
+            if (decimal.TryParse(x, NumberStyles.Any, CultureInfo.InvariantCulture, out var nx) &&
+                decimal.TryParse(y, NumberStyles.Any, CultureInfo.InvariantCulture, out var ny))
+            {
+                return nx.CompareTo(ny);
+            }
+            if (DateTime.TryParse(x, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dx) &&
+                DateTime.TryParse(y, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dy))
+            {
+                return dx.CompareTo(dy);
+            }
+            return string.Compare(x, y, StringComparison.CurrentCulture);
+        }
+
+        int Compare(List<string> a, List<string> b)
+        {
+            var x = Cell(a);
+            var y = Cell(b);
+            var xEmpty = x.Length == 0;
+            var yEmpty = y.Length == 0;
+            // Prázdné až za směrem: obrácení pořadí by je jinak vytáhlo
+            // dopředu, a „nevyplněno" není nejvyšší hodnota o nic víc než
+            // nejnižší — je to chybějící hodnota a patří na konec vždycky.
+            if (xEmpty || yEmpty) return xEmpty && yEmpty ? 0 : (xEmpty ? 1 : -1);
+            var c = CompareValues(x, y);
+            return field.SortDescending ? -c : c;
+        }
+
+        var sorted = new List<List<string>>(rows);
+        // Stabilní řazení: řádky se stejnou hodnotou si nechají pořadí, ve
+        // kterém přišly. `List.Sort` stabilní není.
+        sorted = sorted
+            .Select((row, i) => (row, i))
+            .OrderBy(t => t, Comparer<(List<string> row, int i)>.Create((a, b) =>
+            {
+                var c = Compare(a.row, b.row);
+                return c != 0 ? c : a.i.CompareTo(b.i);
+            }))
+            .Select(t => t.row)
+            .ToList();
+        return sorted;
+    }
+
     /// <summary>Sloupce pole; prázdný seznam dostane jeden bezejmenný.</summary>
     private static List<TableColumnDefinition> NormalizeColumns(PdfFieldDefinition field)
     {
@@ -961,7 +1035,7 @@ public class PdfTemplateService
         string continuationNoteFormat)
     {
         var columns = NormalizeColumns(field);
-        var dataRows = rows ?? new List<List<string>>();
+        var dataRows = SortRows(rows ?? new List<List<string>>(), field);
 
         var full = BuildTable(dataRows, columns, field, rect.GetWidth(), false, null);
         var fits = FitsInArea(full, pdfDoc, pageNumber, rect);
