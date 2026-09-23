@@ -589,7 +589,7 @@
   <data name="Error_TSA_HTTPS_REQUIRED" xml:space="preserve"><value>Die URL der Zeitstempel-Behörde muss HTTPS verwenden.</value></data>
   <data name="Error_TSA_HOST_NOT_ALLOWED" xml:space="preserve"><value>Der Host der Zeitstempel-Behörde ist nicht zulässig.</value></data>
   <data name="Error_FIELD_NAME_INVALID" xml:space="preserve"><value>Der Feldname darf nur Buchstaben, Zahlen, Unterstrich oder Bindestrich enthalten.</value></data>
-  <data name="Error_FIELD_TYPE_INVALID" xml:space="preserve"><value>Nicht unterstützter Feldtyp. Erlaubt: text, image, barcode, signature, table.</value></data>
+  <data name="Error_FIELD_TYPE_INVALID" xml:space="preserve"><value>Nicht unterstützter Feldtyp. Erlaubt: text, image, barcode, signature, table, checkbox.</value></data>
   <data name="Error_FIELD_HALIGN_INVALID" xml:space="preserve"><value>Horizontale Ausrichtung muss eines sein von: left, center, right.</value></data>
   <data name="Error_FIELD_VALIGN_INVALID" xml:space="preserve"><value>Vertikale Ausrichtung muss eines sein von: top, center, bottom.</value></data>
   <data name="Error_FIELD_FONTSIZE_INVALID" xml:space="preserve"><value>Schriftgröße muss zwischen 5 und 128 liegen.</value></data>
