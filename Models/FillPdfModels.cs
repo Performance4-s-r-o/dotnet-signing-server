@@ -202,6 +202,16 @@ public class PdfFieldDefinition
     // ── Table-level styling (Type == table). Hex colors (#RRGGBB / #RRGGBBAA). ──
     /// <summary>Row height in PT for the header + data rows. Null ⇒ auto.</summary>
     public float? RowHeight { get; set; }
+    /// <summary>
+    /// Řadit řádky podle sloupce (od 1, v pořadí <see cref="TableColumns"/>).
+    /// Null ⇒ v pořadí, v jakém data přišla.
+    ///
+    /// Řadí se na serveru, ne u volajícího: pak to platí i pro konektor a API,
+    /// ne jen pro průvodce v SharePointu.
+    /// </summary>
+    public int? SortColumn { get; set; }
+    /// <summary>Sestupně? Bez <see cref="SortColumn"/> nemá význam.</summary>
+    public bool SortDescending { get; set; }
     public string? HeaderBackgroundColor { get; set; }
     public string? HeaderTextColor { get; set; }
     public string? RowBackgroundColor { get; set; }
@@ -259,6 +269,15 @@ public class FillPdfInput
     public string PdfContent { get; set; } = string.Empty; // Base64
     public List<PdfFieldDefinition> Fields { get; set; } = new();
     public List<FillDataSet> Data { get; set; } = new();
+    /// <summary>
+    /// Jazyk textu, který engine sám vloží do dokumentu (odkaz na pokračování
+    /// tabulky, nadpis generované stránky) — "cs", "en", …
+    ///
+    /// Kultura požadavku se tu nehodí: řídí se jen URL a `/api` prefix jazyka
+    /// nemá, takže by dokument vyšel vždy anglicky. Null nebo nepodporovaný
+    /// jazyk ⇒ angličtina.
+    /// </summary>
+    public string? Locale { get; set; }
 }
 
 public class FillPdfResponse

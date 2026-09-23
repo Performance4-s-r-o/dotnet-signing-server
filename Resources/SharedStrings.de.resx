@@ -23,6 +23,8 @@
   <data name="CheckEmailVerification" xml:space="preserve"><value>Bitte prüfen Sie Ihr E-Mail-Postfach für den Bestätigungslink.</value></data>
   <data name="VerificationEmailFailed" xml:space="preserve"><value>Die Bestätigungs-E-Mail konnte nicht gesendet werden. Bitte kontaktieren Sie den Support oder versuchen Sie es später erneut.</value></data>
   <data name="TooManySignInAttempts" xml:space="preserve"><value>Zu viele Anmeldeversuche. Bitte versuchen Sie es in einer Minute erneut.</value></data>
+  <data name="TableContinuesOnGeneratedPage" xml:space="preserve"><value>Die vollständige Tabelle steht am Ende des Dokuments — Generierte Tabelle {0}</value></data>
+  <data name="GeneratedTableTitle" xml:space="preserve"><value>Generierte Tabelle {0}</value></data>
   <data name="InvalidCredentials" xml:space="preserve"><value>Ungültige Anmeldedaten.</value></data>
   <data name="AccountDeactivated" xml:space="preserve"><value>Ihr Konto wurde deaktiviert.</value></data>
   <data name="VerifyEmailFirst" xml:space="preserve"><value>Bitte bestätigen Sie Ihre E-Mail-Adresse, bevor Sie sich anmelden.</value></data>
@@ -597,6 +599,7 @@
   <data name="Error_FIELD_FONTNAME_INVALID" xml:space="preserve"><value>Schriftname muss eines sein von: Helvetica, Times-Roman, Courier, Symbol, ZapfDingbats.</value></data>
   <data name="Error_FIELD_BARCODE_UNSUPPORTED" xml:space="preserve"><value>Das angegebene Barcode-Format wird nicht unterstützt.</value></data>
   <data name="Error_TABLE_COLUMNS_ZERO" xml:space="preserve"><value>Die Tabelle muss mindestens eine Spalte haben.</value></data>
+  <data name="Error_TABLE_TOO_MANY_ROWS" xml:space="preserve"><value>Eine Tabelle darf höchstens 1000 Zeilen haben.</value></data>
   <data name="Error_TABLE_COLUMNS_MISMATCH" xml:space="preserve"><value>Die Anzahl der Spaltendefinitionen stimmt nicht mit der deklarierten Spaltenanzahl überein.</value></data>
   <data name="Error_TABLE_COLUMN_NAME_REQUIRED" xml:space="preserve"><value>Tabellenspaltenname ist erforderlich.</value></data>
   <data name="Error_TABLE_COLUMN_WIDTH_INVALID" xml:space="preserve"><value>Der prozentuale Breitenwert der Tabellenspalte muss zwischen 0 und 100 liegen.</value></data>

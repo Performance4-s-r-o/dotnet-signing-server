@@ -23,6 +23,8 @@
   <data name="CheckEmailVerification" xml:space="preserve"><value>Zkontrolujte prosím svůj e-mail, kde najdete ověřovací odkaz.</value></data>
   <data name="VerificationEmailFailed" xml:space="preserve"><value>Nepodařilo se odeslat ověřovací e-mail. Kontaktujte prosím podporu nebo to zkuste znovu později.</value></data>
   <data name="TooManySignInAttempts" xml:space="preserve"><value>Příliš mnoho pokusů o přihlášení. Zkuste to prosím znovu za minutu.</value></data>
+  <data name="TableContinuesOnGeneratedPage" xml:space="preserve"><value>Celá tabulka je na konci dokumentu — Generovaná tabulka {0}</value></data>
+  <data name="GeneratedTableTitle" xml:space="preserve"><value>Generovaná tabulka {0}</value></data>
   <data name="InvalidCredentials" xml:space="preserve"><value>Neplatné přihlašovací údaje.</value></data>
   <data name="AccountDeactivated" xml:space="preserve"><value>Váš účet byl deaktivován.</value></data>
   <data name="VerifyEmailFirst" xml:space="preserve"><value>Před přihlášením prosím ověřte svůj e-mail.</value></data>
@@ -607,6 +609,7 @@
   <data name="Error_FIELD_FONTNAME_INVALID" xml:space="preserve"><value>Název písma musí být jedno z: Helvetica, Times-Roman, Courier, Symbol, ZapfDingbats.</value></data>
   <data name="Error_FIELD_BARCODE_UNSUPPORTED" xml:space="preserve"><value>Zadaný formát čárového kódu není podporován.</value></data>
   <data name="Error_TABLE_COLUMNS_ZERO" xml:space="preserve"><value>Tabulka musí mít alespoň jeden sloupec.</value></data>
+  <data name="Error_TABLE_TOO_MANY_ROWS" xml:space="preserve"><value>Tabulka může mít nejvýše 1000 řádků.</value></data>
   <data name="Error_TABLE_COLUMNS_MISMATCH" xml:space="preserve"><value>Počet definic sloupců neodpovídá deklarovanému počtu sloupců.</value></data>
   <data name="Error_TABLE_COLUMN_NAME_REQUIRED" xml:space="preserve"><value>Název sloupce tabulky je povinný.</value></data>
   <data name="Error_TABLE_COLUMN_WIDTH_INVALID" xml:space="preserve"><value>Procentuální šířka sloupce tabulky musí být mezi 0 a 100.</value></data>
