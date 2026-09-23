@@ -105,12 +105,26 @@ public class PdfTemplateService
         var fields = await ResolveFieldsAsync(input, userId, cancellationToken);
         var results = new List<string>();
 
+        // Strop se kontroluje předem pro všechny sady: jinak se napřed vysází
+        // všechny dokumenty před tou přerostlou a pak se stejně vše zahodí.
+        var tableFields = fields
+            .Where(f => f.Type == PdfFieldType.Table)
+            .Select(f => f.FieldName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (input.Data.Any(d => (d?.Data ?? new List<PdfFieldValue>()).Any(v =>
+                tableFields.Contains(v.FieldName) && v.TableValue != null && v.TableValue.Count > MaxTableRows)))
+        {
+            throw new ApiValidationException("TABLE_TOO_MANY_ROWS");
+        }
+
+        var (continuationNote, generatedTableTitle) = DocumentStrings(input.Locale);
+
         foreach (var dataset in input.Data)
         {
             var filled = FillSingle(
                 templateBytes, fields, dataset,
-                _strings["TableContinuesOnGeneratedPage"].Value,
-                _strings["GeneratedTableTitle"].Value,
+                continuationNote,
+                generatedTableTitle,
                 _logger);
             results.Add(Convert.ToBase64String(filled));
         }
@@ -120,6 +134,28 @@ public class PdfTemplateService
             Files = results,
             TemplateId = input.TemplateId
         };
+    }
+
+    /// <summary>
+    /// Texty, které engine vkládá do dokumentu, v jazyce z požadavku. Kultura
+    /// vlákna se na `/api` nenastavuje (řídí se prefixem URL), takže se jazyk
+    /// přepne jen na dobu čtení z lokalizátoru.
+    /// </summary>
+    private (string ContinuationNote, string GeneratedTableTitle) DocumentStrings(string? locale)
+    {
+        // "cs-CZ" i "cs" znamenají totéž.
+        var language = locale?.Split('-', '_')[0].Trim().ToLowerInvariant();
+        var culture = CultureInfo.GetCultureInfo(CultureUrls.IsSupported(language) ? language! : CultureUrls.Default);
+        var previous = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = culture;
+            return (_strings["TableContinuesOnGeneratedPage"].Value, _strings["GeneratedTableTitle"].Value);
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = previous;
+        }
     }
 
     private async Task<byte[]> ResolveTemplateBytesAsync(FillPdfInput input, Guid userId, CancellationToken cancellationToken)
@@ -252,6 +288,7 @@ public class PdfTemplateService
         var pdfDoc = new PdfDocument(reader, writer, new StampingProperties().UseAppendMode());
 
         var overflowTables = new List<PendingTableOverflow>();
+        var fonts = new DocumentFonts();
 
         foreach (var field in fields)
         {
@@ -312,7 +349,7 @@ public class PdfTemplateService
                     }
                     var overflow = TryAddTable(
                         provided.TableValue, pdfDoc, pageNumber, rect, field,
-                        overflowTables.Count + 1, continuationNote, logger);
+                        overflowTables.Count + 1, continuationNote, fonts, logger);
                     if (overflow != null)
                     {
                         logger.LogInformation(
@@ -331,7 +368,7 @@ public class PdfTemplateService
             AddText(value, pdfDoc, pageNumber, rect, field);
         }
 
-        AppendOverflowTables(pdfDoc, overflowTables, generatedTableTitle, logger);
+        AppendOverflowTables(pdfDoc, overflowTables, generatedTableTitle, fonts, logger);
 
         pdfDoc.Close();
         return msOut.ToArray();
@@ -710,6 +747,29 @@ public class PdfTemplateService
     }
 
     /// <summary>
+    /// Jedna instance písma na dokument. <see cref="AppFonts.Load"/> vrací
+    /// pokaždé nové <c>PdfFont</c> a každé se do PDF vkládá zvlášť — tabulka
+    /// o tisíci řádcích tak nesla přes dva tisíce kopií téhož písma (~16 MB).
+    /// Instance se nesmí sdílet mezi dokumenty, proto žije jen v jednom
+    /// <see cref="FillSingle"/>.
+    /// </summary>
+    private sealed class DocumentFonts
+    {
+        private readonly Dictionary<(PdfFontName?, PdfFontWeight?, bool), iText.Kernel.Font.PdfFont> _cache = new();
+
+        public iText.Kernel.Font.PdfFont Get(PdfFontName? name, PdfFontWeight? weight, bool italic = false)
+        {
+            var key = (name, weight, italic);
+            if (!_cache.TryGetValue(key, out var font))
+            {
+                font = ResolveFont(name, weight, italic);
+                _cache[key] = font;
+            }
+            return font;
+        }
+    }
+
+    /// <summary>
     /// Tabulka, která se do svého pole nevešla. Stránky s pokračováním se
     /// přidávají až po vyplnění všech polí — přidat je uprostřed by posunulo
     /// počet stránek pod nohama polím, která se na stránku odkazují číslem.
@@ -730,8 +790,10 @@ public class PdfTemplateService
 
     /// <summary>
     /// Řádky seřazené podle nastavení pole. Hodnoty jsou řetězce, takže se
-    /// zkusí nejdřív číslo, pak datum a nakonec text v jazyce prostředí —
-    /// „10" má stát za „9", ne před „2".
+    /// každá buňka jednou zařadí: číslo, datum, nebo text — „10" má stát za
+    /// „9", ne před „2". Ve smíšeném sloupci jdou čísla před data a data před
+    /// text; porovnávat dvojici podle toho, co zrovna obě parsují, by dalo
+    /// cyklické pořadí (2 &lt; 10 číselně, „10" &lt; „1x" &lt; „2" textově).
     ///
     /// Prázdné hodnoty jsou vždy na konci, vzestupně i sestupně: „nevyplněno"
     /// není nejmenší hodnota, je to chybějící hodnota.
@@ -741,50 +803,73 @@ public class PdfTemplateService
         var column = (field.SortColumn ?? 0) - 1;
         if (column < 0 || rows.Count < 2) return rows;
 
-        string Cell(List<string> row) => column < row.Count ? (row[column] ?? string.Empty).Trim() : string.Empty;
+        var keyed = rows
+            .Select((row, i) => (row, i, key: SortKey.Of(column < row.Count ? row[column] : null)))
+            .ToList();
 
-        static int CompareValues(string x, string y)
+        int Compare((List<string> row, int i, SortKey key) a, (List<string> row, int i, SortKey key) b)
         {
-            if (decimal.TryParse(x, NumberStyles.Any, CultureInfo.InvariantCulture, out var nx) &&
-                decimal.TryParse(y, NumberStyles.Any, CultureInfo.InvariantCulture, out var ny))
-            {
-                return nx.CompareTo(ny);
-            }
-            if (DateTime.TryParse(x, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dx) &&
-                DateTime.TryParse(y, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dy))
-            {
-                return dx.CompareTo(dy);
-            }
-            return string.Compare(x, y, StringComparison.CurrentCulture);
-        }
-
-        int Compare(List<string> a, List<string> b)
-        {
-            var x = Cell(a);
-            var y = Cell(b);
-            var xEmpty = x.Length == 0;
-            var yEmpty = y.Length == 0;
             // Prázdné až za směrem: obrácení pořadí by je jinak vytáhlo
             // dopředu, a „nevyplněno" není nejvyšší hodnota o nic víc než
             // nejnižší — je to chybějící hodnota a patří na konec vždycky.
-            if (xEmpty || yEmpty) return xEmpty && yEmpty ? 0 : (xEmpty ? 1 : -1);
-            var c = CompareValues(x, y);
-            return field.SortDescending ? -c : c;
+            var aEmpty = a.key.Kind == SortKind.Empty;
+            var bEmpty = b.key.Kind == SortKind.Empty;
+            if (aEmpty || bEmpty)
+            {
+                var e = aEmpty == bEmpty ? 0 : (aEmpty ? 1 : -1);
+                return e != 0 ? e : a.i.CompareTo(b.i);
+            }
+            var c = a.key.CompareTo(b.key);
+            if (field.SortDescending) c = -c;
+            // Stabilní řazení: řádky se stejnou hodnotou si nechají pořadí, ve
+            // kterém přišly.
+            return c != 0 ? c : a.i.CompareTo(b.i);
         }
 
-        var sorted = new List<List<string>>(rows);
-        // Stabilní řazení: řádky se stejnou hodnotou si nechají pořadí, ve
-        // kterém přišly. `List.Sort` stabilní není.
-        sorted = sorted
-            .Select((row, i) => (row, i))
-            .OrderBy(t => t, Comparer<(List<string> row, int i)>.Create((a, b) =>
+        keyed.Sort(Compare);
+        return keyed.Select(t => t.row).ToList();
+    }
+
+    private enum SortKind { Number, Date, Text, Empty }
+
+    private readonly record struct SortKey(SortKind Kind, decimal Number, DateTime Date, string Text)
+    {
+        private static readonly CultureInfo[] Cultures =
+        {
+            CultureInfo.InvariantCulture,
+            // Data z českého SharePointu: desetinná čárka, „23. 9. 2026".
+            CultureInfo.GetCultureInfo("cs-CZ"),
+        };
+
+        public static SortKey Of(string? raw)
+        {
+            var text = (raw ?? string.Empty).Trim();
+            if (text.Length == 0) return new SortKey(SortKind.Empty, 0, default, text);
+
+            // Bez oddělovače tisíců: invariantní „1,5" by jinak bylo 15.
+            foreach (var culture in Cultures)
             {
-                var c = Compare(a.row, b.row);
-                return c != 0 ? c : a.i.CompareTo(b.i);
-            }))
-            .Select(t => t.row)
-            .ToList();
-        return sorted;
+                if (decimal.TryParse(text, NumberStyles.Float, culture, out var number))
+                    return new SortKey(SortKind.Number, number, default, text);
+            }
+            foreach (var culture in Cultures)
+            {
+                if (DateTime.TryParse(text, culture, DateTimeStyles.None, out var date))
+                    return new SortKey(SortKind.Date, 0, date, text);
+            }
+            return new SortKey(SortKind.Text, 0, default, text);
+        }
+
+        public int CompareTo(SortKey other)
+        {
+            if (Kind != other.Kind) return Kind.CompareTo(other.Kind);
+            return Kind switch
+            {
+                SortKind.Number => Number.CompareTo(other.Number),
+                SortKind.Date => Date.CompareTo(other.Date),
+                _ => string.Compare(Text, other.Text, StringComparison.CurrentCulture),
+            };
+        }
     }
 
     /// <summary>Sloupce pole; prázdný seznam dostane jeden bezejmenný.</summary>
@@ -832,7 +917,8 @@ public class PdfTemplateService
         PdfFieldDefinition field,
         float totalWidth,
         bool repeatHeader,
-        string? footerNote)
+        string? footerNote,
+        DocumentFonts fonts)
     {
         var columnCount = Math.Max(1, columns.Count);
         var table = new Table(ColumnWidths(columns, totalWidth));
@@ -873,7 +959,7 @@ public class PdfTemplateService
                 .SetMultipliedLeading(1.1f);
 
             var weight = header ? PdfFontWeight.Bold : (col.FontWeight ?? field.FontWeight);
-            paragraph.SetFont(ResolveFont(col.FontName ?? field.FontName, weight));
+            paragraph.SetFont(fonts.Get(col.FontName ?? field.FontName, weight));
 
             var txtColor = header ? headerText : (alt ? (altText ?? rowText) : rowText);
             var txtAlpha = header ? headerTextA : (alt && altText != null ? altTextA : rowTextA);
@@ -936,7 +1022,7 @@ public class PdfTemplateService
                 .SetMargin(0)
                 .SetPadding(0)
                 .SetFontSize(Math.Max(5f, field.FontSize - 1f))
-                .SetFont(ResolveFont(field.FontName, PdfFontWeight.Normal, italic: true))
+                .SetFont(fonts.Get(field.FontName, PdfFontWeight.Normal, italic: true))
                 .SetMultipliedLeading(1.1f);
             var cell = new Cell(1, columnCount).Add(note).SetPadding(4).SetBorder(Border.NO_BORDER);
             table.AddCell(cell);
@@ -973,7 +1059,12 @@ public class PdfTemplateService
 
     /// <summary>
     /// Nejvyšší počet řádků od začátku, který se i s poznámkou o pokračování
-    /// ještě vejde. Půlením intervalu, aby se tisíc řádků neměřilo tisíckrát.
+    /// ještě vejde.
+    ///
+    /// Hledá se od odhadu `hint` zdvojováním a pak půlením intervalu. Čisté
+    /// půlení přes celý zbytek měřilo na každé stránce pokračování tabulku
+    /// o stovkách řádků (tisíc řádků ≈ 25 stránek × 11 měření); odhad z
+    /// předchozí stránky drží měřené tabulky kolem velikosti jedné stránky.
     /// </summary>
     private static int LargestFittingRowCount(
         List<List<string>> rows,
@@ -983,14 +1074,37 @@ public class PdfTemplateService
         int pageNumber,
         Rectangle area,
         string? footerNote,
+        int hint,
+        DocumentFonts fonts,
         ILogger logger)
     {
-        int low = 0, high = rows.Count, best = 0;
+        if (rows.Count == 0) return 0;
+
+        bool Fits(int count) =>
+            FitsInArea(
+                BuildTable(rows.Take(count).ToList(), columns, field, area.GetWidth(), false, footerNote, fonts),
+                pdfDoc, pageNumber, area, logger) == true;
+
+        // Nula se neměří: když se nevejde ani hlavička, volající stejně bere nulu.
+        int best = 0, high = rows.Count;
+        var probe = Math.Clamp(hint, 1, high);
+        while (true)
+        {
+            if (!Fits(probe))
+            {
+                high = probe - 1;
+                break;
+            }
+            best = probe;
+            if (probe == high) return best;
+            probe = Math.Min(high, probe * 2);
+        }
+
+        var low = best + 1;
         while (low <= high)
         {
-            var mid = (low + high) / 2;
-            var candidate = BuildTable(rows.Take(mid).ToList(), columns, field, area.GetWidth(), false, footerNote);
-            if (FitsInArea(candidate, pdfDoc, pageNumber, area, logger) == true)
+            var mid = low + (high - low) / 2;
+            if (Fits(mid))
             {
                 best = mid;
                 low = mid + 1;
@@ -1038,12 +1152,13 @@ public class PdfTemplateService
         PdfFieldDefinition field,
         int overflowIndex,
         string continuationNoteFormat,
+        DocumentFonts fonts,
         ILogger logger)
     {
         var columns = NormalizeColumns(field);
         var dataRows = SortRows(rows ?? new List<List<string>>(), field);
 
-        var full = BuildTable(dataRows, columns, field, rect.GetWidth(), false, null);
+        var full = BuildTable(dataRows, columns, field, rect.GetWidth(), false, null, fonts);
         var fits = FitsInArea(full, pdfDoc, pageNumber, rect, logger);
         if (fits != false)
         {
@@ -1053,8 +1168,8 @@ public class PdfTemplateService
         }
 
         var note = string.Format(continuationNoteFormat, overflowIndex);
-        var keep = LargestFittingRowCount(dataRows, columns, field, pdfDoc, pageNumber, rect, note, logger);
-        var shown = BuildTable(dataRows.Take(keep).ToList(), columns, field, rect.GetWidth(), false, note);
+        var keep = LargestFittingRowCount(dataRows, columns, field, pdfDoc, pageNumber, rect, note, 8, fonts, logger);
+        var shown = BuildTable(dataRows.Take(keep).ToList(), columns, field, rect.GetWidth(), false, note, fonts);
         DrawTable(shown, pdfDoc, pageNumber, rect, field.Rotation);
 
         return new PendingTableOverflow(
@@ -1076,6 +1191,7 @@ public class PdfTemplateService
         PdfDocument pdfDoc,
         List<PendingTableOverflow> pending,
         string titleFormat,
+        DocumentFonts fonts,
         ILogger logger)
     {
         const float margin = 36f;
@@ -1085,9 +1201,14 @@ public class PdfTemplateService
         {
             var title = string.Format(titleFormat, item.Index);
             var index = 0;
+            // Stránky pokračování mají stejnou plochu, takže počet řádků
+            // z předchozí je nejlepší odhad pro další.
+            var lastTake = 32;
             while (index < item.Rows.Count)
             {
-                var page = pdfDoc.AddNewPage(new PageSize(item.PageSize));
+                // Jen rozměr, ne počátek: MediaBox šablony smí začínat mimo
+                // nulu a okraje níž se počítají od nuly.
+                var page = pdfDoc.AddNewPage(new PageSize(item.PageSize.GetWidth(), item.PageSize.GetHeight()));
                 var pageNumber = pdfDoc.GetPageNumber(page);
                 var width = item.PageSize.GetWidth() - 2 * margin;
                 var top = item.PageSize.GetHeight() - margin;
@@ -1099,12 +1220,12 @@ public class PdfTemplateService
                         .SetMargin(0)
                         .SetPadding(0)
                         .SetFontSize(Math.Max(8f, item.Field.FontSize))
-                        .SetFont(ResolveFont(item.Field.FontName, PdfFontWeight.Bold)));
+                        .SetFont(fonts.Get(item.Field.FontName, PdfFontWeight.Bold)));
                 titleCanvas.Close();
 
                 var tableRect = new Rectangle(margin, margin, width, top - titleBand - margin);
                 var rest = item.Rows.Skip(index).ToList();
-                var take = LargestFittingRowCount(rest, item.Columns, item.Field, pdfDoc, pageNumber, tableRect, null, logger);
+                var take = LargestFittingRowCount(rest, item.Columns, item.Field, pdfDoc, pageNumber, tableRect, null, lastTake, fonts, logger);
                 // Ani jeden řádek se nevejde (obří buňka, drobná stránka).
                 // Vzít nulu by cyklilo donekonečna, takže se jeden vykreslí
                 // i za cenu oříznutí — jinak by se dokument nikdy nedopočítal.
@@ -1119,9 +1240,10 @@ public class PdfTemplateService
                     take = 1;
                 }
 
-                var chunk = BuildTable(rest.Take(take).ToList(), item.Columns, item.Field, width, true, null);
+                var chunk = BuildTable(rest.Take(take).ToList(), item.Columns, item.Field, width, true, null, fonts);
                 DrawTable(chunk, pdfDoc, pageNumber, tableRect, 0f);
                 index += take;
+                lastTake = take;
             }
         }
     }

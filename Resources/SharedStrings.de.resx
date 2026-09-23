@@ -599,6 +599,7 @@
   <data name="Error_FIELD_FONTNAME_INVALID" xml:space="preserve"><value>Schriftname muss eines sein von: Helvetica, Times-Roman, Courier, Symbol, ZapfDingbats.</value></data>
   <data name="Error_FIELD_BARCODE_UNSUPPORTED" xml:space="preserve"><value>Das angegebene Barcode-Format wird nicht unterstützt.</value></data>
   <data name="Error_TABLE_COLUMNS_ZERO" xml:space="preserve"><value>Die Tabelle muss mindestens eine Spalte haben.</value></data>
+  <data name="Error_TABLE_TOO_MANY_ROWS" xml:space="preserve"><value>Eine Tabelle darf höchstens 1000 Zeilen haben.</value></data>
   <data name="Error_TABLE_COLUMNS_MISMATCH" xml:space="preserve"><value>Die Anzahl der Spaltendefinitionen stimmt nicht mit der deklarierten Spaltenanzahl überein.</value></data>
   <data name="Error_TABLE_COLUMN_NAME_REQUIRED" xml:space="preserve"><value>Tabellenspaltenname ist erforderlich.</value></data>
   <data name="Error_TABLE_COLUMN_WIDTH_INVALID" xml:space="preserve"><value>Der prozentuale Breitenwert der Tabellenspalte muss zwischen 0 und 100 liegen.</value></data>

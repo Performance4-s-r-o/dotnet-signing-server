@@ -599,6 +599,7 @@
   <data name="Error_FIELD_FONTNAME_INVALID" xml:space="preserve"><value>El nombre de la fuente debe ser uno de: Helvetica, Times-Roman, Courier, Symbol, ZapfDingbats.</value></data>
   <data name="Error_FIELD_BARCODE_UNSUPPORTED" xml:space="preserve"><value>El formato de código de barras especificado no es compatible.</value></data>
   <data name="Error_TABLE_COLUMNS_ZERO" xml:space="preserve"><value>La tabla debe tener al menos una columna.</value></data>
+  <data name="Error_TABLE_TOO_MANY_ROWS" xml:space="preserve"><value>Una tabla puede tener como máximo 1000 filas.</value></data>
   <data name="Error_TABLE_COLUMNS_MISMATCH" xml:space="preserve"><value>El número de definiciones de columnas no coincide con el número de columnas declarado.</value></data>
   <data name="Error_TABLE_COLUMN_NAME_REQUIRED" xml:space="preserve"><value>El nombre de la columna de tabla es obligatorio.</value></data>
   <data name="Error_TABLE_COLUMN_WIDTH_INVALID" xml:space="preserve"><value>El porcentaje de anchura de la columna de tabla debe estar entre 0 y 100.</value></data>

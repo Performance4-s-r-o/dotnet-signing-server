@@ -269,6 +269,15 @@ public class FillPdfInput
     public string PdfContent { get; set; } = string.Empty; // Base64
     public List<PdfFieldDefinition> Fields { get; set; } = new();
     public List<FillDataSet> Data { get; set; } = new();
+    /// <summary>
+    /// Jazyk textu, který engine sám vloží do dokumentu (odkaz na pokračování
+    /// tabulky, nadpis generované stránky) — "cs", "en", …
+    ///
+    /// Kultura požadavku se tu nehodí: řídí se jen URL a `/api` prefix jazyka
+    /// nemá, takže by dokument vyšel vždy anglicky. Null nebo nepodporovaný
+    /// jazyk ⇒ angličtina.
+    /// </summary>
+    public string? Locale { get; set; }
 }
 
 public class FillPdfResponse

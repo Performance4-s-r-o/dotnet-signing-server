@@ -136,6 +136,12 @@ namespace DotNetSigningServer.Controllers
                 }
                 return Ok(response);
             }
+            catch (ApiValidationException ex)
+            {
+                // Validace uvnitř vyplňování (strop řádků tabulky, šablona bez
+                // polí) je chyba volajícího, ne 500.
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
+            }
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Fill PDF failed");
