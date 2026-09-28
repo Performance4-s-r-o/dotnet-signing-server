@@ -78,4 +78,41 @@ public class LegalDocument
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    // ── Snapshot of the P4 Backoffice service (Modules:Docs) ────────────────
+    // Hand-maintained rows leave these empty. When the Docs module is On, the last
+    // successful answer of the service is stored here and served during an outage.
+
+    /// <summary>Service document type (<c>terms</c>, <c>privacy</c>, …); see <c>LegalSlugMap</c>.</summary>
+    [MaxLength(40)]
+    public string? TypeKey { get; set; }
+
+    /// <summary>Sanitized HTML as served by the service; rendered as is.</summary>
+    public string? ContentHtml { get; set; }
+
+    /// <summary>SHA-256 (hex) of <see cref="ContentHtml"/> as reported by the service.</summary>
+    [MaxLength(64)]
+    public string? ContentHash { get; set; }
+
+    /// <summary><c>material</c>, <c>notice</c> or <c>minor</c>.</summary>
+    [MaxLength(16)]
+    public string? ChangeKind { get; set; }
+
+    /// <summary>
+    /// <see cref="LegalDocumentSources.Manual"/> for hand-maintained rows (the default),
+    /// <see cref="LegalDocumentSources.Backoffice"/> for rows created from the service.
+    /// </summary>
+    [Required]
+    [MaxLength(16)]
+    public string Source { get; set; } = LegalDocumentSources.Manual;
+
+    /// <summary>When the service text in this row was last fetched.</summary>
+    public DateTimeOffset? FetchedAt { get; set; }
+}
+
+/// <summary>Known <see cref="LegalDocument.Source"/> values.</summary>
+public static class LegalDocumentSources
+{
+    public const string Manual = "manual";
+    public const string Backoffice = "backoffice";
 }
