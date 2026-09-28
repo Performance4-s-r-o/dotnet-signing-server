@@ -92,11 +92,11 @@ services:
       - P4Backoffice__SecretKey=${P4_BACKOFFICE_SECRET_KEY:-}
       - P4Backoffice__Webhook__Secret=${P4_BACKOFFICE_WEBHOOK_SECRET:-}
       - P4Backoffice__Webhook__PreviousSecret=${P4_BACKOFFICE_WEBHOOK_PREVIOUS_SECRET:-}
-      - P4Backoffice__Modules__Docs=${P4_BACKOFFICE_MODULE_DOCS:-}
-      - P4Backoffice__Modules__Consents=${P4_BACKOFFICE_MODULE_CONSENTS:-}
-      - P4Backoffice__Modules__Email=${P4_BACKOFFICE_MODULE_EMAIL:-}
-      - P4Backoffice__Modules__Pricing=${P4_BACKOFFICE_MODULE_PRICING:-}
-      - P4Backoffice__Modules__Support=${P4_BACKOFFICE_MODULE_SUPPORT:-}
+      - P4Backoffice__Modules__Docs=${P4_BACKOFFICE_DOCS_MODE:-}
+      - P4Backoffice__Modules__Consents=${P4_BACKOFFICE_CONSENTS_MODE:-}
+      - P4Backoffice__Modules__Email=${P4_BACKOFFICE_EMAIL_MODE:-}
+      - P4Backoffice__Modules__Pricing=${P4_BACKOFFICE_PRICING_MODE:-}
+      - P4Backoffice__Modules__Support=${P4_BACKOFFICE_SUPPORT_MODE:-}
       # Size limits
       - Limits__PdfMaxBytes=${PDF_MAX_BYTES:-20971520}
       - Limits__ImageMaxBytes=${IMAGE_MAX_BYTES:-1048576}
