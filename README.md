@@ -146,8 +146,8 @@ error. Finished items are deleted after 30 days.
 
 #### Backoffice webhooks
 
-Events from the service (`document.*`, `price.*`, `email.*`,
-`support.ticket_failed`) arrive at `POST /api/webhooks/p4`
+Events from the service (`document.*`, `cookie_declaration.published`,
+`price.*`, `email.*`, `support.ticket_failed`) arrive at `POST /api/webhooks/p4`
 (`Controllers/BackofficeWebhookController.cs`), signed per
 [Standard Webhooks](https://www.standardwebhooks.com). Register the endpoint in
 the service admin as `https://<FqdnServerName>/api/webhooks/p4` with the event
