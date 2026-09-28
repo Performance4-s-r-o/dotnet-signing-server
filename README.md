@@ -321,8 +321,25 @@ those paths calls the service.
   account while automatic tax is on), the amount is sent inline and a warning
   logged. Checkout metadata (`documents`) and the Stripe webhook are unchanged.
 
+Price-change notices (`price_change_notice` to users with auto-recharge):
+
+- `Off` and `Shadow`: `PriceChangeMonitorService` compares the price of 100
+  credits with each user's stored price once a day, as before. In `Shadow` the
+  `price.*` events are only logged (who would be notified).
+- `On`: the monitor does not run. `price.scheduled` notifies every non-Enterprise
+  user with auto-recharge on a pack whose price changes, once per price-list
+  version (`Users.PriceChangeNotifiedVersion`, stored with the queued e-mail);
+  `price.effective` stores the new price of 100 credits in
+  `AutoRechargePricePer100` and clears the notice markers; `price.unscheduled`
+  clears the marker of that version (no e-mail); `price.sync_failed` is logged as
+  an error. A daily check of `GET /v1/pricing/upcoming` sends the notices itself
+  (with a warning) when a version takes effect in less than its notice period and
+  nobody has been notified yet.
+
 Rollback: `P4Backoffice__Modules__Pricing=Off`. Keep `Billing__*` in line with
-the price list while the module is `On`: it is the fallback.
+the price list while the module is `On`: it is the fallback, and after a rollback
+the monitor compares against `Billing__PricePer100` again
+(`PriceChangeNotifiedVersion` is then ignored).
 
 ## Stripe webhooks
 

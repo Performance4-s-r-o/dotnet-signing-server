@@ -9,10 +9,12 @@ namespace DotNetSigningServer.Services;
 
 /// <summary>
 /// Background service that checks once per day whether the current price of 100 credits
-/// (<see cref="ICreditPricingProvider"/>: <c>Billing:PricePer100</c>, or the service's price list
-/// with <c>Modules:Pricing=On</c>) has changed compared to users' stored AutoRechargePricePer100.
+/// (<see cref="ICreditPricingProvider"/>: <c>Billing:PricePer100</c>) has changed compared to users' stored AutoRechargePricePer100.
 /// If a change is detected, users are notified 30 days in advance
 /// and given the option to cancel auto-recharge before the new price takes effect.
+///
+/// Registered only while <c>P4Backoffice:Modules:Pricing</c> is not On; On replaces it by the
+/// <c>price.*</c> events (<see cref="Backoffice.Handlers.PriceScheduledHandler"/>).
 /// </summary>
 public class PriceChangeMonitorService : BackgroundService
 {

@@ -226,6 +226,10 @@ public static class BackofficeRegistration
     /// the same, keeps the price-list snapshot up to date in the background and logs how it
     /// differs from the configuration; On serves the snapshot (configured prices as the
     /// fallback) and Checkout charges the Stripe Price of the pack's lookup key.
+    /// Price-change notices: <see cref="PriceChangeMonitorService"/> while Off or Shadow (Shadow
+    /// handlers of <c>price.*</c> only log what they would do); On replaces it by
+    /// <see cref="PriceScheduledHandler"/> / <see cref="PriceEffectiveHandler"/> and the daily
+    /// <see cref="PricingUpcomingCheck"/>. <c>price.sync_failed</c> is logged as an error.
     /// <see cref="ICreditPricingProvider"/> and <see cref="StripePriceResolver"/> are always
     /// registered; the resolver only acts on packs with a lookup key, which Off never has.
     /// </summary>
@@ -243,6 +247,12 @@ public static class BackofficeRegistration
         });
 
         var mode = options.ModeFor(BackofficeModule.Pricing);
+        // Price-change notices: the local monitor unless Pricing is On, then the price.* events.
+        // Never both (Shadow handlers only log).
+        if (mode != BackofficeMode.On)
+        {
+            services.AddHostedService<PriceChangeMonitorService>();
+        }
         if (mode == BackofficeMode.Off)
         {
             services.TryAddSingleton<ICreditPricingProvider>(sp => sp.GetRequiredService<ConfigCreditPricingProvider>());
@@ -273,7 +283,11 @@ public static class BackofficeRegistration
         services.AddHostedService<PricingSnapshotWorker>();
         services.TryAddScoped<PricingResync>();
         services.AddScoped<IBackofficeResync>(sp => sp.GetRequiredService<PricingResync>());
-        services.AddScoped<IBackofficeEventHandler, PricingEventsHandler>();
+        AddPriceEventHandler<PriceScheduledHandler>(services, mode);
+        AddPriceEventHandler<PriceEffectiveHandler>(services, mode);
+        AddPriceEventHandler<PriceUnscheduledHandler>(services, mode);
+        services.AddScoped<IBackofficeEventHandler, PriceSyncFailedHandler>();
+        services.AddHostedService<PricingUpcomingCheck>();
 
         if (mode == BackofficeMode.Shadow)
         {
@@ -283,6 +297,14 @@ public static class BackofficeRegistration
 
         services.TryAddSingleton<BackofficeCreditPricingProvider>();
         services.TryAddSingleton<ICreditPricingProvider>(sp => sp.GetRequiredService<BackofficeCreditPricingProvider>());
+    }
+
+    /// <summary>A <c>price.*</c> handler that acts by the Pricing mode, also resolvable as itself.</summary>
+    private static void AddPriceEventHandler<T>(IServiceCollection services, BackofficeMode mode)
+        where T : class, IBackofficeEventHandler
+    {
+        services.TryAddScoped(sp => ActivatorUtilities.CreateInstance<T>(sp, mode));
+        services.AddScoped<IBackofficeEventHandler>(sp => sp.GetRequiredService<T>());
     }
 
     /// <summary>

@@ -23,7 +23,7 @@ public enum PricingRefreshOutcome
 /// <see cref="PricingSnapshotHolder"/>) up to date from <c>GET /v1/pricing/current</c>, with
 /// <c>If-None-Match</c>. Runs in the background only: at startup, hourly
 /// (<see cref="PricingSnapshotWorker"/>), after <c>price.effective</c>
-/// (<see cref="Backoffice.Handlers.PricingEventsHandler"/>) and on <c>window_clamped</c> (<see cref="PricingResync"/>).
+/// (<see cref="Backoffice.Handlers.PriceEffectiveHandler"/>) and on <c>window_clamped</c> (<see cref="PricingResync"/>).
 ///
 /// Pricing=Shadow: after every refresh the configured prices are compared with the service's
 /// and differences are logged; nothing a customer sees changes.

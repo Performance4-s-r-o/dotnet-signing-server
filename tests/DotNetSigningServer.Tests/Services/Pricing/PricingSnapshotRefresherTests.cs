@@ -4,6 +4,7 @@ using System.Text.Json;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Services;
 using DotNetSigningServer.Services.Backoffice;
 using DotNetSigningServer.Services.Backoffice.Handlers;
 using DotNetSigningServer.Services.Backoffice.Inbox;
@@ -29,6 +30,9 @@ internal sealed class PricingTestHost : IDisposable
     public Mock<IStripeClient> Stripe { get; } = new();
     public ManualTimeProvider Time { get; } = new(new DateTimeOffset(2026, 9, 28, 12, 0, 0, TimeSpan.Zero));
     public int StripeLookups { get; private set; }
+
+    /// <summary>Stands in for e-mail (price-change notices).</summary>
+    public FakeTemplatedEmailSender Email { get; } = new();
 
     public PricingTestHost(string mode, BillingOptions? billing = null)
     {
@@ -57,8 +61,12 @@ internal sealed class PricingTestHost : IDisposable
             o.Currency = b.Currency;
         });
         services.Configure<StripeOptions>(_ => { });
+        services.Configure<AppOptions>(o => o.FqdnServerName = "https://app.example.com");
+        services.AddSingleton<DotNetSigningServer.Services.Email.ITemplatedEmailSender>(Email);
         services.AddSingleton(sp => new StripePriceResolver(Stripe.Object, Time, sp.GetRequiredService<ILogger<StripePriceResolver>>()));
         BackofficeRegistration.AddPricing(services, options);
+        services.AddSingleton<LoggingBackofficeEventHandler>();
+        services.AddScoped<EventHandlerRegistry>();
         services.AddHttpClient(BackofficePricingClient.HttpClientName)
             .ConfigurePrimaryHttpMessageHandler(() => Service);
         Services = services.BuildServiceProvider();
@@ -104,6 +112,33 @@ internal sealed class PricingTestHost : IDisposable
         using var scope = Services.CreateScope();
         await BackofficeStateStore.SetAsync(scope.ServiceProvider.GetRequiredService<ApplicationDbContext>(),
             BackofficeStateKeys.PricingCurrent, value, Time.GetUtcNow());
+    }
+
+    public async Task<User> AddUserAsync(Action<User> configure)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var user = new User { Email = $"u{Guid.NewGuid():N}@example.com" };
+        configure(user);
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        return user;
+    }
+
+    public async Task<User> UserAsync(Guid id)
+    {
+        using var scope = Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Users.AsNoTracking().SingleAsync(u => u.Id == id);
+    }
+
+    /// <summary>Runs the registered handler of <paramref name="type"/> in its own scope.</summary>
+    public async Task HandleAsync(string type, string dataJson, string id = "msg_1", string source = "webhook")
+    {
+        using var scope = Services.CreateScope();
+        var registry = scope.ServiceProvider.GetRequiredService<EventHandlerRegistry>();
+        var handler = registry.Find(type) ?? throw new InvalidOperationException("no handler for " + type);
+        using var data = JsonDocument.Parse(dataJson);
+        await handler.HandleAsync(new BackofficeEvent(id, type, data.RootElement.Clone(), source, Time.GetUtcNow(), 1), CancellationToken.None);
     }
 
     public void Dispose() => Services.Dispose();
@@ -247,7 +282,7 @@ public class PricingSnapshotRefresherTests
         using (var scope = host.Services.CreateScope())
         {
             var registry = scope.ServiceProvider.GetRequiredService<IEnumerable<IBackofficeEventHandler>>();
-            var handler = Assert.Single(registry.OfType<PricingEventsHandler>());
+            var handler = Assert.Single(registry.OfType<PriceEffectiveHandler>());
             using var data = JsonDocument.Parse("""{"version":1}""");
             await handler.HandleAsync(new BackofficeEvent("evt_1", BackofficeEventTypes.PriceEffective, data.RootElement.Clone(), "webhook", host.Time.GetUtcNow(), 1), CancellationToken.None);
         }
@@ -304,7 +339,8 @@ public class PricingRegistrationTests
         using var host = new PricingTestHost("Off");
 
         Assert.IsType<ConfigCreditPricingProvider>(host.Provider);
-        Assert.Empty(host.Services.GetServices<IHostedService>());
+        // Only the local price-change monitor (see PriceNoticeRegistrationTests).
+        Assert.IsType<PriceChangeMonitorService>(Assert.Single(host.Services.GetServices<IHostedService>()));
         using var scope = host.Services.CreateScope();
         Assert.Empty(scope.ServiceProvider.GetServices<IBackofficeEventHandler>());
         Assert.Empty(scope.ServiceProvider.GetServices<IBackofficeResync>());
