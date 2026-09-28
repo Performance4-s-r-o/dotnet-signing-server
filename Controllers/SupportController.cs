@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
 using System.Net;
@@ -49,14 +50,14 @@ public class SupportController : Controller
     }
 
     [HttpGet("/support")]
-    public IActionResult Index()
+    public async Task<IActionResult> Index()
     {
         if (!_osTicket.IsConfigured)
         {
             return NotFound();
         }
 
-        ViewData["UserEmail"] = GetUserEmail();
+        ViewData["UserEmail"] = (await GetCurrentUserAsync())?.Email ?? GetUserEmailClaim();
         return View();
     }
 
@@ -79,10 +80,8 @@ public class SupportController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var userEmail = GetUserEmail();
-        var user = await _dbContext.Users
-            .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Email == userEmail);
+        var user = await GetCurrentUserAsync();
+        var userEmail = user?.Email ?? GetUserEmailClaim();
 
         var plan = user?.IsEnterprise == true ? "Enterprise" : "Standard";
         var credits = user?.CreditsRemaining.ToString() ?? "N/A";
@@ -98,7 +97,7 @@ public class SupportController : Controller
 
         var payload = new
         {
-            name = User.Identity?.Name ?? userEmail.Split('@')[0],
+            name = ReporterName(userEmail),
             email = userEmail,
             subject = subject.Trim(),
             message = $"data:text/html,{Uri.EscapeDataString(body)}",
@@ -146,8 +145,30 @@ public class SupportController : Controller
         }
     }
 
-    private string GetUserEmail() =>
+    /// <summary>The signed-in user, looked up by id (<c>NameIdentifier</c>); null when the row is gone.</summary>
+    private async Task<User?> GetCurrentUserAsync()
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+        {
+            return null;
+        }
+
+        return await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
+    }
+
+    /// <summary>
+    /// The e-mail address from the cookie. Sign-in stores it as <c>ClaimTypes.Name</c>; the
+    /// e-mail claim types are only read in case another scheme sets them.
+    /// </summary>
+    private string GetUserEmailClaim() =>
         User.FindFirst(ClaimTypes.Email)?.Value
         ?? User.FindFirst("email")?.Value
+        ?? User.FindFirst(ClaimTypes.Name)?.Value
         ?? string.Empty;
+
+    /// <summary>
+    /// Name shown to support agents. Accounts have no display name, so it is the e-mail
+    /// address (as the helpdesk shows it next to the ticket anyway).
+    /// </summary>
+    internal static string ReporterName(string email) => email;
 }
