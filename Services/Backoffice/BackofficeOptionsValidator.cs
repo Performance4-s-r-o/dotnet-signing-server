@@ -17,6 +17,12 @@ public static class BackofficeOptionsValidator
     public const string LiveKeyPrefix = "p4sk_live_";
     public const string WebhookSecretPrefix = "whsec_";
 
+    /// <summary>
+    /// Shortest accepted HMAC key behind <c>whsec_</c>, in bytes. The service generates
+    /// 24 random bytes, so a shorter one is a truncated or placeholder value.
+    /// </summary>
+    public const int MinWebhookSecretBytes = 24;
+
     public static IReadOnlyList<string> Validate(P4BackofficeProductOptions options)
     {
         var problems = new List<string>();
@@ -34,7 +40,7 @@ public static class BackofficeOptionsValidator
         {
             problems.Add($"{Setting("Email:FallbackAfter")} must not be negative.");
         }
-        if (options.Polling.Interval <= TimeSpan.Zero)
+        if (options.Polling.Interval is { } interval && interval <= TimeSpan.Zero)
         {
             problems.Add($"{Setting("Polling:Interval")} must be positive.");
         }
@@ -90,11 +96,29 @@ public static class BackofficeOptionsValidator
 
     private static void CheckWebhookSecret(List<string> problems, string? value, string key)
     {
-        if (!string.IsNullOrWhiteSpace(value)
-            && !value.Trim().StartsWith(WebhookSecretPrefix, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(value)) return;
+        var trimmed = value.Trim();
+        if (!trimmed.StartsWith(WebhookSecretPrefix, StringComparison.Ordinal))
         {
             problems.Add($"{Setting(key)} must be empty or start with {WebhookSecretPrefix}.");
         }
+        else if (DecodedLength(trimmed[WebhookSecretPrefix.Length..]) is not { } length)
+        {
+            problems.Add($"{Setting(key)} must be {WebhookSecretPrefix} followed by base64 (copy it from the webhook endpoint).");
+        }
+        else if (length < MinWebhookSecretBytes)
+        {
+            problems.Add($"{Setting(key)} is too short: the key after {WebhookSecretPrefix} decodes to {length} bytes, "
+                         + $"at least {MinWebhookSecretBytes} are required (copy the whole secret from the webhook endpoint).");
+        }
+    }
+
+    /// <summary>Decoded byte length of a non-empty base64 value, or null when it is not base64.</summary>
+    private static int? DecodedLength(string value)
+    {
+        if (value.Length == 0) return null;
+        var buffer = new byte[value.Length];
+        return Convert.TryFromBase64String(value, buffer, out var written) ? written : null;
     }
 
     private static void CheckBaseUrl(List<string> problems, string? value)

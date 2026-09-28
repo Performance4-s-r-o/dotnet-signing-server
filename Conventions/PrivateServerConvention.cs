@@ -14,13 +14,15 @@ public class PrivateServerConvention : IApplicationModelConvention
 {
     /// <summary>
     /// Exists for the hosted service only. Billing has nothing to charge, the
-    /// marketing pages advertise a product the reader already runs, and support
-    /// tickets belong to whoever sold the installation.
+    /// marketing pages advertise a product the reader already runs, support
+    /// tickets belong to whoever sold the installation, and the backoffice
+    /// integration is forced Off.
     /// </summary>
     private static readonly HashSet<string> RemovedControllers = new(StringComparer.Ordinal)
     {
         "Billing",
         "StripeWebhook",
+        "BackofficeWebhook",
         "Home",
         "Seo",
         "Legal",

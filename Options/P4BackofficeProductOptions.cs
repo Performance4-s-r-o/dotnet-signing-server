@@ -122,12 +122,28 @@ public class P4BackofficeProductOptions
 
         /// <summary>Previous secret, accepted during rotation.</summary>
         public string? PreviousSecret { get; set; }
+
+        /// <summary>True when the webhook endpoint accepts deliveries (a secret is set).</summary>
+        public bool Configured => !string.IsNullOrWhiteSpace(Secret);
     }
 
     public class PollingOptions
     {
-        /// <summary>How often events are polled as a backup to webhooks.</summary>
-        public TimeSpan Interval { get; set; } = TimeSpan.FromMinutes(15);
+        /// <summary>Polling interval while webhooks are configured (they are the main channel).</summary>
+        public static readonly TimeSpan DefaultInterval = TimeSpan.FromMinutes(15);
+
+        /// <summary>Polling interval without a webhook secret (polling is then the only channel).</summary>
+        public static readonly TimeSpan DefaultIntervalWithoutWebhooks = TimeSpan.FromMinutes(2);
+
+        /// <summary>
+        /// How often <c>GET /v1/events</c> is polled. Empty = <see cref="DefaultInterval"/>, or
+        /// <see cref="DefaultIntervalWithoutWebhooks"/> when no webhook secret is set.
+        /// </summary>
+        public TimeSpan? Interval { get; set; }
+
+        /// <summary>The interval actually used.</summary>
+        public TimeSpan EffectiveInterval(bool webhooksConfigured) =>
+            Interval ?? (webhooksConfigured ? DefaultInterval : DefaultIntervalWithoutWebhooks);
     }
 
     public class ConsentsOptions

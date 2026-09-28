@@ -33,11 +33,42 @@ public class PrivateServerConventionTests
     [Fact]
     public void Removes_TheControllersThatOnlyServeTheHostedService()
     {
-        var application = BuildModel("Billing", "StripeWebhook", "Home", "Seo", "Legal", "Support", "Requests");
+        var application = BuildModel("Billing", "StripeWebhook", "BackofficeWebhook", "Home", "Seo", "Legal", "Support", "Requests");
 
         new PrivateServerConvention().Apply(application);
 
         Assert.Empty(application.Controllers);
+    }
+
+    [Fact]
+    public void Removes_TheBackofficeWebhook()
+    {
+        // The integration is forced Off on a private server; its endpoint must not exist at all.
+        Assert.Contains("BackofficeWebhook", PrivateServerConvention.RemovedControllerNames);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void BackofficeWebhookRoute_ExistsOnlyOnTheHostedService(bool privateServer, bool expected)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(new System.Diagnostics.DiagnosticListener("test"));
+        services.AddControllers(options =>
+            {
+                if (privateServer) options.Conventions.Add(new PrivateServerConvention());
+            })
+            .AddApplicationPart(typeof(DotNetSigningServer.Controllers.BackofficeWebhookController).Assembly);
+        using var provider = services.BuildServiceProvider();
+
+        var routes = provider.GetRequiredService<Microsoft.AspNetCore.Mvc.Infrastructure.IActionDescriptorCollectionProvider>()
+            .ActionDescriptors.Items
+            .Select(a => a.AttributeRouteInfo?.Template)
+            .ToList();
+
+        Assert.Equal(expected, routes.Contains("api/webhooks/p4"));
+        Assert.Equal(expected, routes.Contains("api/webhooks/stripe"));
     }
 
     [Fact]
@@ -180,6 +211,7 @@ public class PrivateServerBackofficeTests
             Enum.GetValues<BackofficeModule>(),
             m => Assert.Equal(BackofficeMode.Off, options.ModeFor(m)));
         Assert.False(BackofficeRegistrationTests.AnySdkService(services));
+        Assert.False(BackofficeRegistrationTests.AnyInboxWorker(services)); // no polling, no processing
     }
 
     [Fact]

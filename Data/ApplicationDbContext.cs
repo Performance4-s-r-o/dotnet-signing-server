@@ -21,6 +21,8 @@ namespace DotNetSigningServer.Data
         public DbSet<StoredPdfTemplate> StoredPdfTemplates { get; set; }
         public DbSet<LegalDocument> LegalDocuments { get; set; }
         public DbSet<BackofficeOutboxItem> BackofficeOutboxItems { get; set; }
+        public DbSet<BackofficeWebhookInboxItem> BackofficeWebhookInboxItems { get; set; }
+        public DbSet<BackofficeState> BackofficeStates { get; set; }
 
         /// <summary>
         /// Outbox items added through this context and not yet announced to the dispatcher;
@@ -145,6 +147,19 @@ namespace DotNetSigningServer.Data
 
             modelBuilder.Entity<BackofficeOutboxItem>()
                 .HasIndex(i => i.CreatedAt);
+
+            // Dedupe of webhook deliveries and polled events (INSERT … ON CONFLICT DO NOTHING).
+            modelBuilder.Entity<BackofficeWebhookInboxItem>()
+                .HasIndex(i => i.WebhookId)
+                .IsUnique();
+
+            // The processor reads unprocessed items that are due; cleanup goes by ProcessedAt.
+            modelBuilder.Entity<BackofficeWebhookInboxItem>()
+                .HasIndex(i => i.NextAttemptAt)
+                .HasFilter("\"ProcessedAt\" IS NULL");
+
+            modelBuilder.Entity<BackofficeWebhookInboxItem>()
+                .HasIndex(i => i.ProcessedAt);
         }
     }
 }
