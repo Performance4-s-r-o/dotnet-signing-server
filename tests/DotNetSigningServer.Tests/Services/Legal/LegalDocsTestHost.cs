@@ -131,29 +131,29 @@ internal sealed class LegalDocsTestHost : IDisposable
 
     public static LegalDocument Manual(string slug = "terms-of-service", string locale = "en", int version = 1,
         string title = "Terms (manual)", string content = "# Manual terms", DateTimeOffset? effectiveFrom = null) => new()
-    {
-        Slug = slug,
-        Locale = locale,
-        Version = version,
-        Title = title,
-        Content = content,
-        EffectiveFrom = effectiveFrom ?? new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero),
-    };
+        {
+            Slug = slug,
+            Locale = locale,
+            Version = version,
+            Title = title,
+            Content = content,
+            EffectiveFrom = effectiveFrom ?? new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        };
 
     public static LegalDocument Snapshot(string slug = "terms-of-service", string locale = "en", int version = 2,
         string title = "Terms (snapshot)", string html = "<p>Snapshot terms</p>") => new()
-    {
-        Slug = slug,
-        Locale = locale,
-        Version = version,
-        Title = title,
-        Content = "",
-        ContentHtml = html,
-        ContentHash = Hash(html),
-        TypeKey = LegalSlugMap.TypeFor(slug),
-        ChangeKind = "material",
-        Source = LegalDocumentSources.Backoffice,
-        EffectiveFrom = new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero),
-        FetchedAt = new DateTimeOffset(2026, 9, 27, 0, 0, 0, TimeSpan.Zero),
-    };
+        {
+            Slug = slug,
+            Locale = locale,
+            Version = version,
+            Title = title,
+            Content = "",
+            ContentHtml = html,
+            ContentHash = Hash(html),
+            TypeKey = LegalSlugMap.TypeFor(slug),
+            ChangeKind = "material",
+            Source = LegalDocumentSources.Backoffice,
+            EffectiveFrom = new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero),
+            FetchedAt = new DateTimeOffset(2026, 9, 27, 0, 0, 0, TimeSpan.Zero),
+        };
 }
