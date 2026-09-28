@@ -5,6 +5,7 @@ using DotNetSigningServer.Services.Backoffice.Documents;
 using DotNetSigningServer.Services.Backoffice.Handlers;
 using DotNetSigningServer.Services.Backoffice.Inbox;
 using DotNetSigningServer.Services.Backoffice.Outbox;
+using DotNetSigningServer.Services.Consents;
 using DotNetSigningServer.Services.Legal;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -63,8 +64,45 @@ public static class BackofficeRegistration
             AddInboxProcessing(services, snapshot);
         }
         AddLegalDocuments(services, snapshot);
+        AddConsents(services, snapshot);
 
         return services;
+    }
+
+    /// <summary>
+    /// Consents: always registered, because sign-up records a local <c>ConsentRecord</c> in every
+    /// mode (Off only skips the outbox and the gate); the mode is read per call. The daily
+    /// reconciliation with the service runs only when <c>Modules:Consents</c> is Shadow or On.
+    /// The gate itself (<c>RequireCurrentConsentFilter</c>) is added to MVC by <c>Program.cs</c>,
+    /// outside a PrivateServer.
+    /// </summary>
+    internal static void AddConsents(IServiceCollection services, P4BackofficeProductOptions options)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddMemoryCache();
+        services.TryAddSingleton<ConsentStatusCache>();
+        services.AddSingleton<IDocumentChangeListener>(sp => sp.GetRequiredService<ConsentStatusCache>());
+        services.TryAddSingleton<ConsentNoticeProvider>();
+        services.TryAddScoped<ConsentDocumentResolver>();
+        services.TryAddScoped<ConsentService>();
+        services.TryAddScoped<ConsentBackfill>();
+        services.TryAddScoped<IConsentStatusProvider, ConsentStatusProvider>();
+
+        if (options.ModeFor(BackofficeModule.Consents) == BackofficeMode.Off)
+        {
+            return;
+        }
+
+        var baseUrl = options.BaseUrl?.Trim() ?? "";
+        var secretKey = options.SecretKey?.Trim() ?? "";
+        services.AddHttpClient(ConsentReconciliationService.HttpClientName, client =>
+        {
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            client.Timeout = ConsentReconciliationService.RequestTimeout;
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretKey);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-consents");
+        });
+        services.AddHostedService<ConsentReconciliationService>();
     }
 
     /// <summary>
@@ -152,6 +190,9 @@ public static class BackofficeRegistration
             client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-outbox");
         });
         services.TryAddSingleton<OutboxProcessor>();
+        // Handlers of every kind a module may have queued: items stay valid when their module
+        // is switched Off again later.
+        services.AddSingleton<IOutboxHandler, ConsentOutboxHandler>();
         services.AddHostedService<BackofficeOutboxDispatcher>();
     }
 

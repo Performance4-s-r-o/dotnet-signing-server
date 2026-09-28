@@ -5,6 +5,8 @@ using DotNetSigningServer.Services;
 using DotNetSigningServer.Services.Email;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
+using DotNetSigningServer.Services.Backoffice;
+using DotNetSigningServer.Services.Consents;
 using System.Globalization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -103,24 +105,61 @@ public class AccountController : Controller
     }
 
     [HttpGet("/Account/SignUp")]
-    public IActionResult SignUp()
+    public async Task<IActionResult> SignUp(
+        [FromServices] ConsentDocumentResolver consentDocuments,
+        [FromServices] IOptions<P4BackofficeProductOptions> backoffice)
     {
         if (User?.Identity?.IsAuthenticated == true)
         {
             return RedirectToAction("Index", "Home");
         }
-        return View(new SignUpViewModel());
+        var model = new SignUpViewModel();
+        await PrepareSignUpFormAsync(model, consentDocuments, backoffice.Value);
+        return View(model);
     }
 
     [HttpPost("/Account/SignUp")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SignUp(SignUpViewModel model)
+    public async Task<IActionResult> SignUp(
+        SignUpViewModel model,
+        [FromServices] ConsentDocumentResolver consentDocuments,
+        [FromServices] ConsentService consents,
+        [FromServices] IOptions<P4BackofficeProductOptions> backoffice,
+        [FromServices] TimeProvider time,
+        [FromServices] ILogger<AccountController> logger)
     {
         if (User?.Identity?.IsAuthenticated == true)
         {
             return RedirectToAction("Index", "Home");
         }
-        if (!ModelState.IsValid) return View(model);
+
+        // Checked here too: a bypassed HTML "required" must not create an account without consent.
+        if (!model.AcceptTerms)
+        {
+            ModelState.Remove(nameof(SignUpViewModel.AcceptTerms));
+            ModelState.AddModelError(nameof(SignUpViewModel.AcceptTerms), _localizer["SignUpAcceptTermsRequired"].Value);
+        }
+
+        // Local data only (docs:meta, LegalDocuments): never the service.
+        var shownDocuments = await consentDocuments.ResolveAsync(
+            ConsentRequirements.From(backoffice.Value.Consents), CurrentLocale, HttpContext.RequestAborted);
+        if (!ModelState.IsValid)
+        {
+            await PrepareSignUpFormAsync(model, consentDocuments, backoffice.Value, shownDocuments);
+            return View(model);
+        }
+
+        var consentsOn = backoffice.Value.ModeFor(BackofficeModule.Consents) != BackofficeMode.Off;
+        var accepted = consentsOn
+            ? ConsentVersionCheck.Accept(model.ShownVersions, shownDocuments, time.GetUtcNow())
+            : shownDocuments.ToDictionary(d => d.Document, d => d.Version, StringComparer.Ordinal);
+        if (accepted is null)
+        {
+            // A new version came into force more than 10 minutes after the form was opened.
+            ModelState.AddModelError(string.Empty, _localizer["LegalVersionOutdated"].Value);
+            await PrepareSignUpFormAsync(model, consentDocuments, backoffice.Value, shownDocuments);
+            return View(model);
+        }
 
         bool exists = await _dbContext.Users.AnyAsync(u => u.Email == model.Email);
         if (exists)
@@ -128,7 +167,8 @@ public class AccountController : Controller
             // Do not reveal that the address is already registered — that turns signup
             // into an account-enumeration oracle. Show the same "check your inbox"
             // outcome as a fresh signup; the real owner already has an account and can
-            // sign in or use the password-reset flow.
+            // sign in or use the password-reset flow. No consent is recorded: the
+            // visitor is not (provably) the account's owner.
             TempData["Info"] = _localizer["CheckEmailVerification"].Value;
             return RedirectToAction(nameof(Verify));
         }
@@ -152,7 +192,11 @@ public class AccountController : Controller
             UpdatedAt = DateTimeOffset.UtcNow
         };
 
+        var choices = await ConsentChoicesAsync(shownDocuments, accepted, model.ShownHashes, consentDocuments, logger);
         _dbContext.Users.Add(user);
+        // Records (and, unless the Consents module is Off, the outbox item) go into the same
+        // SaveChangesAsync as the user: one transaction, nothing sent during the request.
+        consents.RecordSignupConsents(user, choices, Request.Headers.UserAgent.ToString(), ClientIp());
         await _dbContext.SaveChangesAsync();
 
         // Send verification email (critical — user cannot complete signup without it)
@@ -692,6 +736,165 @@ public class AccountController : Controller
                 AllowRefresh = true
             });
     }
+
+    /// <summary>Documents and hidden version fields of the sign-up form.</summary>
+    private async Task PrepareSignUpFormAsync(
+        SignUpViewModel model,
+        ConsentDocumentResolver consentDocuments,
+        P4BackofficeProductOptions backoffice,
+        IReadOnlyList<ConsentDocumentVersion>? documents = null)
+    {
+        model.Documents = documents ?? await consentDocuments.ResolveAsync(
+            ConsentRequirements.From(backoffice.Consents), CurrentLocale, HttpContext.RequestAborted);
+        model.ShowVersions = backoffice.ModeFor(BackofficeModule.Consents) != BackofficeMode.Off;
+        // The form always carries the versions in force now, also when it is shown again.
+        model.ShownVersions = model.Documents.ToDictionary(d => d.Document, d => d.Version, StringComparer.Ordinal);
+        model.ShownHashes = model.Documents.Where(d => d.ContentHash != null)
+            .ToDictionary(d => d.Document, d => d.ContentHash!, StringComparer.Ordinal);
+        ModelState.Remove(nameof(SignUpViewModel.ShownVersions));
+        ModelState.Remove(nameof(SignUpViewModel.ShownHashes));
+    }
+
+    /// <summary>
+    /// What to record per document: the accepted version and the server's hash of its text.
+    /// The form's hash is only compared (a minor correction can change the text within a version).
+    /// </summary>
+    private static async Task<IReadOnlyList<ConsentChoice>> ConsentChoicesAsync(
+        IReadOnlyList<ConsentDocumentVersion> documents,
+        IReadOnlyDictionary<string, int> accepted,
+        IReadOnlyDictionary<string, string>? shownHashes,
+        ConsentDocumentResolver consentDocuments,
+        ILogger logger)
+    {
+        var choices = new List<ConsentChoice>();
+        foreach (var document in documents)
+        {
+            var version = accepted[document.Document];
+            var hash = version == document.Version
+                ? document.ContentHash
+                : await consentDocuments.HashAsync(document.Document, document.Locale, version);
+            if (shownHashes != null && shownHashes.TryGetValue(document.Document, out var shown)
+                && hash != null && !string.Equals(shown, hash, StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogInformation("[consents] {Document} v{Version}: the form showed another text hash than the one recorded",
+                    document.Document, version);
+            }
+            choices.Add(new ConsentChoice(document, version, hash));
+        }
+        return choices;
+    }
+
+    /// <summary>End user's IP (after the forwarded headers); sent to the service only for the DPA, which stores it truncated.</summary>
+    private string? ClientIp()
+    {
+        var ip = HttpContext.Connection.RemoteIpAddress;
+        if (ip is null) return null;
+        return (ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4() : ip).ToString();
+    }
+
+    /// <summary>Re-consent: documents the signed-in user still has to confirm (see <c>RequireCurrentConsentFilter</c>).</summary>
+    [Authorize]
+    [HttpGet("/Account/Consent")]
+    public async Task<IActionResult> Consent(
+        string? returnUrl,
+        [FromServices] IConsentStatusProvider consentStatus,
+        [FromServices] ConsentDocumentResolver consentDocuments,
+        [FromServices] IOptions<P4BackofficeProductOptions> backoffice)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null)
+        {
+            return RedirectToAction(nameof(SignIn));
+        }
+
+        var status = await consentStatus.GetAsync(userId.Value, HttpContext.RequestAborted);
+        if (status.IsCurrent)
+        {
+            return LocalRedirect(SafeReturnUrl(returnUrl));
+        }
+
+        var model = new ConsentViewModel { ReturnUrl = returnUrl };
+        await PrepareConsentFormAsync(model, status, consentDocuments, backoffice.Value);
+        return View(model);
+    }
+
+    [Authorize]
+    [HttpPost("/Account/Consent")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Consent(
+        ConsentViewModel model,
+        [FromServices] IConsentStatusProvider consentStatus,
+        [FromServices] ConsentStatusCache consentCache,
+        [FromServices] ConsentDocumentResolver consentDocuments,
+        [FromServices] ConsentService consents,
+        [FromServices] IOptions<P4BackofficeProductOptions> backoffice,
+        [FromServices] TimeProvider time,
+        [FromServices] ILogger<AccountController> logger)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null)
+        {
+            return RedirectToAction(nameof(SignIn));
+        }
+
+        consentCache.Invalidate(userId.Value);
+        var status = await consentStatus.GetAsync(userId.Value, HttpContext.RequestAborted);
+        if (status.IsCurrent)
+        {
+            return LocalRedirect(SafeReturnUrl(model.ReturnUrl));
+        }
+
+        var shownHashes = model.ShownHashes;
+        var shownVersions = model.ShownVersions;
+        await PrepareConsentFormAsync(model, status, consentDocuments, backoffice.Value);
+        if (model.RequiresCheckbox && !model.Accept)
+        {
+            ModelState.AddModelError(nameof(ConsentViewModel.Accept), _localizer["SignUpAcceptTermsRequired"].Value);
+            return View(model);
+        }
+
+        var accepted = ConsentVersionCheck.Accept(shownVersions, model.Documents, time.GetUtcNow());
+        if (accepted is null)
+        {
+            ModelState.AddModelError(string.Empty, _localizer["LegalVersionOutdated"].Value);
+            return View(model);
+        }
+
+        var choices = await ConsentChoicesAsync(model.Documents, accepted, shownHashes, consentDocuments, logger);
+        consents.RecordReconsent(
+            userId.Value,
+            choices,
+            status.HasAnyRecord ? ConsentService.Flows.Reconsent : ConsentService.Flows.Initial,
+            Request.Headers.UserAgent.ToString(),
+            ClientIp());
+        await _dbContext.SaveChangesAsync();
+        consentCache.Invalidate(userId.Value);
+
+        return LocalRedirect(SafeReturnUrl(model.ReturnUrl));
+    }
+
+    private async Task PrepareConsentFormAsync(
+        ConsentViewModel model,
+        ConsentStatus status,
+        ConsentDocumentResolver consentDocuments,
+        P4BackofficeProductOptions backoffice)
+    {
+        var outstanding = status.Outstanding.Select(o => o.Document).ToHashSet(StringComparer.Ordinal);
+        var requirements = ConsentRequirements.From(backoffice.Consents).Where(r => outstanding.Contains(r.Document));
+        model.Documents = await consentDocuments.ResolveAsync(requirements, CurrentLocale, HttpContext.RequestAborted);
+        model.Initial = !status.HasAnyRecord;
+        model.ShownVersions = model.Documents.ToDictionary(d => d.Document, d => d.Version, StringComparer.Ordinal);
+        model.ShownHashes = model.Documents.Where(d => d.ContentHash != null)
+            .ToDictionary(d => d.Document, d => d.ContentHash!, StringComparer.Ordinal);
+        ModelState.Remove(nameof(ConsentViewModel.ShownVersions));
+        ModelState.Remove(nameof(ConsentViewModel.ShownHashes));
+    }
+
+    /// <summary>A local return URL, else the account page (in the current language).</summary>
+    private string SafeReturnUrl(string? returnUrl) =>
+        !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl)
+            ? returnUrl
+            : Url.Action(nameof(Index), "Account") ?? "/Account";
 
     private Guid? GetCurrentUserId()
     {

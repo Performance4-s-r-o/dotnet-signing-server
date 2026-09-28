@@ -34,12 +34,14 @@ public class PrivateServerConvention : IApplicationModelConvention
     /// Signing up is what makes this a service rather than an appliance. The one
     /// account is created at installation; the rest of AccountController — signing
     /// in, signing out, changing a password — is what the administrator needs to
-    /// manage API keys.
+    /// manage API keys. The re-consent page belongs to the backoffice integration,
+    /// which is forced Off here (its gate is not registered either).
     /// </summary>
     private static readonly HashSet<string> RemovedActions = new(StringComparer.Ordinal)
     {
         "SignUp",
         "ResendVerification",
+        "Consent",
     };
 
     public void Apply(ApplicationModel application)

@@ -48,6 +48,7 @@ public static class BackofficeOptionsValidator
         {
             problems.Add($"{Setting("Polling:Interval")} must be positive.");
         }
+        CheckConsentDocuments(problems, options.Consents);
 
         // A self-hosted installation is forced Off whatever it asks for, so a key or URL
         // left over there is not a reason to refuse to start (it is logged instead). A build
@@ -61,6 +62,26 @@ public static class BackofficeOptionsValidator
         }
 
         return problems;
+    }
+
+    /// <summary>Document keys as the service accepts them (<c>ConsentInput.document</c>).</summary>
+    private static readonly System.Text.RegularExpressions.Regex DocumentKey = new("^[a-z][a-z0-9_]{1,39}$");
+
+    private static void CheckConsentDocuments(List<string> problems, P4BackofficeProductOptions.ConsentsOptions consents)
+    {
+        var granted = consents.EffectiveDocuments;
+        var acknowledged = consents.EffectiveAcknowledged;
+        foreach (var key in granted.Concat(acknowledged))
+        {
+            if (!DocumentKey.IsMatch(key ?? ""))
+            {
+                problems.Add($"{Setting("Consents:Documents")} / {Setting("Consents:Acknowledged")}: '{key}' is not a document key (lower case letters, digits, '_').");
+            }
+        }
+        foreach (var key in granted.Intersect(acknowledged, StringComparer.Ordinal))
+        {
+            problems.Add($"{Setting("Consents:Documents")} and {Setting("Consents:Acknowledged")} both list '{key}'.");
+        }
     }
 
     /// <summary>A test key in production is allowed (staging-like setups) but worth a warning.</summary>

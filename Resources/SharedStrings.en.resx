@@ -640,4 +640,22 @@
   <data name="AdminOutboxBlockedHint" xml:space="preserve"><value>Blocked items were refused as unauthorised. Fix the API key or its scopes first, then put them back in the queue.</value></data>
   <data name="AdminOutboxRequeueBlocked" xml:space="preserve"><value>Requeue blocked items</value></data>
   <data name="AdminOutboxRequeued" xml:space="preserve"><value>{0} blocked item(s) put back in the queue.</value></data>
+  <data name="SignUpAcceptTermsDpa" xml:space="preserve"><value>I agree to the {0}.</value></data>
+  <data name="SignUpPrivacyNotice" xml:space="preserve"><value>How we process your personal data is described in the {0}.</value></data>
+  <data name="SignUpAcceptTermsRequired" xml:space="preserve"><value>Please agree to the terms to continue.</value></data>
+  <data name="LegalVersionOutdated" xml:space="preserve"><value>The legal documents have just been updated. Please review the current versions and confirm again.</value></data>
+  <data name="LegalDocumentVersion" xml:space="preserve"><value>{0} (version {1})</value></data>
+  <data name="ListAnd" xml:space="preserve"><value> and </value></data>
+  <data name="ConsentTitle" xml:space="preserve"><value>Confirm the terms</value></data>
+  <data name="ConsentHeadingInitial" xml:space="preserve"><value>Please confirm our terms</value></data>
+  <data name="ConsentHeadingChanged" xml:space="preserve"><value>Our terms have changed</value></data>
+  <data name="ConsentIntroInitial" xml:space="preserve"><value>Before you continue, please review and confirm the documents below.</value></data>
+  <data name="ConsentIntroChanged" xml:space="preserve"><value>We have updated the documents below. Please review the changes and confirm them to continue.</value></data>
+  <data name="ConsentWhatChanged" xml:space="preserve"><value>What changed:</value></data>
+  <data name="ConsentAcceptButton" xml:space="preserve"><value>Confirm and continue</value></data>
+  <data name="LegalUpcomingBanner" xml:space="preserve"><value>A new version of the {0} applies from {1}.</value></data>
+  <data name="AdminConsentsBackfill" xml:space="preserve"><value>Send consents recorded while the module was Off</value></data>
+  <data name="AdminConsentsBackfillHint" xml:space="preserve"><value>Queues consent records that have not been sent to the backoffice service yet. Records already queued are skipped.</value></data>
+  <data name="AdminConsentsBackfilled" xml:space="preserve"><value>Queued {0} consent records in {1} batches.</value></data>
+  <data name="AdminConsentsBackfillOff" xml:space="preserve"><value>Switch the Consents module to Shadow or On first.</value></data>
 </root>

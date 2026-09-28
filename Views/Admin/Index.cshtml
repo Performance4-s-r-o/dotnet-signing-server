@@ -120,6 +120,15 @@
                         </tr>
                     </tbody>
                 </table>
+                @if (backoffice.Modules.Any(m => m.Module == DotNetSigningServer.Services.Backoffice.BackofficeModule.Consents
+                                                 && m.Mode != DotNetSigningServer.Services.Backoffice.BackofficeMode.Off))
+                {
+                    <form method="post" action="/Admin/Backoffice/Consents/Backfill" class="p-4">
+                        @Html.AntiForgeryToken()
+                        <p class="muted" style="font-size:0.875rem;margin-bottom:0.75rem">@L["AdminConsentsBackfillHint"]</p>
+                        <button type="submit" class="btn-small btn-secondary">@L["AdminConsentsBackfill"]</button>
+                    </form>
+                }
             </div>
         </section>
     }

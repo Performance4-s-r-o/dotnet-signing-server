@@ -1,6 +1,7 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @inject Microsoft.Extensions.Options.IOptions<DotNetSigningServer.Options.OsTicketOptions> OsTicket
 @inject Microsoft.Extensions.Options.IOptions<DotNetSigningServer.Options.AppOptions> App
+@inject DotNetSigningServer.Services.Consents.ConsentNoticeProvider ConsentNotices
 @{
     var supportEnabled = OsTicket.Value.IsConfigured;
     var pageTitle = ViewData["Title"] as string;
@@ -200,6 +201,19 @@
     </header>
 
     <main>
+        @if (isAuthenticated)
+        {
+            // Announced versions of the consent documents (Consents module On); cached, never the service.
+            var upcomingDocuments = await ConsentNotices.GetUpcomingAsync();
+            foreach (var notice in upcomingDocuments)
+            {
+                <div class="flash info legal-upcoming" role="status">
+                    @DotNetSigningServer.Services.Consents.ConsentHtml.Sentence(L, "LegalUpcomingBanner",
+                        DotNetSigningServer.Services.Consents.ConsentHtml.Link(Url, L, notice.Document, null, null),
+                        System.Text.Encodings.Web.HtmlEncoder.Default.Encode(notice.EffectiveFrom.UtcDateTime.ToString("d", System.Globalization.CultureInfo.CurrentUICulture)))
+                </div>
+            }
+        }
         <div class="@((isHomePage ? "" : "main-wrapper") + (isAccountPage ? " auth" : ""))">
             @RenderBody()
         </div>
