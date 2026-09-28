@@ -52,6 +52,16 @@ public class AccountController : Controller
 
     private string CurrentLocale => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
 
+    /// <summary><see cref="CurrentLocale"/> as stored in <c>User.Locale</c> (for e-mails sent later).</summary>
+    private string StoredLocale
+    {
+        get
+        {
+            var locale = CurrentLocale.ToLowerInvariant();
+            return locale.Length > Models.User.MaxLocaleLength ? locale[..Models.User.MaxLocaleLength] : locale;
+        }
+    }
+
     private bool IsRateLimited(string key)
     {
         var now = DateTime.UtcNow;
@@ -188,6 +198,7 @@ public class AccountController : Controller
             EmailVerificationToken = SecureTokens.Hash(verificationToken),
             EmailVerificationExpiresAt = DateTimeOffset.UtcNow.AddHours(24),
             CreditsRemaining = 10,
+            Locale = StoredLocale,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
@@ -197,18 +208,28 @@ public class AccountController : Controller
         // Records (and, unless the Consents module is Off, the outbox item) go into the same
         // SaveChangesAsync as the user: one transaction, nothing sent during the request.
         consents.RecordSignupConsents(user, choices, Request.Headers.UserAgent.ToString(), ClientIp());
-        await _dbContext.SaveChangesAsync();
 
-        // Send verification email (critical — user cannot complete signup without it)
+        // Verification email (critical — user cannot complete signup without it). With the
+        // Email module On it is queued in the same SaveChangesAsync as the user; otherwise it
+        // is sent right after, as before.
         var verificationLink = BuildAbsoluteUrl($"/Account/Verify?token={Uri.EscapeDataString(verificationToken)}");
         var rendered = _emailTemplates.Render(EmailTemplateId.EmailVerification, CurrentLocale, new Dictionary<string, string?>
         {
             ["verificationUrl"] = verificationLink,
         });
+        var emailOptions = new EmailSendOptions(EmailTemplateId.EmailVerification, user.Locale, user.Id);
+        var queued = _emailSender.TryEnqueue(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions);
+        await _dbContext.SaveChangesAsync();
+
+        if (queued)
+        {
+            TempData["Info"] = _localizer["CheckEmailVerification"].Value;
+            return RedirectToAction(nameof(Verify));
+        }
 
         try
         {
-            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody);
+            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions);
             TempData["Info"] = _localizer["CheckEmailVerification"].Value;
         }
         catch
@@ -290,22 +311,36 @@ public class AccountController : Controller
         // database must not be enough to walk through someone's second factor.
         user.EmailOtpCode = SecureTokens.Hash(otp);
         user.EmailOtpExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
-        await _dbContext.SaveChangesAsync();
+        // E-mails sent later (auto-recharge, payments) follow the language of the last sign-in.
+        user.Locale = StoredLocale;
 
         var rendered = _emailTemplates.Render(EmailTemplateId.TwoFactorCode, CurrentLocale, new Dictionary<string, string?>
         {
             ["otpCode"] = otp,
             ["expiryMinutes"] = "10",
         });
-        try
+        var emailOptions = new EmailSendOptions(EmailTemplateId.TwoFactorCode, user.Locale, user.Id);
+        // Email module On: queued with the code in one SaveChangesAsync (break-glass delivers it
+        // if the service does not). Otherwise sent right after the save, as before.
+        var queued = _emailSender.TryEnqueue(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions);
+        await _dbContext.SaveChangesAsync();
+
+        if (queued)
         {
-            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody);
             TempData["Info"] = _localizer["TwoFactorCodeSent"].Value;
         }
-        catch
+        else
         {
-            TempData["Error"] = _localizer["TwoFactorCodeFailed"].Value;
-            return View(model);
+            try
+            {
+                await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions);
+                TempData["Info"] = _localizer["TwoFactorCodeSent"].Value;
+            }
+            catch
+            {
+                TempData["Error"] = _localizer["TwoFactorCodeFailed"].Value;
+                return View(model);
+            }
         }
 
         TempData["ReturnUrl"] = returnUrl;
@@ -487,7 +522,6 @@ public class AccountController : Controller
             user.PasswordResetToken = SecureTokens.Hash(token);
             user.PasswordResetExpiresAt = DateTimeOffset.UtcNow.AddHours(1);
             user.UpdatedAt = DateTimeOffset.UtcNow;
-            await _dbContext.SaveChangesAsync();
 
             var resetLink = BuildAbsoluteUrl($"/Account/ResetPassword?token={Uri.EscapeDataString(token)}");
             var rendered = _emailTemplates.Render(EmailTemplateId.PasswordReset, CurrentLocale, new Dictionary<string, string?>
@@ -495,14 +529,21 @@ public class AccountController : Controller
                 ["resetUrl"] = resetLink,
                 ["expiryMinutes"] = "60",
             });
+            var emailOptions = new EmailSendOptions(EmailTemplateId.PasswordReset, StoredLocale, user.Id);
+            // Email module On: queued with the token in one SaveChangesAsync; otherwise sent after it.
+            var queued = _emailSender.TryEnqueue(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions);
+            await _dbContext.SaveChangesAsync();
 
-            try
+            if (!queued)
             {
-                await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody);
-            }
-            catch
-            {
-                // Log but don't reveal failure to prevent enumeration
+                try
+                {
+                    await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions);
+                }
+                catch
+                {
+                    // Log but don't reveal failure to prevent enumeration
+                }
             }
         }
 

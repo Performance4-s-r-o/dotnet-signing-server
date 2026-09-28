@@ -261,7 +261,8 @@ public class AutoRechargeService : IAutoRechargeService
     {
         var baseUrl = _appOptions.BaseUrl;
         var billingUrl = $"{baseUrl}/Billing";
-        var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        // Runs outside the user's request: the language of their last sign-in, not the thread's.
+        var locale = user.EmailLocale;
         var rendered = _emailTemplates.Render(EmailTemplateId.AutoRechargeSuccess, locale, new Dictionary<string, string?>
         {
             ["quantity"] = creditsAdded.ToString(),
@@ -273,7 +274,8 @@ public class AutoRechargeService : IAutoRechargeService
 
         try
         {
-            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody);
+            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody,
+                new EmailSendOptions(EmailTemplateId.AutoRechargeSuccess, locale, user.Id));
         }
         catch (Exception ex)
         {
@@ -285,7 +287,7 @@ public class AutoRechargeService : IAutoRechargeService
     {
         var baseUrl = _appOptions.BaseUrl;
         var billingUrl = $"{baseUrl}/Billing";
-        var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        var locale = user.EmailLocale;
         var rendered = _emailTemplates.Render(EmailTemplateId.AutoRechargeFailed, locale, new Dictionary<string, string?>
         {
             ["quantity"] = user.AutoRechargeQuantity.ToString(),
@@ -296,7 +298,8 @@ public class AutoRechargeService : IAutoRechargeService
 
         try
         {
-            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody);
+            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody,
+                new EmailSendOptions(EmailTemplateId.AutoRechargeFailed, locale, user.Id));
         }
         catch (Exception ex)
         {

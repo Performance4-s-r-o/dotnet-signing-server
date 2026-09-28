@@ -23,6 +23,9 @@ public sealed record OutboxAttemptResult
 
     public bool IsTimeout { get; init; }
 
+    /// <summary>The service accepted the request but will not deliver it (suppressed recipient).</summary>
+    public bool IsSuppressed { get; init; }
+
     /// <summary>The attempt never reached the network (no handler, unreadable payload, handler bug).</summary>
     public bool IsLocalFailure { get; init; }
 
@@ -41,7 +44,22 @@ public sealed record OutboxAttemptResult
             : problemCode is null ? $"HTTP {statusCode}" : $"HTTP {statusCode} {problemCode}",
         };
 
-    public static OutboxAttemptResult NetworkError(string message) => new() { Error = "Network: " + message };
+    /// <summary>Prefix of <see cref="Error"/> for an attempt that got no connection or answer.</summary>
+    public const string NetworkErrorPrefix = "Network: ";
+
+    public static OutboxAttemptResult NetworkError(string message) => new() { Error = NetworkErrorPrefix + message };
+
+    /// <summary>
+    /// Answered (e.g. <c>202</c> with <c>status=suppressed</c>) but not going to be delivered:
+    /// ends like a <c>422 suppressed_recipient</c>.
+    /// </summary>
+    public static OutboxAttemptResult Suppressed(int statusCode, string? remoteId) => new()
+    {
+        StatusCode = statusCode,
+        RemoteId = remoteId,
+        IsSuppressed = true,
+        Error = "Recipient suppressed",
+    };
 
     public static OutboxAttemptResult Timeout() => new() { Error = "Timeout", IsTimeout = true };
 

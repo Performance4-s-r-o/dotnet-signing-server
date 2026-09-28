@@ -658,4 +658,6 @@
   <data name="AdminConsentsBackfillHint" xml:space="preserve"><value>Zařadí do fronty záznamy souhlasů, které ještě nebyly odeslány do služby backoffice. Již zařazené záznamy přeskočí.</value></data>
   <data name="AdminConsentsBackfilled" xml:space="preserve"><value>Do fronty zařazeno {0} záznamů souhlasu v {1} dávkách.</value></data>
   <data name="AdminConsentsBackfillOff" xml:space="preserve"><value>Nejdřív přepněte modul Consents na Shadow nebo On.</value></data>
+  <data name="EmailLanguage" xml:space="preserve"><value>Jazyk e-mailů</value></data>
+  <data name="EmailBounced" xml:space="preserve"><value>E-mail nedoručitelný / stížnost</value></data>
 </root>

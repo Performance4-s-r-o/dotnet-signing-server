@@ -6,6 +6,7 @@ using DotNetSigningServer.Services.Backoffice.Handlers;
 using DotNetSigningServer.Services.Backoffice.Inbox;
 using DotNetSigningServer.Services.Backoffice.Outbox;
 using DotNetSigningServer.Services.Consents;
+using DotNetSigningServer.Services.Email;
 using DotNetSigningServer.Services.Legal;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -65,8 +66,41 @@ public static class BackofficeRegistration
         }
         AddLegalDocuments(services, snapshot);
         AddConsents(services, snapshot);
+        AddEmail(services, snapshot);
 
         return services;
+    }
+
+    /// <summary>Kind prefix of every e-mail outbox item.</summary>
+    public const string EmailKindPrefix = "email.";
+
+    /// <summary>
+    /// E-mail by <c>Modules:Email</c>: On queues every message into the outbox (<c>email.raw</c>)
+    /// with the break-glass fallback and handles <c>email.*</c> events; Off and Shadow send
+    /// through Resend directly, as before (Shadow is not supported for raw e-mail — the service
+    /// has no "log only" send, so it would deliver every message twice; it starts with a
+    /// warning). <see cref="ResendEmailSender"/> is always registered as its own type too.
+    /// While not On, queued e-mail items stay Pending and are sent once the module is On again.
+    /// </summary>
+    internal static void AddEmail(IServiceCollection services, P4BackofficeProductOptions options)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddScoped<ResendEmailSender>();
+
+        if (options.ModeFor(BackofficeModule.Email) != BackofficeMode.On)
+        {
+            services.TryAddSingleton(new OutboxKindFilter([EmailKindPrefix]));
+            services.AddScoped<IEmailSender>(sp => sp.GetRequiredService<ResendEmailSender>());
+            return;
+        }
+
+        services.TryAddSingleton(OutboxKindFilter.None);
+        services.TryAddScoped<BackofficeOutboxEmailSender>();
+        services.AddScoped<IEmailSender>(sp => sp.GetRequiredService<BackofficeOutboxEmailSender>());
+        services.AddSingleton<IOutboxHandler, EmailRawOutboxHandler>();
+        services.TryAddSingleton<BreakGlassEmailFallback>();
+        services.AddSingleton<IOutboxFallback>(sp => sp.GetRequiredService<BreakGlassEmailFallback>());
+        services.AddScoped<IBackofficeEventHandler, EmailEventsHandler>();
     }
 
     /// <summary>
@@ -270,6 +304,13 @@ internal sealed class BackofficeStartupReport(
         {
             logger.LogWarning("Backoffice: production is using a test key ({KeyPrefix})",
                 BackofficeOptionsValidator.TestKeyPrefix + "…");
+        }
+
+        if (o.ModeFor(BackofficeModule.Email) == BackofficeMode.Shadow)
+        {
+            logger.LogWarning(
+                "Backoffice: Modules:Email=Shadow is not supported for raw e-mail (every message would be sent twice); "
+                + "e-mail is sent through Resend as with Off");
         }
 
         if (o.AnyEnabled)

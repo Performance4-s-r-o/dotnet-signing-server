@@ -240,6 +240,43 @@ Off* (`/Admin`), which queues every record without an outbox item once.
 TODO: there is no account deletion yet. When it is added, queue an outbox item
 `erase` (`POST /v1/subjects/{ref}/erase`) in the same transaction.
 
+#### E-mail (`Modules:Email`)
+
+Every message is still rendered locally (`EmailTemplateRenderer`, the user's
+language). What happens next depends on the mode:
+
+- `Off` — sent through Resend during the call (`ResendEmailSender`), exactly as
+  before, including the error messages when Resend fails.
+- `Shadow` — not supported for raw e-mail (the service has no "log only" send,
+  so every message would go out twice); treated as `Off` with a startup warning.
+- `On` — queued as outbox item `email.raw` (`POST /v1/emails` with `to`,
+  `subject`, `html`, `from` = `EMAIL_FROM`, tags `template`, `locale`,
+  `user_id`, `critical`, `category=transactional`). Sign-up, 2FA and password
+  reset queue their message in the same `SaveChangesAsync` as the token, so
+  they add no latency when the service is down. The code or link is only in the
+  encrypted payload, which is cleared once sent.
+
+Break-glass: 2FA codes, password resets and e-mail verification are `critical`.
+When the service has not taken one within `P4Backoffice__Email__FallbackAfter`
+(default 60 s), when it is known to be down (circuit breaker, or the item's own
+attempt got no connection or a 5xx — then within a dispatcher pass), or when
+the key is refused (`Blocked`), the dispatcher sends it directly through Resend
+(`RESEND_API_KEY` must stay configured), marks it `FallbackSent` and logs a
+warning; the service never sends it afterwards. Critical items older than 24 h
+are left alone. Disable with `P4Backoffice__Email__FallbackDirect=false`.
+
+Background e-mails (auto-recharge, failed payment, price change) use the
+language of the user's last sign-up or sign-in (`Users.Locale`, default `en`).
+`email.bounced` / `email.complained` set `Users.EmailBouncedAt` (matched by the
+`user_id` tag, else the address), shown in `/Admin/Users/{id}`; `email.failed`
+is logged. The sending domain configured for the environment in the service
+must be the domain of `EMAIL_FROM` (DKIM).
+
+Rollback: `P4Backoffice__Modules__Email=Off` sends through Resend directly
+again. E-mail items still pending stay in the outbox untouched while the module
+is not `On` (critical ones will already have gone out by break-glass) and are
+sent once it is `On` again.
+
 ## Stripe webhooks
 
 Endpoint: `POST /api/webhooks/stripe` (`Controllers/StripeWebhookController.cs`).
