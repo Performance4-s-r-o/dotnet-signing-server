@@ -34,6 +34,21 @@
   </ItemGroup>
 
   <!--
+    P4 Backoffice SDK (see Directory.Build.props). Off by default so that forks
+    and public CI build without a registry token; SDK-dependent code is then
+    left out and the integration stays Off.
+  -->
+  <ItemGroup Condition="'$(UseP4BackofficeSdk)' == 'true' And '$(P4BackofficeSdkProject)' == ''">
+    <PackageReference Include="P4.Backoffice.Sdk" Version="$(P4BackofficeSdkVersion)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseP4BackofficeSdk)' == 'true' And '$(P4BackofficeSdkProject)' != ''">
+    <ProjectReference Include="$(P4BackofficeSdkProject)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseP4BackofficeSdk)' != 'true'">
+    <Compile Remove="Services/Backoffice/Sdk/**" />
+  </ItemGroup>
+
+  <!--
     Runtime data that lives inside the project directory. Postgres in particular
     rewrites pg_control and friends on every transaction, which made `dotnet
     watch` spin through "Loading projects…" continuously and eventually lose the
