@@ -1,14 +1,16 @@
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services.Email;
+using DotNetSigningServer.Services.Pricing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace DotNetSigningServer.Services;
 
 /// <summary>
-/// Background service that checks once per day whether the configured PricePer100
-/// has changed compared to users' stored AutoRechargePricePer100.
+/// Background service that checks once per day whether the current price of 100 credits
+/// (<see cref="ICreditPricingProvider"/>: <c>Billing:PricePer100</c>, or the service's price list
+/// with <c>Modules:Pricing=On</c>) has changed compared to users' stored AutoRechargePricePer100.
 /// If a change is detected, users are notified 30 days in advance
 /// and given the option to cancel auto-recharge before the new price takes effect.
 /// </summary>
@@ -52,8 +54,9 @@ public class PriceChangeMonitorService : BackgroundService
         var billingOptions = scope.ServiceProvider.GetRequiredService<IOptions<BillingOptions>>().Value;
         var email = scope.ServiceProvider.GetRequiredService<ITemplatedEmailSender>();
         var appOptions = scope.ServiceProvider.GetRequiredService<IOptions<AppOptions>>().Value;
+        var pricing = scope.ServiceProvider.GetRequiredService<ICreditPricingProvider>();
 
-        var currentPrice = billingOptions.PricePer100;
+        var currentPrice = pricing.PricePer100;
 
         // Find users with auto-recharge enabled whose stored price differs from the current one
         // and who haven't been notified yet (or were notified more than 30 days ago)
@@ -80,7 +83,9 @@ public class PriceChangeMonitorService : BackgroundService
         {
             var cancelUrl = $"{baseUrl}/Billing/AutoRecharge/Cancel?token={user.AutoRechargeCancelToken}";
             var oldAmount = GetFormattedAmount(user.AutoRechargePricePer100, user.AutoRechargeQuantity, billingOptions);
-            var newAmount = GetFormattedAmount(currentPrice, user.AutoRechargeQuantity, billingOptions);
+            var newAmount = pricing.GetPack(user.AutoRechargeQuantity) is { } pack
+                ? pack.Amount.ToString("0.##")
+                : GetFormattedAmount(currentPrice, user.AutoRechargeQuantity, billingOptions);
             // Background job: the language of the user's last sign-in, not the thread's.
             var locale = user.EmailLocale;
             var variables = EmailTemplateVariables.PriceChangeNotice(
@@ -88,7 +93,7 @@ public class PriceChangeMonitorService : BackgroundService
                 quantity: user.AutoRechargeQuantity.ToString(),
                 oldPrice: oldAmount,
                 newPrice: newAmount,
-                currency: billingOptions.Currency,
+                currency: pricing.Currency,
                 cancelUrl: cancelUrl,
                 billingUrl: $"{baseUrl}/Billing");
 
@@ -136,19 +141,6 @@ public class PriceChangeMonitorService : BackgroundService
         }
     }
 
-    private static string GetFormattedAmount(decimal pricePer100, int quantity, BillingOptions options)
-    {
-        int units = (int)Math.Ceiling(quantity / 100m);
-        var baseAmount = units * pricePer100;
-
-        decimal discount = 0m;
-        if (quantity >= 1000) discount = options.Discount1000;
-        else if (quantity >= 500) discount = options.Discount500;
-        else if (quantity >= 300) discount = options.Discount300;
-
-        if (discount > 0)
-            baseAmount -= baseAmount * discount;
-
-        return Math.Round(baseAmount, 2, MidpointRounding.AwayFromZero).ToString("0.##");
-    }
+    private static string GetFormattedAmount(decimal pricePer100, int quantity, BillingOptions options) =>
+        ConfigCreditPricingProvider.CalculateAmount(quantity, pricePer100, options).ToString("0.##");
 }

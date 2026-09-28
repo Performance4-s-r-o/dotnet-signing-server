@@ -373,6 +373,7 @@
   <data name="PricingPaidFeature1" xml:space="preserve"><value>Všechny funkce zdarma</value></data>
   <data name="PricingPaidFeature2" xml:space="preserve"><value>Prioritní e-mailová podpora</value></data>
   <data name="PricingPaidFeature3" xml:space="preserve"><value>Slevy: 300+ (5 %), 500+ (10 %), 1 000+ (15 %)</value></data>
+  <data name="PricingPaidDiscounts" xml:space="preserve"><value>Slevy: {0}</value></data>
 
   <!-- Contact -->
   <data name="ContactTitle" xml:space="preserve"><value>Kontakt</value></data>

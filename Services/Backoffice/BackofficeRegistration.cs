@@ -8,6 +8,7 @@ using DotNetSigningServer.Services.Backoffice.Outbox;
 using DotNetSigningServer.Services.Consents;
 using DotNetSigningServer.Services.Email;
 using DotNetSigningServer.Services.Legal;
+using DotNetSigningServer.Services.Pricing;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -67,6 +68,7 @@ public static class BackofficeRegistration
         AddLegalDocuments(services, snapshot);
         AddConsents(services, snapshot);
         AddEmail(services, snapshot);
+        AddPricing(services, snapshot);
 
         return services;
     }
@@ -217,6 +219,70 @@ public static class BackofficeRegistration
         services.AddScoped<IBackofficeResync>(sp => sp.GetRequiredService<DocumentsResync>());
         services.AddScoped<IBackofficeEventHandler, DocumentEventsHandler>();
         services.AddHostedService<LegalDocumentsWarmup>();
+    }
+
+    /// <summary>
+    /// Credit prices by <c>Modules:Pricing</c>: Off serves <c>Billing:*</c> as before; Shadow does
+    /// the same, keeps the price-list snapshot up to date in the background and logs how it
+    /// differs from the configuration; On serves the snapshot (configured prices as the
+    /// fallback) and Checkout charges the Stripe Price of the pack's lookup key.
+    /// <see cref="ICreditPricingProvider"/> and <see cref="StripePriceResolver"/> are always
+    /// registered; the resolver only acts on packs with a lookup key, which Off never has.
+    /// </summary>
+    internal static void AddPricing(IServiceCollection services, P4BackofficeProductOptions options)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton(sp => new ConfigCreditPricingProvider(sp.GetRequiredService<IOptionsMonitor<BillingOptions>>()));
+        services.TryAddSingleton(sp =>
+        {
+            var apiKey = sp.GetService<IOptions<StripeOptions>>()?.Value.ApiKey;
+            return new StripePriceResolver(
+                string.IsNullOrWhiteSpace(apiKey) ? null : new Stripe.StripeClient(apiKey),
+                sp.GetRequiredService<TimeProvider>(),
+                sp.GetRequiredService<ILogger<StripePriceResolver>>());
+        });
+
+        var mode = options.ModeFor(BackofficeModule.Pricing);
+        if (mode == BackofficeMode.Off)
+        {
+            services.TryAddSingleton<ICreditPricingProvider>(sp => sp.GetRequiredService<ConfigCreditPricingProvider>());
+            return;
+        }
+
+        var baseUrl = options.BaseUrl?.Trim() ?? "";
+        var secretKey = options.SecretKey?.Trim() ?? "";
+        services.AddHttpClient(BackofficePricingClient.HttpClientName, client =>
+        {
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            client.Timeout = BackofficePricingClient.RequestTimeout;
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretKey);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-pricing");
+        });
+        services.TryAddSingleton<BackofficePricingClient>();
+        services.TryAddSingleton<PricingSnapshotHolder>();
+        services.TryAddSingleton(sp => new PricingSnapshotRefresher(
+            sp.GetRequiredService<BackofficePricingClient>(),
+            sp.GetRequiredService<PricingSnapshotHolder>(),
+            sp.GetRequiredService<StripePriceResolver>(),
+            sp.GetRequiredService<ConfigCreditPricingProvider>(),
+            sp.GetRequiredService<IOptionsMonitor<StripeOptions>>(),
+            sp.GetRequiredService<IServiceScopeFactory>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<ILogger<PricingSnapshotRefresher>>(),
+            mode));
+        services.AddHostedService<PricingSnapshotWorker>();
+        services.TryAddScoped<PricingResync>();
+        services.AddScoped<IBackofficeResync>(sp => sp.GetRequiredService<PricingResync>());
+        services.AddScoped<IBackofficeEventHandler, PricingEventsHandler>();
+
+        if (mode == BackofficeMode.Shadow)
+        {
+            services.TryAddSingleton<ICreditPricingProvider>(sp => sp.GetRequiredService<ConfigCreditPricingProvider>());
+            return;
+        }
+
+        services.TryAddSingleton<BackofficeCreditPricingProvider>();
+        services.TryAddSingleton<ICreditPricingProvider>(sp => sp.GetRequiredService<BackofficeCreditPricingProvider>());
     }
 
     /// <summary>

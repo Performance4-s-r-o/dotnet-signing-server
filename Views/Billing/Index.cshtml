@@ -2,12 +2,9 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
     ViewData["Title"] = "Billing";
-    var currency = Model.Currency;
-    decimal price100 = Model.PricePer100;
-    decimal price300 = Model.PricePer100 * 3 * (1 - Model.Discount300);
-    decimal price500 = Model.PricePer100 * 5 * (1 - Model.Discount500);
-    decimal price1000 = Model.PricePer100 * 10 * (1 - Model.Discount1000);
-    string money(decimal v) => v.ToString("0.##");
+    var culture = System.Globalization.CultureInfo.CurrentUICulture;
+    string money(decimal v) => DotNetSigningServer.Services.Pricing.CreditPricing.FormatAmount(v, culture);
+    int discount(DotNetSigningServer.Services.Pricing.CreditPack p) => p.DiscountPercentVersus(Model.PricePer100);
     var pm = Model.SavedPaymentMethod;
     bool hasCard = pm != null;
 }
@@ -128,13 +125,15 @@ else
 
             <h3 class="billing-pricing-title" id="pricing">Pricing</h3>
             <div class="billing-pricing-list">
-                <p class="billing-pricing-item">100 credits: @money(price100) @currency</p>
-                <p class="billing-pricing-item">300 credits: @money(price300) @currency <span class="discount">(5%
-                        off)</span></p>
-                <p class="billing-pricing-item">500 credits: @money(price500) @currency <span class="discount">(10%
-                        off)</span></p>
-                <p class="billing-pricing-item">1000 credits: @money(price1000) @currency <span class="discount">(15%
-                        off)</span></p>
+                @foreach (var pack in Model.Packs)
+                {
+                    <p class="billing-pricing-item">@pack.Quantity credits: @money(pack.Amount) @pack.Currency
+                        @if (discount(pack) > 0)
+                        {
+                            <span class="discount">(@discount(pack)% off)</span>
+                        }
+                    </p>
+                }
             </div>
 
             <h3 class="billing-pricing-title" style="margin-top:1.25rem">@L["ConcurrencyPricingTitle"]</h3>
@@ -199,7 +198,7 @@ else
                 @if (Model.PricePer100 != Model.AutoRechargePricePer100)
                 {
                     <p style="font-size:0.875rem;color:#dc2626;margin-bottom:0.5rem">
-                        Price has changed since enrollment (@Model.AutoRechargePricePer100.ToString("0.##") @Model.Currency &rarr; @Model.PricePer100.ToString("0.##") @Model.Currency / 100 credits).
+                        Price has changed since enrollment (@money(Model.AutoRechargePricePer100) @Model.Currency &rarr; @money(Model.PricePer100) @Model.Currency / 100 credits).
                     </p>
                 }
                 <form method="post" action="/Billing/AutoRecharge/Disable" style="margin-top:0.5rem">
@@ -241,44 +240,22 @@ else
                 <p class="billing-buy-label">Credits to buy</p>
 
                 <div class="billing-options">
-                    <div class="billing-option">
-                        <input type="radio" id="credits-100" name="documentsToBuy" value="100" checked>
-                        <label for="credits-100" class="billing-option-label">
-                            <span class="billing-option-radio"></span>
-                            <span class="billing-option-credits">100 credits</span>
-                            <span class="billing-option-price">for @money(price100) @currency</span>
-                        </label>
-                    </div>
-
-                    <div class="billing-option">
-                        <input type="radio" id="credits-300" name="documentsToBuy" value="300">
-                        <label for="credits-300" class="billing-option-label">
-                            <span class="billing-option-radio"></span>
-                            <span class="billing-option-credits">300 credits</span>
-                            <span class="billing-option-price">for @money(price300) @currency</span>
-                            <span class="billing-option-discount">(5% off)</span>
-                        </label>
-                    </div>
-
-                    <div class="billing-option">
-                        <input type="radio" id="credits-500" name="documentsToBuy" value="500">
-                        <label for="credits-500" class="billing-option-label">
-                            <span class="billing-option-radio"></span>
-                            <span class="billing-option-credits">500 credits</span>
-                            <span class="billing-option-price">for @money(price500) @currency</span>
-                            <span class="billing-option-discount">(10% off)</span>
-                        </label>
-                    </div>
-
-                    <div class="billing-option">
-                        <input type="radio" id="credits-1000" name="documentsToBuy" value="1000">
-                        <label for="credits-1000" class="billing-option-label">
-                            <span class="billing-option-radio"></span>
-                            <span class="billing-option-credits">1000 credits</span>
-                            <span class="billing-option-price">for @money(price1000) @currency</span>
-                            <span class="billing-option-discount">(15% off)</span>
-                        </label>
-                    </div>
+                    @for (var i = 0; i < Model.Packs.Count; i++)
+                    {
+                        var pack = Model.Packs[i];
+                        <div class="billing-option">
+                            <input type="radio" id="credits-@pack.Quantity" name="documentsToBuy" value="@pack.Quantity" checked="@(i == 0)">
+                            <label for="credits-@pack.Quantity" class="billing-option-label">
+                                <span class="billing-option-radio"></span>
+                                <span class="billing-option-credits">@pack.Quantity credits</span>
+                                <span class="billing-option-price">for @money(pack.Amount) @pack.Currency</span>
+                                @if (discount(pack) > 0)
+                                {
+                                    <span class="billing-option-discount">(@discount(pack)% off)</span>
+                                }
+                            </label>
+                        </div>
+                    }
                 </div>
 
                 <label class="billing-save-card" style="display:flex;align-items:flex-start;gap:0.5rem;margin-top:0.75rem;cursor:pointer">

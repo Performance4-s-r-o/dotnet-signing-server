@@ -20,6 +20,7 @@ public class StripeWebhookController : ControllerBase
     private readonly StripeOptions _stripeOptions;
     private readonly BillingOptions _billingOptions;
     private readonly IAutoRechargeService _autoRechargeService;
+    private readonly DotNetSigningServer.Services.Pricing.ICreditPricingProvider _pricing;
     private readonly ITemplatedEmailSender _email;
     private readonly AppOptions _appOptions;
     private readonly ILogger<StripeWebhookController> _logger;
@@ -31,8 +32,10 @@ public class StripeWebhookController : ControllerBase
         IAutoRechargeService autoRechargeService,
         ITemplatedEmailSender email,
         IOptions<AppOptions> appOptions,
-        ILogger<StripeWebhookController> logger)
+        ILogger<StripeWebhookController> logger,
+        DotNetSigningServer.Services.Pricing.ICreditPricingProvider pricing)
     {
+        _pricing = pricing;
         _dbContext = dbContext;
         _stripeOptions = stripeOptions.Value;
         _billingOptions = billingOptions.Value;
@@ -225,7 +228,8 @@ public class StripeWebhookController : ControllerBase
             && bool.TryParse(autoRechargeValue, out var autoRecharge)
             && autoRecharge)
         {
-            await _autoRechargeService.EnableAsync(user, documents, _billingOptions.PricePer100);
+            // Enrolled at the current price of 100 credits, as in BillingController.
+            await _autoRechargeService.EnableAsync(user, documents, _pricing.PricePer100);
         }
 
         // Record payment

@@ -363,6 +363,7 @@
   <data name="PricingPaidFeature1" xml:space="preserve"><value>Todas las funciones gratuitas</value></data>
   <data name="PricingPaidFeature2" xml:space="preserve"><value>Soporte por correo electrónico prioritario</value></data>
   <data name="PricingPaidFeature3" xml:space="preserve"><value>Descuentos: 300+ (5%), 500+ (10%), 1.000+ (15%)</value></data>
+  <data name="PricingPaidDiscounts" xml:space="preserve"><value>Descuentos: {0}</value></data>
 
   <!-- Contact -->
   <data name="ContactTitle" xml:space="preserve"><value>Contacto</value></data>
