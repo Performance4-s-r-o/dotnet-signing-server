@@ -110,6 +110,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `P4Backoffice__BaseUrl` / `P4Backoffice__SecretKey` | when not `Off` | Service URL (https) and `p4sk_` key; startup fails without them |
 | `P4Backoffice__Webhook__Secret` | | Webhook signing secret (`whsec_` + base64 of at least 24 bytes); `…__PreviousSecret` during rotation |
 | `P4Backoffice__Polling__Interval` | | How often `/v1/events` is polled (default `00:15:00`, `00:02:00` without a webhook secret) |
+| `P4Backoffice__DocumentsTtl` | | How long a legal document from the service is shown before it is revalidated (default `00:05:00`) |
 
 Every integration degrades gracefully: leave a section empty and the feature
 switches itself off rather than failing at startup.
@@ -176,6 +177,33 @@ value to `P4Backoffice__Webhook__PreviousSecret` and set the new one in
 `P4Backoffice__Webhook__Secret`, redeploy, and clear `PreviousSecret` after
 24 hours. Rollback: disable the endpoint in the service admin, or set the
 modules `Off` (processing and polling stop; the tables stay).
+
+#### Legal documents (`Modules:Docs`)
+
+The `/Legal/*` pages (`Controllers/LegalController.cs`) read their text through
+`ILegalDocumentSource` (`Services/Legal/`):
+
+- `Off` — the hand-maintained `LegalDocuments` rows (`Source = manual`,
+  Markdown), then the static Razor views. Exactly the behaviour before the
+  integration.
+- `Shadow` — the same pages; in the background the service's version is
+  fetched and differences in version, title and effective date are logged.
+  Nothing is written.
+- `On` — the service's sanitized HTML (all eight documents, `oss` and
+  `license` included; slug ↔ type map in `LegalSlugMap`). A page reads the
+  in-memory copy and never waits for the service: a stale copy is shown while
+  it is revalidated (`If-None-Match`) in the background, and without one the
+  page reads the snapshot in `LegalDocuments` (`Source = backoffice`, or the
+  service HTML stored next to a manual row of the same version), then English,
+  then Razor. After a failed call the service is left alone for 30 s.
+  `document.published` / `document.minor_corrected` refetch the text right
+  away; `document.scheduled` / `unscheduled` update `docs:meta` in
+  `BackofficeStates` (`requires_consent`, `current_version`,
+  `required_version`, `upcoming`). A startup warm-up and the `window_clamped`
+  resync rebuild both.
+
+Rollback: `P4Backoffice__Modules__Docs=Off`. Snapshot rows are ignored in
+`Off` and can stay.
 
 ## Stripe webhooks
 

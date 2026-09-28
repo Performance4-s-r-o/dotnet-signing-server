@@ -72,7 +72,7 @@ public static class BackofficeRegistration
     /// Shadow does the same and compares with the service in the background, On serves the
     /// service's texts with the <c>LegalDocuments</c> snapshot and Razor as fallbacks.
     /// </summary>
-    private static void AddLegalDocuments(IServiceCollection services, P4BackofficeProductOptions options)
+    internal static void AddLegalDocuments(IServiceCollection services, P4BackofficeProductOptions options)
     {
         var mode = options.ModeFor(BackofficeModule.Docs);
         services.TryAddSingleton(TimeProvider.System);
