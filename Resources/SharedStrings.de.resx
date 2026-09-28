@@ -657,4 +657,6 @@
   <data name="AdminConsentsBackfillHint" xml:space="preserve"><value>Queues consent records that have not been sent to the backoffice service yet. Records already queued are skipped.</value></data>
   <data name="AdminConsentsBackfilled" xml:space="preserve"><value>Queued {0} consent records in {1} batches.</value></data>
   <data name="AdminConsentsBackfillOff" xml:space="preserve"><value>Switch the Consents module to Shadow or On first.</value></data>
+  <data name="EmailLanguage" xml:space="preserve"><value>E-Mail-Sprache</value></data>
+  <data name="EmailBounced" xml:space="preserve"><value>E-Mail unzustellbar / Beschwerde</value></data>
 </root>

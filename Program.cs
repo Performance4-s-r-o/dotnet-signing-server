@@ -171,7 +171,8 @@ builder.Services.AddHttpClient("resend", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(15);
 });
-builder.Services.AddScoped<IEmailSender, ResendEmailSender>();
+// IEmailSender itself is registered by AddP4BackofficeIntegration (Modules:Email: On = outbox,
+// otherwise ResendEmailSender directly).
 builder.Services.AddSingleton<DotNetSigningServer.Services.Email.IEmailTemplateRenderer, DotNetSigningServer.Services.Email.EmailTemplateRenderer>();
 builder.Services.AddScoped<PdfTemplateService>();
 builder.Services.AddScoped<PdfConversionService>();

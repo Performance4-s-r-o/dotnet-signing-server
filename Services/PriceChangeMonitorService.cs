@@ -82,7 +82,8 @@ public class PriceChangeMonitorService : BackgroundService
             var cancelUrl = $"{baseUrl}/Billing/AutoRecharge/Cancel?token={user.AutoRechargeCancelToken}";
             var oldAmount = GetFormattedAmount(user.AutoRechargePricePer100, user.AutoRechargeQuantity, billingOptions);
             var newAmount = GetFormattedAmount(currentPrice, user.AutoRechargeQuantity, billingOptions);
-            var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+            // Background job: the language of the user's last sign-in, not the thread's.
+            var locale = user.EmailLocale;
             var rendered = emailTemplates.Render(EmailTemplateId.PriceChangeNotice, locale, new Dictionary<string, string?>
             {
                 ["daysNotice"] = "30",
@@ -94,9 +95,17 @@ public class PriceChangeMonitorService : BackgroundService
                 ["billingUrl"] = $"{baseUrl}/Billing",
             });
 
+            var emailOptions = new EmailSendOptions(EmailTemplateId.PriceChangeNotice, locale, user.Id);
+            // Email module On: queued with PriceChangeNotifiedAt in the SaveChangesAsync below.
+            if (emailSender.TryEnqueue(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions))
+            {
+                user.PriceChangeNotifiedAt = DateTimeOffset.UtcNow;
+                continue;
+            }
+
             try
             {
-                await emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody);
+                await emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions);
 
                 user.PriceChangeNotifiedAt = DateTimeOffset.UtcNow;
                 _logger.LogInformation("Price change notification sent to user {UserId} ({Email})", user.Id, user.Email);

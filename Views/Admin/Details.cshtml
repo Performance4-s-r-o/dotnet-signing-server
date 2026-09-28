@@ -24,6 +24,15 @@
             <table class="table" style="width:100%">
                 <tr><td class="muted">@L["Active"]</td><td>@(Model.User.IsActive ? "✓" : "✗")</td></tr>
                 <tr><td class="muted">@L["EmailVerified"]</td><td>@(Model.User.EmailVerified ? "✓" : "✗")</td></tr>
+                <tr><td class="muted">@L["EmailLanguage"]</td><td>@(Model.User.Locale ?? "—")</td></tr>
+                <tr><td class="muted">@L["EmailBounced"]</td><td>@if (Model.User.EmailBouncedAt is { } bouncedAt)
+                    {
+                        <span style="color:#dc2626">@bouncedAt.ToLocalTime().ToString("g")</span>
+                    }
+                    else
+                    {
+                        @:—
+                    }</td></tr>
                 <tr><td class="muted">@L["Admin"]</td><td>@(Model.User.IsAdmin ? "✓" : "—")</td></tr>
                 <tr><td class="muted">@L["Enterprise"]</td><td>@(Model.User.IsEnterprise ? "✓" : "—")</td></tr>
                 <tr><td class="muted">@L["Credits"]</td><td>@(Model.User.IsEnterprise ? "∞" : Model.User.CreditsRemaining.ToString())</td></tr>

@@ -376,7 +376,8 @@ public class StripeWebhookController : ControllerBase
 
         var paymentType = paymentIntent.Metadata.TryGetValue("type", out var t) ? t : "purchase";
         var baseUrl = _appOptions.BaseUrl;
-        var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        // A webhook from Stripe, not the user's request: the language of their last sign-in.
+        var locale = user.EmailLocale;
         var rendered = _emailTemplates.Render(EmailTemplateId.PaymentFailed, locale, new Dictionary<string, string?>
         {
             ["paymentType"] = paymentType.Replace("_", " "),
@@ -386,9 +387,16 @@ public class StripeWebhookController : ControllerBase
             ["billingUrl"] = $"{baseUrl}/Billing",
         });
 
+        var emailOptions = new EmailSendOptions(EmailTemplateId.PaymentFailed, locale, user.Id);
+        // Email module On: queued with the failed payment and the webhook record (saved by the caller).
+        if (_emailSender.TryEnqueue(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions))
+        {
+            return;
+        }
+
         try
         {
-            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody);
+            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions);
         }
         catch (Exception ex)
         {
