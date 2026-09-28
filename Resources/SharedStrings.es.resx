@@ -630,4 +630,10 @@
   <data name="AdminBackofficeBaseUrl" xml:space="preserve"><value>URL del servicio</value></data>
   <data name="AdminBackofficeKey" xml:space="preserve"><value>Clave de API</value></data>
   <data name="AdminBackofficeKeyNotSet" xml:space="preserve"><value>no configurada</value></data>
+  <data name="AdminOutboxTitle" xml:space="preserve"><value>Cola del backoffice (outbox)</value></data>
+  <data name="AdminOutboxOldestPending" xml:space="preserve"><value>Elemento pendiente más antiguo</value></data>
+  <data name="AdminOutboxLastError" xml:space="preserve"><value>Último error</value></data>
+  <data name="AdminOutboxBlockedHint" xml:space="preserve"><value>Los elementos bloqueados fueron rechazados por falta de autorización. Corrija primero la clave de API o sus permisos y después vuelva a ponerlos en la cola.</value></data>
+  <data name="AdminOutboxRequeueBlocked" xml:space="preserve"><value>Volver a encolar los bloqueados</value></data>
+  <data name="AdminOutboxRequeued" xml:space="preserve"><value>{0} elemento(s) bloqueado(s) devueltos a la cola.</value></data>
 </root>

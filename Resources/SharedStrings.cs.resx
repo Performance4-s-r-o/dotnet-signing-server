@@ -631,4 +631,10 @@
   <data name="AdminBackofficeBaseUrl" xml:space="preserve"><value>URL služby</value></data>
   <data name="AdminBackofficeKey" xml:space="preserve"><value>API klíč</value></data>
   <data name="AdminBackofficeKeyNotSet" xml:space="preserve"><value>nenastaven</value></data>
+  <data name="AdminOutboxTitle" xml:space="preserve"><value>Fronta pro backoffice (outbox)</value></data>
+  <data name="AdminOutboxOldestPending" xml:space="preserve"><value>Nejstarší čekající položka</value></data>
+  <data name="AdminOutboxLastError" xml:space="preserve"><value>Poslední chyba</value></data>
+  <data name="AdminOutboxBlockedHint" xml:space="preserve"><value>Blokované položky služba odmítla jako neautorizované. Nejdřív opravte API klíč nebo jeho oprávnění, pak je vraťte do fronty.</value></data>
+  <data name="AdminOutboxRequeueBlocked" xml:space="preserve"><value>Znovu zařadit blokované</value></data>
+  <data name="AdminOutboxRequeued" xml:space="preserve"><value>Do fronty vráceno {0} blokovaných položek.</value></data>
 </root>

@@ -631,4 +631,10 @@
   <data name="AdminBackofficeBaseUrl" xml:space="preserve"><value>Service URL</value></data>
   <data name="AdminBackofficeKey" xml:space="preserve"><value>API key</value></data>
   <data name="AdminBackofficeKeyNotSet" xml:space="preserve"><value>not set</value></data>
+  <data name="AdminOutboxTitle" xml:space="preserve"><value>Backoffice outbox</value></data>
+  <data name="AdminOutboxOldestPending" xml:space="preserve"><value>Oldest pending item</value></data>
+  <data name="AdminOutboxLastError" xml:space="preserve"><value>Last error</value></data>
+  <data name="AdminOutboxBlockedHint" xml:space="preserve"><value>Blocked items were refused as unauthorised. Fix the API key or its scopes first, then put them back in the queue.</value></data>
+  <data name="AdminOutboxRequeueBlocked" xml:space="preserve"><value>Requeue blocked items</value></data>
+  <data name="AdminOutboxRequeued" xml:space="preserve"><value>{0} blocked item(s) put back in the queue.</value></data>
 </root>

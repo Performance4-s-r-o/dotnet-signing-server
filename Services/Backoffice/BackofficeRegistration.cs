@@ -1,4 +1,7 @@
+using System.Net.Http.Headers;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Services.Backoffice.Outbox;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 #if P4_BACKOFFICE_SDK
 using DotNetSigningServer.Services.Backoffice.Sdk;
@@ -37,6 +40,7 @@ public static class BackofficeRegistration
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<P4BackofficeProductOptions>, BackofficeOptionsValidation>();
         services.AddHostedService<BackofficeStartupReport>();
+        AddOutboxCore(services);
 
         // Decided at registration time from the same section and the same rule as the
         // options above; the options pipeline itself is only available after Build().
@@ -48,9 +52,43 @@ public static class BackofficeRegistration
             // The SDK's "P4Backoffice" HttpClient keeps its own 3 s timeout; nothing is added to it.
             services.AddP4BackofficeSdk(section);
 #endif
+            AddOutboxDispatcher(services, snapshot);
         }
 
         return services;
+    }
+
+    /// <summary>
+    /// Always registered: enqueueing only adds rows to the caller's DbContext, and the admin
+    /// overview reads them. Nothing here talks to the service.
+    /// </summary>
+    private static void AddOutboxCore(IServiceCollection services)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<OutboxSignal>();
+        services.TryAddSingleton<OutboxPayloadProtector>();
+        services.TryAddSingleton<OutboxCircuitBreaker>();
+        services.TryAddScoped<IBackofficeOutbox, BackofficeOutbox>();
+    }
+
+    /// <summary>
+    /// Sending: only when a module is Shadow or On (and so never on a PrivateServer or in a
+    /// build without the SDK). Its own client, separate from the SDK's 3 s one.
+    /// </summary>
+    private static void AddOutboxDispatcher(IServiceCollection services, P4BackofficeProductOptions options)
+    {
+        var baseUrl = options.BaseUrl?.Trim() ?? "";
+        var secretKey = options.SecretKey?.Trim() ?? "";
+        services.AddHttpClient(OutboxProcessor.HttpClientName, client =>
+        {
+            // Validated on start (absolute https URL); paths are relative to the root.
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            client.Timeout = OutboxProcessor.AttemptTimeout;
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretKey);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-outbox");
+        });
+        services.TryAddSingleton<OutboxProcessor>();
+        services.AddHostedService<BackofficeOutboxDispatcher>();
     }
 
     /// <summary>What forces every module Off: PrivateServer wins over a missing SDK.</summary>

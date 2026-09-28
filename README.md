@@ -131,6 +131,16 @@ docker build --build-arg USE_P4_BACKOFFICE_SDK=false .
 The token is read from the environment by `nuget.config`; never commit it.
 `/Admin` shows the effective mode of each module.
 
+Writes to the service never happen inside a request. They are stored in the
+`BackofficeOutboxItems` table in the same `SaveChangesAsync` as the change they
+belong to (payload encrypted with the Data Protection key ring) and sent by a
+background dispatcher, which runs only while a module is `Shadow` or `On`.
+Each attempt sends `Idempotency-Key` = item id; failures are retried from 5 s
+up to every 6 h and given up after 72 h. Items refused with 401/403 stay
+`Blocked` until the key is fixed and they are requeued from `/Admin`, where the
+outbox card also shows counts per status, the oldest pending item and the last
+error. Finished items are deleted after 30 days.
+
 ## Stripe webhooks
 
 Endpoint: `POST /api/webhooks/stripe` (`Controllers/StripeWebhookController.cs`).
