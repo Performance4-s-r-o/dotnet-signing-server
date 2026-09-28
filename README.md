@@ -206,6 +206,33 @@ The `/Legal/*` pages (`Controllers/LegalController.cs`) read their text through
 Rollback: `P4Backoffice__Modules__Docs=Off`. Snapshot rows are ignored in
 `Off` and can stay.
 
+The cookies policy (`/Legal/CookiesPolicy`) lists the cookies in a table under
+the text. With `Docs=On` the table comes from the service's cookie declaration
+(`GET /v1/cookie-declaration?locale=`, `Services/Legal/CookieDeclarationReader.cs`):
+read from memory or the `cookies:{locale}` snapshot in `BackofficeStates`,
+revalidated in the background, and refetched on `cookie_declaration.published`
+(webhook or polling), at startup and on the `window_clamped` resync. Otherwise
+— and whenever no declaration is available — the table shows the audited
+cookies in `Services/Legal/AuditedCookies.cs`; the Razor fallback page shows
+the same list.
+
+#### Cookie banner
+
+This product sets only strictly necessary cookies (`.AspNetCore.Cookies`,
+`.AspNetCore.Antiforgery.*`, `.AspNetCore.Mvc.CookieTempDataProvider`,
+`.AspNetCore.Culture`), which need no consent, so there is **no cookie banner**
+and `_Layout.cshtml` loads no consent widget. Before adding analytics,
+marketing or any other optional cookie or script:
+
+1. Add the cookies to the declaration in the service under a new optional
+   category (`preferences`, `analytics` or `marketing`) and publish it; update
+   `AuditedCookies` and the Razor cookies policy.
+2. Add the service's consent widget to `_Layout.cshtml`
+   (`<script src="<service>/v1/widget.js" data-pk="p4pk_…">`, publishable key
+   only, never the secret key).
+3. Load the new script only after the visitor consented to its category, never
+   unconditionally.
+
 #### Consents (`Modules:Consents`)
 
 Sign-up has one unchecked checkbox for the documents in
