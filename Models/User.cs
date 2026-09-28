@@ -55,6 +55,13 @@ public class User
     public string? AutoRechargeCancelToken { get; set; }
     public DateTimeOffset? PriceChangeNotifiedAt { get; set; }
 
+    /// <summary>
+    /// Price-list version of the service (<c>Modules:Pricing=On</c>) this user was last told about
+    /// (<c>price.scheduled</c>); at most one notice per version. Reset when the version takes
+    /// effect or is taken back. Ignored while Pricing is Off.
+    /// </summary>
+    public int? PriceChangeNotifiedVersion { get; set; }
+
     public bool EmailNotificationsEnabled { get; set; } = true;
 
     /// <summary>
