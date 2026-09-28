@@ -50,8 +50,7 @@ public class PriceChangeMonitorService : BackgroundService
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var billingOptions = scope.ServiceProvider.GetRequiredService<IOptions<BillingOptions>>().Value;
-        var emailSender = scope.ServiceProvider.GetRequiredService<IEmailSender>();
-        var emailTemplates = scope.ServiceProvider.GetRequiredService<IEmailTemplateRenderer>();
+        var email = scope.ServiceProvider.GetRequiredService<ITemplatedEmailSender>();
         var appOptions = scope.ServiceProvider.GetRequiredService<IOptions<AppOptions>>().Value;
 
         var currentPrice = billingOptions.PricePer100;
@@ -84,20 +83,18 @@ public class PriceChangeMonitorService : BackgroundService
             var newAmount = GetFormattedAmount(currentPrice, user.AutoRechargeQuantity, billingOptions);
             // Background job: the language of the user's last sign-in, not the thread's.
             var locale = user.EmailLocale;
-            var rendered = emailTemplates.Render(EmailTemplateId.PriceChangeNotice, locale, new Dictionary<string, string?>
-            {
-                ["daysNotice"] = "30",
-                ["quantity"] = user.AutoRechargeQuantity.ToString(),
-                ["oldPrice"] = oldAmount,
-                ["newPrice"] = newAmount,
-                ["currency"] = billingOptions.Currency,
-                ["cancelUrl"] = cancelUrl,
-                ["billingUrl"] = $"{baseUrl}/Billing",
-            });
+            var variables = EmailTemplateVariables.PriceChangeNotice(
+                daysNotice: "30",
+                quantity: user.AutoRechargeQuantity.ToString(),
+                oldPrice: oldAmount,
+                newPrice: newAmount,
+                currency: billingOptions.Currency,
+                cancelUrl: cancelUrl,
+                billingUrl: $"{baseUrl}/Billing");
 
             var emailOptions = new EmailSendOptions(EmailTemplateId.PriceChangeNotice, locale, user.Id);
             // Email module On: queued with PriceChangeNotifiedAt in the SaveChangesAsync below.
-            if (emailSender.TryEnqueue(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions))
+            if (email.TryEnqueue(EmailTemplateId.PriceChangeNotice, user.Email, locale, variables, emailOptions))
             {
                 user.PriceChangeNotifiedAt = DateTimeOffset.UtcNow;
                 continue;
@@ -105,7 +102,7 @@ public class PriceChangeMonitorService : BackgroundService
 
             try
             {
-                await emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions);
+                await email.SendAsync(EmailTemplateId.PriceChangeNotice, user.Email, locale, variables, emailOptions);
 
                 user.PriceChangeNotifiedAt = DateTimeOffset.UtcNow;
                 _logger.LogInformation("Price change notification sent to user {UserId} ({Email})", user.Id, user.Email);

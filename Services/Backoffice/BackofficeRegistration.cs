@@ -75,22 +75,27 @@ public static class BackofficeRegistration
     public const string EmailKindPrefix = "email.";
 
     /// <summary>
-    /// E-mail by <c>Modules:Email</c>: On queues every message into the outbox (<c>email.raw</c>)
-    /// with the break-glass fallback and handles <c>email.*</c> events; Off and Shadow send
-    /// through Resend directly, as before (Shadow is not supported for raw e-mail — the service
-    /// has no "log only" send, so it would deliver every message twice; it starts with a
-    /// warning). <see cref="ResendEmailSender"/> is always registered as its own type too.
+    /// E-mail by <c>Modules:Email</c>: On queues every message into the outbox — as a service
+    /// template (<c>email.template</c>) when its key is in <c>Email:TemplateKeys</c>, otherwise
+    /// rendered locally (<c>email.raw</c>) — with the break-glass fallback and handles
+    /// <c>email.*</c> events; Off and Shadow send through Resend directly, as before (Shadow only
+    /// compares the listed templates with the service's rendering in the background: the
+    /// service has no "log only" send, so it would deliver every message twice). <see cref="ResendEmailSender"/> is always registered as its own type too.
     /// While not On, queued e-mail items stay Pending and are sent once the module is On again.
     /// </summary>
     internal static void AddEmail(IServiceCollection services, P4BackofficeProductOptions options)
     {
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<ResendEmailSender>();
+        // Every caller goes through it; it reads TemplateKeys per message.
+        services.TryAddScoped<ITemplatedEmailSender, TemplatedEmailSender>();
 
-        if (options.ModeFor(BackofficeModule.Email) != BackofficeMode.On)
+        var mode = options.ModeFor(BackofficeModule.Email);
+        if (mode != BackofficeMode.On)
         {
             services.TryAddSingleton(new OutboxKindFilter([EmailKindPrefix]));
             services.AddScoped<IEmailSender>(sp => sp.GetRequiredService<ResendEmailSender>());
+            if (mode == BackofficeMode.Shadow) AddTemplateShadow(services, options);
             return;
         }
 
@@ -98,9 +103,29 @@ public static class BackofficeRegistration
         services.TryAddScoped<BackofficeOutboxEmailSender>();
         services.AddScoped<IEmailSender>(sp => sp.GetRequiredService<BackofficeOutboxEmailSender>());
         services.AddSingleton<IOutboxHandler, EmailRawOutboxHandler>();
+        services.AddSingleton<IOutboxHandler, EmailTemplateOutboxHandler>();
         services.TryAddSingleton<BreakGlassEmailFallback>();
         services.AddSingleton<IOutboxFallback>(sp => sp.GetRequiredService<BreakGlassEmailFallback>());
         services.AddScoped<IBackofficeEventHandler, EmailEventsHandler>();
+    }
+
+    /// <summary>
+    /// Email=Shadow: templates listed in <c>TemplateKeys</c> are sent locally and compared with
+    /// the service's rendering in the background (<see cref="TemplateShadowComparer"/>).
+    /// </summary>
+    private static void AddTemplateShadow(IServiceCollection services, P4BackofficeProductOptions options)
+    {
+        var baseUrl = options.BaseUrl?.Trim() ?? "";
+        var secretKey = options.SecretKey?.Trim() ?? "";
+        services.AddHttpClient(TemplateShadowComparer.HttpClientName, client =>
+        {
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            client.Timeout = TemplateShadowComparer.RequestTimeout;
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretKey);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-templates");
+        });
+        services.TryAddSingleton<TemplateShadowComparer>();
+        services.AddHostedService(sp => sp.GetRequiredService<TemplateShadowComparer>());
     }
 
     /// <summary>
@@ -306,11 +331,25 @@ internal sealed class BackofficeStartupReport(
                 BackofficeOptionsValidator.TestKeyPrefix + "…");
         }
 
-        if (o.ModeFor(BackofficeModule.Email) == BackofficeMode.Shadow)
+        var emailMode = o.ModeFor(BackofficeModule.Email);
+        if (emailMode == BackofficeMode.Shadow)
         {
             logger.LogWarning(
-                "Backoffice: Modules:Email=Shadow is not supported for raw e-mail (every message would be sent twice); "
-                + "e-mail is sent through Resend as with Off");
+                "Backoffice: Modules:Email=Shadow sends e-mail through Resend as with Off (the service would send every "
+                + "message twice); templates in Email:TemplateKeys are only compared with the service's rendering");
+        }
+        var unknownKeys = o.Email.TemplateKeys
+            .Where(k => !EmailTemplateVariables.Names.ContainsKey(k?.Trim() ?? ""))
+            .ToList();
+        if (unknownKeys.Count > 0)
+        {
+            logger.LogWarning("Backoffice: Email:TemplateKeys contains unknown template keys ({Keys}); they are ignored",
+                string.Join(", ", unknownKeys));
+        }
+        if (emailMode != BackofficeMode.Off && o.Email.TemplateKeys.Count > 0)
+        {
+            logger.LogInformation("Backoffice: e-mail templates from the service: {Keys}",
+                string.Join(", ", o.Email.TemplateKeys));
         }
 
         if (o.AnyEnabled)

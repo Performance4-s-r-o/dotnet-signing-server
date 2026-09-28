@@ -17,7 +17,7 @@ namespace DotNetSigningServer.Services.Backoffice.Handlers;
 /// <c>BackofficeApiClient.V1.Emails.PostAsync</c> with the same header; the payload shape stays
 /// the one of <c>openapi.json</c> (<c>EmailInput</c>).
 /// </summary>
-public sealed class EmailRawOutboxHandler : JsonPostOutboxHandler
+public class EmailRawOutboxHandler : JsonPostOutboxHandler
 {
     public const string SuppressedStatus = "suppressed";
 
@@ -28,7 +28,7 @@ public sealed class EmailRawOutboxHandler : JsonPostOutboxHandler
     public override async Task<OutboxAttemptResult> SendAsync(OutboxRequest request, CancellationToken cancellationToken)
     {
         using var message = request.CreateHttpRequest(HttpMethod.Post, Path);
-        message.Content = new StringContent(request.PayloadJson, Encoding.UTF8, "application/json");
+        message.Content = new StringContent(RequestBody(request), Encoding.UTF8, "application/json");
         using var response = await request.Http.SendAsync(message, cancellationToken);
 
         // Read once: ReadResultAsync consumes the content, so buffer it first.
@@ -41,6 +41,9 @@ public sealed class EmailRawOutboxHandler : JsonPostOutboxHandler
         }
         return result;
     }
+
+    /// <summary>JSON sent to the service; the stored payload as is.</summary>
+    protected virtual string RequestBody(OutboxRequest request) => request.PayloadJson;
 
     private static async Task<string?> StatusAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {

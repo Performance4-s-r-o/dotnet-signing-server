@@ -29,7 +29,8 @@ internal sealed class EmailTestHost : IDisposable
     public EmailTestHost(
         bool fallbackDirect = true,
         bool resendConfigured = true,
-        Action<DbContextOptionsBuilder>? database = null)
+        Action<DbContextOptionsBuilder>? database = null,
+        Action<IServiceCollection>? configure = null)
     {
         Resend = new Mock<ResendEmailSender>(
             Microsoft.Extensions.Options.Options.Create(new ResendOptions()),
@@ -49,6 +50,7 @@ internal sealed class EmailTestHost : IDisposable
             services.AddScoped<BackofficeOutboxEmailSender>();
             services.AddSingleton<IOutboxHandler, EmailRawOutboxHandler>();
             services.AddSingleton<BreakGlassEmailFallback>();
+            configure?.Invoke(services);
         });
     }
 

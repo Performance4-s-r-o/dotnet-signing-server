@@ -15,8 +15,7 @@ public class AutoRechargeService : IAutoRechargeService
     private readonly ApplicationDbContext _dbContext;
     private readonly IBillingService _billingService;
     private readonly BillingOptions _billingOptions;
-    private readonly IEmailSender _emailSender;
-    private readonly IEmailTemplateRenderer _emailTemplates;
+    private readonly ITemplatedEmailSender _email;
     private readonly ILogger<AutoRechargeService> _logger;
     private readonly AppOptions _appOptions;
 
@@ -32,16 +31,14 @@ public class AutoRechargeService : IAutoRechargeService
         ApplicationDbContext dbContext,
         IBillingService billingService,
         IOptions<BillingOptions> billingOptions,
-        IEmailSender emailSender,
-        IEmailTemplateRenderer emailTemplates,
+        ITemplatedEmailSender email,
         ILogger<AutoRechargeService> logger,
         IOptions<AppOptions> appOptions)
     {
         _dbContext = dbContext;
         _billingService = billingService;
         _billingOptions = billingOptions.Value;
-        _emailSender = emailSender;
-        _emailTemplates = emailTemplates;
+        _email = email;
         _logger = logger;
         _appOptions = appOptions.Value;
     }
@@ -263,18 +260,16 @@ public class AutoRechargeService : IAutoRechargeService
         var billingUrl = $"{baseUrl}/Billing";
         // Runs outside the user's request: the language of their last sign-in, not the thread's.
         var locale = user.EmailLocale;
-        var rendered = _emailTemplates.Render(EmailTemplateId.AutoRechargeSuccess, locale, new Dictionary<string, string?>
-        {
-            ["quantity"] = creditsAdded.ToString(),
-            ["amount"] = amount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
-            ["currency"] = _billingOptions.Currency,
-            ["newBalance"] = (user.CreditsRemaining + creditsAdded).ToString(),
-            ["billingUrl"] = billingUrl,
-        });
+        var variables = EmailTemplateVariables.AutoRechargeSuccess(
+            quantity: creditsAdded.ToString(),
+            amount: amount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+            currency: _billingOptions.Currency,
+            newBalance: (user.CreditsRemaining + creditsAdded).ToString(),
+            billingUrl: billingUrl);
 
         try
         {
-            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody,
+            await _email.SendAsync(EmailTemplateId.AutoRechargeSuccess, user.Email, locale, variables,
                 new EmailSendOptions(EmailTemplateId.AutoRechargeSuccess, locale, user.Id));
         }
         catch (Exception ex)
@@ -288,17 +283,15 @@ public class AutoRechargeService : IAutoRechargeService
         var baseUrl = _appOptions.BaseUrl;
         var billingUrl = $"{baseUrl}/Billing";
         var locale = user.EmailLocale;
-        var rendered = _emailTemplates.Render(EmailTemplateId.AutoRechargeFailed, locale, new Dictionary<string, string?>
-        {
-            ["quantity"] = user.AutoRechargeQuantity.ToString(),
-            ["failureReason"] = reason,
-            ["currentBalance"] = user.CreditsRemaining.ToString(),
-            ["billingUrl"] = billingUrl,
-        });
+        var variables = EmailTemplateVariables.AutoRechargeFailed(
+            quantity: user.AutoRechargeQuantity.ToString(),
+            failureReason: reason,
+            currentBalance: user.CreditsRemaining.ToString(),
+            billingUrl: billingUrl);
 
         try
         {
-            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody,
+            await _email.SendAsync(EmailTemplateId.AutoRechargeFailed, user.Email, locale, variables,
                 new EmailSendOptions(EmailTemplateId.AutoRechargeFailed, locale, user.Id));
         }
         catch (Exception ex)
