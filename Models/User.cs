@@ -57,6 +57,25 @@ public class User
 
     public bool EmailNotificationsEnabled { get; set; } = true;
 
+    /// <summary>
+    /// Language of the last sign-up or sign-in (<c>cs</c>, <c>en</c>, …); e-mails sent in the
+    /// background (auto-recharge, payment, price change) use it. NULL = <c>en</c>.
+    /// </summary>
+    [MaxLength(MaxLocaleLength)]
+    public string? Locale { get; set; }
+
+    public const int MaxLocaleLength = 8;
+
+    /// <summary>E-mail language of this user: <see cref="Locale"/>, else <c>en</c>.</summary>
+    [NotMapped]
+    public string EmailLocale => string.IsNullOrWhiteSpace(Locale) ? "en" : Locale;
+
+    /// <summary>
+    /// When the e-mail service last reported a hard bounce or a spam complaint for this
+    /// address (<c>email.bounced</c> / <c>email.complained</c>). NULL = none.
+    /// </summary>
+    public DateTimeOffset? EmailBouncedAt { get; set; }
+
     /// <summary>Max parallel API operations. NULL = use default (3).</summary>
     public int? MaxConcurrentOperations { get; set; }
 

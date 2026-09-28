@@ -37,6 +37,7 @@ public sealed class OutboxProcessor
     private readonly OutboxCircuitBreaker _breaker;
     private readonly TimeProvider _time;
     private readonly ILogger<OutboxProcessor> _logger;
+    private readonly OutboxKindFilter _kinds;
 
     public OutboxProcessor(
         IServiceScopeFactory scopes,
@@ -45,8 +46,10 @@ public sealed class OutboxProcessor
         OutboxPayloadProtector protector,
         OutboxCircuitBreaker breaker,
         TimeProvider time,
-        ILogger<OutboxProcessor> logger)
+        ILogger<OutboxProcessor> logger,
+        OutboxKindFilter? kinds = null)
     {
+        _kinds = kinds ?? OutboxKindFilter.None;
         _scopes = scopes;
         _httpClients = httpClients;
         _handlers = handlers.GroupBy(h => h.Kind, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Last(), StringComparer.Ordinal);
@@ -62,7 +65,7 @@ public sealed class OutboxProcessor
         using var scope = _scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        var items = await OutboxClaim.ClaimDueAsync(db, _time.GetUtcNow(), cancellationToken);
+        var items = await OutboxClaim.ClaimDueAsync(db, _time.GetUtcNow(), cancellationToken, _kinds.PausedKindPrefixes);
         if (items.Count == 0) return 0;
 
         var started = Stopwatch.StartNew();

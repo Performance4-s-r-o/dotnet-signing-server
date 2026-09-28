@@ -57,6 +57,7 @@ public static class RetryPolicy
     public static OutboxOutcome Classify(OutboxAttemptResult result)
     {
         if (result.IsFatal) return OutboxOutcome.Dead;
+        if (result.IsSuppressed) return OutboxOutcome.Suppressed;
         if (result.StatusCode is not { } status) return OutboxOutcome.Retry;
 
         if (status is >= 200 and < 300) return OutboxOutcome.Sent;
@@ -139,8 +140,15 @@ public static class RetryPolicy
                 break;
 
             case OutboxOutcome.Dead:
-            case OutboxOutcome.Suppressed:
                 item.Status = BackofficeOutboxStatus.Dead;
+                item.LastError = Truncate(result.Error, MaxErrorLength);
+                break;
+
+            case OutboxOutcome.Suppressed:
+                // Never going to be sent by anyone: the content is not kept.
+                item.Status = BackofficeOutboxStatus.Dead;
+                item.RemoteId = Truncate(result.RemoteId, MaxRemoteIdLength);
+                item.PayloadProtected = null;
                 item.LastError = Truncate(result.Error, MaxErrorLength);
                 break;
         }

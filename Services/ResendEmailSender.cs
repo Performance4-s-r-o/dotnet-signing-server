@@ -5,6 +5,11 @@ using Microsoft.Extensions.Options;
 
 namespace DotNetSigningServer.Services;
 
+/// <summary>
+/// Sends through Resend synchronously (throws when Resend refuses). The <c>IEmailSender</c>
+/// while <c>P4Backoffice:Modules:Email</c> is not On, and the break-glass path for critical
+/// messages while it is (registered as its own type for that).
+/// </summary>
 public class ResendEmailSender : IEmailSender
 {
     private const string EndpointUrl = "https://api.resend.com/emails";
@@ -12,6 +17,9 @@ public class ResendEmailSender : IEmailSender
     private readonly ResendOptions _options;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ResendEmailSender> _logger;
+
+    /// <summary>Whether a message would actually be sent (API key and sender are set).</summary>
+    public virtual bool IsConfigured => _options.IsConfigured;
 
     public ResendEmailSender(
         IOptions<ResendOptions> options,
@@ -23,7 +31,7 @@ public class ResendEmailSender : IEmailSender
         _logger = logger;
     }
 
-    public async Task SendAsync(string toEmail, string subject, string htmlBody)
+    public virtual async Task SendAsync(string toEmail, string subject, string htmlBody)
     {
         if (!_options.IsConfigured)
         {
