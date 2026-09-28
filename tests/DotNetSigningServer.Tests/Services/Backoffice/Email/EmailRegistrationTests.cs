@@ -29,6 +29,7 @@ public class EmailRegistrationTests
         BackofficeRegistration.AddEmail(services, new P4BackofficeProductOptions
         {
             DisabledReason = BackofficeDisabledReason.None,
+            BaseUrl = "https://backoffice.test",
             Modules = { Email = emailMode },
         });
         return services.BuildServiceProvider();
@@ -62,6 +63,49 @@ public class EmailRegistrationTests
         Assert.Contains(provider.GetServices<IOutboxHandler>(), h => h is EmailRawOutboxHandler);
         Assert.IsType<BreakGlassEmailFallback>(Assert.Single(provider.GetServices<IOutboxFallback>()));
         Assert.Contains(scope.ServiceProvider.GetServices<IBackofficeEventHandler>(), h => h is EmailEventsHandler);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Off")]
+    [InlineData("Shadow")]
+    [InlineData("On")]
+    public void TemplatedSender_IsAlwaysRegistered(string? mode)
+    {
+        using var provider = Build(mode);
+
+        Assert.Contains(BuildDescriptors(mode), d => d.ServiceType == typeof(ITemplatedEmailSender)
+                                                     && d.ImplementationType == typeof(TemplatedEmailSender));
+        Assert.Equal(mode == "On", provider.GetServices<IOutboxHandler>().Any(h => h is EmailTemplateOutboxHandler));
+    }
+
+    [Fact]
+    public void Shadow_ComparesTemplatesInTheBackground()
+    {
+        using var provider = Build("Shadow");
+
+        var comparer = provider.GetRequiredService<TemplateShadowComparer>();
+        Assert.Contains(provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>(), h => ReferenceEquals(h, comparer));
+    }
+
+    [Theory]
+    [InlineData("Off")]
+    [InlineData("On")]
+    public void NotShadow_HasNoComparer(string mode)
+    {
+        Assert.DoesNotContain(BuildDescriptors(mode), d => d.ServiceType == typeof(TemplateShadowComparer));
+    }
+
+    private static ServiceCollection BuildDescriptors(string? emailMode)
+    {
+        var services = new ServiceCollection();
+        BackofficeRegistration.AddEmail(services, new P4BackofficeProductOptions
+        {
+            DisabledReason = BackofficeDisabledReason.None,
+            BaseUrl = "https://backoffice.test",
+            Modules = { Email = emailMode },
+        });
+        return services;
     }
 
     [Fact]

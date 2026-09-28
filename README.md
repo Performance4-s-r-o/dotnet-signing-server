@@ -249,12 +249,29 @@ language). What happens next depends on the mode:
   before, including the error messages when Resend fails.
 - `Shadow` — not supported for raw e-mail (the service has no "log only" send,
   so every message would go out twice); treated as `Off` with a startup warning.
+  Templates listed in `P4Backoffice__Email__TemplateKeys` are additionally
+  rendered by the service in the background (`POST /v1/templates/{key}/render`,
+  key scope `templates:read`, skipped without it) and differences in subject and
+  text are logged, with variable values masked.
 - `On` — queued as outbox item `email.raw` (`POST /v1/emails` with `to`,
   `subject`, `html`, `from` = `EMAIL_FROM`, tags `template`, `locale`,
   `user_id`, `critical`, `category=transactional`). Sign-up, 2FA and password
   reset queue their message in the same `SaveChangesAsync` as the token, so
   they add no latency when the service is down. The code or link is only in the
   encrypted payload, which is cleared once sent.
+
+Service templates: with `On`, a template whose key is listed in
+`P4Backoffice__Email__TemplateKeys__0`, `__1`, … (empty by default) is queued as
+outbox item `email.template` instead (`POST /v1/emails` with `template`,
+`variables`, `locale` = `cs` or `en`, tags) and rendered by the service. All
+callers go through `ITemplatedEmailSender`; the variables are defined in
+`EmailTemplateVariables` (same names as the local `{{…}}` placeholders). The
+list is read per message, so removing a key switches back to the local
+rendering without a deployment. A `422 template_variables_invalid` ends the
+item `Dead` with an error log, without retries. Keys: `auto_recharge_success`,
+`auto_recharge_failed`, `payment_failed`, `price_change_notice`,
+`email_verification`, `password_reset`, `two_factor_code` — add them one at a
+time, the critical three last. The local templates stay as the fallback.
 
 Break-glass: 2FA codes, password resets and e-mail verification are `critical`.
 When the service has not taken one within `P4Backoffice__Email__FallbackAfter`
@@ -263,7 +280,9 @@ attempt got no connection or a 5xx — then within a dispatcher pass), or when
 the key is refused (`Blocked`), the dispatcher sends it directly through Resend
 (`RESEND_API_KEY` must stay configured), marks it `FallbackSent` and logs a
 warning; the service never sends it afterwards. Critical items older than 24 h
-are left alone. Disable with `P4Backoffice__Email__FallbackDirect=false`.
+are left alone. Critical `email.template` items carry the local rendering in
+their encrypted payload (never sent to the service), so break-glass does not
+need the service either. Disable with `P4Backoffice__Email__FallbackDirect=false`.
 
 Background e-mails (auto-recharge, failed payment, price change) use the
 language of the user's last sign-up or sign-in (`Users.Locale`, default `en`).
@@ -272,8 +291,9 @@ language of the user's last sign-up or sign-in (`Users.Locale`, default `en`).
 is logged. The sending domain configured for the environment in the service
 must be the domain of `EMAIL_FROM` (DKIM).
 
-Rollback: `P4Backoffice__Modules__Email=Off` sends through Resend directly
-again. E-mail items still pending stay in the outbox untouched while the module
+Rollback: remove a key from `P4Backoffice__Email__TemplateKeys` (local
+rendering again), or `P4Backoffice__Modules__Email=Off` sends through Resend
+directly again. E-mail items still pending stay in the outbox untouched while the module
 is not `On` (critical ones will already have gone out by break-glass) and are
 sent once it is `On` again.
 

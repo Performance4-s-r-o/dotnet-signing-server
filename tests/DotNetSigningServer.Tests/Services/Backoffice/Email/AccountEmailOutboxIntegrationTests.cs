@@ -164,4 +164,50 @@ public class AccountEmailOutboxIntegrationTests : IClassFixture<SignUpPostgresFi
         Assert.True(item.Critical);
         Assert.DoesNotContain("ResetPassword?token=", item.PayloadProtected);
     }
+
+    [DockerFact]
+    public async Task ForgotPassword_WithTheKeyListed_QueuesTheServiceTemplate()
+    {
+        using var app = new SignUpAppFactory(_fixture.Postgres.ConnectionString, "Off", services =>
+        {
+            services.RemoveAll<IEmailSender>();
+            services.AddScoped<BackofficeOutboxEmailSender>();
+            services.AddScoped<IEmailSender>(sp => sp.GetRequiredService<BackofficeOutboxEmailSender>());
+            services.PostConfigure<DotNetSigningServer.Options.P4BackofficeProductOptions>(o =>
+            {
+                o.Modules.Email = "On";
+                o.Email.TemplateKeys = [EmailTemplateId.PasswordReset];
+            });
+        });
+        var email = Email();
+        Guid userId;
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var user = new User { Email = email, EmailVerified = true, IsActive = true, PasswordHash = [1], PasswordSalt = [1] };
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
+            userId = user.Id;
+        }
+
+        var client = app.CreateClient();
+        var response = await client.PostAsync("/Account/ForgotPassword", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] = await TokenAsync(client, "/Account/ForgotPassword"),
+            ["Email"] = email,
+        }));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var item = Assert.Single(await DbAsync(db => db.BackofficeOutboxItems.AsNoTracking()
+            .Where(i => i.SubjectRef == $"user:{userId}")
+            .ToListAsync()));
+        Assert.Equal(TemplatedEmailSender.OutboxKind, item.Kind);
+        Assert.True(item.Critical);
+        var json = app.Services.GetRequiredService<OutboxPayloadProtector>().Unprotect(item.PayloadProtected!);
+        var payload = JsonSerializer.Deserialize<EmailTemplatePayload>(json, BackofficeOutbox.PayloadJson)!;
+        Assert.Equal(EmailTemplateId.PasswordReset, payload.Template);
+        Assert.Contains("ResetPassword?token=", payload.Variables["resetUrl"]);
+        Assert.Equal("60", payload.Variables["expiryMinutes"]);
+        Assert.Contains(payload.Variables["resetUrl"], payload.Fallback!.Html);
+    }
 }
