@@ -47,8 +47,11 @@ public class LegalRegistrationTests
 
         Assert.IsType<BackofficeLegalDocumentSource>(scope.ServiceProvider.GetRequiredService<ILegalDocumentSource>());
         Assert.True(scope.ServiceProvider.GetRequiredService<DbLegalDocumentSource>().IncludeSnapshots);
-        Assert.IsType<DocumentEventsHandler>(Assert.Single(scope.ServiceProvider.GetServices<IBackofficeEventHandler>()));
-        Assert.IsType<DocumentsResync>(Assert.Single(scope.ServiceProvider.GetServices<IBackofficeResync>()));
+        Assert.Equal([typeof(DocumentEventsHandler), typeof(CookieDeclarationEventsHandler)],
+            scope.ServiceProvider.GetServices<IBackofficeEventHandler>().Select(h => h.GetType()));
+        Assert.Equal([typeof(DocumentsResync), typeof(CookieDeclarationResync)],
+            scope.ServiceProvider.GetServices<IBackofficeResync>().Select(r => r.GetType()));
+        Assert.IsType<CookieDeclarationReader>(scope.ServiceProvider.GetRequiredService<ICookieDeclarationSource>());
     }
 
     [Fact]
