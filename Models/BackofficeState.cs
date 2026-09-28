@@ -43,4 +43,7 @@ public static class BackofficeStateKeys
     /// <c>PricingSnapshot</c>.
     /// </summary>
     public const string PricingCurrent = "pricing:current";
+
+    // Per-language keys: "cookies:{locale}" (cookie declaration, CookieDeclarationReader) and
+    // "support:categories:{locale}" (SupportCategoriesWorker).
 }

@@ -171,7 +171,8 @@ public static class BackofficeRegistration
     /// <summary>
     /// Legal documents by <c>Modules:Docs</c>: Off reads the hand-maintained rows (as before),
     /// Shadow does the same and compares with the service in the background, On serves the
-    /// service's texts with the <c>LegalDocuments</c> snapshot and Razor as fallbacks.
+    /// service's texts with the <c>LegalDocuments</c> snapshot and Razor as fallbacks, and the
+    /// cookie declaration under the cookies policy (<see cref="CookieDeclarationReader"/>).
     /// </summary>
     internal static void AddLegalDocuments(IServiceCollection services, P4BackofficeProductOptions options)
     {
@@ -188,6 +189,7 @@ public static class BackofficeRegistration
         if (mode == BackofficeMode.Off)
         {
             services.TryAddScoped<ILegalDocumentSource>(sp => sp.GetRequiredService<DbLegalDocumentSource>());
+            services.TryAddSingleton<ICookieDeclarationSource, NoCookieDeclarationSource>();
             return;
         }
 
@@ -212,6 +214,7 @@ public static class BackofficeRegistration
         if (mode == BackofficeMode.Shadow)
         {
             services.TryAddScoped<ILegalDocumentSource, ShadowLegalDocumentSource>();
+            services.TryAddSingleton<ICookieDeclarationSource, NoCookieDeclarationSource>();
             return;
         }
 
@@ -221,6 +224,18 @@ public static class BackofficeRegistration
         services.AddScoped<IBackofficeResync>(sp => sp.GetRequiredService<DocumentsResync>());
         services.AddScoped<IBackofficeEventHandler, DocumentEventsHandler>();
         services.AddHostedService<LegalDocumentsWarmup>();
+
+        // Cookie declaration: the table under the cookies policy (same HttpClient and key).
+        services.TryAddSingleton(sp => new CookieDeclarationReader(
+            sp.GetRequiredService<IHttpClientFactory>(),
+            sp.GetRequiredService<IServiceScopeFactory>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<ILogger<CookieDeclarationReader>>(),
+            options.DocumentsTtl));
+        services.TryAddSingleton<ICookieDeclarationSource>(sp => sp.GetRequiredService<CookieDeclarationReader>());
+        services.AddScoped<IBackofficeEventHandler, CookieDeclarationEventsHandler>();
+        services.AddScoped<IBackofficeResync, CookieDeclarationResync>();
+        services.AddHostedService<CookieDeclarationWarmup>();
     }
 
     /// <summary>

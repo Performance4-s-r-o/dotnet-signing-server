@@ -7,6 +7,7 @@ public static class BackofficeEventTypes
     public const string DocumentPublished = "document.published";
     public const string DocumentMinorCorrected = "document.minor_corrected";
     public const string DocumentUnscheduled = "document.unscheduled";
+    public const string CookieDeclarationPublished = "cookie_declaration.published";
     public const string PriceScheduled = "price.scheduled";
     public const string PriceEffective = "price.effective";
     public const string PriceUnscheduled = "price.unscheduled";
@@ -26,6 +27,7 @@ public static class BackofficeEventTypes
     public static readonly IReadOnlyList<string> Subscribed =
     [
         DocumentScheduled, DocumentPublished, DocumentMinorCorrected, DocumentUnscheduled,
+        CookieDeclarationPublished,
         PriceScheduled, PriceEffective, PriceUnscheduled, PriceSyncFailed,
         EmailBounced, EmailComplained, EmailFailed,
         SupportTicketFailed,
