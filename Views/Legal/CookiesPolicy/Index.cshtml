@@ -1,3 +1,5 @@
+@* Razor fallback of the cookies policy (Docs module Off, or no text from the service yet).
+   Lists exactly the cookies of the audit (AuditedCookies); no analytics or marketing cookies. *@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
     ViewData["Title"] = L["LegalCookiesPolicy"].Value;
@@ -6,47 +8,20 @@
 
 <div class="legal-document">
     <h1>@L["LegalCookiesPolicy"]</h1>
-    <p><em>@L["LegalLastUpdated"] 25. 11. 2025</em></p>
+    <p><em>@L["LegalLastUpdated"] 28. 9. 2026</em></p>
 
-    <p>
-        This Cookies Policy explains how <strong>Performance4PDF</strong>
-        uses cookies and similar technologies.
-    </p>
+    <p>@L["CookiesPolicyIntro"]</p>
 
-    <h2>1. What Are Cookies?</h2>
-    <p>
-        Cookies are small text files stored on your device when you visit a website.
-        They help websites remember your actions and preferences over a period of time.
-    </p>
+    <h2>@L["CookiesPolicyWhatTitle"]</h2>
+    <p>@L["CookiesPolicyWhatText"]</p>
 
-    <h2>2. Types of Cookies We Use</h2>
-    <ul>
-        <li>
-            <strong>Strictly necessary cookies</strong><br />
-            These cookies are essential for the basic functioning of the Service,
-            such as authentication, session management and security.
-        </li>
-        <li>
-            <strong>Preference cookies</strong><br />
-            These cookies remember your preferences (e.g., language settings).
-        </li>
-        <li>
-            <strong>Analytics cookies (optional)</strong><br />
-            With your consent, we may use analytics tools (such as Google Analytics)
-            to collect aggregated information about how the Service is used.
-        </li>
-    </ul>
+    <h2>@L["CookiesPolicyUsedTitle"]</h2>
+    <p>@L["CookiesPolicyUsedText"]</p>
+    <partial name="_CookieTable" model="DotNetSigningServer.Services.Legal.AuditedCookies.For(L)" />
 
-    <h2>3. Managing Cookies</h2>
-    <p>
-        You can manage or delete cookies at any time via your browser settings.
-        Please note that disabling strictly necessary cookies may impact the
-        functionality of the Service.
-    </p>
+    <h2>@L["CookiesPolicyManageTitle"]</h2>
+    <p>@L["CookiesPolicyManageText"]</p>
 
-    <h2>4. Consent</h2>
-    <p>
-        Where required by law, we will ask for your consent before placing
-        non-essential cookies (such as analytics cookies) on your device.
-    </p>
+    <h2>@L["CookiesPolicyChangesTitle"]</h2>
+    <p>@L["CookiesPolicyChangesText"]</p>
 </div>

@@ -662,4 +662,28 @@
   <data name="AdminConsentsBackfillOff" xml:space="preserve"><value>Switch the Consents module to Shadow or On first.</value></data>
   <data name="EmailLanguage" xml:space="preserve"><value>E-mail language</value></data>
   <data name="EmailBounced" xml:space="preserve"><value>E-mail bounced / complaint</value></data>
+  <data name="CookiesPolicyIntro" xml:space="preserve"><value>This Cookies Policy explains which cookies Performance4PDF uses and why.</value></data>
+  <data name="CookiesPolicyWhatTitle" xml:space="preserve"><value>1. What are cookies?</value></data>
+  <data name="CookiesPolicyWhatText" xml:space="preserve"><value>Cookies are small text files a website stores in your browser. They let the website remember, for example, that you are signed in or which language you chose.</value></data>
+  <data name="CookiesPolicyUsedTitle" xml:space="preserve"><value>2. Cookies we use</value></data>
+  <data name="CookiesPolicyUsedText" xml:space="preserve"><value>We use only strictly necessary cookies. The Service cannot work without them (sign-in, security, the language you chose), so they do not require your consent. We do not use analytics, advertising or other tracking cookies.</value></data>
+  <data name="CookiesPolicyManageTitle" xml:space="preserve"><value>3. Managing cookies</value></data>
+  <data name="CookiesPolicyManageText" xml:space="preserve"><value>You can delete cookies or block them in your browser settings at any time. Without these cookies you cannot sign in and forms will not work.</value></data>
+  <data name="CookiesPolicyChangesTitle" xml:space="preserve"><value>4. Changes</value></data>
+  <data name="CookiesPolicyChangesText" xml:space="preserve"><value>If we ever start using cookies that are not strictly necessary (for example analytics), we will update this policy and ask for your consent before setting them.</value></data>
+  <data name="CookieTableCaption" xml:space="preserve"><value>Cookies used by Performance4PDF</value></data>
+  <data name="CookieTableName" xml:space="preserve"><value>Name</value></data>
+  <data name="CookieTableProvider" xml:space="preserve"><value>Provider</value></data>
+  <data name="CookieTablePurpose" xml:space="preserve"><value>Purpose</value></data>
+  <data name="CookieTableDuration" xml:space="preserve"><value>Duration</value></data>
+  <data name="CookieTableParty" xml:space="preserve"><value>Party</value></data>
+  <data name="CookiePartyFirst" xml:space="preserve"><value>First party</value></data>
+  <data name="CookiePartyThird" xml:space="preserve"><value>Third party</value></data>
+  <data name="CookieAuthPurpose" xml:space="preserve"><value>Keeps you signed in.</value></data>
+  <data name="CookieAuthDuration" xml:space="preserve"><value>Session; with “Remember me” 8 hours, extended while you use the Service</value></data>
+  <data name="CookieAntiforgeryPurpose" xml:space="preserve"><value>Protects forms against cross-site request forgery (CSRF).</value></data>
+  <data name="CookieTempDataPurpose" xml:space="preserve"><value>Shows a one-time message after a redirect.</value></data>
+  <data name="CookieCulturePurpose" xml:space="preserve"><value>Remembers the language you chose.</value></data>
+  <data name="CookieDurationSession" xml:space="preserve"><value>Session</value></data>
+  <data name="CookieDurationOneYear" xml:space="preserve"><value>1 year</value></data>
 </root>

@@ -662,4 +662,28 @@
   <data name="AdminConsentsBackfillOff" xml:space="preserve"><value>Nejdřív přepněte modul Consents na Shadow nebo On.</value></data>
   <data name="EmailLanguage" xml:space="preserve"><value>Jazyk e-mailů</value></data>
   <data name="EmailBounced" xml:space="preserve"><value>E-mail nedoručitelný / stížnost</value></data>
+  <data name="CookiesPolicyIntro" xml:space="preserve"><value>Tyto zásady cookies vysvětlují, jaké cookies Performance4PDF používá a proč.</value></data>
+  <data name="CookiesPolicyWhatTitle" xml:space="preserve"><value>1. Co jsou cookies?</value></data>
+  <data name="CookiesPolicyWhatText" xml:space="preserve"><value>Cookies jsou malé textové soubory, které si web ukládá ve vašem prohlížeči. Díky nim si web pamatuje například to, že jste přihlášeni, nebo jaký jazyk jste zvolili.</value></data>
+  <data name="CookiesPolicyUsedTitle" xml:space="preserve"><value>2. Jaké cookies používáme</value></data>
+  <data name="CookiesPolicyUsedText" xml:space="preserve"><value>Používáme pouze nezbytné cookies. Bez nich služba nemůže fungovat (přihlášení, zabezpečení, zvolený jazyk), a proto k nim nepotřebujeme váš souhlas. Nepoužíváme analytické, reklamní ani jiné sledovací cookies.</value></data>
+  <data name="CookiesPolicyManageTitle" xml:space="preserve"><value>3. Správa cookies</value></data>
+  <data name="CookiesPolicyManageText" xml:space="preserve"><value>Cookies můžete kdykoli smazat nebo zablokovat v nastavení prohlížeče. Bez těchto cookies se ale nepřihlásíte a formuláře nebudou fungovat.</value></data>
+  <data name="CookiesPolicyChangesTitle" xml:space="preserve"><value>4. Změny</value></data>
+  <data name="CookiesPolicyChangesText" xml:space="preserve"><value>Pokud někdy začneme používat cookies, které nejsou nezbytné (například analytické), tyto zásady upravíme a před jejich uložením vás požádáme o souhlas.</value></data>
+  <data name="CookieTableCaption" xml:space="preserve"><value>Cookies, které Performance4PDF používá</value></data>
+  <data name="CookieTableName" xml:space="preserve"><value>Název</value></data>
+  <data name="CookieTableProvider" xml:space="preserve"><value>Poskytovatel</value></data>
+  <data name="CookieTablePurpose" xml:space="preserve"><value>Účel</value></data>
+  <data name="CookieTableDuration" xml:space="preserve"><value>Doba uložení</value></data>
+  <data name="CookieTableParty" xml:space="preserve"><value>Strana</value></data>
+  <data name="CookiePartyFirst" xml:space="preserve"><value>Vlastní (first party)</value></data>
+  <data name="CookiePartyThird" xml:space="preserve"><value>Třetí strana (third party)</value></data>
+  <data name="CookieAuthPurpose" xml:space="preserve"><value>Udržuje vás přihlášené.</value></data>
+  <data name="CookieAuthDuration" xml:space="preserve"><value>Relace; se „Zapamatovat si mě“ 8 hodin, prodlužuje se při používání služby</value></data>
+  <data name="CookieAntiforgeryPurpose" xml:space="preserve"><value>Chrání formuláře před podvržením požadavku (CSRF).</value></data>
+  <data name="CookieTempDataPurpose" xml:space="preserve"><value>Zobrazí jednorázovou zprávu po přesměrování.</value></data>
+  <data name="CookieCulturePurpose" xml:space="preserve"><value>Pamatuje si zvolený jazyk.</value></data>
+  <data name="CookieDurationSession" xml:space="preserve"><value>Relace</value></data>
+  <data name="CookieDurationOneYear" xml:space="preserve"><value>1 rok</value></data>
 </root>
