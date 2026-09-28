@@ -15,6 +15,11 @@ public sealed record BackofficeEvent(string Id, string Type, JsonElement Data, s
 ///
 /// Must be idempotent: the inbox stores each event once, but a handler may run again for
 /// the same event after a crash or a failed attempt. Throwing schedules a retry.
+///
+/// Exception messages must not carry event data or personal data (e-mail addresses, names,
+/// document contents): the processor stores the message in the inbox row's <c>Error</c>
+/// column and logs the exception. Name the event by <see cref="BackofficeEvent.Id"/> and the
+/// failing step instead. E-mail addresses are masked in <c>Error</c> as a safety net only.
 /// </summary>
 public interface IBackofficeEventHandler
 {

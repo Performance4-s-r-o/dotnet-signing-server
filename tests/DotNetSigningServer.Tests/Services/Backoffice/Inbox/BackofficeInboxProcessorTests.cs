@@ -84,6 +84,31 @@ public class BackofficeInboxProcessorTests
     }
 
     [Fact]
+    public async Task FailingHandler_EmailAddressesAreMaskedInTheStoredError()
+    {
+        var handler = new RecordingEventHandler(BackofficeEventTypes.EmailBounced)
+        {
+            Fail = _ => new InvalidOperationException("no user for jan.novak+test@example.co.uk (bounce to Info@Firma.cz)"),
+        };
+        using var host = Host(handler);
+        await host.AddAsync("msg_1", BackofficeEventTypes.EmailBounced);
+
+        await host.Processor.ProcessDueAsync(CancellationToken.None);
+
+        var error = Assert.Single(await host.ItemsAsync()).Error;
+        Assert.Equal("InvalidOperationException: no user for [email] (bounce to [email])", error);
+    }
+
+    [Fact]
+    public void ErrorText_IsTruncated()
+    {
+        var text = BackofficeInboxProcessor.ErrorText(new Exception(new string('x', 2000)));
+
+        Assert.Equal(512, text.Length);
+        Assert.StartsWith("Exception: xxx", text);
+    }
+
+    [Fact]
     public async Task AfterMaxAttempts_ProcessingStops()
     {
         var handler = new RecordingEventHandler(BackofficeEventTypes.EmailBounced) { Fail = _ => new Exception("down") };

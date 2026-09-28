@@ -98,4 +98,85 @@ public class InboxPostgresTests : IClassFixture<OutboxPostgresFixture>
         });
         Assert.Equal("cur_2", await host.CursorAsync());
     }
+
+    [DockerFact]
+    public async Task Polling_SkipsWhileAnotherInstanceHoldsTheLock_AndReleasesItsOwn()
+    {
+        await ClearAsync();
+        using var host = new InboxTestHost(_pg.Configure);
+        await host.WithDbAsync(async db =>
+        {
+            await BackofficeStateStore.SetAsync(db, BackofficeStateKeys.EventsCursor, "cur_1", host.Time.Now);
+            return 0;
+        });
+
+        // Another instance is in the middle of a run.
+        await using (var other = new NpgsqlConnection(_pg.ConnectionString))
+        {
+            await other.OpenAsync();
+            await using (var take = new NpgsqlCommand($"SELECT pg_advisory_lock({BackofficePollingService.AdvisoryLockKey})", other))
+                await take.ExecuteNonQueryAsync();
+
+            var skipped = await host.Polling.PollOnceAsync(CancellationToken.None);
+
+            Assert.True(skipped.Skipped);
+            Assert.Empty(host.Service.Requests);
+            Assert.Equal("cur_1", await host.CursorAsync());
+
+            await using var free = new NpgsqlCommand($"SELECT pg_advisory_unlock({BackofficePollingService.AdvisoryLockKey})", other);
+            await free.ExecuteNonQueryAsync();
+        }
+
+        // The other instance has finished: this one polls, and frees the lock after.
+        host.Service.Enqueue(System.Net.HttpStatusCode.OK,
+            """{"data":[],"next_cursor":"cur_2","has_more":false,"window_clamped":false}""");
+        var result = await host.Polling.PollOnceAsync(CancellationToken.None);
+
+        Assert.False(result.Skipped);
+        Assert.Equal(1, result.Pages);
+        Assert.Equal("cur_2", await host.CursorAsync());
+
+        await using var probe = new NpgsqlConnection(_pg.ConnectionString);
+        await probe.OpenAsync();
+        await using var check = new NpgsqlCommand($"SELECT pg_try_advisory_lock({BackofficePollingService.AdvisoryLockKey})", probe);
+        Assert.True((bool)(await check.ExecuteScalarAsync())!);
+        await using var unlock = new NpgsqlCommand($"SELECT pg_advisory_unlock({BackofficePollingService.AdvisoryLockKey})", probe);
+        await unlock.ExecuteNonQueryAsync();
+    }
+
+    [DockerFact]
+    public async Task ConcurrentPolls_ReadTheServiceOnce()
+    {
+        await ClearAsync();
+        using var host = new InboxTestHost(_pg.Configure);
+        var release = new TaskCompletionSource();
+        var entered = new TaskCompletionSource();
+        host.Service.Responses.Enqueue(async _ =>
+        {
+            entered.TrySetResult();
+            await release.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"data":[],"next_cursor":"cur_a","has_more":false,"window_clamped":false}""",
+                    System.Text.Encoding.UTF8, "application/json"),
+            };
+        });
+
+        var first = Task.Run(() => host.Polling.PollOnceAsync(CancellationToken.None));
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        BackofficePollResult second;
+        try
+        {
+            second = await host.Polling.PollOnceAsync(CancellationToken.None);
+        }
+        finally
+        {
+            release.SetResult();
+        }
+
+        Assert.True(second.Skipped);
+        Assert.False((await first).Skipped);
+        Assert.Single(host.Service.Requests);
+        Assert.Equal("cur_a", await host.CursorAsync());
+    }
 }

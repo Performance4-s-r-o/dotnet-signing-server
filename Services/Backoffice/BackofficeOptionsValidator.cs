@@ -17,6 +17,12 @@ public static class BackofficeOptionsValidator
     public const string LiveKeyPrefix = "p4sk_live_";
     public const string WebhookSecretPrefix = "whsec_";
 
+    /// <summary>
+    /// Shortest accepted HMAC key behind <c>whsec_</c>, in bytes. The service generates
+    /// 24 random bytes, so a shorter one is a truncated or placeholder value.
+    /// </summary>
+    public const int MinWebhookSecretBytes = 24;
+
     public static IReadOnlyList<string> Validate(P4BackofficeProductOptions options)
     {
         var problems = new List<string>();
@@ -96,17 +102,23 @@ public static class BackofficeOptionsValidator
         {
             problems.Add($"{Setting(key)} must be empty or start with {WebhookSecretPrefix}.");
         }
-        else if (!IsBase64(trimmed[WebhookSecretPrefix.Length..]))
+        else if (DecodedLength(trimmed[WebhookSecretPrefix.Length..]) is not { } length)
         {
             problems.Add($"{Setting(key)} must be {WebhookSecretPrefix} followed by base64 (copy it from the webhook endpoint).");
         }
+        else if (length < MinWebhookSecretBytes)
+        {
+            problems.Add($"{Setting(key)} is too short: the key after {WebhookSecretPrefix} decodes to {length} bytes, "
+                         + $"at least {MinWebhookSecretBytes} are required (copy the whole secret from the webhook endpoint).");
+        }
     }
 
-    private static bool IsBase64(string value)
+    /// <summary>Decoded byte length of a non-empty base64 value, or null when it is not base64.</summary>
+    private static int? DecodedLength(string value)
     {
-        if (value.Length == 0) return false;
+        if (value.Length == 0) return null;
         var buffer = new byte[value.Length];
-        return Convert.TryFromBase64String(value, buffer, out _);
+        return Convert.TryFromBase64String(value, buffer, out var written) ? written : null;
     }
 
     private static void CheckBaseUrl(List<string> problems, string? value)

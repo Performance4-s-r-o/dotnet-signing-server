@@ -108,7 +108,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `Limits__*` | | Request/PDF/image/attachment size caps and per-key concurrency |
 | `P4Backoffice__Mode` / `P4Backoffice__Modules__*` | | P4 Backoffice integration: `Off` (default), `Shadow` or `On`, globally or per module (`Docs`, `Consents`, `Email`, `Pricing`, `Support`) |
 | `P4Backoffice__BaseUrl` / `P4Backoffice__SecretKey` | when not `Off` | Service URL (https) and `p4sk_` key; startup fails without them |
-| `P4Backoffice__Webhook__Secret` | | Webhook signing secret (`whsec_`); `…__PreviousSecret` during rotation |
+| `P4Backoffice__Webhook__Secret` | | Webhook signing secret (`whsec_` + base64 of at least 24 bytes); `…__PreviousSecret` during rotation |
 | `P4Backoffice__Polling__Interval` | | How often `/v1/events` is polled (default `00:15:00`, `00:02:00` without a webhook secret) |
 
 Every integration degrades gracefully: leave a section empty and the feature
@@ -156,14 +156,18 @@ signing secret in `P4Backoffice__Webhook__Secret` and check it with the admin's
 The endpoint only verifies the signature (5-minute timestamp tolerance), stores
 the event in `BackofficeWebhookInboxItems` (one row per `webhook-id`,
 redeliveries are ignored) and answers `200`; handlers run in a background
-processor, retried from 30 s up to hourly and given up after 20 attempts. It
+processor, retried from 30 s up to hourly and given up after 20 attempts
+(handlers must keep event data out of exception messages; e-mail addresses are
+masked in the stored error). It
 answers `404` while every module is `Off` or no secret is set, and does not
 exist on a private server.
 
 As a backup — and as the only channel when no secret is set — the same events
 are polled from `GET /v1/events` (every 15 min, or 2 min without a secret). The
 cursor is kept in `BackofficeStates` (`events:cursor`), so a restart continues
-where it stopped; the first run starts one day back. If the cursor has fallen
+where it stopped; the first run starts one day back. With several instances on
+one database only one polls at a time (a PostgreSQL advisory lock per run; the
+others skip that run). If the cursor has fallen
 out of the service's 30-day window, the modules resynchronise from the source
 APIs. Processed events are deleted after 45 days.
 

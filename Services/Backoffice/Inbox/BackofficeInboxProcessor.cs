@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using Microsoft.EntityFrameworkCore;
@@ -165,7 +166,7 @@ public sealed class BackofficeInboxProcessor : BackgroundService
             db.ChangeTracker.Clear();
             db.Attach(item);
             db.Entry(item).State = EntityState.Modified;
-            item.Error = Truncate($"{ex.GetType().Name}: {ex.Message}");
+            item.Error = ErrorText(ex);
             if (item.Attempts >= MaxAttempts)
             {
                 item.NextAttemptAt = null;
@@ -212,6 +213,29 @@ public sealed class BackofficeInboxProcessor : BackgroundService
         db.BackofficeWebhookInboxItems.RemoveRange(rows);
         await db.SaveChangesAsync(cancellationToken);
         return rows.Count;
+    }
+
+    private static readonly Regex EmailPattern = new(
+        @"[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(\.[A-Za-z0-9\-]+)+",
+        RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+
+    /// <summary>
+    /// What is stored in <see cref="BackofficeWebhookInboxItem.Error"/>: the exception type and
+    /// message with e-mail addresses masked (a safety net for handlers that break the
+    /// no-payload-in-exceptions rule of <see cref="IBackofficeEventHandler"/>), at most 512 chars.
+    /// </summary>
+    internal static string ErrorText(Exception ex)
+    {
+        string message;
+        try
+        {
+            message = EmailPattern.Replace(ex.Message, "[email]");
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            message = "(message withheld)";
+        }
+        return Truncate($"{ex.GetType().Name}: {message}");
     }
 
     private static string Truncate(string value) => value.Length <= MaxErrorLength ? value : value[..MaxErrorLength];

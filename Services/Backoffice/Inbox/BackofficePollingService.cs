@@ -4,13 +4,18 @@ using System.Text.Json;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace DotNetSigningServer.Services.Backoffice.Inbox;
 
 /// <summary>Outcome of one <see cref="BackofficePollingService.PollOnceAsync"/>.</summary>
 /// <param name="Completed">False when the run stopped on an error; the cursor then stays at the last good page.</param>
-public sealed record BackofficePollResult(int Pages, int Events, int Added, bool WindowClamped, bool Completed);
+/// <param name="Skipped">True when another instance was polling at the same time; nothing was read.</param>
+public sealed record BackofficePollResult(int Pages, int Events, int Added, bool WindowClamped, bool Completed, bool Skipped = false)
+{
+    public static readonly BackofficePollResult SkippedRun = new(0, 0, 0, false, true, Skipped: true);
+}
 
 /// <summary>
 /// Backup channel for webhooks (and the only one without a webhook secret): reads
@@ -18,6 +23,12 @@ public sealed record BackofficePollResult(int Pages, int Events, int Added, bool
 /// where the webhook copy of the same event is deduplicated by id. The cursor
 /// (<see cref="BackofficeStateKeys.EventsCursor"/>) is saved after every page, empty ones
 /// included, so it survives a restart.
+///
+/// Several app instances may run this service against one database. On PostgreSQL a run
+/// holds a session advisory lock (<see cref="AdvisoryLockKey"/>, taken with
+/// <c>pg_try_advisory_lock</c>) for its whole duration, so only one instance reads and moves
+/// the cursor at a time and a slower instance can never write back an older cursor; the
+/// others skip that run. Other providers (InMemory in tests) run without the lock.
 ///
 /// Registered only when a backoffice module is Shadow or On (never on a PrivateServer).
 /// </summary>
@@ -30,6 +41,12 @@ public sealed class BackofficePollingService : BackgroundService
     public const int MaxPagesPerRun = 50;
 
     public static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Key of the PostgreSQL advisory lock that makes one poll run exclusive across instances
+    /// ("P4BOEVTS" as ASCII, so it does not clash with arbitrary small numbers).
+    /// </summary>
+    public const long AdvisoryLockKey = 0x5034_424F_4556_5453;
 
     /// <summary>
     /// Where the very first run starts: recent enough to skip the history an import created,
@@ -108,6 +125,44 @@ public sealed class BackofficePollingService : BackgroundService
     {
         using var scope = _scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        if (!db.Database.IsNpgsql())
+        {
+            return await PollLockedAsync(scope, db, cancellationToken);
+        }
+
+        // A session lock needs one connection for the whole run: keep it open until the end.
+        await db.Database.OpenConnectionAsync(cancellationToken);
+        try
+        {
+            if (!await TryLockAsync(db, cancellationToken))
+            {
+                _logger.LogDebug("Backoffice event polling skipped: another instance is polling");
+                return BackofficePollResult.SkippedRun;
+            }
+            try
+            {
+                return await PollLockedAsync(scope, db, cancellationToken);
+            }
+            finally
+            {
+                // Not cancellable: the lock must go even when the run was cancelled.
+                await db.Database.SqlQuery<bool>($"SELECT pg_advisory_unlock({AdvisoryLockKey}) AS \"Value\"")
+                    .SingleAsync(CancellationToken.None);
+            }
+        }
+        finally
+        {
+            await db.Database.CloseConnectionAsync();
+        }
+    }
+
+    private static Task<bool> TryLockAsync(ApplicationDbContext db, CancellationToken cancellationToken) =>
+        db.Database.SqlQuery<bool>($"SELECT pg_try_advisory_lock({AdvisoryLockKey}) AS \"Value\"")
+            .SingleAsync(cancellationToken);
+
+    /// <summary>The run itself; on PostgreSQL the caller holds the advisory lock.</summary>
+    private async Task<BackofficePollResult> PollLockedAsync(IServiceScope scope, ApplicationDbContext db, CancellationToken cancellationToken)
+    {
         var inbox = scope.ServiceProvider.GetRequiredService<BackofficeInbox>();
         var http = _httpClients.CreateClient(HttpClientName);
 
