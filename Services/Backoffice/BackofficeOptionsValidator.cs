@@ -34,7 +34,7 @@ public static class BackofficeOptionsValidator
         {
             problems.Add($"{Setting("Email:FallbackAfter")} must not be negative.");
         }
-        if (options.Polling.Interval <= TimeSpan.Zero)
+        if (options.Polling.Interval is { } interval && interval <= TimeSpan.Zero)
         {
             problems.Add($"{Setting("Polling:Interval")} must be positive.");
         }
@@ -90,11 +90,23 @@ public static class BackofficeOptionsValidator
 
     private static void CheckWebhookSecret(List<string> problems, string? value, string key)
     {
-        if (!string.IsNullOrWhiteSpace(value)
-            && !value.Trim().StartsWith(WebhookSecretPrefix, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(value)) return;
+        var trimmed = value.Trim();
+        if (!trimmed.StartsWith(WebhookSecretPrefix, StringComparison.Ordinal))
         {
             problems.Add($"{Setting(key)} must be empty or start with {WebhookSecretPrefix}.");
         }
+        else if (!IsBase64(trimmed[WebhookSecretPrefix.Length..]))
+        {
+            problems.Add($"{Setting(key)} must be {WebhookSecretPrefix} followed by base64 (copy it from the webhook endpoint).");
+        }
+    }
+
+    private static bool IsBase64(string value)
+    {
+        if (value.Length == 0) return false;
+        var buffer = new byte[value.Length];
+        return Convert.TryFromBase64String(value, buffer, out _);
     }
 
     private static void CheckBaseUrl(List<string> problems, string? value)

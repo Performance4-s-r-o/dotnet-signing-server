@@ -37,7 +37,8 @@ public class BackofficeOptionsValidatorTests
         { "http on localhost", Options(mode: "On", baseUrl: "http://localhost:3000", secretKey: Key), null },
         { "http on 127.0.0.1", Options(mode: "On", baseUrl: "http://127.0.0.1:9", secretKey: Key), null },
         { "http on ::1", Options(mode: "On", baseUrl: "http://[::1]:3000", secretKey: Key), null },
-        { "webhook secret", Options(webhookSecret: "whsec_abc", previousSecret: "whsec_old"), null },
+        { "webhook secret", Options(webhookSecret: "whsec_c2VjcmV0LWtleS0x", previousSecret: "whsec_b2xkc2VjcmV0"), null },
+        { "webhook secret not base64", Options(webhookSecret: "whsec_abc"), "followed by base64" },
         { "unknown mode", Options(mode: "Enabled"), "P4Backoffice__Mode" },
         { "numeric mode", Options(mode: "2"), "P4Backoffice__Mode" },
         { "unknown module mode", Options(pricing: "yes"), "P4Backoffice__Modules__Pricing" },
@@ -87,6 +88,18 @@ public class BackofficeOptionsValidatorTests
         options.Polling.Interval = TimeSpan.Zero;
 
         Assert.Contains(BackofficeOptionsValidator.Validate(options), p => p.Contains("Polling__Interval"));
+    }
+
+    [Fact]
+    public void PollingInterval_DefaultsToTheWebhookSetup()
+    {
+        var polling = new P4BackofficeProductOptions.PollingOptions();
+
+        Assert.Equal(TimeSpan.FromMinutes(15), polling.EffectiveInterval(webhooksConfigured: true));
+        Assert.Equal(TimeSpan.FromMinutes(2), polling.EffectiveInterval(webhooksConfigured: false));
+
+        polling.Interval = TimeSpan.FromMinutes(5);
+        Assert.Equal(TimeSpan.FromMinutes(5), polling.EffectiveInterval(webhooksConfigured: false));
     }
 
     [Theory]

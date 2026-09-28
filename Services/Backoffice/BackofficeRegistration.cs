@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Services.Backoffice.Inbox;
 using DotNetSigningServer.Services.Backoffice.Outbox;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -41,6 +42,7 @@ public static class BackofficeRegistration
         services.AddSingleton<IValidateOptions<P4BackofficeProductOptions>, BackofficeOptionsValidation>();
         services.AddHostedService<BackofficeStartupReport>();
         AddOutboxCore(services);
+        AddInboxCore(services);
 
         // Decided at registration time from the same section and the same rule as the
         // options above; the options pipeline itself is only available after Build().
@@ -53,6 +55,7 @@ public static class BackofficeRegistration
             services.AddP4BackofficeSdk(section);
 #endif
             AddOutboxDispatcher(services, snapshot);
+            AddInboxProcessing(services, snapshot);
         }
 
         return services;
@@ -89,6 +92,38 @@ public static class BackofficeRegistration
         });
         services.TryAddSingleton<OutboxProcessor>();
         services.AddHostedService<BackofficeOutboxDispatcher>();
+    }
+
+    /// <summary>
+    /// Always registered, because the webhook endpoint always exists (outside a
+    /// PrivateServer): it answers 404 itself while the integration is Off.
+    /// </summary>
+    private static void AddInboxCore(IServiceCollection services)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<BackofficeInboxSignal>();
+        services.TryAddScoped<BackofficeInbox>();
+    }
+
+    /// <summary>
+    /// Processing and polling: only when a module is Shadow or On. Modules add their
+    /// <see cref="IBackofficeEventHandler"/> and <see cref="IBackofficeResync"/> as scoped services.
+    /// </summary>
+    private static void AddInboxProcessing(IServiceCollection services, P4BackofficeProductOptions options)
+    {
+        var baseUrl = options.BaseUrl?.Trim() ?? "";
+        var secretKey = options.SecretKey?.Trim() ?? "";
+        services.AddHttpClient(BackofficePollingService.HttpClientName, client =>
+        {
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            client.Timeout = BackofficePollingService.RequestTimeout;
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretKey);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-events");
+        });
+        services.TryAddSingleton<LoggingBackofficeEventHandler>();
+        services.TryAddScoped<EventHandlerRegistry>();
+        services.AddHostedService<BackofficeInboxProcessor>();
+        services.AddHostedService<BackofficePollingService>();
     }
 
     /// <summary>What forces every module Off: PrivateServer wins over a missing SDK.</summary>
