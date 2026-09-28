@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Net;
 using DotNetSigningServer.Services.Backoffice.Documents;
 
 namespace DotNetSigningServer.Services.Legal;
@@ -27,6 +28,7 @@ public sealed class LegalDocumentRefresher
     private readonly ILogger<LegalDocumentRefresher> _logger;
     private readonly ConcurrentDictionary<string, Lazy<Task<BackofficeDocumentContent?>>> _inFlight = new();
     private readonly ConcurrentDictionary<string, (int Version, string Hash)> _saved = new();
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _notFoundUntil = new();
     private long _unavailableUntilTicks;
 
     public LegalDocumentRefresher(
@@ -55,12 +57,19 @@ public sealed class LegalDocumentRefresher
         {
             document = await _cache.RefreshAsync(type, locale, cancellationToken);
         }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            // Not published in the service: an answer, not an outage. Not asked again for a TTL.
+            _notFoundUntil[$"{type}:{locale}"] = _time.GetUtcNow() + _cache.Ttl;
+            throw;
+        }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
             Interlocked.Exchange(ref _unavailableUntilTicks, (_time.GetUtcNow() + FailureBackoff).UtcTicks);
             throw;
         }
         Interlocked.Exchange(ref _unavailableUntilTicks, 0);
+        _notFoundUntil.TryRemove($"{type}:{locale}", out _);
 
         if (saveSnapshot)
         {
@@ -75,7 +84,8 @@ public sealed class LegalDocumentRefresher
     /// </summary>
     public Task<BackofficeDocumentContent?> RefreshInBackground(string type, string locale, bool saveSnapshot)
     {
-        if (InBackoff)
+        if (InBackoff
+            || _notFoundUntil.TryGetValue($"{type}:{locale}", out var notFoundUntil) && _time.GetUtcNow() < notFoundUntil)
         {
             return Task.FromResult<BackofficeDocumentContent?>(null);
         }
@@ -92,6 +102,11 @@ public sealed class LegalDocumentRefresher
         {
             using var timeout = new CancellationTokenSource(BackgroundTimeout);
             return await RefreshAsync(type, locale, saveSnapshot, timeout.Token);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            _logger.LogInformation("[legal-docs] {Type}/{Locale} is not published in the service; serving the local text", type, locale);
+            return null;
         }
         catch (Exception ex)
         {

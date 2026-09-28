@@ -123,6 +123,26 @@ public class BackofficeLegalDocumentSourceTests
     }
 
     [Fact]
+    public async Task NotPublishedType_IsNotAnOutage_AndIsNotAskedAgainWithinTheTtl()
+    {
+        using var host = new LegalDocsTestHost();
+        await host.SeedAsync(LegalDocsTestHost.Manual(slug: "open-source-notices"));
+        host.EnqueueStatus(HttpStatusCode.NotFound);
+
+        var (oss, _) = await GetAsync(host, slug: "open-source-notices");
+        await GetAsync(host, slug: "open-source-notices");
+
+        Assert.Equal("Terms (manual)", oss!.Title);
+        Assert.Equal(1, host.RequestCount);
+        Assert.False(host.Refresher.InBackoff);
+
+        // Other documents are still fetched.
+        host.EnqueueDocument(LegalDocsTestHost.DocumentJson());
+        await GetAsync(host);
+        Assert.Equal(2, host.RequestCount);
+    }
+
+    [Fact]
     public async Task StaleCopy_IsServedAndRevalidatedWithTheETag()
     {
         using var host = new LegalDocsTestHost();
