@@ -106,9 +106,30 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `Sentry__Dsn` | | Error monitoring; disabled when empty |
 | `Loki__Url` | | Log shipping; disabled when empty |
 | `Limits__*` | | Request/PDF/image/attachment size caps and per-key concurrency |
+| `P4Backoffice__Mode` / `P4Backoffice__Modules__*` | | P4 Backoffice integration: `Off` (default), `Shadow` or `On`, globally or per module (`Docs`, `Consents`, `Email`, `Pricing`, `Support`) |
+| `P4Backoffice__BaseUrl` / `P4Backoffice__SecretKey` | when not `Off` | Service URL (https) and `p4sk_` key; startup fails without them |
+| `P4Backoffice__Webhook__Secret` | | Webhook signing secret (`whsec_`); `…__PreviousSecret` during rotation |
 
 Every integration degrades gracefully: leave a section empty and the feature
 switches itself off rather than failing at startup.
+
+### P4 Backoffice
+
+The shared backoffice service can take over legal documents, consents, e-mail,
+pricing and support one module at a time. Nothing changes until a module is
+switched to `Shadow` or `On`; `PrivateServer__Enabled=true` forces every module
+`Off`. The integration needs the `P4.Backoffice.Sdk` package, which is not on
+nuget.org, so the default build leaves it out and stays `Off`:
+
+```bash
+dotnet build                                   # without the SDK (forks, public CI)
+P4_PACKAGES_TOKEN=... dotnet build -p:UseP4BackofficeSdk=true
+dotnet build -p:UseP4BackofficeSdk=true -p:P4BackofficeSdkProject=/path/to/P4.Backoffice.Sdk.csproj
+docker build --build-arg USE_P4_BACKOFFICE_SDK=false .
+```
+
+The token is read from the environment by `nuget.config`; never commit it.
+`/Admin` shows the effective mode of each module.
 
 ## Stripe webhooks
 

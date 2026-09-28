@@ -2,8 +2,14 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
+# P4 Backoffice SDK (see Directory.Build.props). Off by default: a community
+# build needs no registry token and behaves as P4Backoffice:Mode=Off. Restore
+# and build must see the same value, hence ENV for the whole stage.
+ARG USE_P4_BACKOFFICE_SDK=false
+ENV UseP4BackofficeSdk=${USE_P4_BACKOFFICE_SDK}
+
 # Copy csproj and restore as distinct layers to leverage Docker cache
-COPY ["dotnet-signing-server.csproj", "."]
+COPY ["dotnet-signing-server.csproj", "Directory.Build.props", "nuget.config", "./"]
 RUN dotnet restore "./dotnet-signing-server.csproj"
 
 # Copy the rest of the application source code

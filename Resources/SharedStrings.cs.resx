@@ -620,4 +620,15 @@
   <data name="Error_TABLE_COLUMN_BORDER_INVALID" xml:space="preserve"><value>Rámeček sloupce tabulky musí být jedno z: none, dashed, filled.</value></data>
   <data name="Error_TABLE_NO_COLUMNS" xml:space="preserve"><value>Pole tabulky musí definovat alespoň jeden sloupec.</value></data>
   <data name="ApiDocFindCodesNote2" xml:space="preserve"><value>Prohledá se jen prvních 30 stránek dokumentu.</value></data>
+  <data name="AdminBackofficeTitle" xml:space="preserve"><value>Napojení na backoffice</value></data>
+  <data name="AdminBackofficeDisabledPrivateServer" xml:space="preserve"><value>Na privátním serveru vypnuto: všechny moduly jsou Off.</value></data>
+  <data name="AdminBackofficeDisabledNoSdk" xml:space="preserve"><value>Tento build neobsahuje SDK backoffice: všechny moduly jsou Off.</value></data>
+  <data name="AdminBackofficeModuleDocs" xml:space="preserve"><value>Právní dokumenty</value></data>
+  <data name="AdminBackofficeModuleConsents" xml:space="preserve"><value>Souhlasy</value></data>
+  <data name="AdminBackofficeModuleEmail" xml:space="preserve"><value>E-maily</value></data>
+  <data name="AdminBackofficeModulePricing" xml:space="preserve"><value>Ceník</value></data>
+  <data name="AdminBackofficeModuleSupport" xml:space="preserve"><value>Podpora</value></data>
+  <data name="AdminBackofficeBaseUrl" xml:space="preserve"><value>URL služby</value></data>
+  <data name="AdminBackofficeKey" xml:space="preserve"><value>API klíč</value></data>
+  <data name="AdminBackofficeKeyNotSet" xml:space="preserve"><value>nenastaven</value></data>
 </root>

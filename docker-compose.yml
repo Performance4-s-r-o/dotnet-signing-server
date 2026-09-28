@@ -12,6 +12,9 @@ services:
         # YYYY-MM-DD-<sha>. Empty
         # disables it and Sentry falls back to its default detection.
         SENTRY_RELEASE_SHA: ${SENTRY_RELEASE_SHA:-}
+        # true builds with the P4 Backoffice SDK (needs registry access at
+        # restore time); false leaves it out and the integration stays Off.
+        USE_P4_BACKOFFICE_SDK: ${USE_P4_BACKOFFICE_SDK:-false}
     restart: unless-stopped
     volumes:
       - data_protection_keys:/app/data-protection-keys
@@ -81,6 +84,19 @@ services:
       - OsTicket__Topic__billing=${OSTICKET_TOPIC_BILLING:-3}
       - OsTicket__Topic__account=${OSTICKET_TOPIC_ACCOUNT:-4}
       - OsTicket__Topic__other=${OSTICKET_TOPIC_OTHER:-5}
+      # P4 Backoffice integration. Everything Off by default; PrivateServer forces
+      # Off. Shadow/On needs BaseUrl + a p4sk_ key or startup fails. Empty module
+      # overrides inherit Mode.
+      - P4Backoffice__Mode=${P4_BACKOFFICE_MODE:-Off}
+      - P4Backoffice__BaseUrl=${P4_BACKOFFICE_URL:-}
+      - P4Backoffice__SecretKey=${P4_BACKOFFICE_SECRET_KEY:-}
+      - P4Backoffice__Webhook__Secret=${P4_BACKOFFICE_WEBHOOK_SECRET:-}
+      - P4Backoffice__Webhook__PreviousSecret=${P4_BACKOFFICE_WEBHOOK_PREVIOUS_SECRET:-}
+      - P4Backoffice__Modules__Docs=${P4_BACKOFFICE_DOCS_MODE:-}
+      - P4Backoffice__Modules__Consents=${P4_BACKOFFICE_CONSENTS_MODE:-}
+      - P4Backoffice__Modules__Email=${P4_BACKOFFICE_EMAIL_MODE:-}
+      - P4Backoffice__Modules__Pricing=${P4_BACKOFFICE_PRICING_MODE:-}
+      - P4Backoffice__Modules__Support=${P4_BACKOFFICE_SUPPORT_MODE:-}
       # Size limits
       - Limits__PdfMaxBytes=${PDF_MAX_BYTES:-20971520}
       - Limits__ImageMaxBytes=${IMAGE_MAX_BYTES:-1048576}
