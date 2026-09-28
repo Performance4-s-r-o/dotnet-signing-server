@@ -1,7 +1,12 @@
 using System.Net.Http.Headers;
+using DotNetSigningServer.Data;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Services.Backoffice.Documents;
+using DotNetSigningServer.Services.Backoffice.Handlers;
 using DotNetSigningServer.Services.Backoffice.Inbox;
 using DotNetSigningServer.Services.Backoffice.Outbox;
+using DotNetSigningServer.Services.Legal;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 #if P4_BACKOFFICE_SDK
@@ -57,8 +62,64 @@ public static class BackofficeRegistration
             AddOutboxDispatcher(services, snapshot);
             AddInboxProcessing(services, snapshot);
         }
+        AddLegalDocuments(services, snapshot);
 
         return services;
+    }
+
+    /// <summary>
+    /// Legal documents by <c>Modules:Docs</c>: Off reads the hand-maintained rows (as before),
+    /// Shadow does the same and compares with the service in the background, On serves the
+    /// service's texts with the <c>LegalDocuments</c> snapshot and Razor as fallbacks.
+    /// </summary>
+    internal static void AddLegalDocuments(IServiceCollection services, P4BackofficeProductOptions options)
+    {
+        var mode = options.ModeFor(BackofficeModule.Docs);
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddScoped<LegalDocumentsSnapshotWriter>();
+        // On: the hand-maintained rows are the fallback, and the snapshot is read with them.
+        services.TryAddScoped(sp => new DbLegalDocumentSource(
+            sp.GetRequiredService<ApplicationDbContext>(),
+            sp.GetRequiredService<ILogger<DbLegalDocumentSource>>(),
+            includeSnapshots: mode == BackofficeMode.On,
+            sp.GetRequiredService<TimeProvider>()));
+
+        if (mode == BackofficeMode.Off)
+        {
+            services.TryAddScoped<ILegalDocumentSource>(sp => sp.GetRequiredService<DbLegalDocumentSource>());
+            return;
+        }
+
+        var baseUrl = options.BaseUrl?.Trim() ?? "";
+        var secretKey = options.SecretKey?.Trim() ?? "";
+        services.AddHttpClient(BackofficeDocumentsClient.HttpClientName, client =>
+        {
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            client.Timeout = BackofficeDocumentsClient.RequestTimeout;
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretKey);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-documents");
+        });
+        services.AddMemoryCache();
+        services.TryAddSingleton<BackofficeDocumentsClient>();
+        services.TryAddSingleton(sp => new BackofficeDocumentsCache(
+            sp.GetRequiredService<BackofficeDocumentsClient>(),
+            sp.GetRequiredService<IMemoryCache>(),
+            sp.GetRequiredService<TimeProvider>(),
+            options.DocumentsTtl));
+        services.TryAddSingleton<LegalDocumentRefresher>();
+
+        if (mode == BackofficeMode.Shadow)
+        {
+            services.TryAddScoped<ILegalDocumentSource, ShadowLegalDocumentSource>();
+            return;
+        }
+
+        services.TryAddScoped<ILegalDocumentSource, BackofficeLegalDocumentSource>();
+        services.TryAddScoped<DocumentsMetaUpdater>();
+        services.TryAddScoped<DocumentsResync>();
+        services.AddScoped<IBackofficeResync>(sp => sp.GetRequiredService<DocumentsResync>());
+        services.AddScoped<IBackofficeEventHandler, DocumentEventsHandler>();
+        services.AddHostedService<LegalDocumentsWarmup>();
     }
 
     /// <summary>

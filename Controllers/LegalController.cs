@@ -1,4 +1,4 @@
-using DotNetSigningServer.Services;
+using DotNetSigningServer.Services.Legal;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DotNetSigningServer.Controllers;
@@ -6,9 +6,9 @@ namespace DotNetSigningServer.Controllers;
 [Route("Legal")]
 public class LegalController : Controller
 {
-    private readonly LegalDocumentService _documents;
+    private readonly ILegalDocumentSource _documents;
 
-    public LegalController(LegalDocumentService documents)
+    public LegalController(ILegalDocumentSource documents)
     {
         _documents = documents;
     }
@@ -49,20 +49,14 @@ public class LegalController : Controller
         => RenderAsync("license", "License/Index", ct);
 
     /// <summary>
-    /// Try to render the database-managed version of a legal document; on miss
-    /// or any failure, fall back to the existing static Razor view.
+    /// Render the managed version of a legal document (hand-maintained rows, or the P4
+    /// Backoffice service with its snapshot — see <see cref="ILegalDocumentSource"/>); when
+    /// there is none, fall back to the existing static Razor view.
     /// </summary>
     private async Task<IActionResult> RenderAsync(string slug, string staticViewName, CancellationToken ct)
     {
         var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.ToLowerInvariant();
-        var rendered = await _documents.TryGetAsync(slug, locale, ct);
-
-        if (rendered is null && locale != "en")
-        {
-            // English is the platform-default locale and the most likely to
-            // be authored — fall back to it before resorting to static.
-            rendered = await _documents.TryGetAsync(slug, "en", ct);
-        }
+        var rendered = await _documents.GetAsync(slug, locale, ct);
 
         if (rendered is not null)
         {

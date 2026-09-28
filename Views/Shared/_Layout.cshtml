@@ -232,12 +232,12 @@
                 <div class="footer-links-section">
                     <h4>@L["FooterLegal"]</h4>
                     <ul class="footer-links">
-                        <li><a href="/Legal/TermsOfService">Terms of Service</a></li>
-                        <li><a href="/Legal/PrivacyPolicy">Privacy Policy</a></li>
-                        <li><a href="/Legal/DataProcessingAgreement">DPA</a></li>
-                        <li><a href="/Legal/ServiceLevelAgreement">SLA</a></li>
-                        <li><a href="/Legal/RefundPolicy">Refund Policy</a></li>
-                        <li><a href="/Legal/CookiesPolicy">Cookies Policy</a></li>
+                        <li><a href="@Url.Action("TermsOfService", "Legal")">@L["LegalTermsOfService"]</a></li>
+                        <li><a href="@Url.Action("PrivacyPolicy", "Legal")">@L["LegalPrivacyPolicy"]</a></li>
+                        <li><a href="@Url.Action("DataProcessingAgreement", "Legal")">@L["LegalDpa"]</a></li>
+                        <li><a href="@Url.Action("ServiceLevelAgreement", "Legal")">@L["LegalSla"]</a></li>
+                        <li><a href="@Url.Action("RefundPolicy", "Legal")">@L["LegalRefundPolicy"]</a></li>
+                        <li><a href="@Url.Action("CookiesPolicy", "Legal")">@L["LegalCookiesPolicy"]</a></li>
                     </ul>
                 </div>
 
@@ -245,8 +245,8 @@
                 <div class="footer-links-section">
                     <h4>@L["FooterResources"]</h4>
                     <ul class="footer-links">
-                        <li><a href="/Legal/OpenSourceNotices">Open-Source Notices</a></li>
-                        <li><a href="/Legal/License">AGPL License</a></li>
+                        <li><a href="@Url.Action("OpenSourceNotices", "Legal")">@L["LegalOpenSourceNotices"]</a></li>
+                        <li><a href="@Url.Action("License", "Legal")">@L["LegalAgplLicense"]</a></li>
                     </ul>
                 </div>
             </div>

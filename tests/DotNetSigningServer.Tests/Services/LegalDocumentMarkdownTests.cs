@@ -1,3 +1,4 @@
+using DotNetSigningServer.Services.Legal;
 using Markdig;
 
 namespace DotNetSigningServer.Tests.Services;
@@ -15,13 +16,8 @@ namespace DotNetSigningServer.Tests.Services;
 /// </summary>
 public class LegalDocumentMarkdownTests
 {
-    /// <summary>Must mirror LegalDocumentService's pipeline exactly.</summary>
-    private static MarkdownPipeline BuildPipeline() =>
-        new MarkdownPipelineBuilder()
-            .UseAdvancedExtensions()
-            .UseAutoLinks()
-            .DisableHtml()
-            .Build();
+    /// <summary>The pipeline DbLegalDocumentSource renders hand-maintained rows with.</summary>
+    private static MarkdownPipeline BuildPipeline() => DbLegalDocumentSource.Pipeline;
 
     [Theory]
     [InlineData("<script>alert(1)</script>")]

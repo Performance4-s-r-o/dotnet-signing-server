@@ -391,6 +391,9 @@
   <data name="TemplatesApiDocsLink" xml:space="preserve"><value>Dokumentace API</value></data>
 
   <!-- Legal / Index -->
+  <data name="LegalDocVersion" xml:space="preserve"><value>Verze {0}</value></data>
+  <data name="LegalDocEffectiveFrom" xml:space="preserve"><value>Účinnost od {0:d. M. yyyy}</value></data>
+  <data name="LegalDocKeyChanges" xml:space="preserve"><value>Hlavní změny:</value></data>
   <data name="LegalTitle" xml:space="preserve"><value>Právní dokumenty</value></data>
   <data name="LegalDescription" xml:space="preserve"><value>Zde najdete všechny právní dokumenty a zásady týkající se používání služby Performance4PDF od Performance4 s.r.o.</value></data>
   <data name="LegalTermsOfService" xml:space="preserve"><value>Podmínky použití</value></data>

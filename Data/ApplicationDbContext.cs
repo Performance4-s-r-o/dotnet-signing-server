@@ -78,6 +78,15 @@ namespace DotNetSigningServer.Data
             modelBuilder.Entity<LegalDocument>()
                 .HasIndex(d => new { d.Slug, d.Locale, d.IsDraft, d.EffectiveFrom });
 
+            // Existing rows become 'manual' through the column default.
+            modelBuilder.Entity<LegalDocument>()
+                .Property(d => d.Source)
+                .HasDefaultValue(LegalDocumentSources.Manual);
+
+            modelBuilder.Entity<LegalDocument>()
+                .Property(d => d.ContentHash)
+                .IsFixedLength();
+
             modelBuilder.Entity<ApiToken>()
                 .HasIndex(t => t.TokenHash);
 

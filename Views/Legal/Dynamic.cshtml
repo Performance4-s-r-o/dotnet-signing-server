@@ -1,6 +1,7 @@
-@model DotNetSigningServer.Services.LegalDocumentRendered
-@* Model comes from LegalDocumentService (this platform's own DB), not from any
-   external CMS — the legal texts are owned here. *@
+@model DotNetSigningServer.Services.Legal.LegalDocumentRendered
+@* Model comes from ILegalDocumentSource: this platform's own LegalDocuments rows
+   (Markdown rendered by Markdig) or, with the Docs module On, the P4 Backoffice
+   service and its snapshot (HTML sanitized by the service). *@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
     ViewData["Title"] = Model.Title;
@@ -8,27 +9,27 @@
     ViewData["MetaDescription"] = string.IsNullOrWhiteSpace(Model.Summary)
         ? $"{Model.Title} — Performance4PDF"
         : Model.Summary;
-    var locale = string.Equals(Model.Locale, "cs", StringComparison.OrdinalIgnoreCase) ? "cs" : "en";
-    var effectiveFromLabel = locale == "cs"
-        ? $"Účinnost od {Model.EffectiveFrom.LocalDateTime:d. M. yyyy}"
-        : $"Effective from {Model.EffectiveFrom.LocalDateTime:MMMM d, yyyy}";
-    var versionLabel = locale == "cs" ? $"Verze {Model.Version}" : $"Version {Model.Version}";
+    var culture = System.Globalization.CultureInfo.CurrentUICulture;
+    var versionLabel = string.Format(culture, L["LegalDocVersion"].Value, Model.Version);
+    var effectiveFromLabel = Model.EffectiveFrom is { } effectiveFrom
+        ? string.Format(culture, L["LegalDocEffectiveFrom"].Value, effectiveFrom.LocalDateTime)
+        : null;
 }
 
 <div class="legal-document">
     <h1>@Model.Title</h1>
-    <p><em>@versionLabel · @effectiveFromLabel</em></p>
+    <p><em>@versionLabel@(effectiveFromLabel is null ? "" : " · " + effectiveFromLabel)</em></p>
 
     @if (!string.IsNullOrWhiteSpace(Model.Summary))
     {
         <div class="legal-document__summary">
-            <strong>@(locale == "cs" ? "Hlavní změny:" : "Key changes:")</strong>
+            <strong>@L["LegalDocKeyChanges"]</strong>
             <p>@Model.Summary</p>
         </div>
     }
 
-    @* Content was rendered server-side from Markdown by LegalDocumentService, whose
-       pipeline has DisableHtml() — raw HTML in the stored markdown is escaped, not
-       passed through, so the output here contains only Markdig-generated markup. *@
+    @* Safe HTML only: Markdig output of a hand-maintained row, whose pipeline has
+       DisableHtml() (raw HTML in the stored Markdown is escaped, not passed through),
+       or the P4 Backoffice service's HTML, which the service sanitizes before serving. *@
     @Html.Raw(Model.ContentHtml)
 </div>

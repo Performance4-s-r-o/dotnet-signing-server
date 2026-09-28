@@ -40,6 +40,10 @@ public static class BackofficeOptionsValidator
         {
             problems.Add($"{Setting("Email:FallbackAfter")} must not be negative.");
         }
+        if (options.DocumentsTtl is { } ttl && ttl <= TimeSpan.Zero)
+        {
+            problems.Add($"{Setting("DocumentsTtl")} must be positive.");
+        }
         if (options.Polling.Interval is { } interval && interval <= TimeSpan.Zero)
         {
             problems.Add($"{Setting("Polling:Interval")} must be positive.");
