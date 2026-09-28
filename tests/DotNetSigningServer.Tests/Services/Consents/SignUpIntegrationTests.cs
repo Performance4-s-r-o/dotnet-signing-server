@@ -179,12 +179,18 @@ public class SignUpIntegrationTests : IClassFixture<SignUpPostgresFixture>
         Assert.Equal(BackofficeOutboxStatus.Pending, item.Status);
         Assert.Equal($"dotnet:user:{user.Id}", item.SubjectRef);
 
-        // The same address again: the same answer, and no consent is recorded for it.
+        // The same address again: the same answer, and no consent or outbox item is written for it
+        // (no database side effect that would reveal the account exists).
+        var recordsBefore = await DbAsync(db => db.ConsentRecords.CountAsync());
+        var itemsBefore = await DbAsync(db => db.BackofficeOutboxItems.CountAsync());
         (token, _) = await OpenFormAsync(client);
         var again = await PostAsync(client, token, email, accept: true,
             new Dictionary<string, string> { ["ShownVersions[terms]"] = "1", ["ShownVersions[dpa]"] = "1", ["ShownVersions[privacy]"] = "1" });
         Assert.Equal(HttpStatusCode.Redirect, again.StatusCode);
+        Assert.Equal("/Account/Verify", again.Headers.Location?.OriginalString);
         Assert.Equal(3, await DbAsync(db => db.ConsentRecords.CountAsync(r => r.UserId == user.Id)));
+        Assert.Equal(recordsBefore, await DbAsync(db => db.ConsentRecords.CountAsync()));
+        Assert.Equal(itemsBefore, await DbAsync(db => db.BackofficeOutboxItems.CountAsync()));
     }
 
     [DockerFact]

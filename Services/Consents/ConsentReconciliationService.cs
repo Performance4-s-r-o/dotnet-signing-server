@@ -17,7 +17,8 @@ public sealed record RemoteDocumentConsent(string Document, string? LastAction, 
 /// for every user with a record from the last <see cref="Lookback"/>, reads
 /// <c>GET /v1/subjects/{ref}/consent-status</c> and logs differences as warnings. It only
 /// reports — the gate always reads the local records — and it never runs in a request.
-/// Users whose consent batch is still in the outbox are skipped. On PostgreSQL one instance
+/// Users whose consent batch is still in the outbox are skipped; records never queued (made while
+/// Off and not yet backfilled) show up as missing in the service. On PostgreSQL one instance
 /// runs it at a time (session advisory lock); the last run is kept in <c>BackofficeStates</c>.
 /// </summary>
 public sealed class ConsentReconciliationService : BackgroundService
@@ -143,7 +144,9 @@ public sealed class ConsentReconciliationService : BackgroundService
     {
         var since = now - Lookback;
         var userIds = await db.ConsentRecords.AsNoTracking()
-            .Where(c => c.OccurredAt >= since && c.OutboxItemId != null)
+            // Not filtered by OutboxItemId: records sent by ConsentBackfill keep it null (append-only
+            // table), and those users are the ones most likely to differ. Unsent batches are skipped below.
+            .Where(c => c.OccurredAt >= since)
             .Select(c => c.UserId)
             .Distinct()
             .Take(MaxSubjectsPerRun)
