@@ -1,4 +1,5 @@
 using DotNetSigningServer.Models;
+using DotNetSigningServer.Services.Pricing;
 
 namespace DotNetSigningServer.Services;
 
@@ -16,6 +17,18 @@ public interface IStripeCheckoutService
         User user,
         long amountCents,
         string currency,
+        string successUrl,
+        string cancelUrl,
+        IDictionary<string, string>? metadata = null,
+        bool saveCard = false);
+
+    /// <summary>
+    /// Checkout of a credit pack: its Stripe Price (by lookup key) when one matches the pack,
+    /// otherwise the pack's amount inline.
+    /// </summary>
+    Task<string> CreateCheckoutSessionAsync(
+        User user,
+        CreditPack pack,
         string successUrl,
         string cancelUrl,
         IDictionary<string, string>? metadata = null,

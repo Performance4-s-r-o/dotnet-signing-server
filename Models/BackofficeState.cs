@@ -37,4 +37,10 @@ public static class BackofficeStateKeys
 
     /// <summary>When the daily consent reconciliation last ran (ISO 8601).</summary>
     public const string ConsentsReconciledAt = "consents:reconciled_at";
+
+    /// <summary>
+    /// The price list in force (<c>GET /v1/pricing/current</c>) with its ETag, as JSON; see
+    /// <c>PricingSnapshot</c>.
+    /// </summary>
+    public const string PricingCurrent = "pricing:current";
 }

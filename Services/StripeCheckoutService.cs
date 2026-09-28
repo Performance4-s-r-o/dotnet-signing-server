@@ -1,5 +1,6 @@
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Services.Pricing;
 using Microsoft.Extensions.Options;
 using Stripe;
 using Stripe.Checkout;
@@ -9,10 +10,29 @@ namespace DotNetSigningServer.Services;
 public class StripeCheckoutService : IStripeCheckoutService
 {
     private readonly StripeOptions _options;
+    private readonly StripePriceResolver? _priceResolver;
+    private readonly ILogger<StripeCheckoutService>? _logger;
+    private readonly IStripeClient? _client;
 
-    public StripeCheckoutService(IOptions<StripeOptions> options)
+    public StripeCheckoutService(
+        IOptions<StripeOptions> options,
+        StripePriceResolver priceResolver,
+        ILogger<StripeCheckoutService> logger)
+        : this(options, priceResolver, logger, client: null)
+    {
+    }
+
+    /// <summary>Tests: <paramref name="client"/> replaces the global Stripe client for Checkout sessions.</summary>
+    internal StripeCheckoutService(
+        IOptions<StripeOptions> options,
+        StripePriceResolver? priceResolver,
+        ILogger<StripeCheckoutService>? logger,
+        IStripeClient? client)
     {
         _options = options.Value;
+        _priceResolver = priceResolver;
+        _logger = logger;
+        _client = client;
 
         if (!string.IsNullOrWhiteSpace(_options.ApiKey))
         {
@@ -28,6 +48,80 @@ public class StripeCheckoutService : IStripeCheckoutService
         string cancelUrl,
         IDictionary<string, string>? metadata = null,
         bool saveCard = false)
+    {
+        var sessionOptions = BuildSessionOptions(user, InlineLineItem(amountCents, currency), successUrl, cancelUrl, metadata, saveCard);
+        var session = await Sessions().CreateAsync(sessionOptions);
+        return session.Url ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Checkout of a credit pack: one line with the pack's Stripe Price when
+    /// <see cref="StripePriceResolver"/> finds a matching one (lookup key, amount, currency),
+    /// otherwise — and when Stripe refuses the session with that Price, e.g. because the
+    /// account has no default tax behaviour — the pack's amount inline, as before.
+    /// </summary>
+    public async Task<string> CreateCheckoutSessionAsync(
+        User user,
+        CreditPack pack,
+        string successUrl,
+        string cancelUrl,
+        IDictionary<string, string>? metadata = null,
+        bool saveCard = false)
+    {
+        var priceId = _priceResolver == null ? null : await _priceResolver.ResolveAsync(pack);
+        if (priceId != null)
+        {
+            try
+            {
+                var withPrice = BuildSessionOptions(user, PriceLineItem(priceId), successUrl, cancelUrl, metadata, saveCard);
+                var session = await Sessions().CreateAsync(withPrice);
+                return session.Url ?? string.Empty;
+            }
+            catch (StripeException ex)
+            {
+                _logger?.LogWarning(ex,
+                    "[pricing] Checkout with Stripe Price {PriceId} ({LookupKey}) was refused ({StripeCode}); charging {Quantity} credits inline",
+                    priceId, pack.LookupKey, ex.StripeError?.Code, pack.Quantity);
+            }
+        }
+
+        var inline = BuildSessionOptions(user, InlineLineItem(pack.UnitAmountMinor, pack.Currency), successUrl, cancelUrl, metadata, saveCard);
+        var fallback = await Sessions().CreateAsync(inline);
+        return fallback.Url ?? string.Empty;
+    }
+
+    private SessionService Sessions() => _client is null ? new SessionService() : new SessionService(_client);
+
+    /// <summary>A line charging an existing Stripe Price once.</summary>
+    internal static SessionLineItemOptions PriceLineItem(string priceId) => new()
+    {
+        Price = priceId,
+        Quantity = 1,
+    };
+
+    /// <summary>A line with the amount inline (<c>price_data</c>), as Checkout always did.</summary>
+    internal static SessionLineItemOptions InlineLineItem(long amountCents, string currency) => new()
+    {
+        Quantity = 1,
+        PriceData = new SessionLineItemPriceDataOptions
+        {
+            UnitAmount = amountCents,
+            Currency = currency,
+            ProductData = new SessionLineItemPriceDataProductDataOptions
+            {
+                Name = "Signing usage",
+                Description = "Usage-based billing for document signing"
+            }
+        }
+    };
+
+    internal SessionCreateOptions BuildSessionOptions(
+        User user,
+        SessionLineItemOptions lineItem,
+        string successUrl,
+        string cancelUrl,
+        IDictionary<string, string>? metadata,
+        bool saveCard)
     {
         var taxIdCollection = _options.EnableTaxIdCollection
             ? new SessionTaxIdCollectionOptions { Enabled = true }
@@ -55,23 +149,7 @@ public class StripeCheckoutService : IStripeCheckoutService
             {
                 Enabled = true
             },
-            LineItems = new List<SessionLineItemOptions>
-            {
-                new SessionLineItemOptions
-                {
-                    Quantity = 1,
-                    PriceData = new SessionLineItemPriceDataOptions
-                    {
-                        UnitAmount = amountCents,
-                        Currency = currency,
-                        ProductData = new SessionLineItemPriceDataProductDataOptions
-                        {
-                            Name = "Signing usage",
-                            Description = "Usage-based billing for document signing"
-                        }
-                    }
-                }
-            }
+            LineItems = new List<SessionLineItemOptions> { lineItem }
         };
 
         // Only set one of customer or customer_email to satisfy Stripe's requirements.
@@ -90,9 +168,7 @@ public class StripeCheckoutService : IStripeCheckoutService
             sessionOptions.CustomerCreation = "if_required";
         }
 
-        var sessionService = new SessionService();
-        var session = await sessionService.CreateAsync(sessionOptions);
-        return session.Url ?? string.Empty;
+        return sessionOptions;
     }
 
     public async Task<Session?> GetSessionAsync(string sessionId)

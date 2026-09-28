@@ -297,6 +297,33 @@ directly again. E-mail items still pending stay in the outbox untouched while th
 is not `On` (critical ones will already have gone out by break-glass) and are
 sent once it is `On` again.
 
+#### Pricing
+
+Credit packs are 100, 300, 500 and 1000 credits. Every price the app shows or
+charges (`/pricing`, `/Billing`, Checkout, auto-recharge, the price-change
+monitor) comes from `ICreditPricingProvider` (`Services/Pricing/`); nothing on
+those paths calls the service.
+
+- `P4Backoffice__Modules__Pricing=Off` (default): `Billing__PricePer100` and the
+  `Billing__Discount*` volume discounts, charged inline (`price_data`) as before.
+- `Shadow`: the same prices, but the service's price list is fetched in the
+  background (at startup, hourly, after `price.effective`) and every difference
+  from the configuration is logged as a warning.
+- `On`: prices from the snapshot of `GET /v1/pricing/current` (items of kind
+  `credits` with `attributes.quantity`, the one-time price in `Stripe__Currency`),
+  kept in `BackofficeStates` (`pricing:current`) and in memory, refreshed hourly
+  (with `ETag`), right after `price.effective` and on `window_clamped`. Without a
+  snapshot, or for a pack missing from it, the configured price is used and a
+  warning logged. Checkout charges the pack's Stripe Price, found by its
+  `lookup_key` (cached for 10 minutes) and used only when it is active, one-time
+  and its amount and currency match the price list; otherwise, and when Stripe
+  refuses the session with that Price (e.g. no default tax behaviour on the
+  account while automatic tax is on), the amount is sent inline and a warning
+  logged. Checkout metadata (`documents`) and the Stripe webhook are unchanged.
+
+Rollback: `P4Backoffice__Modules__Pricing=Off`. Keep `Billing__*` in line with
+the price list while the module is `On`: it is the fallback.
+
 ## Stripe webhooks
 
 Endpoint: `POST /api/webhooks/stripe` (`Controllers/StripeWebhookController.cs`).
