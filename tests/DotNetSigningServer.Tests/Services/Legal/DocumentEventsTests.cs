@@ -160,7 +160,7 @@ public class DocumentEventsTests
 
         await host.WithScopeAsync(async sp =>
         {
-            var resync = sp.GetServices<IBackofficeResync>().Single();
+            var resync = sp.GetServices<IBackofficeResync>().OfType<DocumentsResync>().Single();
             Assert.Equal("documents", resync.Name);
             await resync.ResyncAsync("window_clamped", CancellationToken.None);
             return true;

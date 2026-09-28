@@ -6,11 +6,16 @@ namespace DotNetSigningServer.Controllers;
 [Route("Legal")]
 public class LegalController : Controller
 {
-    private readonly ILegalDocumentSource _documents;
+    /// <summary>ViewData key of the cookie declaration shown under the cookies policy.</summary>
+    public const string CookieDeclarationKey = "CookieDeclaration";
 
-    public LegalController(ILegalDocumentSource documents)
+    private readonly ILegalDocumentSource _documents;
+    private readonly ICookieDeclarationSource _cookieDeclaration;
+
+    public LegalController(ILegalDocumentSource documents, ICookieDeclarationSource cookieDeclaration)
     {
         _documents = documents;
+        _cookieDeclaration = cookieDeclaration;
     }
 
     [HttpGet("")]
@@ -38,7 +43,9 @@ public class LegalController : Controller
 
     [HttpGet("CookiesPolicy")]
     public Task<IActionResult> CookiesPolicy(CancellationToken ct)
-        => RenderAsync("cookies-policy", "CookiesPolicy/Index", ct);
+        => RenderAsync(CookiesPolicySlug, "CookiesPolicy/Index", ct);
+
+    private const string CookiesPolicySlug = "cookies-policy";
 
     [HttpGet("OpenSourceNotices")]
     public Task<IActionResult> OpenSourceNotices(CancellationToken ct)
@@ -60,6 +67,12 @@ public class LegalController : Controller
 
         if (rendered is not null)
         {
+            if (slug == CookiesPolicySlug)
+            {
+                // Docs On: the service's declaration (memory or snapshot, never a live call).
+                // Null otherwise; the page then has no table.
+                ViewData[CookieDeclarationKey] = await _cookieDeclaration.GetAsync(locale, ct);
+            }
             return View("Dynamic", rendered);
         }
 

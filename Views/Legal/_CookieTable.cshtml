@@ -1,0 +1,31 @@
+@model IReadOnlyList<DotNetSigningServer.Services.Legal.CookieDeclarationCookie>
+@* Cookie table of the cookies policy: the service's declaration (Docs module On) or the
+   audited list (AuditedCookies). Every value is text and HTML-encoded by Razor. *@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
+
+<div class="table-wrapper legal-cookie-table">
+    <table class="table">
+        <caption>@L["CookieTableCaption"]</caption>
+        <thead>
+            <tr>
+                <th scope="col">@L["CookieTableName"]</th>
+                <th scope="col">@L["CookieTableProvider"]</th>
+                <th scope="col">@L["CookieTablePurpose"]</th>
+                <th scope="col">@L["CookieTableDuration"]</th>
+                <th scope="col">@L["CookieTableParty"]</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var cookie in Model)
+            {
+                <tr>
+                    <td><code>@cookie.Name</code></td>
+                    <td>@cookie.Provider</td>
+                    <td>@cookie.Purpose</td>
+                    <td>@cookie.Duration</td>
+                    <td>@(cookie.Party == "third" ? L["CookiePartyThird"] : L["CookiePartyFirst"])</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

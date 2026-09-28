@@ -32,4 +32,13 @@
        DisableHtml() (raw HTML in the stored Markdown is escaped, not passed through),
        or the P4 Backoffice service's HTML, which the service sanitizes before serving. *@
     @Html.Raw(Model.ContentHtml)
+
+    @if (Model.Slug == "cookies-policy")
+    {
+        @* The service's cookie declaration (Docs On, from memory or the snapshot); without one
+           the audited list, so the page always names the cookies actually set. *@
+        var declaration = ViewData[DotNetSigningServer.Controllers.LegalController.CookieDeclarationKey]
+            as DotNetSigningServer.Services.Legal.CookieDeclarationSnapshot;
+        <partial name="_CookieTable" model="declaration?.Cookies ?? DotNetSigningServer.Services.Legal.AuditedCookies.For(L)" />
+    }
 </div>
