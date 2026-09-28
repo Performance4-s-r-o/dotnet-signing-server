@@ -1,6 +1,7 @@
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Services.Backoffice;
 using DotNetSigningServer.Middleware;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
@@ -132,6 +133,9 @@ var privateServer = builder.Configuration.GetSection("PrivateServer")
     .Get<DotNetSigningServer.Options.PrivateServerOptions>() ?? new();
 builder.Services.Configure<DotNetSigningServer.Options.PrivateServerOptions>(
     builder.Configuration.GetSection("PrivateServer"));
+// P4 Backoffice integration (section P4Backoffice). Every module defaults to Off,
+// and PrivateServer forces Off; see Services/Backoffice/BackofficeRegistration.cs.
+builder.Services.AddP4BackofficeIntegration(builder.Configuration, privateServer);
 
 builder.Services.AddControllersWithViews(options =>
     {

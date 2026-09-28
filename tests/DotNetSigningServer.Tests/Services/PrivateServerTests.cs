@@ -1,7 +1,11 @@
 using DotNetSigningServer.Conventions;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Services.Backoffice;
+using DotNetSigningServer.Tests.Services.Backoffice;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using System.Reflection;
 
 namespace DotNetSigningServer.Tests.Services;
@@ -145,5 +149,49 @@ public class PrivateServerStartupCheckTests
     {
         Assert.Empty(PrivateServerStartupChecks.Validate(
             On, "admin@zakaznik.cz", "correct-horse-battery-staple", anyUserExists: false));
+    }
+}
+
+/// <summary>
+/// A self-hosted installation never talks to the P4 Backoffice service, whatever
+/// the configuration asks for — and a key left in its environment is not a
+/// reason to refuse to start.
+/// </summary>
+public class PrivateServerBackofficeTests
+{
+    [Fact]
+    public void PrivateServer_ForcesBackofficeOff_EvenWithAKey()
+    {
+        var services = BackofficeRegistrationTests.Register(
+            new()
+            {
+                ["P4Backoffice:Mode"] = "On",
+                ["P4Backoffice:Modules:Pricing"] = "On",
+                ["P4Backoffice:BaseUrl"] = "https://backoffice.example.com",
+                ["P4Backoffice:SecretKey"] = "p4sk_live_abc",
+            },
+            privateServer: true);
+
+        var options = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<P4BackofficeProductOptions>>().Value;
+
+        Assert.Equal(BackofficeDisabledReason.PrivateServer, options.DisabledReason);
+        Assert.All(
+            Enum.GetValues<BackofficeModule>(),
+            m => Assert.Equal(BackofficeMode.Off, options.ModeFor(m)));
+        Assert.False(BackofficeRegistrationTests.AnySdkService(services));
+    }
+
+    [Fact]
+    public void PrivateServer_DoesNotRequireAKey()
+    {
+        var services = BackofficeRegistrationTests.Register(
+            new() { ["P4Backoffice:Mode"] = "On" },
+            privateServer: true);
+
+        var options = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<P4BackofficeProductOptions>>().Value;
+
+        Assert.False(options.AnyEnabled);
     }
 }
