@@ -5,6 +5,7 @@ using DotNetSigningServer.Models;
 using DotNetSigningServer.Services.Backoffice.Outbox;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace DotNetSigningServer.Tests.Services.Backoffice.Outbox;
@@ -315,5 +316,52 @@ public class BackofficeOutboxDispatcherTests
         var left = await host.WithDbAsync(db => db.BackofficeOutboxItems.Select(i => i.Id).ToListAsync());
         Assert.Equal(new[] { pending }, left);
         _ = sent;
+    }
+
+    [Fact]
+    public async Task LongBacklog_StopsDrainingAfterTheBudget_SoTheAlertStillRuns()
+    {
+        using var host = new OutboxTestHost();
+        for (var i = 0; i < OutboxClaim.BatchSize * 2 + 10; i++)
+        {
+            await host.EnqueueAsync(new { n = i });
+            // A slow but working service: each attempt moves the clock on.
+            host.Service.Responses.Enqueue(_ =>
+            {
+                host.Time.Advance(TimeSpan.FromMinutes(5));
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Accepted));
+            });
+        }
+        var logger = new ListLogger<BackofficeOutboxDispatcher>();
+        var dispatcher = new BackofficeOutboxDispatcher(
+            host.Processor, host.Signal, host.Services.GetRequiredService<IServiceScopeFactory>(),
+            host.Time, logger);
+
+        var moreDue = await dispatcher.RunPassAsync(CancellationToken.None);
+
+        // One full batch used up the budget; the rest waits for the next pass...
+        Assert.True(moreDue);
+        Assert.Equal(OutboxClaim.BatchSize, host.Service.Requests.Count);
+        // ...and the monitor ran in between, reporting the pending item older than 1 h.
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Error && e.Message.Contains("Oldest pending"));
+
+        // Later passes pick up where it stopped until nothing is left.
+        Assert.True(await dispatcher.RunPassAsync(CancellationToken.None));
+        Assert.False(await dispatcher.RunPassAsync(CancellationToken.None));
+        Assert.Equal(OutboxClaim.BatchSize * 2 + 10, host.Service.Requests.Count);
+    }
+}
+
+internal sealed class ListLogger<T> : ILogger<T>
+{
+    public List<(LogLevel Level, string Message)> Entries { get; } = new();
+
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+    public bool IsEnabled(LogLevel logLevel) => true;
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    {
+        lock (Entries) Entries.Add((logLevel, formatter(state, exception)));
     }
 }

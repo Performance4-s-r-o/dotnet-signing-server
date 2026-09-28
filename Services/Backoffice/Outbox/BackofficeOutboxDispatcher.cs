@@ -15,6 +15,12 @@ public sealed class BackofficeOutboxDispatcher : BackgroundService
     public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
     public static readonly TimeSpan MonitorInterval = TimeSpan.FromMinutes(5);
     public static readonly TimeSpan CleanupInterval = TimeSpan.FromDays(1);
+
+    /// <summary>
+    /// A pass stops claiming new batches after this, so a long backlog cannot hold off the
+    /// periodic alert (the very case it is there to report). The drain resumes right away.
+    /// </summary>
+    public static readonly TimeSpan DrainBudget = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan ErrorPause = TimeSpan.FromSeconds(30);
 
     private readonly OutboxProcessor _processor;
@@ -52,7 +58,10 @@ public sealed class BackofficeOutboxDispatcher : BackgroundService
             var wait = PollInterval;
             try
             {
-                await RunPassAsync(stoppingToken);
+                if (await RunPassAsync(stoppingToken))
+                {
+                    continue; // drain budget spent with more due: carry on without waiting
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -75,13 +84,23 @@ public sealed class BackofficeOutboxDispatcher : BackgroundService
         }
     }
 
-    /// <summary>One pass: send everything due (batch after batch), then the periodic chores.</summary>
-    internal async Task RunPassAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// One pass: send what is due (batch after batch, for at most <see cref="DrainBudget"/>),
+    /// then the periodic chores. Returns true when the budget ran out with more likely due.
+    /// </summary>
+    internal async Task<bool> RunPassAsync(CancellationToken cancellationToken)
     {
+        var drainStarted = _time.GetUtcNow();
+        var moreDue = false;
         // A full batch means there may be more due right now.
         while (await _processor.DispatchDueAsync(cancellationToken) >= OutboxClaim.BatchSize)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (_time.GetUtcNow() - drainStarted >= DrainBudget)
+            {
+                moreDue = true;
+                break;
+            }
         }
 
         var now = _time.GetUtcNow();
@@ -95,6 +114,7 @@ public sealed class BackofficeOutboxDispatcher : BackgroundService
             _nextCleanup = now + CleanupInterval;
             await CleanupAsync(now, cancellationToken);
         }
+        return moreDue;
     }
 
     private async Task MonitorAsync(DateTimeOffset now, CancellationToken cancellationToken)
