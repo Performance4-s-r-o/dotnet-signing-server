@@ -20,8 +20,7 @@ public class StripeWebhookController : ControllerBase
     private readonly StripeOptions _stripeOptions;
     private readonly BillingOptions _billingOptions;
     private readonly IAutoRechargeService _autoRechargeService;
-    private readonly IEmailSender _emailSender;
-    private readonly IEmailTemplateRenderer _emailTemplates;
+    private readonly ITemplatedEmailSender _email;
     private readonly AppOptions _appOptions;
     private readonly ILogger<StripeWebhookController> _logger;
 
@@ -30,8 +29,7 @@ public class StripeWebhookController : ControllerBase
         IOptions<StripeOptions> stripeOptions,
         IOptions<BillingOptions> billingOptions,
         IAutoRechargeService autoRechargeService,
-        IEmailSender emailSender,
-        IEmailTemplateRenderer emailTemplates,
+        ITemplatedEmailSender email,
         IOptions<AppOptions> appOptions,
         ILogger<StripeWebhookController> logger)
     {
@@ -39,8 +37,7 @@ public class StripeWebhookController : ControllerBase
         _stripeOptions = stripeOptions.Value;
         _billingOptions = billingOptions.Value;
         _autoRechargeService = autoRechargeService;
-        _emailSender = emailSender;
-        _emailTemplates = emailTemplates;
+        _email = email;
         _appOptions = appOptions.Value;
         _logger = logger;
     }
@@ -378,25 +375,23 @@ public class StripeWebhookController : ControllerBase
         var baseUrl = _appOptions.BaseUrl;
         // A webhook from Stripe, not the user's request: the language of their last sign-in.
         var locale = user.EmailLocale;
-        var rendered = _emailTemplates.Render(EmailTemplateId.PaymentFailed, locale, new Dictionary<string, string?>
-        {
-            ["paymentType"] = paymentType.Replace("_", " "),
-            ["amount"] = (paymentIntent.Amount / 100.0m).ToString("0.00"),
-            ["currency"] = paymentIntent.Currency?.ToUpperInvariant() ?? _billingOptions.Currency,
-            ["failureReason"] = failureMessage,
-            ["billingUrl"] = $"{baseUrl}/Billing",
-        });
+        var variables = EmailTemplateVariables.PaymentFailed(
+            paymentType: paymentType.Replace("_", " "),
+            amount: (paymentIntent.Amount / 100.0m).ToString("0.00"),
+            currency: paymentIntent.Currency?.ToUpperInvariant() ?? _billingOptions.Currency,
+            failureReason: failureMessage,
+            billingUrl: $"{baseUrl}/Billing");
 
         var emailOptions = new EmailSendOptions(EmailTemplateId.PaymentFailed, locale, user.Id);
         // Email module On: queued with the failed payment and the webhook record (saved by the caller).
-        if (_emailSender.TryEnqueue(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions))
+        if (_email.TryEnqueue(EmailTemplateId.PaymentFailed, user.Email, locale, variables, emailOptions))
         {
             return;
         }
 
         try
         {
-            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions);
+            await _email.SendAsync(EmailTemplateId.PaymentFailed, user.Email, locale, variables, emailOptions);
         }
         catch (Exception ex)
         {

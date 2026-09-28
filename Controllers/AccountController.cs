@@ -24,8 +24,7 @@ public class AccountController : Controller
 {
     private readonly ApplicationDbContext _dbContext;
     private readonly IAuthService _authService;
-    private readonly IEmailSender _emailSender;
-    private readonly IEmailTemplateRenderer _emailTemplates;
+    private readonly ITemplatedEmailSender _email;
     private readonly AppOptions _appOptions;
     private readonly IStringLocalizer<SharedStrings> _localizer;
 
@@ -37,15 +36,13 @@ public class AccountController : Controller
     public AccountController(
         ApplicationDbContext dbContext,
         IAuthService authService,
-        IEmailSender emailSender,
-        IEmailTemplateRenderer emailTemplates,
+        ITemplatedEmailSender email,
         IOptions<AppOptions> appOptions,
         IStringLocalizer<SharedStrings> localizer)
     {
         _dbContext = dbContext;
         _authService = authService;
-        _emailSender = emailSender;
-        _emailTemplates = emailTemplates;
+        _email = email;
         _appOptions = appOptions.Value;
         _localizer = localizer;
     }
@@ -213,12 +210,9 @@ public class AccountController : Controller
         // Email module On it is queued in the same SaveChangesAsync as the user; otherwise it
         // is sent right after, as before.
         var verificationLink = BuildAbsoluteUrl($"/Account/Verify?token={Uri.EscapeDataString(verificationToken)}");
-        var rendered = _emailTemplates.Render(EmailTemplateId.EmailVerification, CurrentLocale, new Dictionary<string, string?>
-        {
-            ["verificationUrl"] = verificationLink,
-        });
+        var variables = EmailTemplateVariables.EmailVerification(verificationLink);
         var emailOptions = new EmailSendOptions(EmailTemplateId.EmailVerification, user.Locale, user.Id);
-        var queued = _emailSender.TryEnqueue(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions);
+        var queued = _email.TryEnqueue(EmailTemplateId.EmailVerification, user.Email, CurrentLocale, variables, emailOptions);
         await _dbContext.SaveChangesAsync();
 
         if (queued)
@@ -229,7 +223,7 @@ public class AccountController : Controller
 
         try
         {
-            await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions);
+            await _email.SendAsync(EmailTemplateId.EmailVerification, user.Email, CurrentLocale, variables, emailOptions);
             TempData["Info"] = _localizer["CheckEmailVerification"].Value;
         }
         catch
@@ -314,15 +308,11 @@ public class AccountController : Controller
         // E-mails sent later (auto-recharge, payments) follow the language of the last sign-in.
         user.Locale = StoredLocale;
 
-        var rendered = _emailTemplates.Render(EmailTemplateId.TwoFactorCode, CurrentLocale, new Dictionary<string, string?>
-        {
-            ["otpCode"] = otp,
-            ["expiryMinutes"] = "10",
-        });
+        var variables = EmailTemplateVariables.TwoFactorCode(otp, expiryMinutes: 10);
         var emailOptions = new EmailSendOptions(EmailTemplateId.TwoFactorCode, user.Locale, user.Id);
         // Email module On: queued with the code in one SaveChangesAsync (break-glass delivers it
         // if the service does not). Otherwise sent right after the save, as before.
-        var queued = _emailSender.TryEnqueue(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions);
+        var queued = _email.TryEnqueue(EmailTemplateId.TwoFactorCode, user.Email, CurrentLocale, variables, emailOptions);
         await _dbContext.SaveChangesAsync();
 
         if (queued)
@@ -333,7 +323,7 @@ public class AccountController : Controller
         {
             try
             {
-                await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions);
+                await _email.SendAsync(EmailTemplateId.TwoFactorCode, user.Email, CurrentLocale, variables, emailOptions);
                 TempData["Info"] = _localizer["TwoFactorCodeSent"].Value;
             }
             catch
@@ -524,21 +514,17 @@ public class AccountController : Controller
             user.UpdatedAt = DateTimeOffset.UtcNow;
 
             var resetLink = BuildAbsoluteUrl($"/Account/ResetPassword?token={Uri.EscapeDataString(token)}");
-            var rendered = _emailTemplates.Render(EmailTemplateId.PasswordReset, CurrentLocale, new Dictionary<string, string?>
-            {
-                ["resetUrl"] = resetLink,
-                ["expiryMinutes"] = "60",
-            });
+            var variables = EmailTemplateVariables.PasswordReset(resetLink, expiryMinutes: 60);
             var emailOptions = new EmailSendOptions(EmailTemplateId.PasswordReset, StoredLocale, user.Id);
             // Email module On: queued with the token in one SaveChangesAsync; otherwise sent after it.
-            var queued = _emailSender.TryEnqueue(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions);
+            var queued = _email.TryEnqueue(EmailTemplateId.PasswordReset, user.Email, CurrentLocale, variables, emailOptions);
             await _dbContext.SaveChangesAsync();
 
             if (!queued)
             {
                 try
                 {
-                    await _emailSender.SendAsync(user.Email, rendered.Subject, rendered.HtmlBody, emailOptions);
+                    await _email.SendAsync(EmailTemplateId.PasswordReset, user.Email, CurrentLocale, variables, emailOptions);
                 }
                 catch
                 {

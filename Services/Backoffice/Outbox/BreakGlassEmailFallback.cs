@@ -11,7 +11,8 @@ namespace DotNetSigningServer.Services.Backoffice.Outbox;
 
 /// <summary>
 /// Break-glass for critical e-mail (2FA code, password reset, e-mail verification) while
-/// <c>Modules:Email</c> is On: a critical <c>email.raw</c> item goes out directly through
+/// <c>Modules:Email</c> is On: a critical <c>email.raw</c> or <c>email.template</c> item (by its
+/// stored local rendering) goes out directly through
 /// <see cref="ResendEmailSender"/> when
 /// <list type="bullet">
 /// <item>it is still Pending <see cref="P4BackofficeProductOptions.EmailOptions.FallbackAfter"/>
@@ -35,6 +36,12 @@ public sealed class BreakGlassEmailFallback : IOutboxFallback
 
     /// <summary>Items per run; critical mail is rare, and each send may take up to Resend's timeout.</summary>
     public const int BatchSize = 10;
+
+    /// <summary>
+    /// Kinds that can be sent directly: raw messages as they are, service templates by the local
+    /// rendering stored with them (<see cref="EmailTemplatePayload.Fallback"/>).
+    /// </summary>
+    public static readonly IReadOnlyList<string> Kinds = [BackofficeOutboxEmailSender.OutboxKind, TemplatedEmailSender.OutboxKind];
 
     /// <summary>Remaining claimed items are released after this (well inside the claim's lease).</summary>
     public static readonly TimeSpan RunBudget = TimeSpan.FromSeconds(60);
@@ -85,8 +92,13 @@ public sealed class BreakGlassEmailFallback : IOutboxFallback
         var serviceDown = _breaker.IsServiceDown;
         var pendingCreatedBefore = serviceDown ? now : now - email.FallbackAfter;
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var items = await OutboxClaim.ClaimForFallbackAsync(
-            db, BackofficeOutboxEmailSender.OutboxKind, now, pendingCreatedBefore, now - MaxAge, BatchSize, cancellationToken);
+        var items = new List<BackofficeOutboxItem>();
+        foreach (var kind in Kinds)
+        {
+            if (items.Count >= BatchSize) break;
+            items.AddRange(await OutboxClaim.ClaimForFallbackAsync(
+                db, kind, now, pendingCreatedBefore, now - MaxAge, BatchSize - items.Count, cancellationToken));
+        }
         if (items.Count == 0) return 0;
 
         var started = Stopwatch.StartNew();
@@ -111,16 +123,32 @@ public sealed class BreakGlassEmailFallback : IOutboxFallback
         : OutboxClaim.LastAttemptFoundServiceDown(item.LastError) ? "service unreachable"
         : $"not delivered within {(now - item.CreatedAt).TotalSeconds:0} s";
 
+    private sealed record DirectMessage(string To, string Subject, string Html);
+
+    /// <summary>What a stored payload sends directly; null when it cannot be (no local rendering).</summary>
+    private static DirectMessage? Read(string kind, string json)
+    {
+        if (kind == TemplatedEmailSender.OutboxKind)
+        {
+            var template = JsonSerializer.Deserialize<EmailTemplatePayload>(json, BackofficeOutbox.PayloadJson);
+            if (template == null) return null;
+            // No local copy (it could not be rendered): only the service can send it.
+            return template.Fallback is { } fallback && !string.IsNullOrWhiteSpace(fallback.Html)
+                ? new DirectMessage(template.To, fallback.Subject, fallback.Html)
+                : new DirectMessage(template.To, "", "");
+        }
+        var raw = JsonSerializer.Deserialize<EmailRawPayload>(json, BackofficeOutbox.PayloadJson);
+        return raw == null ? null : new DirectMessage(raw.To, raw.Subject, raw.Html);
+    }
+
     /// <summary>One direct send on a claimed item; records the outcome on it (not saved). True when finished.</summary>
     private async Task<bool> SendAsync(
         BackofficeOutboxItem item, ResendEmailSender resend, string reason, CancellationToken cancellationToken)
     {
-        EmailRawPayload? payload;
+        DirectMessage? payload;
         try
         {
-            payload = item.PayloadProtected == null
-                ? null
-                : JsonSerializer.Deserialize<EmailRawPayload>(_protector.Unprotect(item.PayloadProtected), BackofficeOutbox.PayloadJson);
+            payload = item.PayloadProtected == null ? null : Read(item.Kind, _protector.Unprotect(item.PayloadProtected));
         }
         catch (Exception ex) when (ex is CryptographicException or JsonException)
         {
@@ -134,6 +162,13 @@ public sealed class BreakGlassEmailFallback : IOutboxFallback
             item.LastError = "Break-glass: payload missing or unreadable";
             _logger.LogError("Backoffice e-mail {ItemId} cannot be sent by break-glass: payload missing or unreadable", item.Id);
             return true;
+        }
+
+        if (payload.Html.Length == 0)
+        {
+            item.LockedUntil = _time.GetUtcNow() + RetryPause;
+            _logger.LogWarning("Backoffice e-mail {ItemId} has no local copy for break-glass; left to the service", item.Id);
+            return false;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
