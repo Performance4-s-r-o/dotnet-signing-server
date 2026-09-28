@@ -433,6 +433,7 @@
   <data name="ConcurrencySettingsMoved" xml:space="preserve"><value>Parallelität und Warteschlangen-Timeout finden Sie jetzt unter</value></data>
   <data name="SupportTicketCreated" xml:space="preserve"><value>Ihre Anfrage wurde übermittelt. Wir melden uns per E-Mail.</value></data>
   <data name="SupportTicketCreatedWithId" xml:space="preserve"><value>Ihre Anfrage wurde übermittelt (#{0}). Wir melden uns per E-Mail.</value></data>
+  <data name="SupportTicketQueued" xml:space="preserve"><value>Wir haben Ihre Anfrage erhalten. Die Ticketnummer erhalten Sie per E-Mail.</value></data>
   <data name="SupportSubmitFailed" xml:space="preserve"><value>Die Anfrage konnte nicht übermittelt werden. Bitte versuchen Sie es erneut.</value></data>
   <data name="SupportUnavailable" xml:space="preserve"><value>Das Support-System ist vorübergehend nicht verfügbar. Bitte versuchen Sie es später erneut.</value></data>
   <data name="SupportReplyToHint" xml:space="preserve"><value>Wir antworten an {0}.</value></data>

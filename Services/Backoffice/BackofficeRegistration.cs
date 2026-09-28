@@ -9,6 +9,7 @@ using DotNetSigningServer.Services.Consents;
 using DotNetSigningServer.Services.Email;
 using DotNetSigningServer.Services.Legal;
 using DotNetSigningServer.Services.Pricing;
+using DotNetSigningServer.Services.Support;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -69,6 +70,7 @@ public static class BackofficeRegistration
         AddConsents(services, snapshot);
         AddEmail(services, snapshot);
         AddPricing(services, snapshot);
+        AddSupport(services, snapshot);
 
         return services;
     }
@@ -299,6 +301,42 @@ public static class BackofficeRegistration
         services.TryAddSingleton<ICreditPricingProvider>(sp => sp.GetRequiredService<BackofficeCreditPricingProvider>());
     }
 
+    /// <summary>
+    /// Support form by <c>Modules:Support</c>: Off and Shadow send tickets to osTicket directly
+    /// (as before; Shadow only keeps the service's categories up to date and logs how they
+    /// differ from the form's). On queues every ticket into the outbox (<c>support.ticket</c>),
+    /// attempts it right away with a short limit, and offers the service's categories.
+    /// <c>support.ticket_failed</c> is logged as an error while Shadow or On. The ticket handler is
+    /// registered with the dispatcher (<see cref="AddOutboxDispatcher"/>), so tickets queued while
+    /// On are still delivered after a switch back to Off.
+    /// </summary>
+    internal static void AddSupport(IServiceCollection services, P4BackofficeProductOptions options)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<SupportCategoriesHolder>();
+        services.TryAddSingleton<SupportCategoriesProvider>();
+
+        var mode = options.ModeFor(BackofficeModule.Support);
+        if (mode == BackofficeMode.Off)
+        {
+            return;
+        }
+
+        var baseUrl = options.BaseUrl?.Trim() ?? "";
+        var secretKey = options.SecretKey?.Trim() ?? "";
+        services.AddHttpClient(SupportCategoriesClient.HttpClientName, client =>
+        {
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            client.Timeout = SupportCategoriesClient.RequestTimeout;
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretKey);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-support");
+        });
+        services.TryAddSingleton<SupportCategoriesClient>();
+        services.TryAddSingleton(sp => ActivatorUtilities.CreateInstance<SupportCategoriesWorker>(sp, mode));
+        services.AddHostedService(sp => sp.GetRequiredService<SupportCategoriesWorker>());
+        services.AddScoped<IBackofficeEventHandler, SupportEventsHandler>();
+    }
+
     /// <summary>A <c>price.*</c> handler that acts by the Pricing mode, also resolvable as itself.</summary>
     private static void AddPriceEventHandler<T>(IServiceCollection services, BackofficeMode mode)
         where T : class, IBackofficeEventHandler
@@ -340,6 +378,7 @@ public static class BackofficeRegistration
         // Handlers of every kind a module may have queued: items stay valid when their module
         // is switched Off again later.
         services.AddSingleton<IOutboxHandler, ConsentOutboxHandler>();
+        services.AddSingleton<IOutboxHandler, SupportTicketOutboxHandler>();
         services.AddHostedService<BackofficeOutboxDispatcher>();
     }
 
@@ -425,6 +464,11 @@ internal sealed class BackofficeStartupReport(
             logger.LogWarning(
                 "Backoffice: Modules:Email=Shadow sends e-mail through Resend as with Off (the service would send every "
                 + "message twice); templates in Email:TemplateKeys are only compared with the service's rendering");
+        }
+        if (o.ModeFor(BackofficeModule.Support) == BackofficeMode.Shadow)
+        {
+            logger.LogInformation(
+                "Backoffice: Modules:Support=Shadow sends tickets to osTicket as with Off; the service's categories are only compared");
         }
         var unknownKeys = o.Email.TemplateKeys
             .Where(k => !EmailTemplateVariables.Names.ContainsKey(k?.Trim() ?? ""))

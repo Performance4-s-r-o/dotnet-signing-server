@@ -101,7 +101,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `Seal__Enabled` | | Server-side sealing; needs `Seal__PfxBase64` + `Seal__PfxPassword` |
 | `Stripe__ApiKey` / `Stripe__WebhookSecret` | for billing | Payments; the webhook secret must start with `whsec_` in production |
 | `Resend__ApiKey` / `Resend__From` | for email | Transactional email |
-| `OsTicket__Url` / `OsTicket__ApiKey` | | Support form; without them the routes 404 and the nav entry hides |
+| `OsTicket__Url` / `OsTicket__ApiKey` | | Support form; without them (and with `Modules:Support` not `On`) the routes 404 and the nav entry hides |
 | `AI__Enabled` / `AI__Google__ApiKey` | | AI-assisted template field detection |
 | `Sentry__Dsn` | | Error monitoring; disabled when empty |
 | `Loki__Url` | | Log shipping; disabled when empty |
@@ -340,6 +340,29 @@ Rollback: `P4Backoffice__Modules__Pricing=Off`. Keep `Billing__*` in line with
 the price list while the module is `On`: it is the fallback, and after a rollback
 the monitor compares against `Billing__PricePer100` again
 (`PriceChangeNotifiedVersion` is then ignored).
+
+#### Support form (`Modules:Support`)
+
+The in-app form at `/support` (signed-in users). The ticket always carries the
+user's e-mail address, looked up by account id.
+
+- `P4Backoffice__Modules__Support=Off` (default) and `Shadow`: the ticket goes to
+  osTicket directly (`OsTicket__*`), as before. `Shadow` also fetches the
+  service's categories in the background and logs how they differ from the form's.
+- `On`: the ticket is queued in the outbox (`support.ticket`, in the same
+  transaction) and attempted right away for at most 5 seconds. The user sees the
+  ticket number when the service answered in time, otherwise "received, the
+  number comes by e-mail" — never an error because the service is down; the
+  outbox delivers it later with the item id as `Idempotency-Key`, and a repeated
+  submission of the same form is not queued twice. The message is sent as plain
+  text (the service escapes it). Categories come from
+  `GET /v1/support/categories` per site language, refreshed hourly in the
+  background and kept in `BackofficeStates` (`support:categories:{locale}`); the
+  form's own list is used until then. `support.ticket_failed` is logged as an
+  error. The form is shown with `On` even without `OsTicket__*`.
+
+Rollback: `P4Backoffice__Modules__Support=Off` (keep `OsTicket__*` until then).
+Tickets already queued are still delivered.
 
 ## Stripe webhooks
 
