@@ -38,20 +38,20 @@ public sealed class BackofficeLegalDocumentSource : ILegalDocumentSource
     public async Task<LegalDocumentRendered?> GetAsync(string slug, string locale, CancellationToken cancellationToken = default)
     {
         var type = LegalSlugMap.TypeFor(slug);
+        string? refreshLocale = null;
         if (type != null)
         {
             var serviceLocale = LegalLocales.Normalize(locale);
             try
             {
                 var cached = _cache.Peek(type, serviceLocale);
-                if (cached is null || !_cache.IsFresh(cached))
-                {
-                    PendingRefresh = _refresher.RefreshInBackground(type, serviceLocale, saveSnapshot: true);
-                }
+                var stale = cached is null || !_cache.IsFresh(cached);
                 if (cached != null && !string.IsNullOrWhiteSpace(cached.Document.Html))
                 {
+                    if (stale) StartRefresh(type, serviceLocale);
                     return Render(slug, cached.Document);
                 }
+                if (stale) refreshLocale = serviceLocale;
             }
             catch (Exception ex)
             {
@@ -59,7 +59,23 @@ public sealed class BackofficeLegalDocumentSource : ILegalDocumentSource
             }
         }
 
-        return await _database.GetAsync(slug, locale, cancellationToken);
+        // Read the snapshot before the background fetch starts, so this request sees the snapshot
+        // as it was and never races the fetch writing a new one.
+        var snapshot = await _database.GetAsync(slug, locale, cancellationToken);
+        if (type != null && refreshLocale != null) StartRefresh(type, refreshLocale);
+        return snapshot;
+    }
+
+    private void StartRefresh(string type, string serviceLocale)
+    {
+        try
+        {
+            PendingRefresh = _refresher.RefreshInBackground(type, serviceLocale, saveSnapshot: true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[legal-docs] starting the refresh of {Type}/{Locale} failed", type, serviceLocale);
+        }
     }
 
     internal static LegalDocumentRendered Render(string slug, BackofficeDocumentContent document) => new(
