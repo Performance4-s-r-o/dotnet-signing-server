@@ -95,8 +95,12 @@ public class AccountEmailOutboxIntegrationTests : IClassFixture<SignUpPostgresFi
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             var user = new User
             {
-                Email = email, PasswordHash = hash, PasswordSalt = salt, PasswordIterations = iterations,
-                EmailVerified = true, IsActive = true,
+                Email = email,
+                PasswordHash = hash,
+                PasswordSalt = salt,
+                PasswordIterations = iterations,
+                EmailVerified = true,
+                IsActive = true,
             };
             db.Users.Add(user);
             await db.SaveChangesAsync();

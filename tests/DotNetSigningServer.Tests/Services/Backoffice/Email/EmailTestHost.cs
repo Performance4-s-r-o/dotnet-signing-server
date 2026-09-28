@@ -34,7 +34,8 @@ internal sealed class EmailTestHost : IDisposable
         Resend = new Mock<ResendEmailSender>(
             Microsoft.Extensions.Options.Options.Create(new ResendOptions()),
             Mock.Of<IHttpClientFactory>(),
-            NullLogger<ResendEmailSender>.Instance) { CallBase = false };
+            NullLogger<ResendEmailSender>.Instance)
+        { CallBase = false };
         Resend.SetupGet(r => r.IsConfigured).Returns(resendConfigured);
         Resend.Setup(r => r.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .Callback<string, string, string>((to, subject, html) => DirectSends.Add((to, subject, html)))
