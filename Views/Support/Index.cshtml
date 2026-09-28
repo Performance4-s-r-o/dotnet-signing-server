@@ -1,6 +1,22 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
+@using DotNetSigningServer.Services.Support
 @{
     ViewData["Title"] = L["SupportTitle"].Value;
+    var categories = ViewData["SupportCategories"] as IReadOnlyList<SupportCategoryOption> ?? SupportCategoriesProvider.Defaults;
+    var selectedCategory = categories.Any(c => c.Key == SupportTicketRequest.FallbackCategory)
+        ? SupportTicketRequest.FallbackCategory
+        : categories.FirstOrDefault()?.Key;
+}
+@functions {
+    // Labels of the form's own categories (used while the service's list is not in use).
+    private static readonly Dictionary<string, string> FallbackLabels = new()
+    {
+        ["signing"] = "SupportCategorySigning",
+        ["templates"] = "SupportCategoryTemplates",
+        ["billing"] = "SupportCategoryBilling",
+        ["account"] = "SupportCategoryAccount",
+        ["other"] = "SupportCategoryOther",
+    };
 }
 <h1>@L["SupportTitle"]</h1>
 <p class="muted mt-2 mb-3">@L["SupportDesc"]</p>
@@ -22,15 +38,16 @@
     }
     <form method="post" action="/support/ticket">
         @Html.AntiForgeryToken()
+        <input type="hidden" name="formKey" value="@(ViewData["SupportFormKey"] as string)" />
 
         <div class="form-group">
             <label for="category">@L["SupportCategory"]</label>
             <select name="category" id="category" required>
-                <option value="signing">@L["SupportCategorySigning"]</option>
-                <option value="templates">@L["SupportCategoryTemplates"]</option>
-                <option value="billing">@L["SupportCategoryBilling"]</option>
-                <option value="account">@L["SupportCategoryAccount"]</option>
-                <option value="other" selected>@L["SupportCategoryOther"]</option>
+                @foreach (var option in categories)
+                {
+                    var label = option.Label ?? (FallbackLabels.TryGetValue(option.Key, out var resource) ? L[resource].Value : option.Key);
+                    <option value="@option.Key" selected="@(option.Key == selectedCategory)">@label</option>
+                }
             </select>
         </div>
 
@@ -45,12 +62,12 @@
 
         <div class="form-group">
             <label for="subject">@L["SupportSubjectLabel"]</label>
-            <input type="text" name="subject" id="subject" placeholder="@L["SupportSubjectPlaceholder"]" required />
+            <input type="text" name="subject" id="subject" maxlength="@SupportTicketRequest.MaxSubjectLength" placeholder="@L["SupportSubjectPlaceholder"]" required />
         </div>
 
         <div class="form-group">
             <label for="message">@L["SupportMessageLabel"]</label>
-            <textarea name="message" id="message" rows="6" placeholder="@L["SupportMessagePlaceholder"]" required></textarea>
+            <textarea name="message" id="message" rows="6" maxlength="@SupportTicketRequest.MaxMessageLength" placeholder="@L["SupportMessagePlaceholder"]" required></textarea>
         </div>
 
         <button type="submit" class="btn btn-primary">@L["SupportSubmitButton"]</button>

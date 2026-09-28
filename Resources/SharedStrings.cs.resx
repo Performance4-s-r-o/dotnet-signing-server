@@ -443,6 +443,7 @@
   <data name="ConcurrencySettingsMoved" xml:space="preserve"><value>Paralelizace a timeout fronty se přesunuly do sekce</value></data>
   <data name="SupportTicketCreated" xml:space="preserve"><value>Váš požadavek byl odeslán. Ozveme se vám e-mailem.</value></data>
   <data name="SupportTicketCreatedWithId" xml:space="preserve"><value>Váš požadavek byl odeslán (#{0}). Ozveme se vám e-mailem.</value></data>
+  <data name="SupportTicketQueued" xml:space="preserve"><value>Váš požadavek jsme přijali. Číslo tiketu vám přijde e-mailem.</value></data>
   <data name="SupportSubmitFailed" xml:space="preserve"><value>Požadavek se nepodařilo odeslat. Zkuste to prosím znovu.</value></data>
   <data name="SupportUnavailable" xml:space="preserve"><value>Systém podpory je dočasně nedostupný. Zkuste to prosím později.</value></data>
   <data name="SupportReplyToHint" xml:space="preserve"><value>Odpovíme na adresu {0}.</value></data>

@@ -433,6 +433,7 @@
   <data name="ConcurrencySettingsMoved" xml:space="preserve"><value>La concurrencia y el tiempo de espera de la cola se han movido a</value></data>
   <data name="SupportTicketCreated" xml:space="preserve"><value>Su solicitud ha sido enviada. Le responderemos por correo electrónico.</value></data>
   <data name="SupportTicketCreatedWithId" xml:space="preserve"><value>Su solicitud ha sido enviada (#{0}). Le responderemos por correo electrónico.</value></data>
+  <data name="SupportTicketQueued" xml:space="preserve"><value>Hemos recibido su solicitud. Le enviaremos el número de ticket por correo electrónico.</value></data>
   <data name="SupportSubmitFailed" xml:space="preserve"><value>No se pudo enviar la solicitud. Inténtelo de nuevo.</value></data>
   <data name="SupportUnavailable" xml:space="preserve"><value>El sistema de soporte no está disponible temporalmente. Inténtelo más tarde.</value></data>
   <data name="SupportReplyToHint" xml:space="preserve"><value>Responderemos a {0}.</value></data>

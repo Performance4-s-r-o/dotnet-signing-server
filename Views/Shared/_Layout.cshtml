@@ -1,9 +1,11 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @inject Microsoft.Extensions.Options.IOptions<DotNetSigningServer.Options.OsTicketOptions> OsTicket
+@inject Microsoft.Extensions.Options.IOptions<DotNetSigningServer.Options.P4BackofficeProductOptions> Backoffice
 @inject Microsoft.Extensions.Options.IOptions<DotNetSigningServer.Options.AppOptions> App
 @inject DotNetSigningServer.Services.Consents.ConsentNoticeProvider ConsentNotices
 @{
-    var supportEnabled = OsTicket.Value.IsConfigured;
+    var supportEnabled = OsTicket.Value.IsConfigured
+        || Backoffice.Value.ModeFor(DotNetSigningServer.Services.Backoffice.BackofficeModule.Support) == DotNetSigningServer.Services.Backoffice.BackofficeMode.On;
     var pageTitle = ViewData["Title"] as string;
     const string brandSuffix = "Performance4PDF";
     var fullTitle = string.IsNullOrWhiteSpace(pageTitle)
