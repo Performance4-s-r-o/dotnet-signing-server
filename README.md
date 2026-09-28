@@ -109,6 +109,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `P4Backoffice__Mode` / `P4Backoffice__Modules__*` | | P4 Backoffice integration: `Off` (default), `Shadow` or `On`, globally or per module (`Docs`, `Consents`, `Email`, `Pricing`, `Support`) |
 | `P4Backoffice__BaseUrl` / `P4Backoffice__SecretKey` | when not `Off` | Service URL (https) and `p4sk_` key; startup fails without them |
 | `P4Backoffice__Webhook__Secret` | | Webhook signing secret (`whsec_`); `…__PreviousSecret` during rotation |
+| `P4Backoffice__Polling__Interval` | | How often `/v1/events` is polled (default `00:15:00`, `00:02:00` without a webhook secret) |
 
 Every integration degrades gracefully: leave a section empty and the feature
 switches itself off rather than failing at startup.
@@ -140,6 +141,37 @@ up to every 6 h and given up after 72 h. Items refused with 401/403 stay
 `Blocked` until the key is fixed and they are requeued from `/Admin`, where the
 outbox card also shows counts per status, the oldest pending item and the last
 error. Finished items are deleted after 30 days.
+
+#### Backoffice webhooks
+
+Events from the service (`document.*`, `price.*`, `email.*`,
+`support.ticket_failed`) arrive at `POST /api/webhooks/p4`
+(`Controllers/BackofficeWebhookController.cs`), signed per
+[Standard Webhooks](https://www.standardwebhooks.com). Register the endpoint in
+the service admin as `https://<FqdnServerName>/api/webhooks/p4` with the event
+types listed in `Services/Backoffice/Inbox/BackofficeEventTypes.cs`, put its
+signing secret in `P4Backoffice__Webhook__Secret` and check it with the admin's
+"Test" button (a `webhook.test` event is logged and marked processed).
+
+The endpoint only verifies the signature (5-minute timestamp tolerance), stores
+the event in `BackofficeWebhookInboxItems` (one row per `webhook-id`,
+redeliveries are ignored) and answers `200`; handlers run in a background
+processor, retried from 30 s up to hourly and given up after 20 attempts. It
+answers `404` while every module is `Off` or no secret is set, and does not
+exist on a private server.
+
+As a backup — and as the only channel when no secret is set — the same events
+are polled from `GET /v1/events` (every 15 min, or 2 min without a secret). The
+cursor is kept in `BackofficeStates` (`events:cursor`), so a restart continues
+where it stopped; the first run starts one day back. If the cursor has fallen
+out of the service's 30-day window, the modules resynchronise from the source
+APIs. Processed events are deleted after 45 days.
+
+Rotating the secret: create the new secret in the service admin, move the old
+value to `P4Backoffice__Webhook__PreviousSecret` and set the new one in
+`P4Backoffice__Webhook__Secret`, redeploy, and clear `PreviousSecret` after
+24 hours. Rollback: disable the endpoint in the service admin, or set the
+modules `Off` (processing and polling stop; the tables stay).
 
 ## Stripe webhooks
 

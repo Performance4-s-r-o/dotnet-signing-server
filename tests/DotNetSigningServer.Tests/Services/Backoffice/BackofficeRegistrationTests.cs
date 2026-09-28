@@ -1,5 +1,6 @@
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services.Backoffice;
+using DotNetSigningServer.Services.Backoffice.Inbox;
 using DotNetSigningServer.Tests.Helpers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,6 +23,12 @@ public class BackofficeRegistrationTests
         services.AddP4BackofficeIntegration(configuration, new PrivateServerOptions { Enabled = privateServer });
         return services;
     }
+
+    /// <summary>True when the inbox processor or event polling would run.</summary>
+    internal static bool AnyInboxWorker(IServiceCollection services) =>
+        services.Any(d => d.ServiceType == typeof(IHostedService)
+                          && (d.ImplementationType == typeof(BackofficeInboxProcessor)
+                              || d.ImplementationType == typeof(BackofficePollingService)));
 
     internal static bool AnySdkService(IServiceCollection services) =>
         services.Any(d => d.ServiceType.Assembly.GetName().Name == SdkAssembly
@@ -51,6 +58,18 @@ public class BackofficeRegistrationTests
         });
 
         Assert.False(AnySdkService(services));
+        Assert.False(AnyInboxWorker(services));
+    }
+
+    [Fact]
+    public void WebhookEndpointDependencies_AreAlwaysRegistered()
+    {
+        // The endpoint exists outside a PrivateServer and answers 404 itself while Off.
+        var services = Register(new());
+
+        Assert.Contains(services, d => d.ServiceType == typeof(BackofficeInbox));
+        Assert.Contains(services, d => d.ServiceType == typeof(BackofficeInboxSignal));
+        Assert.False(AnyInboxWorker(services));
     }
 
     [Fact]
@@ -115,6 +134,7 @@ public class BackofficeRegistrationTests
         Assert.Contains(services, d => d.ServiceType == typeof(P4.Backoffice.Sdk.Client.BackofficeApiClient));
         Assert.True(BackofficeRegistration.SdkIncluded);
         Assert.True(Resolve(services).AnyEnabled);
+        Assert.True(AnyInboxWorker(services));
     }
 #else
     [Fact]
@@ -131,6 +151,7 @@ public class BackofficeRegistrationTests
         Assert.Equal(BackofficeDisabledReason.SdkNotIncluded, options.DisabledReason);
         Assert.False(options.AnyEnabled);
         Assert.False(AnySdkService(services));
+        Assert.False(AnyInboxWorker(services));
     }
 #endif
 

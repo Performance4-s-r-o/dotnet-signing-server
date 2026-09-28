@@ -145,9 +145,13 @@ public sealed class BackofficeInboxProcessor : BackgroundService
 
         try
         {
-            using var payload = JsonDocument.Parse(item.PayloadJson);
+            JsonElement data;
+            using (var payload = JsonDocument.Parse(item.PayloadJson))
+            {
+                data = payload.RootElement.Clone(); // handlers may keep it
+            }
             await handler.HandleAsync(
-                new BackofficeEvent(item.WebhookId, item.Type, payload.RootElement, item.Source, item.ReceivedAt, item.Attempts),
+                new BackofficeEvent(item.WebhookId, item.Type, data, item.Source, item.ReceivedAt, item.Attempts),
                 cancellationToken);
             MarkProcessed(item);
         }
