@@ -51,8 +51,12 @@ public class StripeCheckoutServiceTests
 
     private static Price Price300(long amount = 1425) => new()
     {
-        Id = "price_300", Active = true, Currency = "eur", UnitAmount = amount,
-        LookupKey = "pd_credits_300_once_eur", Type = "one_time",
+        Id = "price_300",
+        Active = true,
+        Currency = "eur",
+        UnitAmount = amount,
+        LookupKey = "pd_credits_300_once_eur",
+        Type = "one_time",
     };
 
     [Fact]
