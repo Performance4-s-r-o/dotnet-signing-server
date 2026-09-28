@@ -111,6 +111,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `P4Backoffice__Webhook__Secret` | | Webhook signing secret (`whsec_` + base64 of at least 24 bytes); `…__PreviousSecret` during rotation |
 | `P4Backoffice__Polling__Interval` | | How often `/v1/events` is polled (default `00:15:00`, `00:02:00` without a webhook secret) |
 | `P4Backoffice__DocumentsTtl` | | How long a legal document from the service is shown before it is revalidated (default `00:05:00`) |
+| `P4Backoffice__Consents__Documents__0…` / `…__Acknowledged__0…` | | Documents consented to at sign-up (default `terms`, `dpa`) and documents only acknowledged (default `privacy`) |
 
 Every integration degrades gracefully: leave a section empty and the feature
 switches itself off rather than failing at startup.
@@ -204,6 +205,40 @@ The `/Legal/*` pages (`Controllers/LegalController.cs`) read their text through
 
 Rollback: `P4Backoffice__Modules__Docs=Off`. Snapshot rows are ignored in
 `Off` and can stay.
+
+#### Consents (`Modules:Consents`)
+
+Sign-up has one unchecked checkbox for the documents in
+`P4Backoffice__Consents__Documents` (default `terms`, `dpa`: recorded as
+`granted`) and an information sentence for `P4Backoffice__Consents__Acknowledged`
+(default `privacy`: `acknowledged`). The checkbox is validated on the server.
+Every sign-up stores one `ConsentRecords` row per document (version, language
+and content hash of the text shown, from local data only: `docs:meta` and
+`LegalDocuments`). The table is append-only; on PostgreSQL a trigger refuses
+`UPDATE`, `DELETE` and `TRUNCATE`. Subjects are sent as `dotnet:user:{id}`,
+never as an e-mail address.
+
+- `Off` — records are stored locally only; no outbox item, no gate.
+- `Shadow` — the form sends the versions it showed (a previous version is
+  accepted for 10 minutes after a new one came into force, then the form is
+  reloaded with `LegalVersionOutdated`); records plus one `consent` outbox item
+  (`POST /v1/consents`, one batch) are written in the same `SaveChangesAsync`
+  as the user. The re-consent gate only logs.
+- `On` — as `Shadow`, and `RequireCurrentConsentFilter` sends signed-in users
+  (cookie only; never `/api/*` or Bearer tokens) whose newest records do not
+  reach `required_version` of `docs:meta` to `/Account/Consent`, which returns
+  them to the page they asked for. Users registered before consents were
+  recorded confirm once (`flow=initial`). A banner announces upcoming versions.
+
+A daily job compares the last 7 days of records with
+`GET /v1/subjects/{ref}/consent-status` and only logs differences.
+
+Rollback: `P4Backoffice__Modules__Consents=Off`. Records made while `Off` are
+sent later with the admin action *Send consents recorded while the module was
+Off* (`/Admin`), which queues every record without an outbox item once.
+
+TODO: there is no account deletion yet. When it is added, queue an outbox item
+`erase` (`POST /v1/subjects/{ref}/erase`) in the same transaction.
 
 ## Stripe webhooks
 

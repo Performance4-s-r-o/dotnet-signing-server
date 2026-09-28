@@ -31,4 +31,10 @@ public static class BackofficeStateKeys
     /// <c>required_version</c>, <c>upcoming</c>) as JSON; see <c>DocumentsMeta</c>.
     /// </summary>
     public const string DocsMeta = "docs:meta";
+
+    /// <summary>Consent records up to this time (ISO 8601) were queued by the consent backfill.</summary>
+    public const string ConsentsBackfilledUntil = "consents:backfilled_until";
+
+    /// <summary>When the daily consent reconciliation last ran (ISO 8601).</summary>
+    public const string ConsentsReconciledAt = "consents:reconciled_at";
 }

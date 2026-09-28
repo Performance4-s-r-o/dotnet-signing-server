@@ -23,6 +23,7 @@ namespace DotNetSigningServer.Data
         public DbSet<BackofficeOutboxItem> BackofficeOutboxItems { get; set; }
         public DbSet<BackofficeWebhookInboxItem> BackofficeWebhookInboxItems { get; set; }
         public DbSet<BackofficeState> BackofficeStates { get; set; }
+        public DbSet<ConsentRecord> ConsentRecords { get; set; }
 
         /// <summary>
         /// Outbox items added through this context and not yet announced to the dispatcher;
@@ -169,6 +170,18 @@ namespace DotNetSigningServer.Data
 
             modelBuilder.Entity<BackofficeWebhookInboxItem>()
                 .HasIndex(i => i.ProcessedAt);
+
+            // The re-consent gate reads a user's newest record per document.
+            modelBuilder.Entity<ConsentRecord>()
+                .HasIndex(c => new { c.UserId, c.Document, c.OccurredAt });
+
+            // Reconciliation and the backfill go by time.
+            modelBuilder.Entity<ConsentRecord>()
+                .HasIndex(c => c.OccurredAt);
+
+            modelBuilder.Entity<ConsentRecord>()
+                .Property(c => c.ContentHash)
+                .IsFixedLength();
         }
     }
 }

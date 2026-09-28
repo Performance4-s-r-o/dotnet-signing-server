@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using DotNetSigningServer.Services.Backoffice.Documents;
 using DotNetSigningServer.Services.Backoffice.Inbox;
+using DotNetSigningServer.Services.Consents;
 using DotNetSigningServer.Services.Legal;
 
 namespace DotNetSigningServer.Services.Backoffice.Handlers;
@@ -15,6 +16,8 @@ namespace DotNetSigningServer.Services.Backoffice.Handlers;
 /// <item><c>document.scheduled</c>, <c>document.unscheduled</c>: only the <c>docs:meta</c> entry
 /// (its <c>upcoming</c> part changes; the text in force does not).</item>
 /// </list>
+/// After <c>docs:meta</c> is rebuilt, every <see cref="IDocumentChangeListener"/> is told (the
+/// consent gate drops its cached states when the event has <c>requires_reconsent</c>).
 /// A failed fetch throws, so the inbox retries the event.
 /// </summary>
 public sealed class DocumentEventsHandler : IBackofficeEventHandler
@@ -22,17 +25,20 @@ public sealed class DocumentEventsHandler : IBackofficeEventHandler
     private readonly BackofficeDocumentsCache _cache;
     private readonly LegalDocumentRefresher _refresher;
     private readonly DocumentsMetaUpdater _meta;
+    private readonly IEnumerable<IDocumentChangeListener> _listeners;
     private readonly ILogger<DocumentEventsHandler> _logger;
 
     public DocumentEventsHandler(
         BackofficeDocumentsCache cache,
         LegalDocumentRefresher refresher,
         DocumentsMetaUpdater meta,
+        IEnumerable<IDocumentChangeListener> listeners,
         ILogger<DocumentEventsHandler> logger)
     {
         _cache = cache;
         _refresher = refresher;
         _meta = meta;
+        _listeners = listeners;
         _logger = logger;
     }
 
@@ -73,7 +79,27 @@ public sealed class DocumentEventsHandler : IBackofficeEventHandler
         }
 
         await _meta.RefreshTypeAsync(type, cancellationToken);
+
+        var reconsent = evt.Type == BackofficeEventTypes.DocumentPublished && RequiresReconsent(evt.Data);
+        foreach (var listener in _listeners)
+        {
+            try
+            {
+                listener.OnDocumentChanged(type, evt.Type, reconsent);
+            }
+            catch (Exception ex)
+            {
+                // A cache that is not dropped expires on its own; the event itself is done.
+                _logger.LogWarning(ex, "Backoffice event {EventId}: document change listener {Listener} failed", evt.Id, listener.GetType().Name);
+            }
+        }
     }
+
+    /// <summary><c>data.requires_reconsent</c>; false when missing.</summary>
+    internal static bool RequiresReconsent(JsonElement data) =>
+        data.ValueKind == JsonValueKind.Object
+        && data.TryGetProperty("requires_reconsent", out var value)
+        && value.ValueKind == JsonValueKind.True;
 
     /// <summary><c>data.document.type</c>; null when missing.</summary>
     internal static string? DocumentType(JsonElement data) =>

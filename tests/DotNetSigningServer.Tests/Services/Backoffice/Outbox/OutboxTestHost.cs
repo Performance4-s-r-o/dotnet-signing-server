@@ -73,7 +73,8 @@ internal sealed class OutboxTestHost : IDisposable
     public ManualTimeProvider Time { get; } = new(new DateTimeOffset(2026, 9, 28, 12, 0, 0, TimeSpan.Zero));
 
     /// <param name="database">Database to use instead of a fresh InMemory one.</param>
-    public OutboxTestHost(Action<DbContextOptionsBuilder>? database = null)
+    /// <param name="configure">Extra registrations (other handlers, module services).</param>
+    public OutboxTestHost(Action<DbContextOptionsBuilder>? database = null, Action<IServiceCollection>? configure = null)
     {
         var dbName = "outbox-" + Guid.NewGuid();
         var services = new ServiceCollection();
@@ -93,6 +94,7 @@ internal sealed class OutboxTestHost : IDisposable
                 c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", SecretKey);
             })
             .ConfigurePrimaryHttpMessageHandler(() => Service);
+        configure?.Invoke(services);
         Services = services.BuildServiceProvider();
     }
 

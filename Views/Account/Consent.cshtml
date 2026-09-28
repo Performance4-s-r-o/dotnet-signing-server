@@ -1,0 +1,62 @@
+@model DotNetSigningServer.Models.ConsentViewModel
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
+@{
+    ViewData["Title"] = L["ConsentTitle"].Value;
+    var granted = Model.Documents.Where(d => d.Action == DotNetSigningServer.Models.ConsentActions.Granted).ToList();
+    var acknowledged = Model.Documents.Where(d => d.Action == DotNetSigningServer.Models.ConsentActions.Acknowledged).ToList();
+}
+<h1>@(Model.Initial ? L["ConsentHeadingInitial"] : L["ConsentHeadingChanged"])</h1>
+<p class="muted">@(Model.Initial ? L["ConsentIntroInitial"] : L["ConsentIntroChanged"])</p>
+
+@if (ViewData.ModelState.TryGetValue(string.Empty, out var formErrors) && formErrors.Errors.Count > 0)
+{
+    <div class="flash error">@Html.ValidationSummary(excludePropertyErrors: true)</div>
+}
+
+<ul class="consent-documents">
+    @foreach (var document in Model.Documents)
+    {
+        <li>
+            @Html.Raw(DotNetSigningServer.Services.Consents.ConsentHtml.Link(Url, L, document.Document, document.Title, document.Version))
+            @if (!string.IsNullOrWhiteSpace(document.Summary))
+            {
+                <div class="muted"><strong>@L["ConsentWhatChanged"]</strong> @document.Summary</div>
+            }
+        </li>
+    }
+</ul>
+
+<form method="post" action="@Url.Action("Consent", "Account")" class="auth-form">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+    @foreach (var document in Model.Documents)
+    {
+        <input type="hidden" name="ShownVersions[@document.Document]" value="@document.Version" />
+        if (document.ContentHash != null)
+        {
+            <input type="hidden" name="ShownHashes[@document.Document]" value="@document.ContentHash" />
+        }
+    }
+    @if (Model.RequiresCheckbox)
+    {
+        <div class="form-group">
+            <label class="form-check">
+                <input asp-for="Accept" type="checkbox" required />
+                <span>@DotNetSigningServer.Services.Consents.ConsentHtml.Sentence(L, "SignUpAcceptTermsDpa",
+                    DotNetSigningServer.Services.Consents.ConsentHtml.Links(Url, L, granted, true))</span>
+            </label>
+            <span asp-validation-for="Accept" class="form-validation"></span>
+        </div>
+    }
+    @if (acknowledged.Count > 0)
+    {
+        <p class="muted">@DotNetSigningServer.Services.Consents.ConsentHtml.Sentence(L, "SignUpPrivacyNotice",
+            DotNetSigningServer.Services.Consents.ConsentHtml.Links(Url, L, acknowledged, true))</p>
+    }
+    <button type="submit" class="btn btn-primary">@L["ConsentAcceptButton"]</button>
+</form>
+
+<form method="post" action="@Url.Action("SignOutUser", "Account")" class="text-center mt-3">
+    @Html.AntiForgeryToken()
+    <button type="submit" class="btn-link muted">@L["NavSignOut"]</button>
+</form>

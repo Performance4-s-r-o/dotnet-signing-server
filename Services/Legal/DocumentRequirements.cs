@@ -8,11 +8,19 @@ namespace DotNetSigningServer.Services.Legal;
 /// <param name="CurrentVersion">Version in force now.</param>
 /// <param name="RequiredVersion">Oldest version a consent may name and still count (see <see cref="DocumentRequirements.RequiredVersion"/>).</param>
 /// <param name="Upcoming">Approved version that is not in force yet (for a notice banner).</param>
+/// <param name="CurrentSince">
+/// When <paramref name="CurrentVersion"/> came into force (the later of its effective date and
+/// publication); the sign-up form accepts the previous version for a short while after it.
+/// Null in entries written before this field existed.
+/// </param>
+/// <param name="CurrentSummary">"What changed" note of the version in force.</param>
 public sealed record DocumentMeta(
     [property: JsonPropertyName("requires_consent")] bool RequiresConsent,
     [property: JsonPropertyName("current_version")] int? CurrentVersion,
     [property: JsonPropertyName("required_version")] int? RequiredVersion,
-    [property: JsonPropertyName("upcoming")] DocumentUpcomingMeta? Upcoming);
+    [property: JsonPropertyName("upcoming")] DocumentUpcomingMeta? Upcoming,
+    [property: JsonPropertyName("current_since")] DateTimeOffset? CurrentSince = null,
+    [property: JsonPropertyName("current_summary")] string? CurrentSummary = null);
 
 public sealed record DocumentUpcomingMeta(
     [property: JsonPropertyName("version")] int Version,
@@ -88,10 +96,25 @@ public static class DocumentRequirements
         var upcoming = summary.Upcoming is { } u
             ? new DocumentUpcomingMeta(u.Version, u.ChangeKind, u.EffectiveFrom, u.Summary)
             : null;
+        var currentVersion = summary.Current?.Version ?? CurrentVersion(list, now);
+        var current = list.FirstOrDefault(v => v.Version == currentVersion)
+                      ?? (summary.Current?.Version == currentVersion ? summary.Current : null);
         return new DocumentMeta(
             summary.RequiresConsent,
-            summary.Current?.Version ?? CurrentVersion(list, now),
+            currentVersion,
             RequiredVersion(list, now),
-            upcoming);
+            upcoming,
+            current is null ? null : InForceSince(current),
+            current?.Summary);
     }
+
+    /// <summary>When a version came into force: the later of its effective date and its publication.</summary>
+    public static DateTimeOffset? InForceSince(BackofficeDocumentVersion version) =>
+        (version.EffectiveFrom, version.PublishedAt) switch
+        {
+            ({ } from, { } published) => from > published ? from : published,
+            ({ } from, null) => from,
+            (null, { } published) => published,
+            _ => null,
+        };
 }

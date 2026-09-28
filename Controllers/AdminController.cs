@@ -6,6 +6,7 @@ using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Services.Backoffice;
 using DotNetSigningServer.Services.Backoffice.Outbox;
+using DotNetSigningServer.Services.Consents;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -109,6 +110,26 @@ public class AdminController : Controller
 
         _logger.LogInformation("Admin requeued {Count} blocked backoffice outbox item(s)", ids.Count);
         TempData["Info"] = string.Format(_localizer["AdminOutboxRequeued"].Value, ids.Count);
+        return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>
+    /// One-off catch-up after the Consents module was Off: queues the consent records that were
+    /// only stored locally (see <see cref="ConsentBackfill"/>). Safe to repeat.
+    /// </summary>
+    [HttpPost("/Admin/Backoffice/Consents/Backfill")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> BackfillConsents([FromServices] ConsentBackfill backfill)
+    {
+        if (_backofficeOptions.Value.ModeFor(BackofficeModule.Consents) == BackofficeMode.Off)
+        {
+            TempData["Error"] = _localizer["AdminConsentsBackfillOff"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+
+        var result = await backfill.RunAsync(HttpContext.RequestAborted);
+        _logger.LogInformation("Admin queued {Records} consent record(s) in {Batches} batch(es)", result.Records, result.Batches);
+        TempData["Info"] = string.Format(_localizer["AdminConsentsBackfilled"].Value, result.Records, result.Batches);
         return RedirectToAction(nameof(Index));
     }
 

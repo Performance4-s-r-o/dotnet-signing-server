@@ -640,4 +640,22 @@
   <data name="AdminOutboxBlockedHint" xml:space="preserve"><value>Blokované položky služba odmítla jako neautorizované. Nejdřív opravte API klíč nebo jeho oprávnění, pak je vraťte do fronty.</value></data>
   <data name="AdminOutboxRequeueBlocked" xml:space="preserve"><value>Znovu zařadit blokované</value></data>
   <data name="AdminOutboxRequeued" xml:space="preserve"><value>Do fronty vráceno {0} blokovaných položek.</value></data>
+  <data name="SignUpAcceptTermsDpa" xml:space="preserve"><value>Souhlasím s dokumenty {0}.</value></data>
+  <data name="SignUpPrivacyNotice" xml:space="preserve"><value>Jak zpracováváme vaše osobní údaje, popisuje dokument {0}.</value></data>
+  <data name="SignUpAcceptTermsRequired" xml:space="preserve"><value>Pro pokračování je potřeba souhlasit s podmínkami.</value></data>
+  <data name="LegalVersionOutdated" xml:space="preserve"><value>Právní dokumenty byly právě aktualizovány. Projděte si prosím aktuální verze a potvrďte je znovu.</value></data>
+  <data name="LegalDocumentVersion" xml:space="preserve"><value>{0} (verze {1})</value></data>
+  <data name="ListAnd" xml:space="preserve"><value> a </value></data>
+  <data name="ConsentTitle" xml:space="preserve"><value>Potvrzení podmínek</value></data>
+  <data name="ConsentHeadingInitial" xml:space="preserve"><value>Potvrďte prosím naše podmínky</value></data>
+  <data name="ConsentHeadingChanged" xml:space="preserve"><value>Naše podmínky se změnily</value></data>
+  <data name="ConsentIntroInitial" xml:space="preserve"><value>Než budete pokračovat, projděte si prosím a potvrďte níže uvedené dokumenty.</value></data>
+  <data name="ConsentIntroChanged" xml:space="preserve"><value>Níže uvedené dokumenty jsme aktualizovali. Projděte si prosím změny a potvrďte je, abyste mohli pokračovat.</value></data>
+  <data name="ConsentWhatChanged" xml:space="preserve"><value>Co se změnilo:</value></data>
+  <data name="ConsentAcceptButton" xml:space="preserve"><value>Potvrdit a pokračovat</value></data>
+  <data name="LegalUpcomingBanner" xml:space="preserve"><value>Od {1} platí nová verze dokumentu {0}.</value></data>
+  <data name="AdminConsentsBackfill" xml:space="preserve"><value>Odeslat souhlasy zaznamenané při vypnutém modulu</value></data>
+  <data name="AdminConsentsBackfillHint" xml:space="preserve"><value>Zařadí do fronty záznamy souhlasů, které ještě nebyly odeslány do služby backoffice. Již zařazené záznamy přeskočí.</value></data>
+  <data name="AdminConsentsBackfilled" xml:space="preserve"><value>Do fronty zařazeno {0} záznamů souhlasu v {1} dávkách.</value></data>
+  <data name="AdminConsentsBackfillOff" xml:space="preserve"><value>Nejdřív přepněte modul Consents na Shadow nebo On.</value></data>
 </root>

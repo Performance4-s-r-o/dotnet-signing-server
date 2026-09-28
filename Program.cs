@@ -141,6 +141,13 @@ builder.Services.AddControllersWithViews(options =>
     {
         options.Filters.Add<DotNetSigningServer.Filters.NoIndexPrivatePagesFilter>();
 
+        // Re-consent gate (P4Backoffice:Modules:Consents; does nothing while Off). Never on a
+        // PrivateServer, where the backoffice integration is forced Off anyway.
+        if (!privateServer.Enabled)
+        {
+            options.Filters.Add<DotNetSigningServer.Filters.RequireCurrentConsentFilter>();
+        }
+
         // Applied as a convention rather than a filter: the routes are removed
         // rather than answered, so nothing can reach them at all.
         if (privateServer.Enabled)
