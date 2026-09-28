@@ -2,6 +2,7 @@ using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services.Email;
+using DotNetSigningServer.Services.Pricing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Stripe;
@@ -15,6 +16,7 @@ public class AutoRechargeService : IAutoRechargeService
     private readonly ApplicationDbContext _dbContext;
     private readonly IBillingService _billingService;
     private readonly BillingOptions _billingOptions;
+    private readonly ICreditPricingProvider _pricing;
     private readonly ITemplatedEmailSender _email;
     private readonly ILogger<AutoRechargeService> _logger;
     private readonly AppOptions _appOptions;
@@ -33,8 +35,10 @@ public class AutoRechargeService : IAutoRechargeService
         IOptions<BillingOptions> billingOptions,
         ITemplatedEmailSender email,
         ILogger<AutoRechargeService> logger,
-        IOptions<AppOptions> appOptions)
+        IOptions<AppOptions> appOptions,
+        ICreditPricingProvider pricing)
     {
+        _pricing = pricing;
         _dbContext = dbContext;
         _billingService = billingService;
         _billingOptions = billingOptions.Value;
@@ -91,9 +95,14 @@ public class AutoRechargeService : IAutoRechargeService
                 return new AutoRechargeResult { Success = false, Error = "No saved payment method" };
             }
 
-            // Calculate amount using the CURRENT price (not the stored one)
-            var amount = _billingService.CalculateAmountForDocuments(user.AutoRechargeQuantity, _billingOptions.PricePer100);
-            var amountCents = (long)Math.Round(amount * 100, MidpointRounding.AwayFromZero);
+            // The CURRENT price of the pack (not the stored one), from the price list in force
+            // (Modules:Pricing) — the same amount Checkout charges. A quantity that is not a sold
+            // pack keeps the configured formula.
+            var pack = _pricing.GetPack(user.AutoRechargeQuantity);
+            var amount = pack?.Amount
+                ?? _billingService.CalculateAmountForDocuments(user.AutoRechargeQuantity, _billingOptions.PricePer100);
+            var amountCents = pack?.UnitAmountMinor ?? CreditPricing.ToMinorUnits(amount);
+            var currency = pack?.Currency ?? _billingOptions.Currency;
 
             try
             {
@@ -101,7 +110,7 @@ public class AutoRechargeService : IAutoRechargeService
                 var paymentIntent = await paymentIntentService.CreateAsync(new PaymentIntentCreateOptions
                 {
                     Amount = amountCents,
-                    Currency = _billingOptions.Currency.ToLower(),
+                    Currency = currency.ToLower(),
                     Customer = user.StripeCustomerId,
                     PaymentMethod = paymentMethodId,
                     OffSession = true,
@@ -133,7 +142,7 @@ public class AutoRechargeService : IAutoRechargeService
                     UserId = user.Id,
                     StripePaymentIntentId = paymentIntent.Id,
                     AmountCents = (int)amountCents,
-                    Currency = _billingOptions.Currency,
+                    Currency = currency,
                     Status = "succeeded"
                 });
 
@@ -155,7 +164,7 @@ public class AutoRechargeService : IAutoRechargeService
                 _logger.LogInformation("Auto-recharge succeeded for user {UserId}: +{Credits} credits",
                     userId, user.AutoRechargeQuantity);
 
-                await SendRechargeSuccessEmailAsync(user, user.AutoRechargeQuantity, amount);
+                await SendRechargeSuccessEmailAsync(user, user.AutoRechargeQuantity, amount, currency);
 
                 return new AutoRechargeResult { Success = true, CreditsAdded = user.AutoRechargeQuantity };
             }
@@ -254,7 +263,7 @@ public class AutoRechargeService : IAutoRechargeService
         }
     }
 
-    private async Task SendRechargeSuccessEmailAsync(User user, int creditsAdded, decimal amount)
+    private async Task SendRechargeSuccessEmailAsync(User user, int creditsAdded, decimal amount, string currency)
     {
         var baseUrl = _appOptions.BaseUrl;
         var billingUrl = $"{baseUrl}/Billing";
@@ -263,7 +272,7 @@ public class AutoRechargeService : IAutoRechargeService
         var variables = EmailTemplateVariables.AutoRechargeSuccess(
             quantity: creditsAdded.ToString(),
             amount: amount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
-            currency: _billingOptions.Currency,
+            currency: currency,
             newBalance: (user.CreditsRemaining + creditsAdded).ToString(),
             billingUrl: billingUrl);
 

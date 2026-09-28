@@ -3,6 +3,7 @@ using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Services.Pricing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -19,7 +20,7 @@ public class BillingController : Controller
 {
     private readonly ApplicationDbContext _dbContext;
     private readonly IBillingService _billingService;
-    private readonly BillingOptions _billingOptions;
+    private readonly ICreditPricingProvider _pricing;
     private readonly IStripeCheckoutService _checkoutService;
     private readonly IAutoRechargeService _autoRechargeService;
     private readonly ILogger<BillingController> _logger;
@@ -28,7 +29,7 @@ public class BillingController : Controller
     public BillingController(
         ApplicationDbContext dbContext,
         IBillingService billingService,
-        IOptions<BillingOptions> billingOptions,
+        ICreditPricingProvider pricing,
         IStripeCheckoutService checkoutService,
         IAutoRechargeService autoRechargeService,
         ILogger<BillingController> logger,
@@ -36,7 +37,7 @@ public class BillingController : Controller
     {
         _dbContext = dbContext;
         _billingService = billingService;
-        _billingOptions = billingOptions.Value;
+        _pricing = pricing;
         _checkoutService = checkoutService;
         _autoRechargeService = autoRechargeService;
         _logger = logger;
@@ -114,13 +115,11 @@ public class BillingController : Controller
         var model = new BillingViewModel
         {
             Invoices = invoices,
-            PricePer100 = _billingOptions.PricePer100,
-            Currency = _billingOptions.Currency,
+            PricePer100 = _pricing.PricePer100,
+            Currency = _pricing.Currency,
+            Packs = _pricing.GetPacks(),
             CreditsRemaining = user.CreditsRemaining,
             StripeInvoices = stripeInvoices,
-            Discount300 = _billingOptions.Discount300,
-            Discount500 = _billingOptions.Discount500,
-            Discount1000 = _billingOptions.Discount1000,
             AutoRechargeEnabled = user.AutoRechargeEnabled,
             AutoRechargeQuantity = user.AutoRechargeQuantity,
             AutoRechargePricePer100 = user.AutoRechargePricePer100,
@@ -267,32 +266,15 @@ public class BillingController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var allowedDocuments = new[] { 100, 300, 500, 1000 };
-        if (!allowedDocuments.Contains(documentsToBuy))
+        // Only the sold packs, at the current price (Modules:Pricing: the service's price list
+        // snapshot or Billing:*). No call to the service here.
+        var pack = _pricing.GetPack(documentsToBuy);
+        if (pack == null)
         {
             TempData["Error"] = _localizer["InvalidDocumentBundle"].Value;
             return RedirectToAction(nameof(Index));
         }
 
-        var units = (int)Math.Ceiling(documentsToBuy / 100m);
-        var baseAmount = units * _billingOptions.PricePer100;
-
-        decimal discount = 0m;
-        if (documentsToBuy >= 1000)
-        {
-            discount = _billingOptions.Discount1000;
-        }
-        else if (documentsToBuy >= 500)
-        {
-            discount = _billingOptions.Discount500;
-        }
-        else if (documentsToBuy >= 300)
-        {
-            discount = _billingOptions.Discount300;
-        }
-
-        var amount = baseAmount - (baseAmount * discount);
-        var amountCents = (long)Math.Round(amount * 100, MidpointRounding.AwayFromZero);
         var successUrl = Url.Action("ConfirmCheckout", "Billing", null, Request.Scheme) ?? "/";
         successUrl += successUrl.Contains('?') ? "&session_id={CHECKOUT_SESSION_ID}" : "?session_id={CHECKOUT_SESSION_ID}";
         var cancelUrl = Url.Action("Index", "Billing", null, Request.Scheme) ?? "/";
@@ -304,8 +286,7 @@ public class BillingController : Controller
 
             var checkoutUrl = await _checkoutService.CreateCheckoutSessionAsync(
                 user,
-                amountCents,
-                _billingOptions.Currency,
+                pack,
                 successUrl,
                 cancelUrl,
                 new Dictionary<string, string>
@@ -428,7 +409,7 @@ public class BillingController : Controller
                 && bool.TryParse(autoRechargeValue, out var autoRecharge)
                 && autoRecharge)
             {
-                await _autoRechargeService.EnableAsync(user, documents, _billingOptions.PricePer100);
+                await _autoRechargeService.EnableAsync(user, documents, _pricing.PricePer100);
             }
 
             await _dbContext.SaveChangesAsync();
@@ -450,9 +431,8 @@ public class BillingController : Controller
         public string Currency { get; set; } = "EUR";
         public int CreditsRemaining { get; set; }
         public IReadOnlyList<global::Stripe.Invoice> StripeInvoices { get; set; } = Array.Empty<global::Stripe.Invoice>();
-        public decimal Discount300 { get; set; }
-        public decimal Discount500 { get; set; }
-        public decimal Discount1000 { get; set; }
+        /// <summary>The sold packs at their current prices, smallest first.</summary>
+        public IReadOnlyList<CreditPack> Packs { get; set; } = Array.Empty<CreditPack>();
         public bool AutoRechargeEnabled { get; set; }
         public int AutoRechargeQuantity { get; set; }
         public decimal AutoRechargePricePer100 { get; set; }
@@ -493,8 +473,7 @@ public class BillingController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var allowedQuantities = new[] { 100, 300, 500, 1000 };
-        if (!allowedQuantities.Contains(quantity))
+        if (!CreditPricing.IsSoldQuantity(quantity))
         {
             TempData["Error"] = _localizer["InvalidDocumentBundle"].Value;
             return RedirectToAction(nameof(Index));
@@ -578,7 +557,7 @@ public class BillingController : Controller
             }
         }
 
-        await _autoRechargeService.EnableAsync(user, quantity, _billingOptions.PricePer100);
+        await _autoRechargeService.EnableAsync(user, quantity, _pricing.PricePer100);
         TempData["Info"] = _localizer["AutoRechargeEnabled"].Value;
         return RedirectToAction(nameof(Index));
     }
@@ -613,7 +592,7 @@ public class BillingController : Controller
 
             if (!session.Metadata.TryGetValue("autoRechargeQuantity", out var qtyValue)
                 || !int.TryParse(qtyValue, out var quantity)
-                || !new[] { 100, 300, 500, 1000 }.Contains(quantity))
+                || !CreditPricing.IsSoldQuantity(quantity))
             {
                 TempData["Error"] = _localizer["InvalidDocumentBundle"].Value;
                 return RedirectToAction(nameof(Index));
@@ -628,7 +607,7 @@ public class BillingController : Controller
                 await _dbContext.SaveChangesAsync();
             }
 
-            await _autoRechargeService.EnableAsync(user, quantity, _billingOptions.PricePer100);
+            await _autoRechargeService.EnableAsync(user, quantity, _pricing.PricePer100);
             TempData["Info"] = _localizer["AutoRechargeEnabled"].Value;
         }
         catch (Exception ex)
