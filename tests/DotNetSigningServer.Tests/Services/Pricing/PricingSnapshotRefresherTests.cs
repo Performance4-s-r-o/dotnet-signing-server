@@ -247,7 +247,7 @@ public class PricingSnapshotRefresherTests
         using (var scope = host.Services.CreateScope())
         {
             var registry = scope.ServiceProvider.GetRequiredService<IEnumerable<IBackofficeEventHandler>>();
-            var handler = Assert.Single(registry.OfType<PricingEventsHandler>());
+            var handler = Assert.Single(registry.OfType<PriceEffectiveHandler>());
             using var data = JsonDocument.Parse("""{"version":1}""");
             await handler.HandleAsync(new BackofficeEvent("evt_1", BackofficeEventTypes.PriceEffective, data.RootElement.Clone(), "webhook", host.Time.GetUtcNow(), 1), CancellationToken.None);
         }

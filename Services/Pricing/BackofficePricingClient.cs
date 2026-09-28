@@ -11,14 +11,14 @@ public sealed record PricingFetch(string? Body, string? ETag)
 }
 
 /// <summary>
-/// Read-only client of <c>GET /v1/pricing/current</c> of the P4 Backoffice service.
+/// Read-only client of <c>GET /v1/pricing/current</c> and <c>/v1/pricing/upcoming</c> of the P4 Backoffice service.
 ///
 /// Vendored like <c>BackofficeDocumentsClient</c>: the default build does not include
 /// <c>P4.Backoffice.Sdk</c> and tests run without it. TODO(P4.Backoffice.Sdk): once the
 /// package is restored in CI, call the SDK's generated client (<c>V1.Pricing.Current</c>) here
 /// and keep this class as the adapter — callers only see <see cref="PricingFetch"/>.
 ///
-/// Only background code calls it (<see cref="PricingSnapshotRefresher"/>). Throws
+/// Only background code calls it (<see cref="PricingSnapshotRefresher"/>, <see cref="PricingUpcomingCheck"/>). Throws
 /// <see cref="HttpRequestException"/> (or <see cref="TaskCanceledException"/> on timeout).
 /// </summary>
 public sealed class BackofficePricingClient
@@ -51,5 +51,13 @@ public sealed class BackofficePricingClient
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         return new PricingFetch(body, response.Headers.ETag?.ToString());
+    }
+
+    /// <summary><c>GET /v1/pricing/upcoming</c>: the body (<c>PriceBookUpcoming</c>) as JSON.</summary>
+    public async Task<string> GetUpcomingAsync(CancellationToken cancellationToken)
+    {
+        using var response = await _httpClients.CreateClient(HttpClientName).GetAsync("v1/pricing/upcoming", cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync(cancellationToken);
     }
 }

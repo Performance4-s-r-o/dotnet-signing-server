@@ -180,7 +180,8 @@ builder.Services.AddSingleton<ContentLimitGuard>();
 builder.Services.AddSingleton<PdfSafetyGuard>();
 builder.Services.AddScoped<IAutoRechargeService, AutoRechargeService>();
 builder.Services.AddHostedService<PresignCleanupService>();
-builder.Services.AddHostedService<PriceChangeMonitorService>();
+// PriceChangeMonitorService is registered by AddP4BackofficeIntegration, only while
+// P4Backoffice:Modules:Pricing is not On (then the price.* events replace it).
 builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();
 builder.Services.AddSingleton<IIpWhitelistService, IpWhitelistService>();
 // LokiClient is a singleton (it owns a batching queue + background flush
