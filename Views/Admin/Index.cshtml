@@ -3,6 +3,7 @@
 @{
     ViewData["Title"] = L["AdminTitle"].Value;
     var search = ViewBag.Search as string ?? "";
+    var backoffice = ViewBag.Backoffice as DotNetSigningServer.Controllers.AdminController.BackofficeStatus;
 }
 
 @if (TempData["Error"] != null)
@@ -85,4 +86,40 @@
             }
         </div>
     </section>
+
+    @if (backoffice != null)
+    {
+        <section class="tokens-existing" style="margin-top:1.5rem">
+            <h2 class="tokens-existing-title">@L["AdminBackofficeTitle"]</h2>
+            <div class="table-wrapper">
+                @if (backoffice.DisabledReason == DotNetSigningServer.Services.Backoffice.BackofficeDisabledReason.PrivateServer)
+                {
+                    <p class="muted p-4">@L["AdminBackofficeDisabledPrivateServer"]</p>
+                }
+                else if (backoffice.DisabledReason == DotNetSigningServer.Services.Backoffice.BackofficeDisabledReason.SdkNotIncluded)
+                {
+                    <p class="muted p-4">@L["AdminBackofficeDisabledNoSdk"]</p>
+                }
+                <table class="table">
+                    <tbody>
+                        @foreach (var (module, mode) in backoffice.Modules)
+                        {
+                            <tr>
+                                <td>@L["AdminBackofficeModule" + module]</td>
+                                <td><code>@mode</code></td>
+                            </tr>
+                        }
+                        <tr>
+                            <td>@L["AdminBackofficeBaseUrl"]</td>
+                            <td>@(backoffice.BaseUrl ?? "—")</td>
+                        </tr>
+                        <tr>
+                            <td>@L["AdminBackofficeKey"]</td>
+                            <td>@if (backoffice.KeyDisplay != null) { <code>@backoffice.KeyDisplay</code> } else { <span class="muted">@L["AdminBackofficeKeyNotSet"]</span> }</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
 </main>

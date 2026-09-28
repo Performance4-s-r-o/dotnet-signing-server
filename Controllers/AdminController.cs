@@ -2,11 +2,14 @@ using DotNetSigningServer.Data;
 using DotNetSigningServer.Middleware;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Resources;
+using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Services.Backoffice;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using Stripe;
 
@@ -19,17 +22,20 @@ public class AdminController : Controller
     private readonly IAutoRechargeService _autoRechargeService;
     private readonly ILogger<AdminController> _logger;
     private readonly IStringLocalizer<SharedStrings> _localizer;
+    private readonly IOptions<P4BackofficeProductOptions> _backofficeOptions;
 
     public AdminController(
         ApplicationDbContext dbContext,
         IAutoRechargeService autoRechargeService,
         ILogger<AdminController> logger,
-        IStringLocalizer<SharedStrings> localizer)
+        IStringLocalizer<SharedStrings> localizer,
+        IOptions<P4BackofficeProductOptions> backofficeOptions)
     {
         _dbContext = dbContext;
         _autoRechargeService = autoRechargeService;
         _logger = logger;
         _localizer = localizer;
+        _backofficeOptions = backofficeOptions;
     }
 
     [HttpGet("/Admin")]
@@ -61,6 +67,7 @@ public class AdminController : Controller
             .ToListAsync();
 
         ViewBag.Search = search;
+        ViewBag.Backoffice = BackofficeStatus.From(_backofficeOptions.Value);
         return View(users);
     }
 
@@ -243,6 +250,23 @@ public class AdminController : Controller
         UserConcurrencyMiddleware.InvalidateLimitCache(id);
         TempData["Info"] = _localizer["ConcurrencyQueueTimeoutUpdated"].Value;
         return RedirectToAction(nameof(Details), new { id });
+    }
+
+    /// <summary>What the admin overview shows of the backoffice integration — never the key itself.</summary>
+    public class BackofficeStatus
+    {
+        public IReadOnlyList<(BackofficeModule Module, BackofficeMode Mode)> Modules { get; init; } = [];
+        public string? BaseUrl { get; init; }
+        public string? KeyDisplay { get; init; }
+        public BackofficeDisabledReason DisabledReason { get; init; }
+
+        public static BackofficeStatus From(P4BackofficeProductOptions options) => new()
+        {
+            Modules = Enum.GetValues<BackofficeModule>().Select(m => (m, options.ModeFor(m))).ToList(),
+            BaseUrl = string.IsNullOrWhiteSpace(options.BaseUrl) ? null : options.BaseUrl.Trim(),
+            KeyDisplay = BackofficeOptionsValidator.KeyDisplay(options.SecretKey),
+            DisabledReason = options.DisabledReason,
+        };
     }
 
     public class AdminUserRow

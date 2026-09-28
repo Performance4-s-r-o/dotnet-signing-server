@@ -619,4 +619,15 @@
   <data name="DailyBreakdown" xml:space="preserve"><value>Desglose diario (últimos 14 días)</value></data>
   <data name="MonthlyBreakdown" xml:space="preserve"><value>Desglose mensual (últimos 12 meses)</value></data>
   <data name="Date" xml:space="preserve"><value>Fecha</value></data>
+  <data name="AdminBackofficeTitle" xml:space="preserve"><value>Backoffice integration</value></data>
+  <data name="AdminBackofficeDisabledPrivateServer" xml:space="preserve"><value>Disabled on a private server: every module is Off.</value></data>
+  <data name="AdminBackofficeDisabledNoSdk" xml:space="preserve"><value>This build does not include the backoffice SDK: every module is Off.</value></data>
+  <data name="AdminBackofficeModuleDocs" xml:space="preserve"><value>Legal documents</value></data>
+  <data name="AdminBackofficeModuleConsents" xml:space="preserve"><value>Consents</value></data>
+  <data name="AdminBackofficeModuleEmail" xml:space="preserve"><value>E-mail</value></data>
+  <data name="AdminBackofficeModulePricing" xml:space="preserve"><value>Pricing</value></data>
+  <data name="AdminBackofficeModuleSupport" xml:space="preserve"><value>Support</value></data>
+  <data name="AdminBackofficeBaseUrl" xml:space="preserve"><value>Service URL</value></data>
+  <data name="AdminBackofficeKey" xml:space="preserve"><value>API key</value></data>
+  <data name="AdminBackofficeKeyNotSet" xml:space="preserve"><value>not set</value></data>
 </root>
