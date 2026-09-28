@@ -28,6 +28,12 @@ public class P4BackofficeProductOptions
     /// <summary>Secret key of the product environment (<c>p4sk_test_…</c> / <c>p4sk_live_…</c>).</summary>
     public string? SecretKey { get; set; }
 
+    /// <summary>
+    /// How long a legal document from the service is shown without revalidation (the SDK's
+    /// setting of the same name). Empty = 5 minutes.
+    /// </summary>
+    public TimeSpan? DocumentsTtl { get; set; }
+
     public EmailOptions Email { get; set; } = new();
 
     public WebhookOptions Webhook { get; set; } = new();

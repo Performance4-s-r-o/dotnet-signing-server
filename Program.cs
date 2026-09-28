@@ -182,7 +182,6 @@ builder.Services.AddSingleton<LokiClient>();
 // Ship all ILogger output (not just unhandled exceptions) to Loki.
 builder.Services.AddSingleton<ILoggerProvider, DotNetSigningServer.Logging.LokiLoggerProvider>();
 builder.Services.AddHttpClient<TemplateAiService>();
-builder.Services.AddScoped<LegalDocumentService>();
 builder.Services.AddHttpClient("osticket", client =>
 {
     var timeout = builder.Configuration.GetValue<int?>("OsTicket:TimeoutSeconds") ?? 10;

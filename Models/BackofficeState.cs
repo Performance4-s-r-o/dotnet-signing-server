@@ -25,4 +25,10 @@ public static class BackofficeStateKeys
 {
     /// <summary><c>next_cursor</c> of the last page read from <c>GET /v1/events</c>.</summary>
     public const string EventsCursor = "events:cursor";
+
+    /// <summary>
+    /// Consent-relevant facts of every document (<c>requires_consent</c>, <c>current_version</c>,
+    /// <c>required_version</c>, <c>upcoming</c>) as JSON; see <c>DocumentsMeta</c>.
+    /// </summary>
+    public const string DocsMeta = "docs:meta";
 }
