@@ -27,11 +27,14 @@ internal sealed class SignUpAppFactory : WebApplicationFactory<Program>
 {
     private readonly string _connectionString;
     private readonly string _consentsMode;
+    private readonly Action<IServiceCollection>? _configureServices;
 
-    public SignUpAppFactory(string connectionString, string consentsMode)
+    /// <param name="configureServices">Runs after the defaults, e.g. to put a real e-mail sender back.</param>
+    public SignUpAppFactory(string connectionString, string consentsMode, Action<IServiceCollection>? configureServices = null)
     {
         _connectionString = connectionString;
         _consentsMode = consentsMode;
+        _configureServices = configureServices;
         ClientOptions.BaseAddress = new Uri("https://localhost");
         ClientOptions.AllowAutoRedirect = false;
     }
@@ -61,6 +64,7 @@ internal sealed class SignUpAppFactory : WebApplicationFactory<Program>
                 o.BaseUrl = "https://127.0.0.1:9";
                 o.SecretKey = "p4sk_test_integration";
             });
+            _configureServices?.Invoke(services);
         });
     }
 }
