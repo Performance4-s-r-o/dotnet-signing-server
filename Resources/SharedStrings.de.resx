@@ -630,4 +630,10 @@
   <data name="AdminBackofficeBaseUrl" xml:space="preserve"><value>Dienst-URL</value></data>
   <data name="AdminBackofficeKey" xml:space="preserve"><value>API-Schlüssel</value></data>
   <data name="AdminBackofficeKeyNotSet" xml:space="preserve"><value>nicht gesetzt</value></data>
+  <data name="AdminOutboxTitle" xml:space="preserve"><value>Backoffice-Warteschlange (Outbox)</value></data>
+  <data name="AdminOutboxOldestPending" xml:space="preserve"><value>Älteste wartende Nachricht</value></data>
+  <data name="AdminOutboxLastError" xml:space="preserve"><value>Letzter Fehler</value></data>
+  <data name="AdminOutboxBlockedHint" xml:space="preserve"><value>Blockierte Nachrichten wurden als nicht autorisiert abgelehnt. Korrigieren Sie zuerst den API-Schlüssel oder seine Berechtigungen und stellen Sie sie dann erneut ein.</value></data>
+  <data name="AdminOutboxRequeueBlocked" xml:space="preserve"><value>Blockierte erneut einstellen</value></data>
+  <data name="AdminOutboxRequeued" xml:space="preserve"><value>{0} blockierte Nachricht(en) erneut eingestellt.</value></data>
 </root>

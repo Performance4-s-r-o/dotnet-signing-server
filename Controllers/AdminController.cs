@@ -5,6 +5,7 @@ using DotNetSigningServer.Resources;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Services.Backoffice;
+using DotNetSigningServer.Services.Backoffice.Outbox;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -23,14 +24,20 @@ public class AdminController : Controller
     private readonly ILogger<AdminController> _logger;
     private readonly IStringLocalizer<SharedStrings> _localizer;
     private readonly IOptions<P4BackofficeProductOptions> _backofficeOptions;
+    private readonly OutboxSignal _outboxSignal;
+    private readonly TimeProvider _time;
 
     public AdminController(
         ApplicationDbContext dbContext,
         IAutoRechargeService autoRechargeService,
         ILogger<AdminController> logger,
         IStringLocalizer<SharedStrings> localizer,
-        IOptions<P4BackofficeProductOptions> backofficeOptions)
+        IOptions<P4BackofficeProductOptions> backofficeOptions,
+        OutboxSignal outboxSignal,
+        TimeProvider time)
     {
+        _outboxSignal = outboxSignal;
+        _time = time;
         _dbContext = dbContext;
         _autoRechargeService = autoRechargeService;
         _logger = logger;
@@ -68,7 +75,41 @@ public class AdminController : Controller
 
         ViewBag.Search = search;
         ViewBag.Backoffice = BackofficeStatus.From(_backofficeOptions.Value);
+        ViewBag.Outbox = await ReadOutboxAsync();
         return View(users);
+    }
+
+    /// <summary>
+    /// Outbox overview for the admin page. The table may be missing on an instance whose
+    /// migrations have not run yet; the page must still render then.
+    /// </summary>
+    private async Task<OutboxHealthSnapshot?> ReadOutboxAsync()
+    {
+        try
+        {
+            return await OutboxHealth.ReadAsync(_dbContext, HttpContext.RequestAborted);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Backoffice outbox overview unavailable");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Puts items refused as unauthorised (401/403) back in the queue once the API key or its
+    /// scopes have been fixed.
+    /// </summary>
+    [HttpPost("/Admin/Backoffice/Outbox/RequeueBlocked")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RequeueBlockedOutbox()
+    {
+        var ids = await OutboxHealth.RequeueBlockedAsync(_dbContext, _time.GetUtcNow(), HttpContext.RequestAborted);
+        foreach (var id in ids) _outboxSignal.Notify(id);
+
+        _logger.LogInformation("Admin requeued {Count} blocked backoffice outbox item(s)", ids.Count);
+        TempData["Info"] = string.Format(_localizer["AdminOutboxRequeued"].Value, ids.Count);
+        return RedirectToAction(nameof(Index));
     }
 
     [HttpGet("/Admin/Users/{id:guid}")]

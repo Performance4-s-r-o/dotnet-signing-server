@@ -1,4 +1,5 @@
 using DotNetSigningServer.Models;
+using DotNetSigningServer.Services.Backoffice.Outbox;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
@@ -19,6 +20,20 @@ namespace DotNetSigningServer.Data
         public DbSet<WebhookEvent> WebhookEvents { get; set; }
         public DbSet<StoredPdfTemplate> StoredPdfTemplates { get; set; }
         public DbSet<LegalDocument> LegalDocuments { get; set; }
+        public DbSet<BackofficeOutboxItem> BackofficeOutboxItems { get; set; }
+
+        /// <summary>
+        /// Outbox items added through this context and not yet announced to the dispatcher;
+        /// see <see cref="OutboxSignalInterceptor"/>.
+        /// </summary>
+        internal OutboxPendingSignals OutboxPendingSignals { get; } = new();
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        {
+            // Wakes the outbox dispatcher once enqueued items are committed. Stateless and
+            // shared, so it does not change the options' identity between contexts.
+            optionsBuilder.AddInterceptors(OutboxSignalInterceptor.Instance);
+        }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -122,6 +137,14 @@ namespace DotNetSigningServer.Data
             modelBuilder.Entity<WebhookEvent>()
                 .HasIndex(w => w.EventId)
                 .IsUnique();
+
+            // The dispatcher's claim filters by status and due time; cleanup and the
+            // admin overview go by age.
+            modelBuilder.Entity<BackofficeOutboxItem>()
+                .HasIndex(i => new { i.Status, i.NextAttemptAt });
+
+            modelBuilder.Entity<BackofficeOutboxItem>()
+                .HasIndex(i => i.CreatedAt);
         }
     }
 }

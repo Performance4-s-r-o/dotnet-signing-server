@@ -4,6 +4,7 @@
     ViewData["Title"] = L["AdminTitle"].Value;
     var search = ViewBag.Search as string ?? "";
     var backoffice = ViewBag.Backoffice as DotNetSigningServer.Controllers.AdminController.BackofficeStatus;
+    var outbox = ViewBag.Outbox as DotNetSigningServer.Services.Backoffice.Outbox.OutboxHealthSnapshot;
 }
 
 @if (TempData["Error"] != null)
@@ -119,6 +120,43 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </section>
+    }
+
+    @if (outbox != null)
+    {
+        var blocked = outbox.Count(DotNetSigningServer.Models.BackofficeOutboxStatus.Blocked);
+        <section class="tokens-existing" style="margin-top:1.5rem">
+            <h2 class="tokens-existing-title">@L["AdminOutboxTitle"]</h2>
+            <div class="table-wrapper">
+                <table class="table">
+                    <tbody>
+                        @foreach (var status in DotNetSigningServer.Models.BackofficeOutboxStatus.All)
+                        {
+                            <tr>
+                                <td><code>@status</code></td>
+                                <td>@outbox.Count(status)</td>
+                            </tr>
+                        }
+                        <tr>
+                            <td>@L["AdminOutboxOldestPending"]</td>
+                            <td>@(outbox.OldestPendingAt?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "—")</td>
+                        </tr>
+                        <tr>
+                            <td>@L["AdminOutboxLastError"]</td>
+                            <td>@if (outbox.LastError != null) { <code>@outbox.LastError</code> } else { <span>—</span> }</td>
+                        </tr>
+                    </tbody>
+                </table>
+                @if (blocked > 0)
+                {
+                    <form method="post" action="/Admin/Backoffice/Outbox/RequeueBlocked" class="p-4">
+                        @Html.AntiForgeryToken()
+                        <p class="muted" style="font-size:0.875rem;margin-bottom:0.75rem">@L["AdminOutboxBlockedHint"]</p>
+                        <button type="submit" class="btn-small btn-secondary">@L["AdminOutboxRequeueBlocked"] (@blocked)</button>
+                    </form>
+                }
             </div>
         </section>
     }
