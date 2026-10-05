@@ -108,6 +108,14 @@
     @* Static assets are served with a one-week max-age, so the URL has to change
        when the file does — otherwise edits stay invisible behind the cache. *@
     <link rel="stylesheet" href="/css/custom.css" asp-append-version="true" />
+    @* Cookie consent banner of the P4 Backoffice service — only with a publishable key
+       (P4_BACKOFFICE_PK). Before any optional script: such scripts are written as
+       <script type="text/plain" data-p4-category="analytics"> and run after consent. *@
+    @{ var cookieWidget = Backoffice.Value.DisabledReason == DotNetSigningServer.Services.Backoffice.BackofficeDisabledReason.None ? Backoffice.Value.CookieWidget : null; }
+    @if (cookieWidget?.ScriptSrc is { } widgetSrc)
+    {
+        <script src="@widgetSrc" data-pk="@cookieWidget.PublishableKey" data-locale="@currentCulture"></script>
+    }
     @* Entity signals: tells search engines that "Performance4PDF" is this product, published
        by this company. Pages may add their own graph via ViewData["JsonLd"]. *@
     <script type="application/ld+json">@Html.Raw(DotNetSigningServer.Services.StructuredData.SiteJsonLd(origin, metaDescription))</script>
