@@ -17,10 +17,7 @@ public sealed record VerifiedWebhook(string Id, string Type, DateTimeOffset Time
 /// constant-time compare, 5 minute timestamp tolerance. During a secret rotation either the
 /// current or the previous secret may match.
 ///
-/// Same algorithm and API shape as <c>P4.Backoffice.Sdk.Webhooks.WebhookVerifier</c>, kept
-/// here because the default build leaves the SDK out (see <c>Directory.Build.props</c>); an
-/// SDK build checks both produce the same signatures (<c>StandardWebhookVerifierTests</c>).
-/// Switch to the SDK type once the SDK is part of every build.
+/// Same algorithm as the service's own verifier (Standard Webhooks); no SDK dependency.
 /// </summary>
 public sealed class StandardWebhookVerifier
 {

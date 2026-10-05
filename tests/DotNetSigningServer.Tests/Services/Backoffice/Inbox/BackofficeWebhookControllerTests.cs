@@ -124,7 +124,6 @@ public class BackofficeWebhookControllerTests
     [Theory]
     [InlineData("Off", BackofficeDisabledReason.None)]
     [InlineData("On", BackofficeDisabledReason.PrivateServer)]
-    [InlineData("On", BackofficeDisabledReason.SdkNotIncluded)]
     public async Task IntegrationOff_Returns404(string mode, BackofficeDisabledReason reason)
     {
         using var host = new InboxTestHost(configure: o =>

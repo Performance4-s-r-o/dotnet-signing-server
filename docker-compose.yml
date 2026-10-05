@@ -14,7 +14,6 @@ services:
         SENTRY_RELEASE_SHA: ${SENTRY_RELEASE_SHA:-}
         # true builds with the P4 Backoffice SDK (needs registry access at
         # restore time); false leaves it out and the integration stays Off.
-        USE_P4_BACKOFFICE_SDK: ${USE_P4_BACKOFFICE_SDK:-false}
     restart: unless-stopped
     volumes:
       - data_protection_keys:/app/data-protection-keys

@@ -12,8 +12,6 @@ namespace DotNetSigningServer.Tests.Services.Backoffice;
 
 public class BackofficeRegistrationTests
 {
-    internal const string SdkAssembly = "P4.Backoffice.Sdk";
-
     internal static ServiceCollection Register(Dictionary<string, string?> settings, bool privateServer = false)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
@@ -30,10 +28,6 @@ public class BackofficeRegistrationTests
                           && (d.ImplementationType == typeof(BackofficeInboxProcessor)
                               || d.ImplementationType == typeof(BackofficePollingService)));
 
-    internal static bool AnySdkService(IServiceCollection services) =>
-        services.Any(d => d.ServiceType.Assembly.GetName().Name == SdkAssembly
-                          || d.ImplementationType?.Assembly.GetName().Name == SdkAssembly);
-
     private static P4BackofficeProductOptions Resolve(IServiceCollection services) =>
         services.BuildServiceProvider().GetRequiredService<IOptions<P4BackofficeProductOptions>>().Value;
 
@@ -44,7 +38,6 @@ public class BackofficeRegistrationTests
 
         var options = Resolve(services);
         Assert.All(Enum.GetValues<BackofficeModule>(), m => Assert.Equal(BackofficeMode.Off, options.ModeFor(m)));
-        Assert.False(AnySdkService(services));
     }
 
     [Fact]
@@ -56,8 +49,6 @@ public class BackofficeRegistrationTests
             ["P4Backoffice:BaseUrl"] = "https://backoffice.example.com",
             ["P4Backoffice:SecretKey"] = "p4sk_test_abc",
         });
-
-        Assert.False(AnySdkService(services));
         Assert.False(AnyInboxWorker(services));
     }
 
@@ -120,25 +111,8 @@ public class BackofficeRegistrationTests
         Assert.Throws<OptionsValidationException>(() => validator.Validate());
     }
 
-#if P4_BACKOFFICE_SDK
     [Fact]
-    public void On_WithSdk_RegistersTheClient()
-    {
-        var services = Register(new()
-        {
-            ["P4Backoffice:Mode"] = "On",
-            ["P4Backoffice:BaseUrl"] = "https://backoffice.example.com",
-            ["P4Backoffice:SecretKey"] = "p4sk_test_abc",
-        });
-
-        Assert.Contains(services, d => d.ServiceType == typeof(P4.Backoffice.Sdk.Client.BackofficeApiClient));
-        Assert.True(BackofficeRegistration.SdkIncluded);
-        Assert.True(Resolve(services).AnyEnabled);
-        Assert.True(AnyInboxWorker(services));
-    }
-#else
-    [Fact]
-    public void On_WithoutSdk_StaysOff()
+    public void On_RegistersTheIntegration()
     {
         var services = Register(new()
         {
@@ -148,11 +122,9 @@ public class BackofficeRegistrationTests
         });
 
         var options = Resolve(services);
-        Assert.Equal(BackofficeDisabledReason.SdkNotIncluded, options.DisabledReason);
-        Assert.False(options.AnyEnabled);
-        Assert.False(AnySdkService(services));
-        Assert.False(AnyInboxWorker(services));
+        Assert.Equal(BackofficeDisabledReason.None, options.DisabledReason);
+        Assert.True(options.AnyEnabled);
+        Assert.True(AnyInboxWorker(services));
     }
-#endif
 
 }

@@ -105,8 +105,7 @@ public sealed class SupportCategoriesProvider
 
 /// <summary>
 /// Read-only client of <c>GET /v1/support/categories?locale=</c>. Vendored like
-/// <c>BackofficePricingClient</c>; TODO(P4.Backoffice.Sdk): call
-/// <c>V1.Support.Categories.GetAsync</c> here once the package is restored in CI.
+/// <c>BackofficePricingClient</c>; no SDK dependency.
 /// Only <see cref="SupportCategoriesWorker"/> calls it.
 /// </summary>
 public sealed class SupportCategoriesClient

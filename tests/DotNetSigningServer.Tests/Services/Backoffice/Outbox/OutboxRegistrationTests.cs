@@ -37,12 +37,11 @@ public class OutboxRegistrationTests
     }
 
     [Fact]
-    public void ModuleOn_RegistersTheDispatcherWhenTheBuildHasTheSdk()
+    public void ModuleOn_RegistersTheDispatcher()
     {
         var services = BackofficeRegistrationTests.Register(new(On));
 
-        // A build without the SDK keeps every module Off, and so sends nothing.
-        Assert.Equal(BackofficeRegistration.SdkIncluded, HasDispatcher(services));
+        Assert.True(HasDispatcher(services));
     }
 
     [Fact]
@@ -55,6 +54,6 @@ public class OutboxRegistrationTests
             ["P4Backoffice:SecretKey"] = "p4sk_test_abc",
         });
 
-        Assert.Equal(BackofficeRegistration.SdkIncluded, HasDispatcher(services));
+        Assert.True(HasDispatcher(services));
     }
 }

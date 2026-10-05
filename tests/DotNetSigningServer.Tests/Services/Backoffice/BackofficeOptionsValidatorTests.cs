@@ -57,7 +57,6 @@ public class BackofficeOptionsValidatorTests
         { "bad webhook secret", Options(webhookSecret: "abc"), "P4Backoffice__Webhook__Secret" },
         { "bad previous secret", Options(previousSecret: "abc"), "P4Backoffice__Webhook__PreviousSecret" },
         { "PrivateServer skips key rules", Options(mode: "On", reason: BackofficeDisabledReason.PrivateServer), null },
-        { "no SDK still validates", Options(mode: "On", baseUrl: Url, reason: BackofficeDisabledReason.SdkNotIncluded), "P4Backoffice__SecretKey" },
     };
 
     [Theory]
@@ -162,7 +161,6 @@ public class P4BackofficeProductOptionsTests
 
     [Theory]
     [InlineData(BackofficeDisabledReason.PrivateServer)]
-    [InlineData(BackofficeDisabledReason.SdkNotIncluded)]
     public void DisabledReason_ForcesEveryModuleOff(BackofficeDisabledReason reason)
     {
         var options = new P4BackofficeProductOptions { Mode = "On", Modules = { Pricing = "On" }, DisabledReason = reason };

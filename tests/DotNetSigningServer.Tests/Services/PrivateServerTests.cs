@@ -210,7 +210,6 @@ public class PrivateServerBackofficeTests
         Assert.All(
             Enum.GetValues<BackofficeModule>(),
             m => Assert.Equal(BackofficeMode.Off, options.ModeFor(m)));
-        Assert.False(BackofficeRegistrationTests.AnySdkService(services));
         Assert.False(BackofficeRegistrationTests.AnyInboxWorker(services)); // no polling, no processing
     }
 

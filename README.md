@@ -121,17 +121,9 @@ switches itself off rather than failing at startup.
 The shared backoffice service can take over legal documents, consents, e-mail,
 pricing and support one module at a time. Nothing changes until a module is
 switched to `Shadow` or `On`; `PrivateServer__Enabled=true` forces every module
-`Off`. The integration needs the `P4.Backoffice.Sdk` package, which is not on
-nuget.org, so the default build leaves it out and stays `Off`:
-
-```bash
-dotnet build                                   # without the SDK (forks, public CI)
-P4_PACKAGES_TOKEN=... dotnet build -p:UseP4BackofficeSdk=true
-dotnet build -p:UseP4BackofficeSdk=true -p:P4BackofficeSdkProject=/path/to/P4.Backoffice.Sdk.csproj
-docker build --build-arg USE_P4_BACKOFFICE_SDK=false .
-```
-
-The token is read from the environment by `nuget.config`; never commit it.
+`Off`. The integration calls the service's HTTP API directly (its own clients in
+`Services/Backoffice/`, written from the service's OpenAPI document); it needs no
+SDK or private package, so every build — forks included — can switch it on.
 `/Admin` shows the effective mode of each module.
 
 Writes to the service never happen inside a request. They are stored in the

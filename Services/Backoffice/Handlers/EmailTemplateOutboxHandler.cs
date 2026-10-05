@@ -13,9 +13,8 @@ namespace DotNetSigningServer.Services.Backoffice.Handlers;
 /// template's schema does not match what the product sends) ends Dead without retries and is
 /// logged as an error naming the template.
 ///
-/// TODO(P4.Backoffice.Sdk): once the package is restored in CI, send through
-/// <c>BackofficeApiClient.V1.Emails.PostAsync</c> with the same header; the payload shape stays
-/// the one of <c>openapi.json</c> (<c>EmailInput</c>, template mode).
+/// Own HTTP call following the service's OpenAPI document — no SDK dependency, so every build
+/// (forks included) can use it.
 /// </summary>
 public sealed class EmailTemplateOutboxHandler : EmailRawOutboxHandler
 {

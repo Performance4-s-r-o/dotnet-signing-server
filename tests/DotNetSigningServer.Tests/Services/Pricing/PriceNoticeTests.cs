@@ -462,8 +462,7 @@ public class PriceNoticeRegistrationTests
     [InlineData(true, "On")] // PrivateServer forces Off
     public void Integration_RegistersTheMonitorWhenPricingIsNotOn(bool privateServer, string pricing)
     {
-        // Without the SDK in the build every module is Off as well.
-        var monitor = privateServer || !DotNetSigningServer.Services.Backoffice.BackofficeRegistration.SdkIncluded || pricing != "On";
+        var monitor = privateServer || pricing != "On";
 
         var services = BackofficeRegistrationTests.Register(new()
         {

@@ -13,9 +13,8 @@ namespace DotNetSigningServer.Services.Backoffice.Handlers;
 /// as <c>RemoteId</c>); <c>status=suppressed</c> or <c>422 suppressed_recipient</c> ⇒ Dead
 /// without an alert.
 ///
-/// TODO(P4.Backoffice.Sdk): once the package is restored in CI, send through
-/// <c>BackofficeApiClient.V1.Emails.PostAsync</c> with the same header; the payload shape stays
-/// the one of <c>openapi.json</c> (<c>EmailInput</c>).
+/// Own HTTP call following the service's OpenAPI document — no SDK dependency, so every build
+/// (forks included) can use it.
 /// </summary>
 public class EmailRawOutboxHandler : JsonPostOutboxHandler
 {

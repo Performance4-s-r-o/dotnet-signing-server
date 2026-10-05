@@ -12,9 +12,8 @@ namespace DotNetSigningServer.Services.Backoffice.Handlers;
 /// (<see cref="SupportTicketReceipt"/>). <c>422 support_invalid</c> ends Dead without retries
 /// and is logged as an error. Everything else follows <see cref="RetryPolicy"/>.
 ///
-/// TODO(P4.Backoffice.Sdk): once the package is restored in CI, send through
-/// <c>BackofficeApiClient.V1.Support.Tickets.PostAsync</c> with the same header; the payload
-/// stays <c>SupportTicketInput</c> of <c>openapi.json</c>.
+/// Own HTTP call following the service's OpenAPI document — no SDK dependency, so every build
+/// (forks included) can use it.
 /// </summary>
 public sealed class SupportTicketOutboxHandler : JsonPostOutboxHandler
 {
