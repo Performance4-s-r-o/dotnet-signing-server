@@ -5,10 +5,6 @@ namespace DotNetSigningServer.Options;
 /// <summary>
 /// Product-side settings for the P4 Backoffice integration, section <c>P4Backoffice</c>.
 ///
-/// The SDK binds its own options (<c>BaseUrl</c>, <c>SecretKey</c>, <c>Timeout</c>, …) from
-/// the same section; <see cref="BaseUrl"/> and <see cref="SecretKey"/> are repeated here so
-/// that validation and the admin overview work in builds without the SDK.
-///
 /// Modes are kept as strings on purpose: an unknown value has to fail startup with a
 /// message naming the setting, not with a binder exception. Parsing is case-insensitive.
 /// </summary>
@@ -41,6 +37,8 @@ public class P4BackofficeProductOptions
     public PollingOptions Polling { get; set; } = new();
 
     public ConsentsOptions Consents { get; set; } = new();
+
+    public CookieWidgetOptions CookieWidget { get; set; } = new();
 
     /// <summary>
     /// Set by the integration after binding. When not <see cref="BackofficeDisabledReason.None"/>
@@ -174,5 +172,31 @@ public class P4BackofficeProductOptions
 
         public IReadOnlyList<string> EffectiveAcknowledged =>
             Acknowledged is { Length: > 0 } ? Acknowledged : DefaultAcknowledged;
+    }
+
+    /// <summary>
+    /// The service's cookie consent widget (banner). Loaded only with a publishable key — this
+    /// product sets only strictly necessary cookies today, so it stays empty until an optional
+    /// category (analytics, marketing, preferences) is added to the declaration in the service.
+    /// Independent of the module modes: the widget talks to the service from the browser.
+    /// </summary>
+    public class CookieWidgetOptions
+    {
+        public const string DefaultUrl = "https://legal.performance4.cz";
+
+        /// <summary>
+        /// Origin browsers load <c>/v1/widget.js</c> from: the public legal viewer, which also
+        /// passes the widget's API calls to the service (the service itself may stay private).
+        /// </summary>
+        public string? Url { get; set; }
+
+        /// <summary>Publishable key of the product environment (<c>p4pk_live_…</c>); public by design.</summary>
+        public string? PublishableKey { get; set; }
+
+        /// <summary>The <c>&lt;script src&gt;</c> of the widget, or null when no key is set.</summary>
+        public string? ScriptSrc =>
+            string.IsNullOrWhiteSpace(PublishableKey)
+                ? null
+                : $"{(string.IsNullOrWhiteSpace(Url) ? DefaultUrl : Url.Trim()).TrimEnd('/')}/v1/widget.js";
     }
 }

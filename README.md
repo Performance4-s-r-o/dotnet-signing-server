@@ -109,6 +109,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `P4Backoffice__Mode` / `P4Backoffice__Modules__*` | | P4 Backoffice integration: `Off` (default), `Shadow` or `On`, globally or per module (`Docs`, `Consents`, `Email`, `Pricing`, `Support`) |
 | `P4Backoffice__BaseUrl` / `P4Backoffice__SecretKey` | when not `Off` | Service URL (https) and `p4sk_` key; startup fails without them |
 | `P4Backoffice__Webhook__Secret` | | Webhook signing secret (`whsec_` + base64 of at least 24 bytes); `…__PreviousSecret` during rotation |
+| `P4Backoffice__CookieWidget__PublishableKey` / `…__Url` | | Cookie banner of the service: publishable key `p4pk_…` (empty = no banner) and the origin of `widget.js` (default `https://legal.performance4.cz`) |
 | `P4Backoffice__Polling__Interval` | | How often `/v1/events` is polled (default `00:15:00`, `00:02:00` without a webhook secret) |
 | `P4Backoffice__DocumentsTtl` | | How long a legal document from the service is shown before it is revalidated (default `00:05:00`) |
 | `P4Backoffice__Consents__Documents__0…` / `…__Acknowledged__0…` | | Documents consented to at sign-up (default `terms`, `dpa`) and documents only acknowledged (default `privacy`) |
@@ -213,17 +214,18 @@ the same list.
 This product sets only strictly necessary cookies (`.AspNetCore.Cookies`,
 `.AspNetCore.Antiforgery.*`, `.AspNetCore.Mvc.CookieTempDataProvider`,
 `.AspNetCore.Culture`), which need no consent, so there is **no cookie banner**
-and `_Layout.cshtml` loads no consent widget. Before adding analytics,
+and `_Layout.cshtml` loads no consent widget while `P4_BACKOFFICE_PK` is empty. Before adding analytics,
 marketing or any other optional cookie or script:
 
 1. Add the cookies to the declaration in the service under a new optional
    category (`preferences`, `analytics` or `marketing`) and publish it; update
    `AuditedCookies` and the Razor cookies policy.
-2. Add the service's consent widget to `_Layout.cshtml`
-   (`<script src="<service>/v1/widget.js" data-pk="p4pk_…">`, publishable key
-   only, never the secret key).
-3. Load the new script only after the visitor consented to its category, never
-   unconditionally.
+2. Set `P4_BACKOFFICE_PK` (publishable key `p4pk_…`, never the secret key).
+   `_Layout.cshtml` then loads the service's widget from the public legal viewer
+   (`P4_BACKOFFICE_WIDGET_URL`, default `https://legal.performance4.cz`), which
+   shows the banner and passes its API calls to the service.
+3. Write the new script as `<script type="text/plain" data-p4-category="analytics" …>`:
+   the widget runs it only after the visitor consented to that category.
 
 #### Consents (`Modules:Consents`)
 
