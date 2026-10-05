@@ -54,12 +54,8 @@ public sealed record BackofficeDocumentFetch(BackofficeDocumentContent? Document
 /// (<c>openapi.json</c>: <c>/v1/documents</c>, <c>/v1/documents/{type}</c>,
 /// <c>/v1/documents/{type}/versions</c>).
 ///
-/// Vendored on purpose: the default build does not include <c>P4.Backoffice.Sdk</c> (see
-/// <c>Directory.Build.props</c>), and tests run without it. The shapes follow the service's
-/// OpenAPI document; the request/ETag handling mirrors the SDK's <c>DocumentsCache</c> 0.1.0.
-/// TODO(P4.Backoffice.Sdk): once the package is restored in CI, replace the HTTP calls here
-/// with the SDK's generated client and keep this class as the adapter — callers depend only
-/// on the records above.
+/// Own client of the service's OpenAPI document (no SDK dependency, so every build — forks
+/// included — can use it); the request/ETag handling mirrors the SDK's <c>DocumentsCache</c>.
 ///
 /// Every method throws <see cref="HttpRequestException"/> (or <see cref="TaskCanceledException"/>
 /// on timeout) when the service fails; callers are background code or fall back to the snapshot.

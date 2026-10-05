@@ -64,7 +64,7 @@ public class SupportRegistrationTests
         services.AddHttpClient();
         services.AddDbContext<ApplicationDbContext>(o => o.UseInMemoryDatabase("reg-" + Guid.NewGuid()));
         services.Configure<OsTicketOptions>(_ => { });
-        var options = new P4BackofficeProductOptions { DisabledReason = BackofficeDisabledReason.SdkNotIncluded };
+        var options = new P4BackofficeProductOptions { DisabledReason = BackofficeDisabledReason.PrivateServer };
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(options));
         BackofficeRegistration.AddSupport(services, options);
         using var provider = services.BuildServiceProvider();

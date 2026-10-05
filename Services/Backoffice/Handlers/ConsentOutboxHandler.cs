@@ -8,9 +8,8 @@ namespace DotNetSigningServer.Services.Backoffice.Handlers;
 /// <see cref="ConsentBatchPayload"/> (<c>{ "events": [ConsentInput, …] }</c>, at most 100)
 /// as is, with the item id as <c>Idempotency-Key</c>, so a retry never records a batch twice.
 ///
-/// TODO(P4.Backoffice.Sdk): once the package is restored in CI, send through
-/// <c>BackofficeApiClient.V1.Consents.PostAsync</c> with the same header; the payload shape
-/// stays the one of <c>openapi.json</c> (<c>ConsentBatch</c>).
+/// Own HTTP call following the service's OpenAPI document — no SDK dependency, so every build
+/// (forks included) can use it.
 /// </summary>
 public sealed class ConsentOutboxHandler : JsonPostOutboxHandler
 {

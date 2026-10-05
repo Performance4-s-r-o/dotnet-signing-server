@@ -97,10 +97,6 @@
                 {
                     <p class="muted p-4">@L["AdminBackofficeDisabledPrivateServer"]</p>
                 }
-                else if (backoffice.DisabledReason == DotNetSigningServer.Services.Backoffice.BackofficeDisabledReason.SdkNotIncluded)
-                {
-                    <p class="muted p-4">@L["AdminBackofficeDisabledNoSdk"]</p>
-                }
                 <table class="table">
                     <tbody>
                         @foreach (var (module, mode) in backoffice.Modules)

@@ -10,7 +10,4 @@ public enum BackofficeDisabledReason
 
     /// <summary><c>PrivateServer:Enabled=true</c> — a self-hosted installation never talks to the service.</summary>
     PrivateServer = 1,
-
-    /// <summary>This build was made without the SDK (<c>UseP4BackofficeSdk=false</c>).</summary>
-    SdkNotIncluded = 2,
 }

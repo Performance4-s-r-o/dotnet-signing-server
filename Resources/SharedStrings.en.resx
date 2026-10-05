@@ -627,7 +627,6 @@
   <data name="ApiDocFindCodesNote2" xml:space="preserve"><value>Only the first 30 pages of a document are scanned.</value></data>
   <data name="AdminBackofficeTitle" xml:space="preserve"><value>Backoffice integration</value></data>
   <data name="AdminBackofficeDisabledPrivateServer" xml:space="preserve"><value>Disabled on a private server: every module is Off.</value></data>
-  <data name="AdminBackofficeDisabledNoSdk" xml:space="preserve"><value>This build does not include the backoffice SDK: every module is Off.</value></data>
   <data name="AdminBackofficeModuleDocs" xml:space="preserve"><value>Legal documents</value></data>
   <data name="AdminBackofficeModuleConsents" xml:space="preserve"><value>Consents</value></data>
   <data name="AdminBackofficeModuleEmail" xml:space="preserve"><value>E-mail</value></data>

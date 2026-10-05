@@ -627,7 +627,6 @@
   <data name="ApiDocFindCodesNote2" xml:space="preserve"><value>Prohledá se jen prvních 30 stránek dokumentu.</value></data>
   <data name="AdminBackofficeTitle" xml:space="preserve"><value>Napojení na backoffice</value></data>
   <data name="AdminBackofficeDisabledPrivateServer" xml:space="preserve"><value>Na privátním serveru vypnuto: všechny moduly jsou Off.</value></data>
-  <data name="AdminBackofficeDisabledNoSdk" xml:space="preserve"><value>Tento build neobsahuje SDK backoffice: všechny moduly jsou Off.</value></data>
   <data name="AdminBackofficeModuleDocs" xml:space="preserve"><value>Právní dokumenty</value></data>
   <data name="AdminBackofficeModuleConsents" xml:space="preserve"><value>Souhlasy</value></data>
   <data name="AdminBackofficeModuleEmail" xml:space="preserve"><value>E-maily</value></data>

@@ -100,18 +100,4 @@ public class StandardWebhookVerifierTests
         Assert.Throws<ArgumentException>(() => new StandardWebhookVerifier(new string?[] { null, " " }));
     }
 
-#if P4_BACKOFFICE_SDK
-    [Fact]
-    public void MatchesTheSdkVerifier()
-    {
-        var ts = Now.ToUnixTimeSeconds();
-        var sdkSignature = P4.Backoffice.Sdk.Webhooks.WebhookVerifier.Sign(Secret, "msg_1", ts, Body);
-
-        Assert.Equal(StandardWebhookVerifier.Sign(Secret, "msg_1", ts, Body), sdkSignature);
-        Assert.Equal("msg_1", Verify(sdkSignature, ts).Id);
-        var sdk = new P4.Backoffice.Sdk.Webhooks.WebhookVerifier(Secret)
-            .Verify(Body, "msg_1", ts.ToString(), StandardWebhookVerifier.Sign(Secret, "msg_1", ts, Body), Now);
-        Assert.Equal("price.scheduled", sdk.Type);
-    }
-#endif
 }

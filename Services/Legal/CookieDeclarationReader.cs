@@ -145,9 +145,8 @@ public sealed class NoCookieDeclarationSource : ICookieDeclarationSource
 /// resync call <see cref="RefreshAllAsync"/>, which refetches every language at once.
 ///
 /// Vendored like <see cref="BackofficeDocumentsClient"/> (same named HttpClient and key).
-/// TODO(P4.Backoffice.Sdk): once the package is restored in CI, call its generated
-/// <c>V1.CookieDeclaration.GetAsync</c> in <see cref="FetchAsync"/>; callers depend only on
-/// <see cref="CookieDeclarationSnapshot"/>.
+/// Own HTTP call following the service's OpenAPI document — no SDK dependency, so every build
+/// (forks included) can use it.
 /// </summary>
 public sealed class CookieDeclarationReader : ICookieDeclarationSource
 {

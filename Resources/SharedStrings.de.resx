@@ -626,7 +626,6 @@
   <data name="Date" xml:space="preserve"><value>Datum</value></data>
   <data name="AdminBackofficeTitle" xml:space="preserve"><value>Backoffice-Anbindung</value></data>
   <data name="AdminBackofficeDisabledPrivateServer" xml:space="preserve"><value>Auf einem privaten Server deaktiviert: Alle Module sind Off.</value></data>
-  <data name="AdminBackofficeDisabledNoSdk" xml:space="preserve"><value>Dieser Build enthält das Backoffice-SDK nicht: Alle Module sind Off.</value></data>
   <data name="AdminBackofficeModuleDocs" xml:space="preserve"><value>Rechtsdokumente</value></data>
   <data name="AdminBackofficeModuleConsents" xml:space="preserve"><value>Einwilligungen</value></data>
   <data name="AdminBackofficeModuleEmail" xml:space="preserve"><value>E-Mail</value></data>

@@ -75,8 +75,8 @@ public class LegalRegistrationTests
             ["P4Backoffice:SecretKey"] = "p4sk_test_abc",
         });
 
-        Assert.Equal(BackofficeRegistration.SdkIncluded, HasWarmup(services));
-        Assert.Equal(BackofficeRegistration.SdkIncluded, Has<BackofficeDocumentsClient>(services));
+        Assert.True(HasWarmup(services));
+        Assert.True(Has<BackofficeDocumentsClient>(services));
     }
 
     [Fact]

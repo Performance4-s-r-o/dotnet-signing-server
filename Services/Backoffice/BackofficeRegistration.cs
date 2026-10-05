@@ -13,9 +13,6 @@ using DotNetSigningServer.Services.Support;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
-#if P4_BACKOFFICE_SDK
-using DotNetSigningServer.Services.Backoffice.Sdk;
-#endif
 
 namespace DotNetSigningServer.Services.Backoffice;
 
@@ -23,26 +20,19 @@ namespace DotNetSigningServer.Services.Backoffice;
 /// All dependency injection for the P4 Backoffice integration; <c>Program.cs</c> only calls
 /// <see cref="AddP4BackofficeIntegration"/>.
 ///
-/// Nothing here is on a request path: the SDK is registered only when a module is Shadow or
-/// On, and registering it opens no connection.
+/// Nothing here is on a request path. The service is called through the integration's own
+/// HTTP clients (written from the service's OpenAPI); there is no SDK dependency, so every
+/// build — forks included — can switch the integration on.
 /// </summary>
 public static class BackofficeRegistration
 {
-    /// <summary>Whether this build contains the SDK (<c>UseP4BackofficeSdk=true</c>).</summary>
-    public const bool SdkIncluded =
-#if P4_BACKOFFICE_SDK
-        true;
-#else
-        false;
-#endif
-
     public static IServiceCollection AddP4BackofficeIntegration(
         this IServiceCollection services,
         IConfiguration configuration,
         PrivateServerOptions privateServer)
     {
         var section = configuration.GetSection(P4BackofficeProductOptions.SectionName);
-        var reason = DisabledReason(privateServer, SdkIncluded);
+        var reason = DisabledReason(privateServer);
 
         services.AddOptions<P4BackofficeProductOptions>()
             .Bind(section)
@@ -59,10 +49,6 @@ public static class BackofficeRegistration
         snapshot.DisabledReason = reason;
         if (snapshot.AnyEnabled)
         {
-#if P4_BACKOFFICE_SDK
-            // The SDK's "P4Backoffice" HttpClient keeps its own 3 s timeout; nothing is added to it.
-            services.AddP4BackofficeSdk(section);
-#endif
             AddOutboxDispatcher(services, snapshot);
             AddInboxProcessing(services, snapshot);
         }
@@ -429,11 +415,9 @@ public static class BackofficeRegistration
         services.AddHostedService<BackofficePollingService>();
     }
 
-    /// <summary>What forces every module Off: PrivateServer wins over a missing SDK.</summary>
-    public static BackofficeDisabledReason DisabledReason(PrivateServerOptions privateServer, bool sdkIncluded) =>
-        privateServer.Enabled ? BackofficeDisabledReason.PrivateServer
-        : !sdkIncluded ? BackofficeDisabledReason.SdkNotIncluded
-        : BackofficeDisabledReason.None;
+    /// <summary>What forces every module Off: a private (self-hosted) server.</summary>
+    public static BackofficeDisabledReason DisabledReason(PrivateServerOptions privateServer) =>
+        privateServer.Enabled ? BackofficeDisabledReason.PrivateServer : BackofficeDisabledReason.None;
 }
 
 /// <summary>
@@ -459,11 +443,6 @@ internal sealed class BackofficeStartupReport(
                         "PrivateServer: {Setting} is set but never used; remove it from this installation",
                         BackofficeOptionsValidator.Setting("SecretKey"));
                 }
-                break;
-            case BackofficeDisabledReason.SdkNotIncluded when o.AnyRequested:
-                logger.LogWarning(
-                    "Backoffice integration is configured but this build does not include the SDK "
-                    + "(UseP4BackofficeSdk=false); every module stays Off");
                 break;
         }
 
