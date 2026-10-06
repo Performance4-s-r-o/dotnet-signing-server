@@ -263,19 +263,21 @@ public class BackofficeOutboxDispatcherTests
         await dispatcher.StartAsync(CancellationToken.None);
         try
         {
-            // Let the first (empty) pass finish so that only the signal can wake it within the 5 s poll.
+            // Let the first (empty) pass finish so that only the signal can wake it within the poll.
             await Task.Delay(200);
             var watch = Stopwatch.StartNew();
             var id = await host.EnqueueAsync(new { n = 1 });
 
-            while (watch.Elapsed < TimeSpan.FromSeconds(3)
-                   && (await host.ItemAsync(id)).Status != BackofficeOutboxStatus.Sent)
+            // Arriving before the poll would have come round is what shows the signal woke the
+            // dispatcher; how long it took after that is the machine's business, not the code's.
+            var deadline = BackofficeOutboxDispatcher.PollInterval - TimeSpan.FromSeconds(1);
+            while (watch.Elapsed < deadline && (await host.ItemAsync(id)).Status != BackofficeOutboxStatus.Sent)
             {
                 await Task.Delay(25);
             }
 
             Assert.Equal(BackofficeOutboxStatus.Sent, (await host.ItemAsync(id)).Status);
-            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(1), $"took {watch.Elapsed}");
+            Assert.True(watch.Elapsed < BackofficeOutboxDispatcher.PollInterval, $"took {watch.Elapsed}");
         }
         finally
         {

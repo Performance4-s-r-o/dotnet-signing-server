@@ -45,6 +45,18 @@ jobs:
         run: >-
           dotnet test tests/DotNetSigningServer.Tests/DotNetSigningServer.Tests.csproj
           --no-build --configuration Release --verbosity normal
+          --logger "trx;LogFileName=test-results.trx"
+
+      # A run that fails once and passes on a retry tells you nothing without this:
+      # the name of the test that failed is in the result file, not in the log tail.
+      - name: Keep the test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/TestResults/*.trx'
+          if-no-files-found: warn
+          retention-days: 14
 
   format:
     name: format
