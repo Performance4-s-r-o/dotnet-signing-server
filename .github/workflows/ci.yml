@@ -51,7 +51,7 @@ jobs:
       # the name of the test that failed is in the result file, not in the log tail.
       - name: Keep the test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: '**/TestResults/*.trx'
