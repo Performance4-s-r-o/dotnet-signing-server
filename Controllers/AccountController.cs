@@ -176,6 +176,12 @@ public class AccountController : Controller
             // outcome as a fresh signup; the real owner already has an account and can
             // sign in or use the password-reset flow. No consent is recorded: the
             // visitor is not (provably) the account's owner.
+            //
+            // Logged because the visitor's view is deliberately identical to a successful
+            // signup: without this line a signup that sends nothing cannot be told from one
+            // whose mail was lost, and the address stays out of the log for the same reason
+            // it stays out of the response.
+            logger.LogInformation("Sign-up for an address that already has an account; no verification e-mail sent.");
             TempData["Info"] = _localizer["CheckEmailVerification"].Value;
             return RedirectToAction(nameof(Verify));
         }
