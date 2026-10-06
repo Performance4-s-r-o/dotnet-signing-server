@@ -16,6 +16,10 @@ namespace DotNetSigningServer.Models
         public string? TsaUrl { get; set; }
         public string? TsaUsername { get; set; }
         public string? TsaPassword { get; set; }
+        /// <summary>Tried when TsaUrl fails (network, HTTP or a rejected response).</summary>
+        public string? TsaBackupUrl { get; set; }
+        public string? TsaBackupUsername { get; set; }
+        public string? TsaBackupPassword { get; set; }
         public Guid? TemplateId { get; set; }
         /// <summary>Signature design width in PDF points. When set, layout uses this instead of SignRect.Width.</summary>
         public float? DesignWidth { get; set; }

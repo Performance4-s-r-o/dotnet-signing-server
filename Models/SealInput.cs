@@ -17,6 +17,10 @@ namespace DotNetSigningServer.Models
         public string? TsaUrl { get; set; }
         public string? TsaUsername { get; set; }
         public string? TsaPassword { get; set; }
+        /// <summary>Tried when TsaUrl fails (network, HTTP or a rejected response).</summary>
+        public string? TsaBackupUrl { get; set; }
+        public string? TsaBackupUsername { get; set; }
+        public string? TsaBackupPassword { get; set; }
         /// <summary>When true, do not apply any timestamp even if TsaUrl is set.</summary>
         public bool DisableTsa { get; set; }
         /// <summary>Verification URL to embed in PDF (e.g. "https://verify.performance4pdf.com/abc123").</summary>
