@@ -110,11 +110,21 @@ namespace DotNetSigningServer.Services
         public static ITSAClient? CreateTsaClient(
             string? url = null,
             string? username = null,
-            string? password = null)
+            string? password = null,
+            TsaEndpoint? backup = null)
         {
             if (string.IsNullOrWhiteSpace(url))
             {
                 return null;
+            }
+
+            if (backup != null)
+            {
+                // The backup faces the same checks as the primary: both arrive in
+                // the request, neither is trusted.
+                var primaryClient = CreateTsaClient(url, username, password)!;
+                var backupClient = CreateTsaClient(backup.Url, backup.Username, backup.Password)!;
+                return new FallbackTsaClient(primaryClient, backupClient, url, backup.Url);
             }
 
             if (!Uri.TryCreate(url, UriKind.Absolute, out var parsedUri)

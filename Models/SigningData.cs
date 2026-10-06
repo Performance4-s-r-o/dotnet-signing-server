@@ -13,6 +13,10 @@ namespace DotNetSigningServer.Models
         public string? TsaUrl { get; set; }
         public string? TsaUsername { get; set; }
         public string? TsaPassword { get; set; }
+        /// <summary>Tried when TsaUrl fails (network, HTTP or a rejected response).</summary>
+        public string? TsaBackupUrl { get; set; }
+        public string? TsaBackupUsername { get; set; }
+        public string? TsaBackupPassword { get; set; }
         public Guid? UserId { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }

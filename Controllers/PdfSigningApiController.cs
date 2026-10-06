@@ -87,6 +87,13 @@ namespace DotNetSigningServer.Controllers
                     ? _dataProtector.Protect(input.TsaUsername) : null;
                 signingData.TsaPassword = !string.IsNullOrEmpty(input.TsaPassword)
                     ? _dataProtector.Protect(input.TsaPassword) : null;
+                // The backup is stored like the primary: /api/sign reads the TSA
+                // from here, never from its own request.
+                signingData.TsaBackupUrl = string.IsNullOrWhiteSpace(input.TsaBackupUrl) ? null : input.TsaBackupUrl;
+                signingData.TsaBackupUsername = !string.IsNullOrEmpty(input.TsaBackupUsername)
+                    ? _dataProtector.Protect(input.TsaBackupUsername) : null;
+                signingData.TsaBackupPassword = !string.IsNullOrEmpty(input.TsaBackupPassword)
+                    ? _dataProtector.Protect(input.TsaBackupPassword) : null;
 
                 signingData.UserId = user.Id;
 
@@ -136,6 +143,12 @@ namespace DotNetSigningServer.Controllers
                     ? _dataProtector.Unprotect(signingData.TsaUsername) : null;
                 var tsaPassword = !string.IsNullOrEmpty(signingData.TsaPassword)
                     ? _dataProtector.Unprotect(signingData.TsaPassword) : null;
+                var tsaBackup = TsaEndpoint.From(
+                    signingData.TsaBackupUrl,
+                    !string.IsNullOrEmpty(signingData.TsaBackupUsername)
+                        ? _dataProtector.Unprotect(signingData.TsaBackupUsername) : null,
+                    !string.IsNullOrEmpty(signingData.TsaBackupPassword)
+                        ? _dataProtector.Unprotect(signingData.TsaBackupPassword) : null);
 
                 var result = _signingService.HandleSign(
                     input,
@@ -144,7 +157,8 @@ namespace DotNetSigningServer.Controllers
                     signingData.FieldName,
                     signingData.TsaUrl,
                     tsaUsername,
-                    tsaPassword);
+                    tsaPassword,
+                    tsaBackup);
 
                 // Charge BEFORE delivering. If the balance raced to zero since the
                 // pre-check, or the concurrency tier multiplied the cost beyond it,
@@ -277,7 +291,9 @@ namespace DotNetSigningServer.Controllers
             iText.Signatures.ITSAClient? tsaClient;
             try
             {
-                tsaClient = PdfCryptoHelper.CreateTsaClient(input.TsaUrl, input.TsaUsername, input.TsaPassword);
+                tsaClient = PdfCryptoHelper.CreateTsaClient(
+                    input.TsaUrl, input.TsaUsername, input.TsaPassword,
+                    TsaEndpoint.From(input.TsaBackupUrl, input.TsaBackupUsername, input.TsaBackupPassword));
             }
             catch (ApiValidationException ex)
             {

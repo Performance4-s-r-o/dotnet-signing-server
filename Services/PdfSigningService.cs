@@ -80,7 +80,7 @@ namespace DotNetSigningServer.Services
             return (preSignedPdfPath, hashToSign);
         }
 
-        public string HandleSign(SignInput input, string presignedPdfPath, string certificatePem, string fieldName, string? tsaUrl = null, string? tsaUsername = null, string? tsaPassword = null)
+        public string HandleSign(SignInput input, string presignedPdfPath, string certificatePem, string fieldName, string? tsaUrl = null, string? tsaUsername = null, string? tsaPassword = null, TsaEndpoint? tsaBackup = null)
         {
             if (!File.Exists(presignedPdfPath))
             {
@@ -88,7 +88,7 @@ namespace DotNetSigningServer.Services
             }
 
             byte[] preSignedPdf = File.ReadAllBytes(presignedPdfPath);
-            ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(tsaUrl, tsaUsername, tsaPassword);
+            ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(tsaUrl, tsaUsername, tsaPassword, tsaBackup);
             var chain = PdfCryptoHelper.LoadCertificatesFromPemString(certificatePem);
             byte[] signatureBytes = PdfCryptoHelper.HexStringToByteArray(input.SignedHash);
             fieldName = PdfCryptoHelper.EnsureFieldName(fieldName);
@@ -122,14 +122,17 @@ namespace DotNetSigningServer.Services
                 designWidth: input.DesignWidth,
                 designHeight: input.DesignHeight,
                 autoHeight: input.AutoHeight,
-                signerNameOverride: input.SignerName);
+                signerNameOverride: input.SignerName,
+                tsaBackup: TsaEndpoint.From(input.TsaBackupUrl, input.TsaBackupUsername, input.TsaBackupPassword));
 
             return Convert.ToBase64String(fullySignedPdf);
         }
 
         public string ApplyDocumentTimestamp(DocumentTimestampInput input)
         {
-            ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(input.TsaUrl, input.TsaUsername, input.TsaPassword);
+            ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(
+                input.TsaUrl, input.TsaUsername, input.TsaPassword,
+                TsaEndpoint.From(input.TsaBackupUrl, input.TsaBackupUsername, input.TsaBackupPassword));
             if (tsaClient == null)
             {
                 throw new ApiValidationException("TSA_NOT_CONFIGURED");
@@ -348,7 +351,8 @@ namespace DotNetSigningServer.Services
             float? designHeight = null,
             bool? autoHeight = null,
             string? signerNameOverride = null,
-            bool disableTsa = false)
+            bool disableTsa = false,
+            TsaEndpoint? tsaBackup = null)
         {
             var preSignContainer = new DigestCalcBlankSigner(PdfName.Adobe_PPKLite, PdfCryptoHelper.SignatureSubFilter);
             preSignContainer.SetChain(chain);
@@ -379,7 +383,7 @@ namespace DotNetSigningServer.Services
             // caller never chose isn't a decision that's ours to make.
             ITSAClient? tsaClient = disableTsa
                 ? null
-                : PdfCryptoHelper.CreateTsaClient(tsaUrl, tsaUsername, tsaPassword);
+                : PdfCryptoHelper.CreateTsaClient(tsaUrl, tsaUsername, tsaPassword, tsaBackup);
             var tsaUrlForError = tsaUrl;
             return InjectFinalSignature(pdfWithPlaceholder, signatureBytes, chain, fieldName, tsaClient, tsaUrlForErrorContext: tsaUrlForError);
         }
