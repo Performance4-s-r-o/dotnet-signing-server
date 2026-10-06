@@ -257,25 +257,31 @@ public class BackofficeOutboxDispatcherTests
     public async Task Dispatcher_SendsAnItemSoonAfterCommit()
     {
         using var host = new OutboxTestHost();
+        // A poll far beyond the test's own patience: within the wait below, nothing but the
+        // commit signal can get the item sent. Timing the real 5 s poll against a stopwatch
+        // measures how busy the machine is and passes even when the signal never fires.
         var dispatcher = new BackofficeOutboxDispatcher(
             host.Processor, host.Signal, host.Services.GetRequiredService<IServiceScopeFactory>(),
-            host.Time, NullLogger<BackofficeOutboxDispatcher>.Instance);
+            host.Time, NullLogger<BackofficeOutboxDispatcher>.Instance, pollInterval: TimeSpan.FromMinutes(5));
         await dispatcher.StartAsync(CancellationToken.None);
         try
         {
-            // Let the first (empty) pass finish so that only the signal can wake it within the 5 s poll.
+            // Let the first (empty) pass finish, so the dispatcher is waiting on the signal.
             await Task.Delay(200);
-            var watch = Stopwatch.StartNew();
             var id = await host.EnqueueAsync(new { n = 1 });
 
-            while (watch.Elapsed < TimeSpan.FromSeconds(3)
+            var watch = Stopwatch.StartNew();
+            while (watch.Elapsed < TimeSpan.FromSeconds(30)
                    && (await host.ItemAsync(id)).Status != BackofficeOutboxStatus.Sent)
             {
                 await Task.Delay(25);
             }
 
             Assert.Equal(BackofficeOutboxStatus.Sent, (await host.ItemAsync(id)).Status);
-            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(1), $"took {watch.Elapsed}");
+            // "Soon" is still part of the contract: a signal that eventually limps through is a
+            // regression. Loose enough that a busy machine does not fail it, tight enough that
+            // it could not be the five-minute poll.
+            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"took {watch.Elapsed}");
         }
         finally
         {

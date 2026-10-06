@@ -31,6 +31,18 @@ Running the app locally needs Docker: with `UseLocalDb: true` the server starts
 a throwaway PostgreSQL container through Testcontainers. See the
 [README](README.md) for configuration.
 
+Run the suite once at a time. Two `dotnet test` runs over the same project
+share `bin/` and `obj/`, and the second one fails while the first is still
+writing them:
+
+```
+Microsoft.AspNetCore.Mvc.Testing.targets(38,5): error MSB4018: ... at System.IO.File.Create(String path)
+```
+
+MSBuild also keeps its worker nodes alive between runs (`/nodeReuse:true`), so
+back-to-back runs can collide the same way. To run several at once, give each
+one its own output: `--property:BaseOutputPath=…` and `--property:BaseIntermediateOutputPath=…`.
+
 ## Branches and commits
 
 Branch off `main`, naming the branch for the work: `fix/tsa-timeout`,

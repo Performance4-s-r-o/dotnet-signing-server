@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
 using DotNetSigningServer.Services.Email;
@@ -108,7 +109,10 @@ public class TemplateShadowComparerTests
         await comparer.StartAsync(CancellationToken.None);
         comparer.Schedule(EmailTemplateId.TwoFactorCode, "en", Vars.ToDictionary(v => v.Key, v => (string?)v.Value),
             new EmailTemplateResult("Code 123456", "<p>Your code: 123456</p><p>Valid 10 min</p>"));
-        for (var i = 0; i < 100 && service.Requests.Count == 0; i++) await Task.Delay(20);
+        // Generous on purpose: the point is that the work happens off the request, not how
+        // quickly a loaded machine gets round to it.
+        var waited = Stopwatch.StartNew();
+        while (waited.Elapsed < TimeSpan.FromSeconds(10) && service.Requests.Count == 0) await Task.Delay(20);
         await comparer.StopAsync(CancellationToken.None);
 
         Assert.Single(service.Requests);

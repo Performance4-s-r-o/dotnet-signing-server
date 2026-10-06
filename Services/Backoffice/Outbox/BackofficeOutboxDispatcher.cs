@@ -30,6 +30,9 @@ public sealed class BackofficeOutboxDispatcher : BackgroundService
     private readonly ILogger<BackofficeOutboxDispatcher> _logger;
     private readonly IReadOnlyList<IOutboxFallback> _fallbacks;
 
+    /// <summary>How long a pass waits for the signal; <see cref="PollInterval"/> unless a test sets it.</summary>
+    private readonly TimeSpan _pollInterval;
+
     private DateTimeOffset _nextMonitor;
     private DateTimeOffset _nextCleanup;
 
@@ -39,8 +42,10 @@ public sealed class BackofficeOutboxDispatcher : BackgroundService
         IServiceScopeFactory scopes,
         TimeProvider time,
         ILogger<BackofficeOutboxDispatcher> logger,
-        IEnumerable<IOutboxFallback>? fallbacks = null)
+        IEnumerable<IOutboxFallback>? fallbacks = null,
+        TimeSpan? pollInterval = null)
     {
+        _pollInterval = pollInterval ?? PollInterval;
         _fallbacks = fallbacks?.ToList() ?? [];
         _processor = processor;
         _signal = signal;
@@ -58,7 +63,7 @@ public sealed class BackofficeOutboxDispatcher : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            var wait = PollInterval;
+            var wait = _pollInterval;
             try
             {
                 if (await RunPassAsync(stoppingToken))
