@@ -37,6 +37,63 @@ public class EmailRawOutboxHandlerTests
     }
 
     [Fact]
+    public async Task RefusedWithFieldErrors_RecordsWhichFieldTheServiceRefused()
+    {
+        using var email = new EmailTestHost();
+        var id = await email.SendAsync(EmailTemplateId.PaymentFailed);
+        email.Host.Service.Enqueue(
+            HttpStatusCode.UnprocessableEntity,
+            """
+            {"type":"about:blank","title":"Unprocessable Entity","status":422,"code":"email_invalid",
+             "detail":"One or more e-mails were refused; nothing was queued.",
+             "errors":[{"path":"0.from","message":"from_domain_unknown"}]}
+            """);
+
+        await email.Host.Processor.DispatchDueAsync(CancellationToken.None);
+
+        // Without the errors this reads as a bare "HTTP 422 email_invalid", which does not
+        // say that the sending domain is the problem.
+        var item = await email.Host.ItemAsync(id);
+        Assert.Equal("HTTP 422 email_invalid (0.from: from_domain_unknown)", item.LastError);
+    }
+
+    [Fact]
+    public async Task RefusedWithManyFieldErrors_KeepsTheErrorShort()
+    {
+        using var email = new EmailTestHost();
+        var id = await email.SendAsync(EmailTemplateId.PaymentFailed);
+        email.Host.Service.Enqueue(
+            HttpStatusCode.UnprocessableEntity,
+            """
+            {"status":422,"code":"email_invalid","errors":[
+              {"path":"0.from","message":"address_invalid"},
+              {"path":"0.to","message":"address_invalid"},
+              {"path":"0.subject","message":"subject_required"},
+              {"path":"0.html","message":"body_required"}]}
+            """);
+
+        await email.Host.Processor.DispatchDueAsync(CancellationToken.None);
+
+        var item = await email.Host.ItemAsync(id);
+        Assert.Equal(
+            "HTTP 422 email_invalid (0.from: address_invalid, 0.to: address_invalid, 0.subject: subject_required)",
+            item.LastError);
+    }
+
+    [Fact]
+    public async Task RefusedWithoutFieldErrors_KeepsTheCodeOnItsOwn()
+    {
+        using var email = new EmailTestHost();
+        var id = await email.SendAsync(EmailTemplateId.PaymentFailed);
+        email.Host.Service.Enqueue(HttpStatusCode.Conflict, """{"status":409,"code":"email_not_configured"}""");
+
+        await email.Host.Processor.DispatchDueAsync(CancellationToken.None);
+
+        var item = await email.Host.ItemAsync(id);
+        Assert.Equal("HTTP 409 email_not_configured", item.LastError);
+    }
+
+    [Fact]
     public async Task SuppressedIn202_IsDeadWithoutPayload()
     {
         using var email = new EmailTestHost();

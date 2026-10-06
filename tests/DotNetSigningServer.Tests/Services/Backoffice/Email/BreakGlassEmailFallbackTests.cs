@@ -95,6 +95,42 @@ public class BreakGlassEmailFallbackTests
     }
 
     [Fact]
+    public async Task DeadOnARefusalTheServiceWillNeverAccept_IsStillSentDirectly()
+    {
+        using var email = new EmailTestHost();
+        var id = await email.SendAsync(EmailTemplateId.EmailVerification);
+        // A sender on an unverified domain: retrying changes nothing, and without the
+        // fallback the user never gets the link that lets them into their account.
+        email.Host.Service.EnqueueProblem(HttpStatusCode.UnprocessableEntity, "email_invalid");
+        await email.Host.Processor.DispatchDueAsync(CancellationToken.None);
+        Assert.Equal(BackofficeOutboxStatus.Dead, (await email.Host.ItemAsync(id)).Status);
+
+        Assert.Equal(1, await email.Fallback.RunAsync(CancellationToken.None));
+
+        Assert.Single(email.DirectSends);
+        Assert.Equal(BackofficeOutboxStatus.FallbackSent, (await email.Host.ItemAsync(id)).Status);
+    }
+
+    [Fact]
+    public async Task SuppressedRecipient_IsDeadButNeverSentDirectly()
+    {
+        using var email = new EmailTestHost();
+        var id = await email.SendAsync(EmailTemplateId.EmailVerification);
+        email.Host.Service.Enqueue(
+            HttpStatusCode.Accepted,
+            """{"id":"res_1","status":"suppressed","send_at":null,"suppression_reason":"complaint"}""");
+        await email.Host.Processor.DispatchDueAsync(CancellationToken.None);
+
+        var suppressed = await email.Host.ItemAsync(id);
+        Assert.Equal(BackofficeOutboxStatus.Dead, suppressed.Status);
+        // Dead like the refusal above, but its payload was cleared: nobody should deliver it.
+        Assert.Null(suppressed.PayloadProtected);
+
+        Assert.Equal(0, await email.Fallback.RunAsync(CancellationToken.None));
+        Assert.Empty(email.DirectSends);
+    }
+
+    [Fact]
     public async Task FallbackSent_IsNeverSentAgain_NeitherDirectlyNorByTheService()
     {
         using var email = new EmailTestHost();

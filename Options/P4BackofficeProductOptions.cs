@@ -106,11 +106,44 @@ public class P4BackofficeProductOptions
 
     public class EmailOptions
     {
+        /// <summary><see cref="Templates"/> entry that selects every template.</summary>
+        public const string Wildcard = "*";
+
+        private static readonly char[] Separators = [',', ';', ' ', '\t', '\r', '\n'];
+
         /// <summary>
         /// Template keys sent as service templates; every other message is sent as raw HTML.
         /// Empty by default — keys are added one at a time once the Email module is On.
         /// </summary>
         public List<string> TemplateKeys { get; set; } = new();
+
+        /// <summary>
+        /// The same selection in one value, for environments that pass a single string
+        /// (<c>P4_BACKOFFICE_TEMPLATES</c>): <c>*</c> for every template, otherwise keys
+        /// separated by commas or whitespace. Added to <see cref="TemplateKeys"/>, never
+        /// replacing it.
+        /// </summary>
+        public string? Templates { get; set; }
+
+        /// <summary>
+        /// Whether the service renders this template. Read on every send, so narrowing the
+        /// selection — or dropping back to local rendering — takes effect without a deploy.
+        /// </summary>
+        public bool Selects(string templateKey)
+        {
+            foreach (var entry in SelectedKeys())
+            {
+                if (entry == Wildcard || string.Equals(entry, templateKey, StringComparison.Ordinal)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Entries of both settings, trimmed, without the empty ones.</summary>
+        public IEnumerable<string> SelectedKeys() =>
+            TemplateKeys
+                .Concat(Templates?.Split(Separators, StringSplitOptions.RemoveEmptyEntries) ?? [])
+                .Select(k => k?.Trim() ?? string.Empty)
+                .Where(k => k.Length > 0);
 
         /// <summary>Send critical messages (2FA, password reset, e-mail verification) directly when the service does not deliver them in time.</summary>
         public bool FallbackDirect { get; set; } = true;

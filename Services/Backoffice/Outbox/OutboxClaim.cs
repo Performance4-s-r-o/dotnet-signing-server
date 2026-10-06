@@ -73,9 +73,15 @@ internal static class OutboxClaim
 
     /// <summary>
     /// Claims critical items of <paramref name="kind"/> created at or after
-    /// <paramref name="notBefore"/> that should go out by the direct fallback: Blocked ones, and
-    /// Pending ones created at or before <paramref name="pendingCreatedBefore"/> or whose last
-    /// attempt found the service unreachable or failing (network error, 5xx). Oldest first. Tracked.
+    /// <paramref name="notBefore"/> that should go out by the direct fallback: Blocked ones,
+    /// Dead ones that still hold their payload, and Pending ones created at or before
+    /// <paramref name="pendingCreatedBefore"/> or whose last attempt found the service
+    /// unreachable or failing (network error, 5xx). Oldest first. Tracked.
+    ///
+    /// A refusal the service will never accept (a misconfigured sender, an unpublished
+    /// template) leaves a critical message Dead, and the user waiting for it cannot get into
+    /// their account. A suppressed recipient is Dead too, but its payload was cleared — so
+    /// holding a payload is what separates "nobody delivered this" from "nobody should".
     /// </summary>
     public static async Task<List<BackofficeOutboxItem>> ClaimForFallbackAsync(
         ApplicationDbContext db, string kind, DateTimeOffset now, DateTimeOffset pendingCreatedBefore,
@@ -93,6 +99,7 @@ internal static class OutboxClaim
                       AND {{t.CreatedAt}} >= {3}
                       AND ({{t.LockedUntil}} IS NULL OR {{t.LockedUntil}} < {0})
                       AND ({{t.Status}} = '{{BackofficeOutboxStatus.Blocked}}'
+                           OR ({{t.Status}} = '{{BackofficeOutboxStatus.Dead}}' AND {{t.PayloadProtected}} IS NOT NULL)
                            OR ({{t.Status}} = '{{BackofficeOutboxStatus.Pending}}'
                                AND ({{t.CreatedAt}} <= {4} OR {{t.LastError}} LIKE {5} OR {{t.LastError}} LIKE {6})))
                     ORDER BY {{t.CreatedAt}}
@@ -119,13 +126,16 @@ internal static class OutboxClaim
                         && i.Kind == kind
                         && i.CreatedAt >= notBefore
                         && (i.LockedUntil == null || i.LockedUntil < now)
-                        && (i.Status == BackofficeOutboxStatus.Blocked || i.Status == BackofficeOutboxStatus.Pending))
+                        && (i.Status == BackofficeOutboxStatus.Blocked
+                            || i.Status == BackofficeOutboxStatus.Dead
+                            || i.Status == BackofficeOutboxStatus.Pending))
             .OrderBy(i => i.CreatedAt)
             .ToListAsync(cancellationToken);
         var items = candidates
             .Where(i => i.Status == BackofficeOutboxStatus.Blocked
-                        || i.CreatedAt <= pendingCreatedBefore
-                        || LastAttemptFoundServiceDown(i.LastError))
+                        || (i.Status == BackofficeOutboxStatus.Dead && i.PayloadProtected != null)
+                        || (i.Status == BackofficeOutboxStatus.Pending
+                            && (i.CreatedAt <= pendingCreatedBefore || LastAttemptFoundServiceDown(i.LastError))))
             .Take(limit)
             .ToList();
         foreach (var item in items) item.LockedUntil = now + LockDuration;
@@ -183,7 +193,7 @@ internal static class OutboxClaim
     /// <summary>Quoted, schema-qualified table and column names from the EF model.</summary>
     private sealed record Names(
         string Table, string Id, string Kind, string Status, string NextAttemptAt, string LockedUntil, string Critical,
-        string CreatedAt, string LastError)
+        string CreatedAt, string LastError, string PayloadProtected)
     {
         public static Names Of(DbContext db)
         {
@@ -201,7 +211,8 @@ internal static class OutboxClaim
                 Column(nameof(BackofficeOutboxItem.LockedUntil)),
                 Column(nameof(BackofficeOutboxItem.Critical)),
                 Column(nameof(BackofficeOutboxItem.CreatedAt)),
-                Column(nameof(BackofficeOutboxItem.LastError)));
+                Column(nameof(BackofficeOutboxItem.LastError)),
+                Column(nameof(BackofficeOutboxItem.PayloadProtected)));
         }
 
         private static string Quote(string identifier) => "\"" + identifier.Replace("\"", "\"\"") + "\"";
