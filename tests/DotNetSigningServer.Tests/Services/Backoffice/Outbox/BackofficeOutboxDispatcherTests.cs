@@ -278,6 +278,10 @@ public class BackofficeOutboxDispatcherTests
             }
 
             Assert.Equal(BackofficeOutboxStatus.Sent, (await host.ItemAsync(id)).Status);
+            // "Soon" is still part of the contract: a signal that eventually limps through is a
+            // regression. Loose enough that a busy machine does not fail it, tight enough that
+            // it could not be the five-minute poll.
+            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"took {watch.Elapsed}");
         }
         finally
         {
