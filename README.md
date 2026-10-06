@@ -110,6 +110,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `P4Backoffice__BaseUrl` / `P4Backoffice__SecretKey` | when not `Off` | Service URL (https) and `p4sk_` key; startup fails without them |
 | `P4Backoffice__Webhook__Secret` | | Webhook signing secret (`whsec_` + base64 of at least 24 bytes); `…__PreviousSecret` during rotation |
 | `P4Backoffice__CookieWidget__PublishableKey` / `…__Url` | | Cookie banner of the service: publishable key `p4pk_…` (empty = no banner) and the origin of `widget.js` (default `https://legal.performance4.cz`) |
+| `P4Backoffice__Email__Templates` / `P4_BACKOFFICE_TEMPLATES` | | Templates the service renders: `*` for all, otherwise keys separated by commas or whitespace (empty = all rendered locally) |
 | `P4Backoffice__Polling__Interval` | | How often `/v1/events` is polled (default `00:15:00`, `00:02:00` without a webhook secret) |
 | `P4Backoffice__DocumentsTtl` | | How long a legal document from the service is shown before it is revalidated (default `00:05:00`) |
 | `P4Backoffice__Consents__Documents__0…` / `…__Acknowledged__0…` | | Documents consented to at sign-up (default `terms`, `dpa`) and documents only acknowledged (default `privacy`) |
@@ -281,27 +282,35 @@ language). What happens next depends on the mode:
   they add no latency when the service is down. The code or link is only in the
   encrypted payload, which is cleared once sent.
 
-Service templates: with `On`, a template whose key is listed in
-`P4Backoffice__Email__TemplateKeys__0`, `__1`, … (empty by default) is queued as
-outbox item `email.template` instead (`POST /v1/emails` with `template`,
+Service templates: with `On`, a template whose key is selected — in
+`P4Backoffice__Email__TemplateKeys__0`, `__1`, … or, as a single value,
+`P4Backoffice__Email__Templates` / `P4_BACKOFFICE_TEMPLATES` (`*` for every
+template, otherwise keys separated by commas or whitespace; empty by default) —
+is queued as outbox item `email.template` instead (`POST /v1/emails` with `template`,
 `variables`, `locale` = `cs` or `en`, tags) and rendered by the service. All
 callers go through `ITemplatedEmailSender`; the variables are defined in
 `EmailTemplateVariables` (same names as the local `{{…}}` placeholders). The
-list is read per message, so removing a key switches back to the local
+selection is read per message, so removing a key switches back to the local
 rendering without a deployment. A `422 template_variables_invalid` ends the
 item `Dead` with an error log, without retries. Keys: `auto_recharge_success`,
 `auto_recharge_failed`, `payment_failed`, `price_change_notice`,
 `email_verification`, `password_reset`, `two_factor_code` — add them one at a
-time, the critical three last. The local templates stay as the fallback.
+time, the critical three last. The local templates stay as the fallback. With
+`*` a key the service does not know is sent to it anyway and refused; the
+message then goes out by break-glass if it is critical, so nothing is lost
+silently, but a new local template is worth publishing in the service first.
 
 Break-glass: 2FA codes, password resets and e-mail verification are `critical`.
 When the service has not taken one within `P4Backoffice__Email__FallbackAfter`
 (default 60 s), when it is known to be down (circuit breaker, or the item's own
-attempt got no connection or a 5xx — then within a dispatcher pass), or when
-the key is refused (`Blocked`), the dispatcher sends it directly through Resend
+attempt got no connection or a 5xx — then within a dispatcher pass), when the
+key is refused (`Blocked`), or when the service refused the message for good
+(`Dead` while the payload is still there — a sender on an unverified domain, a
+template that is not published), the dispatcher sends it directly through Resend
 (`RESEND_API_KEY` must stay configured), marks it `FallbackSent` and logs a
-warning; the service never sends it afterwards. Critical items older than 24 h
-are left alone. Critical `email.template` items carry the local rendering in
+warning; the service never sends it afterwards. A suppressed recipient is
+`Dead` too but its payload was cleared, so break-glass leaves it alone — nobody
+should deliver it. Critical items older than 24 h are left alone. Critical `email.template` items carry the local rendering in
 their encrypted payload (never sent to the service), so break-glass does not
 need the service either. Disable with `P4Backoffice__Email__FallbackDirect=false`.
 

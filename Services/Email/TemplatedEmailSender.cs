@@ -168,7 +168,7 @@ public sealed class TemplatedEmailSender : ITemplatedEmailSender
         options == null ? new EmailSendOptions(templateKey, locale) : options with { TemplateId = templateKey };
 
     private static bool IsListed(P4BackofficeProductOptions options, string templateKey) =>
-        options.Email.TemplateKeys.Any(k => string.Equals(k?.Trim(), templateKey, StringComparison.Ordinal));
+        options.Email.Selects(templateKey);
 }
 
 /// <summary>Languages the service's templates are published in; the local templates have the same two.</summary>

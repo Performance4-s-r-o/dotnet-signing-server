@@ -25,6 +25,32 @@ public class TemplatedEmailSenderTests
     }
 
     [Fact]
+    public async Task WildcardTemplates_QueuesServiceTemplateForAnUnlistedKey()
+    {
+        using var host = new TemplatedEmailTestHost("On");
+        host.Options.CurrentValue.Email.Templates = "*";
+
+        Assert.True(await host.SendAsync(EmailTemplateId.AutoRechargeSuccess, Recharge));
+
+        var item = Assert.Single(await host.ItemsAsync());
+        Assert.Equal(TemplatedEmailSender.OutboxKind, item.Kind);
+    }
+
+    [Fact]
+    public async Task WildcardRemoved_GoesBackToLocalRenderingWithoutARestart()
+    {
+        using var host = new TemplatedEmailTestHost("On");
+        host.Options.CurrentValue.Email.Templates = "*";
+        Assert.True(await host.SendAsync(EmailTemplateId.AutoRechargeSuccess, Recharge));
+
+        host.Options.CurrentValue.Email.Templates = null;
+        Assert.True(await host.SendAsync(EmailTemplateId.AutoRechargeSuccess, Recharge));
+
+        var kinds = (await host.ItemsAsync()).Select(i => i.Kind).ToList();
+        Assert.Equal(new List<string> { TemplatedEmailSender.OutboxKind, "email.raw" }, kinds);
+    }
+
+    [Fact]
     public async Task ListedKeyWithEmailOn_QueuesServiceTemplate()
     {
         using var host = new TemplatedEmailTestHost("On", EmailTemplateId.AutoRechargeSuccess);

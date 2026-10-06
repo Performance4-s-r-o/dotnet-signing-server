@@ -94,6 +94,7 @@ services:
       - P4Backoffice__Modules__Docs=${P4_BACKOFFICE_DOCS_MODE:-}
       - P4Backoffice__Modules__Consents=${P4_BACKOFFICE_CONSENTS_MODE:-}
       - P4Backoffice__Modules__Email=${P4_BACKOFFICE_EMAIL_MODE:-}
+      - P4Backoffice__Email__Templates=${P4_BACKOFFICE_TEMPLATES:-}
       - P4Backoffice__Modules__Pricing=${P4_BACKOFFICE_PRICING_MODE:-}
       - P4Backoffice__Modules__Support=${P4_BACKOFFICE_SUPPORT_MODE:-}
       - P4Backoffice__CookieWidget__Url=${P4_BACKOFFICE_WIDGET_URL:-}

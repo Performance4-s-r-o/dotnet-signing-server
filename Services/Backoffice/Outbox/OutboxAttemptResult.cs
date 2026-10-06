@@ -33,16 +33,22 @@ public sealed record OutboxAttemptResult
     public bool IsFatal { get; init; }
 
     public static OutboxAttemptResult Response(
-        int statusCode, string? problemCode = null, string? remoteId = null, TimeSpan? retryAfter = null) => new()
+        int statusCode, string? problemCode = null, string? remoteId = null, TimeSpan? retryAfter = null,
+        string? problemDetails = null) => new()
         {
             StatusCode = statusCode,
             ProblemCode = problemCode,
             RemoteId = remoteId,
             RetryAfter = retryAfter,
-            Error = statusCode is >= 200 and < 300
-            ? null
-            : problemCode is null ? $"HTTP {statusCode}" : $"HTTP {statusCode} {problemCode}",
+            Error = statusCode is >= 200 and < 300 ? null : ErrorText(statusCode, problemCode, problemDetails),
         };
+
+    /// <summary>`HTTP 422 email_invalid (0.from: from_domain_unknown)` — the code alone rarely says enough.</summary>
+    private static string ErrorText(int statusCode, string? problemCode, string? problemDetails)
+    {
+        var text = problemCode is null ? $"HTTP {statusCode}" : $"HTTP {statusCode} {problemCode}";
+        return string.IsNullOrWhiteSpace(problemDetails) ? text : $"{text} ({problemDetails})";
+    }
 
     /// <summary>Prefix of <see cref="Error"/> for an attempt that got no connection or answer.</summary>
     public const string NetworkErrorPrefix = "Network: ";

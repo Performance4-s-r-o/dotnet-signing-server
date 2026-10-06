@@ -2,6 +2,7 @@ using System.Net;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services.Backoffice.Outbox;
 using DotNetSigningServer.Services.Email;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -92,6 +93,87 @@ public class BreakGlassEmailFallbackTests
         Assert.Equal(1, await email.Fallback.RunAsync(CancellationToken.None));
 
         Assert.Equal(BackofficeOutboxStatus.FallbackSent, (await email.Host.ItemAsync(id)).Status);
+    }
+
+    [Fact]
+    public async Task DeadOnARefusalTheServiceWillNeverAccept_IsStillSentDirectly()
+    {
+        using var email = new EmailTestHost();
+        var id = await email.SendAsync(EmailTemplateId.EmailVerification);
+        // A sender on an unverified domain: retrying changes nothing, and without the
+        // fallback the user never gets the link that lets them into their account.
+        email.Host.Service.EnqueueProblem(HttpStatusCode.UnprocessableEntity, "email_invalid");
+        await email.Host.Processor.DispatchDueAsync(CancellationToken.None);
+        Assert.Equal(BackofficeOutboxStatus.Dead, (await email.Host.ItemAsync(id)).Status);
+
+        Assert.Equal(1, await email.Fallback.RunAsync(CancellationToken.None));
+
+        Assert.Single(email.DirectSends);
+        Assert.Equal(BackofficeOutboxStatus.FallbackSent, (await email.Host.ItemAsync(id)).Status);
+    }
+
+    [Fact]
+    public async Task DeadRefusal_KeepsTheServicesOwnErrorAsTheReason()
+    {
+        using var email = new EmailTestHost();
+        var id = await email.SendAsync(EmailTemplateId.PasswordReset);
+        email.Host.Service.Enqueue(
+            HttpStatusCode.UnprocessableEntity,
+            """{"status":422,"code":"email_invalid","errors":[{"path":"0.from","message":"from_domain_unknown"}]}""");
+        await email.Host.Processor.DispatchDueAsync(CancellationToken.None);
+
+        Assert.Equal(1, await email.Fallback.RunAsync(CancellationToken.None));
+
+        // The refusal is what has to be fixed; a "not delivered within N s" reason would
+        // overwrite it and send the operator looking for a timing problem.
+        var item = await email.Host.ItemAsync(id);
+        Assert.Equal(
+            "Break-glass: refused by the service (HTTP 422 email_invalid (0.from: from_domain_unknown))",
+            item.LastError);
+    }
+
+    [Fact]
+    public async Task DeadWithAnUnreadablePayload_IsNotClaimedAgain()
+    {
+        using var email = new EmailTestHost();
+        var id = await email.SendAsync(EmailTemplateId.TwoFactorCode);
+        email.Host.Service.EnqueueProblem(HttpStatusCode.UnprocessableEntity, "email_invalid");
+        await email.Host.Processor.DispatchDueAsync(CancellationToken.None);
+        // Whatever makes the payload unreadable (a rotated key ring, corruption) must not
+        // leave the item claimable, or it takes a fallback slot on every pass for 24 h.
+        await email.Host.WithDbAsync(async db =>
+        {
+            var item = await db.BackofficeOutboxItems.SingleAsync(i => i.Id == id);
+            item.PayloadProtected = "not-decryptable";
+            return await db.SaveChangesAsync();
+        });
+
+        Assert.Equal(1, await email.Fallback.RunAsync(CancellationToken.None));
+        var after = await email.Host.ItemAsync(id);
+        Assert.Equal(BackofficeOutboxStatus.Dead, after.Status);
+        Assert.Null(after.PayloadProtected);
+
+        Assert.Equal(0, await email.Fallback.RunAsync(CancellationToken.None));
+        Assert.Empty(email.DirectSends);
+    }
+
+    [Fact]
+    public async Task SuppressedRecipient_IsDeadButNeverSentDirectly()
+    {
+        using var email = new EmailTestHost();
+        var id = await email.SendAsync(EmailTemplateId.EmailVerification);
+        email.Host.Service.Enqueue(
+            HttpStatusCode.Accepted,
+            """{"id":"res_1","status":"suppressed","send_at":null,"suppression_reason":"complaint"}""");
+        await email.Host.Processor.DispatchDueAsync(CancellationToken.None);
+
+        var suppressed = await email.Host.ItemAsync(id);
+        Assert.Equal(BackofficeOutboxStatus.Dead, suppressed.Status);
+        // Dead like the refusal above, but its payload was cleared: nobody should deliver it.
+        Assert.Null(suppressed.PayloadProtected);
+
+        Assert.Equal(0, await email.Fallback.RunAsync(CancellationToken.None));
+        Assert.Empty(email.DirectSends);
     }
 
     [Fact]
