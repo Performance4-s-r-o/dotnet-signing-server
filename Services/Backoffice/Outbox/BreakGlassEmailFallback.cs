@@ -119,6 +119,9 @@ public sealed class BreakGlassEmailFallback : IOutboxFallback
 
     private static string Reason(BackofficeOutboxItem item, DateTimeOffset now, bool serviceDown) =>
         item.Status == BackofficeOutboxStatus.Blocked ? "blocked (API key refused)"
+        // The refusal is what an operator has to fix, and this reason replaces LastError once
+        // the message is out — so it carries the service's own words rather than a timing guess.
+        : item.Status == BackofficeOutboxStatus.Dead ? $"refused by the service ({item.LastError ?? "no detail"})"
         : serviceDown ? "service down"
         : OutboxClaim.LastAttemptFoundServiceDown(item.LastError) ? "service unreachable"
         : $"not delivered within {(now - item.CreatedAt).TotalSeconds:0} s";
@@ -156,8 +159,11 @@ public sealed class BreakGlassEmailFallback : IOutboxFallback
         }
         if (payload == null || string.IsNullOrWhiteSpace(payload.To))
         {
-            // Nothing that could be sent, by anyone.
+            // Nothing that could be sent, by anyone. The payload goes with it: Dead items are
+            // claimed again as long as they hold one, and this one would fail to decrypt on
+            // every pass, taking a slot from a 2FA code that could still go out.
             item.Status = BackofficeOutboxStatus.Dead;
+            item.PayloadProtected = null;
             item.LockedUntil = null;
             item.LastError = "Break-glass: payload missing or unreadable";
             _logger.LogError("Backoffice e-mail {ItemId} cannot be sent by break-glass: payload missing or unreadable", item.Id);
