@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using DotNetSigningServer.Services.Backoffice.Consents;
 using DotNetSigningServer.Services.Consents;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 
@@ -40,4 +41,21 @@ public class SignUpViewModel
     /// <summary>Whether versions are shown and sent (Consents module Shadow or On).</summary>
     [BindNever]
     public bool ShowVersions { get; set; }
+
+    /// <summary>
+    /// The sentence the service publishes for this checkbox; null means this app's own wording
+    /// (the module is off, or the service has nothing for this context yet).
+    /// </summary>
+    [BindNever]
+    public BackofficeConsentPrompt? Prompt { get; set; }
+
+    /// <summary>
+    /// Which wording the form actually showed, sent back as hidden fields. The consent is
+    /// recorded against it, so the record says what was read, not what is published now.
+    /// </summary>
+    public string? PromptKey { get; set; }
+
+    public int? PromptVersion { get; set; }
+
+    public string? PromptHash { get; set; }
 }

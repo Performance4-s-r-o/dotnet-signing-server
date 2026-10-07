@@ -6,6 +6,7 @@ using DotNetSigningServer.Services.Email;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
 using DotNetSigningServer.Services.Backoffice;
+using DotNetSigningServer.Services.Backoffice.Consents;
 using DotNetSigningServer.Services.Consents;
 using System.Globalization;
 using Microsoft.AspNetCore.Authentication;
@@ -114,14 +115,15 @@ public class AccountController : Controller
     [HttpGet("/Account/SignUp")]
     public async Task<IActionResult> SignUp(
         [FromServices] ConsentDocumentResolver consentDocuments,
-        [FromServices] IOptions<P4BackofficeProductOptions> backoffice)
+        [FromServices] IOptions<P4BackofficeProductOptions> backoffice,
+        [FromServices] ConsentPromptsCache? prompts = null)
     {
         if (User?.Identity?.IsAuthenticated == true)
         {
             return RedirectToAction("Index", "Home");
         }
         var model = new SignUpViewModel();
-        await PrepareSignUpFormAsync(model, consentDocuments, backoffice.Value);
+        await PrepareSignUpFormAsync(model, consentDocuments, backoffice.Value, prompts: prompts);
         return View(model);
     }
 
@@ -133,7 +135,8 @@ public class AccountController : Controller
         [FromServices] ConsentService consents,
         [FromServices] IOptions<P4BackofficeProductOptions> backoffice,
         [FromServices] TimeProvider time,
-        [FromServices] ILogger<AccountController> logger)
+        [FromServices] ILogger<AccountController> logger,
+        [FromServices] ConsentPromptsCache? prompts = null)
     {
         if (User?.Identity?.IsAuthenticated == true)
         {
@@ -152,7 +155,7 @@ public class AccountController : Controller
             ConsentRequirements.From(backoffice.Value.Consents), CurrentLocale, HttpContext.RequestAborted);
         if (!ModelState.IsValid)
         {
-            await PrepareSignUpFormAsync(model, consentDocuments, backoffice.Value, shownDocuments);
+            await PrepareSignUpFormAsync(model, consentDocuments, backoffice.Value, shownDocuments, prompts);
             return View(model);
         }
 
@@ -164,7 +167,7 @@ public class AccountController : Controller
         {
             // A new version came into force more than 10 minutes after the form was opened.
             ModelState.AddModelError(string.Empty, _localizer["LegalVersionOutdated"].Value);
-            await PrepareSignUpFormAsync(model, consentDocuments, backoffice.Value, shownDocuments);
+            await PrepareSignUpFormAsync(model, consentDocuments, backoffice.Value, shownDocuments, prompts);
             return View(model);
         }
 
@@ -775,17 +778,52 @@ public class AccountController : Controller
         SignUpViewModel model,
         ConsentDocumentResolver consentDocuments,
         P4BackofficeProductOptions backoffice,
-        IReadOnlyList<ConsentDocumentVersion>? documents = null)
+        IReadOnlyList<ConsentDocumentVersion>? documents = null,
+        ConsentPromptsCache? prompts = null)
     {
         model.Documents = documents ?? await consentDocuments.ResolveAsync(
             ConsentRequirements.From(backoffice.Consents), CurrentLocale, HttpContext.RequestAborted);
         model.ShowVersions = backoffice.ModeFor(BackofficeModule.Consents) != BackofficeMode.Off;
+        model.Prompt = SignUpPrompt(prompts);
         // The form always carries the versions in force now, also when it is shown again.
         model.ShownVersions = model.Documents.ToDictionary(d => d.Document, d => d.Version, StringComparer.Ordinal);
         model.ShownHashes = model.Documents.Where(d => d.ContentHash != null)
             .ToDictionary(d => d.Document, d => d.ContentHash!, StringComparer.Ordinal);
         ModelState.Remove(nameof(SignUpViewModel.ShownVersions));
         ModelState.Remove(nameof(SignUpViewModel.ShownHashes));
+    }
+
+    /// <summary>
+    /// The sentence the service publishes for the sign-up checkbox, from what is already in
+    /// memory — the form never waits for the service. Nothing cached yet means this app's own
+    /// wording this time, and a background refresh so the next visitor gets the published one.
+    /// </summary>
+    private BackofficeConsentPrompt? SignUpPrompt(ConsentPromptsCache? prompts)
+    {
+        if (prompts is null) return null;
+        var entry = prompts.Peek(ConsentPromptContexts.Registration, CurrentLocale);
+        if (entry is null || !prompts.IsFresh(entry))
+        {
+            RefreshPromptsInBackground(prompts);
+        }
+        return ConsentPromptSelection.ForSingleCheckbox(entry?.Prompts);
+    }
+
+    /// <summary>Fire and forget: a page is never held up by it, and a failure is the service's to log.</summary>
+    private void RefreshPromptsInBackground(ConsentPromptsCache prompts)
+    {
+        var locale = CurrentLocale;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await prompts.RefreshAsync(ConsentPromptContexts.Registration, locale, CancellationToken.None);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                // The cached copy, or this app's own wording, carries the page.
+            }
+        });
     }
 
     /// <summary>
