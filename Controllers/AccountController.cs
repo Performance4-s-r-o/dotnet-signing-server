@@ -213,7 +213,8 @@ public class AccountController : Controller
         _dbContext.Users.Add(user);
         // Records (and, unless the Consents module is Off, the outbox item) go into the same
         // SaveChangesAsync as the user: one transaction, nothing sent during the request.
-        consents.RecordSignupConsents(user, choices, Request.Headers.UserAgent.ToString(), ClientIp());
+        consents.RecordSignupConsents(
+            user, choices, Request.Headers.UserAgent.ToString(), ClientIp(), PromptRefFromForm(model));
 
         // Verification email (critical — user cannot complete signup without it). With the
         // Email module On it is queued in the same SaveChangesAsync as the user; otherwise it
@@ -792,6 +793,19 @@ public class AccountController : Controller
         ModelState.Remove(nameof(SignUpViewModel.ShownVersions));
         ModelState.Remove(nameof(SignUpViewModel.ShownHashes));
     }
+
+    /// <summary>
+    /// The wording the form said it showed, as the service's `prompt` reference. Taken from the
+    /// hidden fields rather than from the cache: by the time the form comes back a new version
+    /// may be published, and the record has to name what was read.
+    ///
+    /// Not a security check — the service verifies the hash belongs to that prompt version and
+    /// refuses the consent if it does not.
+    /// </summary>
+    private static ConsentPromptRef? PromptRefFromForm(SignUpViewModel model) =>
+        !string.IsNullOrWhiteSpace(model.PromptKey) && model.PromptVersion is > 0 && !string.IsNullOrWhiteSpace(model.PromptHash)
+            ? new ConsentPromptRef(model.PromptKey!, model.PromptVersion.Value, model.PromptHash!)
+            : null;
 
     /// <summary>
     /// The sentence the service publishes for the sign-up checkbox, from what is already in
