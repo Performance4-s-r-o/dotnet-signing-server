@@ -30,6 +30,13 @@ public class P4BackofficeProductOptions
     /// </summary>
     public TimeSpan? DocumentsTtl { get; set; }
 
+    /// <summary>
+    /// How long the wording of a consent is shown without revalidation. Empty = 5 minutes,
+    /// like <see cref="DocumentsTtl"/>; a published change is picked up by the next
+    /// revalidation either way.
+    /// </summary>
+    public TimeSpan? ConsentPromptsTtl { get; set; }
+
     public EmailOptions Email { get; set; } = new();
 
     public WebhookOptions Webhook { get; set; } = new();
