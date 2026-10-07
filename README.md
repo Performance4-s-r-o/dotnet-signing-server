@@ -228,7 +228,31 @@ marketing or any other optional cookie or script:
 3. Write the new script as `<script type="text/plain" data-p4-category="analytics" …>`:
    the widget runs it only after the visitor consented to that category.
 
+#### Public support form
+
+The contact page frames the support form hosted by the legal viewer
+(`P4_BACKOFFICE_SUPPORT_FORM_PRODUCT` = the product slug in the service,
+`P4_BACKOFFICE_SUPPORT_FORM_URL` to point elsewhere than
+`https://legal.performance4.cz`). The form belongs to the service: the captcha,
+the attachment rules, the rate limits and the helpdesk connection live there,
+and a browser cannot reach the service directly.
+
+Two things have to be set on the other side: the product's **embed origins**
+must list this app's origin, or the browser refuses to frame the form, and the
+helpdesk connection must be configured for the product's live environment.
+Without `…_PRODUCT` the contact page is an address and a mail link, as before.
+
+Signed-in users keep the in-app form at `/support`, which posts through the
+product API with the secret key.
+
 #### Consents (`Modules:Consents`)
+
+The sentence next to the sign-up checkbox comes from the service when it
+publishes one for the `registration` context, with its version and hash
+recorded alongside the consent; `P4Backoffice__ConsentPromptsTtl` sets how long
+a copy is shown without revalidation (five minutes by default). The form never
+waits for the service — it renders what is already in memory and falls back to
+this app's own wording until there is a copy.
 
 Sign-up has one unchecked checkbox for the documents in
 `P4Backoffice__Consents__Documents` (default `terms`, `dpa`: recorded as

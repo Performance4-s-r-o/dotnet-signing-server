@@ -99,6 +99,8 @@ services:
       - P4Backoffice__Modules__Support=${P4_BACKOFFICE_SUPPORT_MODE:-}
       - P4Backoffice__CookieWidget__Url=${P4_BACKOFFICE_WIDGET_URL:-}
       - P4Backoffice__CookieWidget__PublishableKey=${P4_BACKOFFICE_PK:-}
+      - P4Backoffice__SupportForm__Product=${P4_BACKOFFICE_SUPPORT_FORM_PRODUCT:-}
+      - P4Backoffice__SupportForm__Url=${P4_BACKOFFICE_SUPPORT_FORM_URL:-}
       # Size limits
       - Limits__PdfMaxBytes=${PDF_MAX_BYTES:-20971520}
       - Limits__ImageMaxBytes=${IMAGE_MAX_BYTES:-1048576}

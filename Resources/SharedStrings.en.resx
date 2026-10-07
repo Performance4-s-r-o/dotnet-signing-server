@@ -379,6 +379,8 @@
   <data name="ContactTitle" xml:space="preserve"><value>Contact</value></data>
   <data name="ContactIdNumber" xml:space="preserve"><value>Identification Number:</value></data>
   <data name="ContactVatNumber" xml:space="preserve"><value>VAT Number (DIČ):</value></data>
+  <data name="ContactFormHeading" xml:space="preserve"><value>Write to us</value></data>
+  <data name="ContactFormStandalone" xml:space="preserve"><value>Open the form in a new window</value></data>
   <data name="ContactEmailLabel" xml:space="preserve"><value>Email:</value></data>
 
   <!-- Templates -->
