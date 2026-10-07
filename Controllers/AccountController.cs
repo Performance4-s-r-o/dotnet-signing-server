@@ -214,7 +214,7 @@ public class AccountController : Controller
         // Records (and, unless the Consents module is Off, the outbox item) go into the same
         // SaveChangesAsync as the user: one transaction, nothing sent during the request.
         consents.RecordSignupConsents(
-            user, choices, Request.Headers.UserAgent.ToString(), ClientIp(), PromptRefFromForm(model.PromptKey, model.PromptVersion, model.PromptHash));
+            user, choices, Request.Headers.UserAgent.ToString(), ClientIp(), PromptRefFromForm(model.PromptKey, model.PromptVersion, model.PromptHash, model.PromptDocuments));
 
         // Verification email (critical — user cannot complete signup without it). With the
         // Email module On it is queued in the same SaveChangesAsync as the user; otherwise it
@@ -799,13 +799,18 @@ public class AccountController : Controller
     /// hidden fields rather than from the cache: by the time the form comes back a new version
     /// may be published, and the record has to name what was read.
     ///
-    /// Not a security check — the service verifies the hash belongs to that prompt version and
-    /// refuses the consent if it does not.
+    /// Not a security check — the service verifies the hash belongs to that prompt version, and
+    /// that the prompt is linked to the document, and refuses the consent if either is wrong.
     /// </summary>
-    private static ConsentPromptRef? PromptRefFromForm(string? key, int? version, string? hash) =>
-        !string.IsNullOrWhiteSpace(key) && version is > 0 && !string.IsNullOrWhiteSpace(hash)
-            ? new ConsentPromptRef(key!, version.Value, hash!)
-            : null;
+    private static ConsentPromptRef? PromptRefFromForm(string? key, int? version, string? hash, string? documents)
+    {
+        if (string.IsNullOrWhiteSpace(key) || version is not > 0 || string.IsNullOrWhiteSpace(hash)) return null;
+        var covered = (documents ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.Ordinal);
+        // A sentence that mentions no document cannot be named by any consent.
+        return covered.Count == 0 ? null : new ConsentPromptRef(key!, version.Value, hash!, covered);
+    }
 
     /// <summary>
     /// The sentence the service publishes for the sign-up checkbox, from what is already in
@@ -954,7 +959,7 @@ public class AccountController : Controller
             status.HasAnyRecord ? ConsentService.Flows.Reconsent : ConsentService.Flows.Initial,
             Request.Headers.UserAgent.ToString(),
             ClientIp(),
-            PromptRefFromForm(model.PromptKey, model.PromptVersion, model.PromptHash));
+            PromptRefFromForm(model.PromptKey, model.PromptVersion, model.PromptHash, model.PromptDocuments));
         await _dbContext.SaveChangesAsync();
         consentCache.Invalidate(userId.Value);
 

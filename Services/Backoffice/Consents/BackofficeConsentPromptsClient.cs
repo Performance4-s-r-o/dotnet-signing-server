@@ -35,7 +35,12 @@ public sealed record BackofficeConsentPrompt(
     string Locale,
     string? RequestedLocale,
     bool Fallback,
-    IReadOnlyList<ConsentPromptSegment> Segments);
+    IReadOnlyList<ConsentPromptSegment> Segments)
+{
+    /// <summary>Documents the sentence links to — the ones a consent may name this prompt for.</summary>
+    public IReadOnlySet<string> Documents =>
+        Segments.OfType<ConsentPromptSegment.Link>().Select(l => l.DocumentType).ToHashSet(StringComparer.Ordinal);
+}
 
 /// <summary>What the service answered, with the ETag to revalidate with.</summary>
 /// <param name="Prompts">Null when the service answered <c>304 Not Modified</c>.</param>

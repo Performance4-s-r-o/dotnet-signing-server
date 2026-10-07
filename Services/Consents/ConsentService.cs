@@ -20,7 +20,16 @@ public sealed record ConsentBatchPayload(IReadOnlyList<ConsentEventPayload> Even
 /// The sentence the person read, as the service's <c>ConsentInput.prompt</c>. Sent only for a
 /// consent that was granted against a published wording, so the record says what was read.
 /// </summary>
-public sealed record ConsentPromptRef(string Key, int Version, string Hash);
+/// <param name="Documents">
+/// The documents the sentence links to. The service refuses the event when the prompt it names
+/// is not linked to that document (<c>consent_prompt_document_mismatch</c>), and a refused
+/// batch would sit in the outbox retrying forever — so the reference rides along only with the
+/// documents the sentence actually mentioned.
+/// </param>
+public sealed record ConsentPromptRef(string Key, int Version, string Hash, IReadOnlySet<string> Documents)
+{
+    public bool Covers(string document) => Documents.Contains(document);
+}
 
 /// <summary>One <c>ConsentInput</c> of the service (snake_case on the wire).</summary>
 public sealed record ConsentEventPayload(
@@ -132,7 +141,9 @@ public sealed class ConsentService
     /// <param name="ip">End user's IP; sent only for documents with legal weight (DPA), else null.</param>
     /// <param name="prompt">
     /// The published wording the form showed, when it showed one. Attached to granted consents
-    /// only: an acknowledgement is a notice, not a decision made against a sentence.
+    /// whose document the sentence links to: an acknowledgement is a notice rather than a
+    /// decision made against a sentence, and a document the sentence never mentioned would be
+    /// refused by the service.
     /// </param>
     public static ConsentBatchPayload Batch(
         IEnumerable<ConsentRecord> records,
@@ -156,7 +167,7 @@ public sealed class ConsentService
             Metadata: backfill
                 ? new Dictionary<string, object?> { ["flow"] = flow, ["backfill"] = true }
                 : new Dictionary<string, object?> { ["flow"] = flow },
-            Prompt: r.Action == ConsentActions.Granted ? prompt : null)).ToList());
+            Prompt: r.Action == ConsentActions.Granted && prompt?.Covers(r.Document) == true ? prompt : null)).ToList());
 
     private static string? Truncate(string? value, int max) =>
         string.IsNullOrEmpty(value) ? null : value.Length <= max ? value : value[..max];
