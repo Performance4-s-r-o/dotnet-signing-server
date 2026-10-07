@@ -30,6 +30,13 @@ public class P4BackofficeProductOptions
     /// </summary>
     public TimeSpan? DocumentsTtl { get; set; }
 
+    /// <summary>
+    /// How long the wording of a consent is shown without revalidation. Empty = 5 minutes,
+    /// like <see cref="DocumentsTtl"/>; a published change is picked up by the next
+    /// revalidation either way.
+    /// </summary>
+    public TimeSpan? ConsentPromptsTtl { get; set; }
+
     public EmailOptions Email { get; set; } = new();
 
     public WebhookOptions Webhook { get; set; } = new();
@@ -39,6 +46,8 @@ public class P4BackofficeProductOptions
     public ConsentsOptions Consents { get; set; } = new();
 
     public CookieWidgetOptions CookieWidget { get; set; } = new();
+
+    public SupportFormOptions SupportForm { get; set; } = new();
 
     /// <summary>
     /// Set by the integration after binding. When not <see cref="BackofficeDisabledReason.None"/>
@@ -205,6 +214,36 @@ public class P4BackofficeProductOptions
 
         public IReadOnlyList<string> EffectiveAcknowledged =>
             Acknowledged is { Length: > 0 } ? Acknowledged : DefaultAcknowledged;
+    }
+
+    /// <summary>
+    /// The public support form, hosted by the legal viewer and framed on the contact page.
+    ///
+    /// The form a visitor fills in is the service's, not this app's: the captcha, the
+    /// attachment rules, the rate limits and the helpdesk connection all live there, and a
+    /// browser could not reach the service directly anyway. Signed-in users keep the in-app
+    /// form, which posts through the product API with the secret key.
+    /// </summary>
+    public class SupportFormOptions
+    {
+        public const string DefaultUrl = CookieWidgetOptions.DefaultUrl;
+
+        /// <summary>Origin of the legal viewer that hosts the form.</summary>
+        public string? Url { get; set; }
+
+        /// <summary>Product slug in the service (<c>p4-dotnet</c>); empty = the form is not shown.</summary>
+        public string? Product { get; set; }
+
+        private string Origin => (string.IsNullOrWhiteSpace(Url) ? DefaultUrl : Url.Trim()).TrimEnd('/');
+
+        /// <summary>The <c>&lt;script src&gt;</c> of the embed script, or null when no product is set.</summary>
+        public string? ScriptSrc => string.IsNullOrWhiteSpace(Product) ? null : $"{Origin}/v1/support-embed.js";
+
+        /// <summary>Where the form lives on its own, for a link when the frame cannot load.</summary>
+        public string? PageUrl => string.IsNullOrWhiteSpace(Product) ? null : $"{Origin}/{Uri.EscapeDataString(Product.Trim())}/support";
+
+        /// <summary><c>data-product</c> of the embed script.</summary>
+        public string? DataProduct => string.IsNullOrWhiteSpace(Product) ? null : Product.Trim();
     }
 
     /// <summary>

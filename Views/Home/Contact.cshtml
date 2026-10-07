@@ -1,4 +1,5 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
+@inject Microsoft.Extensions.Options.IOptions<DotNetSigningServer.Options.P4BackofficeProductOptions> Backoffice
 @{
     ViewData["Title"] = L["ContactTitle"].Value;
     ViewData["MetaDescription"] = L["ContactMetaDescription"].Value;
@@ -21,3 +22,19 @@
 <p>
     @L["ContactEmailLabel"] <a href="mailto:support@performance4.cz">support@performance4.cz</a><br />
 </p>
+
+@* The public support form is the service's, hosted by the legal viewer and framed here: the
+   captcha, the attachment rules and the helpdesk connection live there, and a browser cannot
+   reach the service directly. Without P4_BACKOFFICE_SUPPORTFORM__PRODUCT the page is what it
+   always was — an address and the mail link above. *@
+@{ var supportForm = Backoffice.Value.SupportForm; }
+@if (supportForm.ScriptSrc is { } supportSrc)
+{
+    <h2>@L["ContactFormHeading"]</h2>
+    <noscript>
+        <p><a href="@supportForm.PageUrl" target="_blank" rel="noopener noreferrer">@L["ContactFormStandalone"]</a></p>
+    </noscript>
+    <div id="p4-support"></div>
+    <script src="@supportSrc" data-product="@supportForm.DataProduct" data-target="#p4-support"
+            data-lang="@System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName" data-min-height="520"></script>
+}

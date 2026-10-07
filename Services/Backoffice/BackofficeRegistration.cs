@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Services.Backoffice.Consents;
 using DotNetSigningServer.Services.Backoffice.Documents;
 using DotNetSigningServer.Services.Backoffice.Handlers;
 using DotNetSigningServer.Services.Backoffice.Inbox;
@@ -152,6 +153,21 @@ public static class BackofficeRegistration
             client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-consents");
         });
         services.AddHostedService<ConsentReconciliationService>();
+
+        // The wording next to the checkboxes, written and versioned in the service.
+        services.AddHttpClient(BackofficeConsentPromptsClient.HttpClientName, client =>
+        {
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            client.Timeout = BackofficeConsentPromptsClient.RequestTimeout;
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretKey);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-consent-prompts");
+        });
+        services.TryAddSingleton<BackofficeConsentPromptsClient>();
+        services.TryAddSingleton(sp => new ConsentPromptsCache(
+            sp.GetRequiredService<BackofficeConsentPromptsClient>(),
+            sp.GetRequiredService<IMemoryCache>(),
+            sp.GetRequiredService<TimeProvider>(),
+            options.ConsentPromptsTtl));
     }
 
     /// <summary>

@@ -16,6 +16,25 @@ public sealed record ConsentChoice(ConsentDocumentVersion Document, int Version,
 /// <summary>Body of <c>POST /v1/consents</c> (<c>ConsentBatch</c>).</summary>
 public sealed record ConsentBatchPayload(IReadOnlyList<ConsentEventPayload> Events);
 
+/// <summary>
+/// The sentence the person read, as the service's <c>ConsentInput.prompt</c>. Sent only for a
+/// consent that was granted against a published wording, so the record says what was read.
+/// </summary>
+/// <param name="Documents">
+/// The documents the sentence links to. The service refuses the event when the prompt it names
+/// is not linked to that document (<c>consent_prompt_document_mismatch</c>), and a refused
+/// batch would sit in the outbox retrying forever — so the reference rides along only with the
+/// documents the sentence actually mentioned.
+/// </param>
+public sealed record ConsentPromptRef(
+    string Key,
+    int Version,
+    string Hash,
+    [property: JsonIgnore] IReadOnlySet<string> Documents)
+{
+    public bool Covers(string document) => Documents.Contains(document);
+}
+
 /// <summary>One <c>ConsentInput</c> of the service (snake_case on the wire).</summary>
 public sealed record ConsentEventPayload(
     string SubjectType,
@@ -30,7 +49,8 @@ public sealed record ConsentEventPayload(
     string Channel,
     string? UserAgent,
     string? Ip,
-    IReadOnlyDictionary<string, object?> Metadata);
+    IReadOnlyDictionary<string, object?> Metadata,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ConsentPromptRef? Prompt = null);
 
 /// <summary>
 /// Records consent decisions: one <see cref="ConsentRecord"/> per document and — with the
@@ -71,17 +91,19 @@ public sealed class ConsentService
     }
 
     /// <summary>Consents given on the sign-up form (<c>source = signup</c>).</summary>
+    /// <param name="prompt">The published wording the form showed, when it showed one.</param>
     public IReadOnlyList<ConsentRecord> RecordSignupConsents(
-        User user, IReadOnlyList<ConsentChoice> shown, string? userAgent, string? ip = null) =>
-        Record(user.Id, shown, ConsentSources.Signup, Flows.Signup, userAgent, ip);
+        User user, IReadOnlyList<ConsentChoice> shown, string? userAgent, string? ip = null, ConsentPromptRef? prompt = null) =>
+        Record(user.Id, shown, ConsentSources.Signup, Flows.Signup, userAgent, ip, prompt);
 
     /// <summary>Consents given on <c>/Account/Consent</c> (<c>source = reconsent</c>).</summary>
     public IReadOnlyList<ConsentRecord> RecordReconsent(
-        Guid userId, IReadOnlyList<ConsentChoice> shown, string flow, string? userAgent, string? ip = null) =>
-        Record(userId, shown, ConsentSources.Reconsent, flow, userAgent, ip);
+        Guid userId, IReadOnlyList<ConsentChoice> shown, string flow, string? userAgent, string? ip = null, ConsentPromptRef? prompt = null) =>
+        Record(userId, shown, ConsentSources.Reconsent, flow, userAgent, ip, prompt);
 
     private IReadOnlyList<ConsentRecord> Record(
-        Guid userId, IReadOnlyList<ConsentChoice> shown, string source, string flow, string? userAgent, string? ip)
+        Guid userId, IReadOnlyList<ConsentChoice> shown, string source, string flow, string? userAgent, string? ip,
+        ConsentPromptRef? prompt = null)
     {
         if (shown.Count == 0) return [];
         if (shown.Count > ConsentRequirements.MaxEventsPerBatch)
@@ -111,7 +133,7 @@ public sealed class ConsentService
         if (_options.Value.ModeFor(BackofficeModule.Consents) != BackofficeMode.Off)
         {
             var outboxId = _outbox.Enqueue(
-                ConsentRequirements.OutboxKind, Batch(records, ip, flow), critical: false, subjectRef: subjectRef);
+                ConsentRequirements.OutboxKind, Batch(records, ip, flow, prompt: prompt), critical: false, subjectRef: subjectRef);
             foreach (var record in records) record.OutboxItemId = outboxId;
         }
 
@@ -121,7 +143,18 @@ public sealed class ConsentService
 
     /// <summary>The <c>POST /v1/consents</c> body for <paramref name="records"/>.</summary>
     /// <param name="ip">End user's IP; sent only for documents with legal weight (DPA), else null.</param>
-    public static ConsentBatchPayload Batch(IEnumerable<ConsentRecord> records, string? ip, string flow, bool backfill = false) =>
+    /// <param name="prompt">
+    /// The published wording the form showed, when it showed one. Attached to granted consents
+    /// whose document the sentence links to: an acknowledgement is a notice rather than a
+    /// decision made against a sentence, and a document the sentence never mentioned would be
+    /// refused by the service.
+    /// </param>
+    public static ConsentBatchPayload Batch(
+        IEnumerable<ConsentRecord> records,
+        string? ip,
+        string flow,
+        bool backfill = false,
+        ConsentPromptRef? prompt = null) =>
         new(records.Select(r => new ConsentEventPayload(
             SubjectType: "user",
             SubjectRef: r.SubjectRef,
@@ -137,7 +170,8 @@ public sealed class ConsentService
             Ip: ConsentRequirements.DocumentsWithIp.Contains(r.Document) && !string.IsNullOrWhiteSpace(ip) ? ip : null,
             Metadata: backfill
                 ? new Dictionary<string, object?> { ["flow"] = flow, ["backfill"] = true }
-                : new Dictionary<string, object?> { ["flow"] = flow })).ToList());
+                : new Dictionary<string, object?> { ["flow"] = flow },
+            Prompt: r.Action == ConsentActions.Granted && prompt?.Covers(r.Document) == true ? prompt : null)).ToList());
 
     private static string? Truncate(string? value, int max) =>
         string.IsNullOrEmpty(value) ? null : value.Length <= max ? value : value[..max];

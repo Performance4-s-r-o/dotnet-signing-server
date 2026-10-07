@@ -6,6 +6,7 @@ using DotNetSigningServer.Services.Email;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
 using DotNetSigningServer.Services.Backoffice;
+using DotNetSigningServer.Services.Backoffice.Consents;
 using DotNetSigningServer.Services.Consents;
 using System.Globalization;
 using Microsoft.AspNetCore.Authentication;
@@ -114,14 +115,15 @@ public class AccountController : Controller
     [HttpGet("/Account/SignUp")]
     public async Task<IActionResult> SignUp(
         [FromServices] ConsentDocumentResolver consentDocuments,
-        [FromServices] IOptions<P4BackofficeProductOptions> backoffice)
+        [FromServices] IOptions<P4BackofficeProductOptions> backoffice,
+        [FromServices] ConsentPromptsCache? prompts = null)
     {
         if (User?.Identity?.IsAuthenticated == true)
         {
             return RedirectToAction("Index", "Home");
         }
         var model = new SignUpViewModel();
-        await PrepareSignUpFormAsync(model, consentDocuments, backoffice.Value);
+        await PrepareSignUpFormAsync(model, consentDocuments, backoffice.Value, prompts: prompts);
         return View(model);
     }
 
@@ -133,7 +135,8 @@ public class AccountController : Controller
         [FromServices] ConsentService consents,
         [FromServices] IOptions<P4BackofficeProductOptions> backoffice,
         [FromServices] TimeProvider time,
-        [FromServices] ILogger<AccountController> logger)
+        [FromServices] ILogger<AccountController> logger,
+        [FromServices] ConsentPromptsCache? prompts = null)
     {
         if (User?.Identity?.IsAuthenticated == true)
         {
@@ -152,7 +155,7 @@ public class AccountController : Controller
             ConsentRequirements.From(backoffice.Value.Consents), CurrentLocale, HttpContext.RequestAborted);
         if (!ModelState.IsValid)
         {
-            await PrepareSignUpFormAsync(model, consentDocuments, backoffice.Value, shownDocuments);
+            await PrepareSignUpFormAsync(model, consentDocuments, backoffice.Value, shownDocuments, prompts);
             return View(model);
         }
 
@@ -164,7 +167,7 @@ public class AccountController : Controller
         {
             // A new version came into force more than 10 minutes after the form was opened.
             ModelState.AddModelError(string.Empty, _localizer["LegalVersionOutdated"].Value);
-            await PrepareSignUpFormAsync(model, consentDocuments, backoffice.Value, shownDocuments);
+            await PrepareSignUpFormAsync(model, consentDocuments, backoffice.Value, shownDocuments, prompts);
             return View(model);
         }
 
@@ -210,7 +213,8 @@ public class AccountController : Controller
         _dbContext.Users.Add(user);
         // Records (and, unless the Consents module is Off, the outbox item) go into the same
         // SaveChangesAsync as the user: one transaction, nothing sent during the request.
-        consents.RecordSignupConsents(user, choices, Request.Headers.UserAgent.ToString(), ClientIp());
+        consents.RecordSignupConsents(
+            user, choices, Request.Headers.UserAgent.ToString(), ClientIp(), PromptRefFromForm(prompts, model.PromptKey, model.PromptVersion, model.PromptHash));
 
         // Verification email (critical — user cannot complete signup without it). With the
         // Email module On it is queued in the same SaveChangesAsync as the user; otherwise it
@@ -775,17 +779,88 @@ public class AccountController : Controller
         SignUpViewModel model,
         ConsentDocumentResolver consentDocuments,
         P4BackofficeProductOptions backoffice,
-        IReadOnlyList<ConsentDocumentVersion>? documents = null)
+        IReadOnlyList<ConsentDocumentVersion>? documents = null,
+        ConsentPromptsCache? prompts = null)
     {
         model.Documents = documents ?? await consentDocuments.ResolveAsync(
             ConsentRequirements.From(backoffice.Consents), CurrentLocale, HttpContext.RequestAborted);
         model.ShowVersions = backoffice.ModeFor(BackofficeModule.Consents) != BackofficeMode.Off;
+        model.Prompt = PromptFor(prompts, model.Documents);
         // The form always carries the versions in force now, also when it is shown again.
         model.ShownVersions = model.Documents.ToDictionary(d => d.Document, d => d.Version, StringComparer.Ordinal);
         model.ShownHashes = model.Documents.Where(d => d.ContentHash != null)
             .ToDictionary(d => d.Document, d => d.ContentHash!, StringComparer.Ordinal);
         ModelState.Remove(nameof(SignUpViewModel.ShownVersions));
         ModelState.Remove(nameof(SignUpViewModel.ShownHashes));
+    }
+
+    /// <summary>
+    /// The wording the form said it showed, as the service's `prompt` reference. Key, version
+    /// and hash come from the hidden fields — by the time the form comes back a newer version
+    /// may be published, and the record has to name what was read.
+    ///
+    /// Which documents that sentence covers is taken from this app's own copy, never from the
+    /// form. The service refuses an event whose prompt is not linked to its document, and one
+    /// refused event takes the whole batch with it (`RetryPolicy` marks a 4xx dead, so the
+    /// other consents in that signup never arrive). A claim this app cannot attest to is
+    /// therefore dropped: the consent is recorded without the reference, as it was before the
+    /// service published any wording.
+    /// </summary>
+    private ConsentPromptRef? PromptRefFromForm(ConsentPromptsCache? prompts, string? key, int? version, string? hash)
+    {
+        if (prompts is null || string.IsNullOrWhiteSpace(key) || version is not > 0 || string.IsNullOrWhiteSpace(hash)) return null;
+        var held = prompts.Peek(ConsentPromptContexts.Registration, CurrentLocale)?.Prompts
+            .FirstOrDefault(p => p.Key == key && p.PromptVersion == version);
+        if (held is null || held.PromptHash != hash || held.Documents.Count == 0) return null;
+        return new ConsentPromptRef(key!, version.Value, hash!, held.Documents);
+    }
+
+    /// <summary>
+    /// The sentence the service publishes for this checkbox, from what is already in memory —
+    /// the form never waits for the service. Nothing cached yet means this app's own wording
+    /// this time, and a background refresh so the next visitor gets the published one.
+    ///
+    /// It stands for the checkbox only when it names exactly the documents being granted here.
+    /// A sentence that mentions more (or fewer) would describe a different decision than the
+    /// one the tick records.
+    /// </summary>
+    private BackofficeConsentPrompt? PromptFor(ConsentPromptsCache? prompts, IReadOnlyList<ConsentDocumentVersion> documents)
+    {
+        if (prompts is null) return null;
+        var entry = prompts.Peek(ConsentPromptContexts.Registration, CurrentLocale);
+        if (entry is null || !prompts.IsFresh(entry))
+        {
+            RefreshPromptsInBackground(prompts);
+        }
+
+        var prompt = ConsentPromptSelection.ForSingleCheckbox(entry?.Prompts);
+        if (prompt is null) return null;
+        var granted = documents.Where(d => d.Action == ConsentActions.Granted).Select(d => d.Document).ToHashSet(StringComparer.Ordinal);
+        return prompt.Documents.SetEquals(granted) ? prompt : null;
+    }
+
+    /// <summary>Fire and forget: a page is never held up by it.</summary>
+    private void RefreshPromptsInBackground(ConsentPromptsCache prompts)
+    {
+        var log = HttpContext.RequestServices.GetService<ILogger<AccountController>>();
+        var locale = CurrentLocale;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await prompts.RefreshAsync(ConsentPromptContexts.Registration, locale, CancellationToken.None);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                // The cached copy, or this app's own wording, carries the page.
+            }
+            catch (Exception ex)
+            {
+                // Nothing observes a discarded task, so anything unexpected would
+                // otherwise be a defect nobody ever hears about.
+                log?.LogError(ex, "Consent prompts could not be refreshed");
+            }
+        });
     }
 
     /// <summary>
@@ -832,7 +907,8 @@ public class AccountController : Controller
         string? returnUrl,
         [FromServices] IConsentStatusProvider consentStatus,
         [FromServices] ConsentDocumentResolver consentDocuments,
-        [FromServices] IOptions<P4BackofficeProductOptions> backoffice)
+        [FromServices] IOptions<P4BackofficeProductOptions> backoffice,
+        [FromServices] ConsentPromptsCache? prompts = null)
     {
         var userId = GetCurrentUserId();
         if (userId == null)
@@ -847,7 +923,7 @@ public class AccountController : Controller
         }
 
         var model = new ConsentViewModel { ReturnUrl = returnUrl };
-        await PrepareConsentFormAsync(model, status, consentDocuments, backoffice.Value);
+        await PrepareConsentFormAsync(model, status, consentDocuments, backoffice.Value, prompts);
         return View(model);
     }
 
@@ -862,7 +938,8 @@ public class AccountController : Controller
         [FromServices] ConsentService consents,
         [FromServices] IOptions<P4BackofficeProductOptions> backoffice,
         [FromServices] TimeProvider time,
-        [FromServices] ILogger<AccountController> logger)
+        [FromServices] ILogger<AccountController> logger,
+        [FromServices] ConsentPromptsCache? prompts = null)
     {
         var userId = GetCurrentUserId();
         if (userId == null)
@@ -879,7 +956,7 @@ public class AccountController : Controller
 
         var shownHashes = model.ShownHashes;
         var shownVersions = model.ShownVersions;
-        await PrepareConsentFormAsync(model, status, consentDocuments, backoffice.Value);
+        await PrepareConsentFormAsync(model, status, consentDocuments, backoffice.Value, prompts);
         if (model.RequiresCheckbox && !model.Accept)
         {
             ModelState.AddModelError(nameof(ConsentViewModel.Accept), _localizer["SignUpAcceptTermsRequired"].Value);
@@ -899,7 +976,8 @@ public class AccountController : Controller
             choices,
             status.HasAnyRecord ? ConsentService.Flows.Reconsent : ConsentService.Flows.Initial,
             Request.Headers.UserAgent.ToString(),
-            ClientIp());
+            ClientIp(),
+            PromptRefFromForm(prompts, model.PromptKey, model.PromptVersion, model.PromptHash));
         await _dbContext.SaveChangesAsync();
         consentCache.Invalidate(userId.Value);
 
@@ -910,8 +988,10 @@ public class AccountController : Controller
         ConsentViewModel model,
         ConsentStatus status,
         ConsentDocumentResolver consentDocuments,
-        P4BackofficeProductOptions backoffice)
+        P4BackofficeProductOptions backoffice,
+        ConsentPromptsCache? prompts = null)
     {
+        model.Prompt = null;
         var outstanding = status.Outstanding.Select(o => o.Document).ToHashSet(StringComparer.Ordinal);
         var requirements = ConsentRequirements.From(backoffice.Consents).Where(r => outstanding.Contains(r.Document));
         model.Documents = await consentDocuments.ResolveAsync(requirements, CurrentLocale, HttpContext.RequestAborted);
@@ -919,6 +999,10 @@ public class AccountController : Controller
         model.ShownVersions = model.Documents.ToDictionary(d => d.Document, d => d.Version, StringComparer.Ordinal);
         model.ShownHashes = model.Documents.Where(d => d.ContentHash != null)
             .ToDictionary(d => d.Document, d => d.ContentHash!, StringComparer.Ordinal);
+        // Only for what this submission actually decides: when `terms` needs
+        // confirming again and `dpa` does not, a sentence naming both would ask
+        // for a decision nobody is making here.
+        model.Prompt = PromptFor(prompts, model.Documents);
         ModelState.Remove(nameof(ConsentViewModel.ShownVersions));
         ModelState.Remove(nameof(ConsentViewModel.ShownHashes));
     }
