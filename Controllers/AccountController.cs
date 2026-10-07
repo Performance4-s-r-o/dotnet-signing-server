@@ -214,7 +214,7 @@ public class AccountController : Controller
         // Records (and, unless the Consents module is Off, the outbox item) go into the same
         // SaveChangesAsync as the user: one transaction, nothing sent during the request.
         consents.RecordSignupConsents(
-            user, choices, Request.Headers.UserAgent.ToString(), ClientIp(), PromptRefFromForm(model));
+            user, choices, Request.Headers.UserAgent.ToString(), ClientIp(), PromptRefFromForm(model.PromptKey, model.PromptVersion, model.PromptHash));
 
         // Verification email (critical — user cannot complete signup without it). With the
         // Email module On it is queued in the same SaveChangesAsync as the user; otherwise it
@@ -802,9 +802,9 @@ public class AccountController : Controller
     /// Not a security check — the service verifies the hash belongs to that prompt version and
     /// refuses the consent if it does not.
     /// </summary>
-    private static ConsentPromptRef? PromptRefFromForm(SignUpViewModel model) =>
-        !string.IsNullOrWhiteSpace(model.PromptKey) && model.PromptVersion is > 0 && !string.IsNullOrWhiteSpace(model.PromptHash)
-            ? new ConsentPromptRef(model.PromptKey!, model.PromptVersion.Value, model.PromptHash!)
+    private static ConsentPromptRef? PromptRefFromForm(string? key, int? version, string? hash) =>
+        !string.IsNullOrWhiteSpace(key) && version is > 0 && !string.IsNullOrWhiteSpace(hash)
+            ? new ConsentPromptRef(key!, version.Value, hash!)
             : null;
 
     /// <summary>
@@ -884,7 +884,8 @@ public class AccountController : Controller
         string? returnUrl,
         [FromServices] IConsentStatusProvider consentStatus,
         [FromServices] ConsentDocumentResolver consentDocuments,
-        [FromServices] IOptions<P4BackofficeProductOptions> backoffice)
+        [FromServices] IOptions<P4BackofficeProductOptions> backoffice,
+        [FromServices] ConsentPromptsCache? prompts = null)
     {
         var userId = GetCurrentUserId();
         if (userId == null)
@@ -899,7 +900,7 @@ public class AccountController : Controller
         }
 
         var model = new ConsentViewModel { ReturnUrl = returnUrl };
-        await PrepareConsentFormAsync(model, status, consentDocuments, backoffice.Value);
+        await PrepareConsentFormAsync(model, status, consentDocuments, backoffice.Value, prompts);
         return View(model);
     }
 
@@ -914,7 +915,8 @@ public class AccountController : Controller
         [FromServices] ConsentService consents,
         [FromServices] IOptions<P4BackofficeProductOptions> backoffice,
         [FromServices] TimeProvider time,
-        [FromServices] ILogger<AccountController> logger)
+        [FromServices] ILogger<AccountController> logger,
+        [FromServices] ConsentPromptsCache? prompts = null)
     {
         var userId = GetCurrentUserId();
         if (userId == null)
@@ -931,7 +933,7 @@ public class AccountController : Controller
 
         var shownHashes = model.ShownHashes;
         var shownVersions = model.ShownVersions;
-        await PrepareConsentFormAsync(model, status, consentDocuments, backoffice.Value);
+        await PrepareConsentFormAsync(model, status, consentDocuments, backoffice.Value, prompts);
         if (model.RequiresCheckbox && !model.Accept)
         {
             ModelState.AddModelError(nameof(ConsentViewModel.Accept), _localizer["SignUpAcceptTermsRequired"].Value);
@@ -951,7 +953,8 @@ public class AccountController : Controller
             choices,
             status.HasAnyRecord ? ConsentService.Flows.Reconsent : ConsentService.Flows.Initial,
             Request.Headers.UserAgent.ToString(),
-            ClientIp());
+            ClientIp(),
+            PromptRefFromForm(model.PromptKey, model.PromptVersion, model.PromptHash));
         await _dbContext.SaveChangesAsync();
         consentCache.Invalidate(userId.Value);
 
@@ -962,8 +965,10 @@ public class AccountController : Controller
         ConsentViewModel model,
         ConsentStatus status,
         ConsentDocumentResolver consentDocuments,
-        P4BackofficeProductOptions backoffice)
+        P4BackofficeProductOptions backoffice,
+        ConsentPromptsCache? prompts = null)
     {
+        model.Prompt = SignUpPrompt(prompts);
         var outstanding = status.Outstanding.Select(o => o.Document).ToHashSet(StringComparer.Ordinal);
         var requirements = ConsentRequirements.From(backoffice.Consents).Where(r => outstanding.Contains(r.Document));
         model.Documents = await consentDocuments.ResolveAsync(requirements, CurrentLocale, HttpContext.RequestAborted);

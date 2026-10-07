@@ -37,13 +37,28 @@
             <input type="hidden" name="ShownHashes[@document.Document]" value="@document.ContentHash" />
         }
     }
+    @if (Model.Prompt is { } prompt)
+    {
+        <input type="hidden" asp-for="PromptKey" value="@prompt.Key" />
+        <input type="hidden" asp-for="PromptVersion" value="@prompt.PromptVersion" />
+        <input type="hidden" asp-for="PromptHash" value="@prompt.PromptHash" />
+    }
     @if (Model.RequiresCheckbox)
     {
         <div class="form-group">
             <label class="form-check">
                 <input asp-for="Accept" type="checkbox" required />
-                <span>@DotNetSigningServer.Services.Consents.ConsentHtml.Sentence(L, "SignUpAcceptTermsDpa",
-                    DotNetSigningServer.Services.Consents.ConsentHtml.Links(Url, L, granted, true))</span>
+                <span>
+                    @if (Model.Prompt is { } shown)
+                    {
+                        @DotNetSigningServer.Services.Consents.ConsentPromptHtml.Sentence(shown)
+                    }
+                    else
+                    {
+                        @DotNetSigningServer.Services.Consents.ConsentHtml.Sentence(L, "SignUpAcceptTermsDpa",
+                            DotNetSigningServer.Services.Consents.ConsentHtml.Links(Url, L, granted, true))
+                    }
+                </span>
             </label>
             <span asp-validation-for="Accept" class="form-validation"></span>
         </div>

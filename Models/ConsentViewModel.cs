@@ -1,3 +1,4 @@
+using DotNetSigningServer.Services.Backoffice.Consents;
 using DotNetSigningServer.Services.Consents;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 
@@ -21,6 +22,20 @@ public class ConsentViewModel
     /// <summary>The user has no consent records yet (registered before they were kept).</summary>
     [BindNever]
     public bool Initial { get; set; }
+
+    /// <summary>
+    /// The sentence the service publishes for this checkbox; null means this app's own wording
+    /// (the module is off, or the service has nothing for this context yet).
+    /// </summary>
+    [BindNever]
+    public BackofficeConsentPrompt? Prompt { get; set; }
+
+    /// <summary>Which wording the form showed, sent back so the consent is recorded against it.</summary>
+    public string? PromptKey { get; set; }
+
+    public int? PromptVersion { get; set; }
+
+    public string? PromptHash { get; set; }
 
     [BindNever]
     public bool RequiresCheckbox => Documents.Any(d => d.Action == ConsentActions.Granted);
