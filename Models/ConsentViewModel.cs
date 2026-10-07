@@ -37,12 +37,6 @@ public class ConsentViewModel
 
     public string? PromptHash { get; set; }
 
-    /// <summary>
-    /// Documents the sentence linked to, comma-separated. The service refuses a consent that
-    /// names a prompt not linked to its document, so only these carry the reference.
-    /// </summary>
-    public string? PromptDocuments { get; set; }
-
     [BindNever]
     public bool RequiresCheckbox => Documents.Any(d => d.Action == ConsentActions.Granted);
 }

@@ -214,7 +214,7 @@ public class AccountController : Controller
         // Records (and, unless the Consents module is Off, the outbox item) go into the same
         // SaveChangesAsync as the user: one transaction, nothing sent during the request.
         consents.RecordSignupConsents(
-            user, choices, Request.Headers.UserAgent.ToString(), ClientIp(), PromptRefFromForm(model.PromptKey, model.PromptVersion, model.PromptHash, model.PromptDocuments));
+            user, choices, Request.Headers.UserAgent.ToString(), ClientIp(), PromptRefFromForm(prompts, model.PromptKey, model.PromptVersion, model.PromptHash));
 
         // Verification email (critical — user cannot complete signup without it). With the
         // Email module On it is queued in the same SaveChangesAsync as the user; otherwise it
@@ -785,7 +785,7 @@ public class AccountController : Controller
         model.Documents = documents ?? await consentDocuments.ResolveAsync(
             ConsentRequirements.From(backoffice.Consents), CurrentLocale, HttpContext.RequestAborted);
         model.ShowVersions = backoffice.ModeFor(BackofficeModule.Consents) != BackofficeMode.Off;
-        model.Prompt = SignUpPrompt(prompts);
+        model.Prompt = PromptFor(prompts, model.Documents);
         // The form always carries the versions in force now, also when it is shown again.
         model.ShownVersions = model.Documents.ToDictionary(d => d.Document, d => d.Version, StringComparer.Ordinal);
         model.ShownHashes = model.Documents.Where(d => d.ContentHash != null)
@@ -795,29 +795,36 @@ public class AccountController : Controller
     }
 
     /// <summary>
-    /// The wording the form said it showed, as the service's `prompt` reference. Taken from the
-    /// hidden fields rather than from the cache: by the time the form comes back a new version
+    /// The wording the form said it showed, as the service's `prompt` reference. Key, version
+    /// and hash come from the hidden fields — by the time the form comes back a newer version
     /// may be published, and the record has to name what was read.
     ///
-    /// Not a security check — the service verifies the hash belongs to that prompt version, and
-    /// that the prompt is linked to the document, and refuses the consent if either is wrong.
+    /// Which documents that sentence covers is taken from this app's own copy, never from the
+    /// form. The service refuses an event whose prompt is not linked to its document, and one
+    /// refused event takes the whole batch with it (`RetryPolicy` marks a 4xx dead, so the
+    /// other consents in that signup never arrive). A claim this app cannot attest to is
+    /// therefore dropped: the consent is recorded without the reference, as it was before the
+    /// service published any wording.
     /// </summary>
-    private static ConsentPromptRef? PromptRefFromForm(string? key, int? version, string? hash, string? documents)
+    private ConsentPromptRef? PromptRefFromForm(ConsentPromptsCache? prompts, string? key, int? version, string? hash)
     {
-        if (string.IsNullOrWhiteSpace(key) || version is not > 0 || string.IsNullOrWhiteSpace(hash)) return null;
-        var covered = (documents ?? "")
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToHashSet(StringComparer.Ordinal);
-        // A sentence that mentions no document cannot be named by any consent.
-        return covered.Count == 0 ? null : new ConsentPromptRef(key!, version.Value, hash!, covered);
+        if (prompts is null || string.IsNullOrWhiteSpace(key) || version is not > 0 || string.IsNullOrWhiteSpace(hash)) return null;
+        var held = prompts.Peek(ConsentPromptContexts.Registration, CurrentLocale)?.Prompts
+            .FirstOrDefault(p => p.Key == key && p.PromptVersion == version);
+        if (held is null || held.PromptHash != hash || held.Documents.Count == 0) return null;
+        return new ConsentPromptRef(key!, version.Value, hash!, held.Documents);
     }
 
     /// <summary>
-    /// The sentence the service publishes for the sign-up checkbox, from what is already in
-    /// memory — the form never waits for the service. Nothing cached yet means this app's own
-    /// wording this time, and a background refresh so the next visitor gets the published one.
+    /// The sentence the service publishes for this checkbox, from what is already in memory —
+    /// the form never waits for the service. Nothing cached yet means this app's own wording
+    /// this time, and a background refresh so the next visitor gets the published one.
+    ///
+    /// It stands for the checkbox only when it names exactly the documents being granted here.
+    /// A sentence that mentions more (or fewer) would describe a different decision than the
+    /// one the tick records.
     /// </summary>
-    private BackofficeConsentPrompt? SignUpPrompt(ConsentPromptsCache? prompts)
+    private BackofficeConsentPrompt? PromptFor(ConsentPromptsCache? prompts, IReadOnlyList<ConsentDocumentVersion> documents)
     {
         if (prompts is null) return null;
         var entry = prompts.Peek(ConsentPromptContexts.Registration, CurrentLocale);
@@ -825,12 +832,17 @@ public class AccountController : Controller
         {
             RefreshPromptsInBackground(prompts);
         }
-        return ConsentPromptSelection.ForSingleCheckbox(entry?.Prompts);
+
+        var prompt = ConsentPromptSelection.ForSingleCheckbox(entry?.Prompts);
+        if (prompt is null) return null;
+        var granted = documents.Where(d => d.Action == ConsentActions.Granted).Select(d => d.Document).ToHashSet(StringComparer.Ordinal);
+        return prompt.Documents.SetEquals(granted) ? prompt : null;
     }
 
-    /// <summary>Fire and forget: a page is never held up by it, and a failure is the service's to log.</summary>
+    /// <summary>Fire and forget: a page is never held up by it.</summary>
     private void RefreshPromptsInBackground(ConsentPromptsCache prompts)
     {
+        var log = HttpContext.RequestServices.GetService<ILogger<AccountController>>();
         var locale = CurrentLocale;
         _ = Task.Run(async () =>
         {
@@ -841,6 +853,12 @@ public class AccountController : Controller
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
             {
                 // The cached copy, or this app's own wording, carries the page.
+            }
+            catch (Exception ex)
+            {
+                // Nothing observes a discarded task, so anything unexpected would
+                // otherwise be a defect nobody ever hears about.
+                log?.LogError(ex, "Consent prompts could not be refreshed");
             }
         });
     }
@@ -959,7 +977,7 @@ public class AccountController : Controller
             status.HasAnyRecord ? ConsentService.Flows.Reconsent : ConsentService.Flows.Initial,
             Request.Headers.UserAgent.ToString(),
             ClientIp(),
-            PromptRefFromForm(model.PromptKey, model.PromptVersion, model.PromptHash, model.PromptDocuments));
+            PromptRefFromForm(prompts, model.PromptKey, model.PromptVersion, model.PromptHash));
         await _dbContext.SaveChangesAsync();
         consentCache.Invalidate(userId.Value);
 
@@ -973,7 +991,7 @@ public class AccountController : Controller
         P4BackofficeProductOptions backoffice,
         ConsentPromptsCache? prompts = null)
     {
-        model.Prompt = SignUpPrompt(prompts);
+        model.Prompt = null;
         var outstanding = status.Outstanding.Select(o => o.Document).ToHashSet(StringComparer.Ordinal);
         var requirements = ConsentRequirements.From(backoffice.Consents).Where(r => outstanding.Contains(r.Document));
         model.Documents = await consentDocuments.ResolveAsync(requirements, CurrentLocale, HttpContext.RequestAborted);
@@ -981,6 +999,10 @@ public class AccountController : Controller
         model.ShownVersions = model.Documents.ToDictionary(d => d.Document, d => d.Version, StringComparer.Ordinal);
         model.ShownHashes = model.Documents.Where(d => d.ContentHash != null)
             .ToDictionary(d => d.Document, d => d.ContentHash!, StringComparer.Ordinal);
+        // Only for what this submission actually decides: when `terms` needs
+        // confirming again and `dpa` does not, a sentence naming both would ask
+        // for a decision nobody is making here.
+        model.Prompt = PromptFor(prompts, model.Documents);
         ModelState.Remove(nameof(ConsentViewModel.ShownVersions));
         ModelState.Remove(nameof(ConsentViewModel.ShownHashes));
     }

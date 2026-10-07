@@ -26,7 +26,11 @@ public sealed record ConsentBatchPayload(IReadOnlyList<ConsentEventPayload> Even
 /// batch would sit in the outbox retrying forever — so the reference rides along only with the
 /// documents the sentence actually mentioned.
 /// </param>
-public sealed record ConsentPromptRef(string Key, int Version, string Hash, IReadOnlySet<string> Documents)
+public sealed record ConsentPromptRef(
+    string Key,
+    int Version,
+    string Hash,
+    [property: JsonIgnore] IReadOnlySet<string> Documents)
 {
     public bool Covers(string document) => Documents.Contains(document);
 }
