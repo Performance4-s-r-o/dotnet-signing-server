@@ -65,7 +65,7 @@
             <span>
                 @if (Model.Prompt is { } shown)
                 {
-                    @DotNetSigningServer.Services.Consents.ConsentPromptHtml.Sentence(shown)
+                    @DotNetSigningServer.Services.Consents.ConsentPromptHtml.Sentence(shown, Url)
                 }
                 else
                 {

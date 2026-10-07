@@ -2,6 +2,9 @@ using System.Text.Encodings.Web;
 using DotNetSigningServer.Services.Backoffice.Consents;
 using DotNetSigningServer.Services.Consents;
 
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
+
 namespace DotNetSigningServer.Tests.Services.Consents;
 
 /// <summary>
@@ -14,11 +17,27 @@ public class ConsentPromptHtmlTests
     private static BackofficeConsentPrompt Prompt(params ConsentPromptSegment[] segments) =>
         new("terms", "terms", "registration", true, 1, "h", "cs", "cs", false, segments);
 
-    private static string Render(BackofficeConsentPrompt prompt)
+    private static string Render(BackofficeConsentPrompt prompt, IUrlHelper? url = null)
     {
         using var writer = new StringWriter();
-        ConsentPromptHtml.Sentence(prompt).WriteTo(writer, HtmlEncoder.Default);
+        ConsentPromptHtml.Sentence(prompt, url).WriteTo(writer, HtmlEncoder.Default);
         return writer.ToString();
+    }
+
+    /// <summary>Answers one path for any action, or nothing at all.</summary>
+    private sealed class StubUrlHelper(string? path) : IUrlHelper
+    {
+        public ActionContext ActionContext => new();
+
+        public string? Action(UrlActionContext actionContext) => path;
+
+        public string? Content(string? contentPath) => contentPath;
+
+        public bool IsLocalUrl(string? url) => true;
+
+        public string? Link(string? routeName, object? values) => path;
+
+        public string? RouteUrl(UrlRouteContext routeContext) => path;
     }
 
     /// <summary>`HtmlEncoder.Default` escapes non-ASCII too, as the rest of this app's consent markup does.</summary>
@@ -59,6 +78,27 @@ public class ConsentPromptHtmlTests
             Assert.Equal(E("Podmínky"), html);
             Assert.DoesNotContain("<a", html);
         }
+    }
+
+    // On-prem the public viewer is unreachable, and the app's own page renders the
+    // same text from the service, so that is where the sentence points.
+    [Fact]
+    public void Links_to_this_app_s_page_for_a_document_it_knows()
+    {
+        var url = new StubUrlHelper("/cs/Legal/TermsOfService");
+        var html = Render(Prompt(new ConsentPromptSegment.Link("terms", "podmínkami", "https://legal.test/p4-dotnet/terms", 2, "h")), url);
+
+        Assert.Contains("href=\"/cs/Legal/TermsOfService\"", html);
+        Assert.DoesNotContain("legal.test", html);
+    }
+
+    [Fact]
+    public void Falls_back_to_the_service_url_for_a_document_it_does_not_know()
+    {
+        var url = new StubUrlHelper(null);
+        var html = Render(Prompt(new ConsentPromptSegment.Link("marketing", "souhlasem", "https://legal.test/p4-dotnet/marketing", 1, "h")), url);
+
+        Assert.Contains("href=\"https://legal.test/p4-dotnet/marketing\"", html);
     }
 
     [Fact]

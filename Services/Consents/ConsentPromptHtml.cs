@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Html;
+using Microsoft.AspNetCore.Mvc;
 using DotNetSigningServer.Services.Backoffice.Consents;
 
 namespace DotNetSigningServer.Services.Consents;
@@ -20,7 +21,8 @@ public static class ConsentPromptHtml
         && (parsed.Scheme == Uri.UriSchemeHttps || parsed.Scheme == Uri.UriSchemeHttp);
 
     /// <summary>The whole sentence; safe to emit raw because every part of it is encoded here.</summary>
-    public static IHtmlContent Sentence(BackofficeConsentPrompt prompt)
+    /// <param name="url">Resolves this app's own page for a document; null falls back to the service's URL.</param>
+    public static IHtmlContent Sentence(BackofficeConsentPrompt prompt, IUrlHelper? url = null)
     {
         var html = new StringBuilder();
         foreach (var segment in prompt.Segments)
@@ -30,9 +32,9 @@ public static class ConsentPromptHtml
                 case ConsentPromptSegment.Text text:
                     html.Append(HtmlEncoder.Default.Encode(text.Value));
                     break;
-                case ConsentPromptSegment.Link link when IsSafeUrl(link.Url):
+                case ConsentPromptSegment.Link link when Href(link, url) is { } href:
                     html.Append("<a href=\"")
-                        .Append(HtmlEncoder.Default.Encode(link.Url))
+                        .Append(HtmlEncoder.Default.Encode(href))
                         .Append("\" target=\"_blank\" rel=\"noopener noreferrer\">")
                         .Append(HtmlEncoder.Default.Encode(link.Title))
                         .Append("</a>");
@@ -44,6 +46,17 @@ public static class ConsentPromptHtml
             }
         }
         return new HtmlString(html.ToString());
+    }
+
+    /// <summary>This app's page for the document, else the service's URL, else nothing to link to.</summary>
+    private static string? Href(ConsentPromptSegment.Link link, IUrlHelper? url)
+    {
+        if (url is not null && ConsentDocumentLinks.ActionFor(link.DocumentType) is { } action)
+        {
+            var local = url.Action(action, "Legal");
+            if (!string.IsNullOrEmpty(local)) return local;
+        }
+        return IsSafeUrl(link.Url) ? link.Url : null;
     }
 
     /// <summary>The same sentence without markup — for a title attribute, a log or an e-mail in plain text.</summary>
