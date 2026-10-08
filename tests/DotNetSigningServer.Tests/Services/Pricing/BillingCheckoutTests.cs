@@ -5,6 +5,7 @@ using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Services.Billing;
 using DotNetSigningServer.Services.Pricing;
 using DotNetSigningServer.Tests.Helpers;
 using Microsoft.AspNetCore.Http;
@@ -48,7 +49,7 @@ public class BillingCheckoutTests : IDisposable
             _db,
             new BillingService(TestHelpers.WrapOptions(new BillingOptions())),
             pricing,
-            _checkout.Object,
+            new StripePaymentGateway(_checkout.Object, NullLogger<StripePaymentGateway>.Instance),
             Mock.Of<IAutoRechargeService>(),
             NullLogger<BillingController>.Instance,
             new StringLocalizer<SharedStrings>(new KeyEchoLocalizerFactory()));

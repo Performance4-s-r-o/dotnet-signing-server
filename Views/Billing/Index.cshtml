@@ -299,7 +299,7 @@ else
                     {
                         <tr>
                             <td>@(invoice.Number ?? "-")</td>
-                            <td>@(invoice.AmountDue / 100.0m)</td>
+                            <td>@(invoice.AmountDueMinor / 100.0m)</td>
                             <td><span
                                     class="billing-status billing-status--@invoice.Status.ToLower()">@char.ToUpper(invoice.Status[0])@invoice.Status.Substring(1)</span>
                             </td>

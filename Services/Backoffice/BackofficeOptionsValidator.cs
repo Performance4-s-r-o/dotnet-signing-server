@@ -49,6 +49,7 @@ public static class BackofficeOptionsValidator
             problems.Add($"{Setting("Polling:Interval")} must be positive.");
         }
         CheckConsentDocuments(problems, options.Consents);
+        CheckBilling(problems, options);
 
         // A self-hosted installation is forced Off whatever it asks for, so a key or URL
         // left over there is not a reason to refuse to start (it is logged instead). A build
@@ -62,6 +63,20 @@ public static class BackofficeOptionsValidator
         }
 
         return problems;
+    }
+
+    /// <summary>
+    /// Payments through the service charge catalog prices only (lookup keys of the price list
+    /// in force), which the product knows only with <c>Modules:Pricing=On</c>.
+    /// </summary>
+    private static void CheckBilling(List<string> problems, P4BackofficeProductOptions options)
+    {
+        if (options.DisabledReason != BackofficeDisabledReason.PrivateServer
+            && options.RequestedModeFor(BackofficeModule.Billing) == BackofficeMode.On
+            && options.RequestedModeFor(BackofficeModule.Pricing) != BackofficeMode.On)
+        {
+            problems.Add($"{Setting("Modules:Billing")} is On, which needs {Setting("Modules:Pricing")} On (payments use the price list's lookup keys).");
+        }
     }
 
     /// <summary>Document keys as the service accepts them (<c>ConsentInput.document</c>).</summary>

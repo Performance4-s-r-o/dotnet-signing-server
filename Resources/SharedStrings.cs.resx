@@ -61,6 +61,7 @@
   <data name="InvalidDocumentBundle" xml:space="preserve"><value>Vybrán neplatný balíček dokumentů.</value></data>
   <data name="CheckoutStartFailed" xml:space="preserve"><value>Nepodařilo se zahájit platbu.</value></data>
   <data name="PaymentStartFailed" xml:space="preserve"><value>Platbu se nepodařilo zahájit. Zkuste to prosím znovu.</value></data>
+  <data name="PaymentsTemporarilyUnavailable" xml:space="preserve"><value>Platby jsou dočasně nedostupné. Zkuste to prosím za chvíli.</value></data>
   <data name="MissingStripeSession" xml:space="preserve"><value>Chybí ID Stripe relace.</value></data>
   <data name="PaymentAlreadyProcessed" xml:space="preserve"><value>Tato platba již byla zpracována.</value></data>
   <data name="PaymentNotCompleted" xml:space="preserve"><value>Platba nebyla dokončena.</value></data>

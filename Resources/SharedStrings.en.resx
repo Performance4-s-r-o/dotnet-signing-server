@@ -61,6 +61,7 @@
   <data name="InvalidDocumentBundle" xml:space="preserve"><value>Invalid document bundle selected.</value></data>
   <data name="CheckoutStartFailed" xml:space="preserve"><value>Unable to start checkout.</value></data>
   <data name="PaymentStartFailed" xml:space="preserve"><value>Payment could not be started. Please try again.</value></data>
+  <data name="PaymentsTemporarilyUnavailable" xml:space="preserve"><value>Payments are temporarily unavailable. Please try again in a moment.</value></data>
   <data name="MissingStripeSession" xml:space="preserve"><value>Missing Stripe session id.</value></data>
   <data name="PaymentAlreadyProcessed" xml:space="preserve"><value>This payment has already been processed.</value></data>
   <data name="PaymentNotCompleted" xml:space="preserve"><value>Payment not completed.</value></data>

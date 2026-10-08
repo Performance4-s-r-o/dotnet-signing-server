@@ -61,6 +61,7 @@
   <data name="InvalidDocumentBundle" xml:space="preserve"><value>Paquete de documentos seleccionado no válido.</value></data>
   <data name="CheckoutStartFailed" xml:space="preserve"><value>No se pudo iniciar el proceso de pago.</value></data>
   <data name="PaymentStartFailed" xml:space="preserve"><value>No se pudo iniciar el pago. Por favor, inténtelo de nuevo.</value></data>
+  <data name="PaymentsTemporarilyUnavailable" xml:space="preserve"><value>Los pagos no están disponibles temporalmente. Por favor, inténtelo de nuevo en unos momentos.</value></data>
   <data name="MissingStripeSession" xml:space="preserve"><value>Falta el ID de sesión de Stripe.</value></data>
   <data name="PaymentAlreadyProcessed" xml:space="preserve"><value>Este pago ya ha sido procesado.</value></data>
   <data name="PaymentNotCompleted" xml:space="preserve"><value>Pago no completado.</value></data>
