@@ -21,7 +21,7 @@ namespace DotNetSigningServer.Tests.Services.Support;
 public class SupportCategoriesTests : IDisposable
 {
     private const string Body = """
-        {"locale":"cs","turnstile_sitekey":null,"data":[
+        {"locale":"cs","data":[
           {"key":"signing","label":"Podepisování","requires_auth":false,"allow_attachments":true},
           {"key":"other","label":"Ostatní","requires_auth":false,"allow_attachments":true},
           {"key":"Bad Key","label":"x","requires_auth":false,"allow_attachments":false},

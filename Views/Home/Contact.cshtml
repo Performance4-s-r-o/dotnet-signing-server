@@ -35,6 +35,9 @@
         <p><a href="@supportForm.PageUrl" target="_blank" rel="noopener noreferrer">@L["ContactFormStandalone"]</a></p>
     </noscript>
     <div id="p4-support"></div>
+    @* A frame inherits nothing from this page, so it gets the page's own colours (body background,
+       --color-text) instead of the widget's defaults: it reads as part of the page. *@
     <script src="@supportSrc" data-product="@supportForm.DataProduct" data-target="#p4-support"
-            data-lang="@System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName" data-min-height="520"></script>
+            data-lang="@System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName" data-min-height="520"
+            data-bg="#ffffff" data-fg="#0f172a"></script>
 }
