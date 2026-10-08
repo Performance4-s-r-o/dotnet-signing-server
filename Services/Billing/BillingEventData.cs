@@ -14,7 +14,8 @@ public sealed record CheckoutPurchase(
     string? StripeCustomerId);
 
 /// <summary>An auto-recharge payment read from <c>billing.payment.succeeded</c> / <c>.failed</c>.</summary>
-public sealed record AutoRechargePayment(string PaymentIntentId, Guid UserId, int Documents, long? Amount, string? Currency, string? FailureCode);
+/// <param name="AttemptKey">Key of the auto-recharge claim that sent the charge (metadata <c>rechargeAttempt</c>).</param>
+public sealed record AutoRechargePayment(string PaymentIntentId, Guid UserId, int Documents, long? Amount, string? Currency, string? FailureCode, string? AttemptKey);
 
 /// <summary>
 /// Reads the <c>billing.*</c> event data this product acts on. Pure. Every reader refuses
@@ -83,7 +84,8 @@ public static class BillingEventData
             return null;
         }
         return new AutoRechargePayment(paymentIntentId, userId, documents,
-            BillingJson.Long(data, "amount"), BillingJson.String(data, "currency"), BillingJson.String(data, "failure_code"));
+            BillingJson.Long(data, "amount"), BillingJson.String(data, "currency"), BillingJson.String(data, "failure_code"),
+            metadata.GetValueOrDefault(AutoRechargeClaim.MetadataKey));
     }
 
     /// <summary>The user of <c>billing.payment_method.detached</c>; null for a customer this product did not create.</summary>

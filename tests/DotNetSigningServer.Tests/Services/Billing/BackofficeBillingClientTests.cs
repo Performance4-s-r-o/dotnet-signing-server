@@ -56,6 +56,17 @@ public class BackofficeBillingClientTests
     }
 
     [Fact]
+    public async Task InteractiveCall_IsSentOnce_EvenOnAnOutage()
+    {
+        _service.EnqueueProblem(HttpStatusCode.BadGateway, "stripe_error");
+
+        var result = await Client().CreateCheckoutAsync(new { customer_ref = "user:x" }, CancellationToken.None);
+
+        Assert.Equal(502, result.Status);
+        Assert.Single(_service.Requests);
+    }
+
+    [Fact]
     public async Task Refusal_IsNotRepeated_AndTheNextWriteGetsANewKey()
     {
         _service.EnqueueProblem(HttpStatusCode.UnprocessableEntity, "validation_failed");

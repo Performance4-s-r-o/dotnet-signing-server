@@ -100,11 +100,24 @@ public class BillingDomainTests
     public void Claim_NoneStartsNew_RunningIsBusy_StaleOrRetryReadyIsReused()
     {
         var now = DateTimeOffset.Parse("2026-10-08T12:00:00Z");
+        var first = now.AddHours(-1);
 
         Assert.Equal(ClaimDecision.New, AutoRechargeClaim.Decide(null, now));
-        Assert.Equal(ClaimDecision.Busy, AutoRechargeClaim.Decide(new("k", now.AddMinutes(-1), false), now));
-        Assert.Equal(ClaimDecision.Reuse, AutoRechargeClaim.Decide(new("k", now.AddMinutes(-1), true), now));
-        Assert.Equal(ClaimDecision.Reuse, AutoRechargeClaim.Decide(new("k", now - AutoRechargeClaim.StaleAfter, false), now));
+        Assert.Equal(ClaimDecision.Busy, AutoRechargeClaim.Decide(new("k", first, now.AddMinutes(-1), false), now));
+        Assert.Equal(ClaimDecision.Reuse, AutoRechargeClaim.Decide(new("k", first, now.AddMinutes(-1), true), now));
+        Assert.Equal(ClaimDecision.Reuse, AutoRechargeClaim.Decide(new("k", first, now - AutoRechargeClaim.StaleAfter, false), now));
+    }
+
+    [Fact]
+    public void Claim_OlderThanTheServicesIdempotencyWindow_IsNeverRepeated()
+    {
+        var now = DateTimeOffset.Parse("2026-10-08T12:00:00Z");
+        var first = now - AutoRechargeClaim.MaxReuseAge;
+
+        // Even a fresh attempt that is ready for a repeat: the first send decides.
+        Assert.Equal(ClaimDecision.Expired, AutoRechargeClaim.Decide(new("k", first, now.AddMinutes(-1), true), now));
+        Assert.Equal(ClaimDecision.Reuse, AutoRechargeClaim.Decide(new("k", first.AddMinutes(1), now.AddMinutes(-1), true), now));
+        Assert.True(AutoRechargeClaim.MaxReuseAge < TimeSpan.FromHours(24));
     }
 
     [Theory]
@@ -124,9 +137,17 @@ public class BillingDomainTests
     {
         Assert.Null(BackofficeAutoRecharge.Read(new WebhookEvent { PayloadJson = "{}" }));
         Assert.Null(BackofficeAutoRecharge.Read(new WebhookEvent { PayloadJson = "not json" }));
-        var claim = BackofficeAutoRecharge.Read(new WebhookEvent { PayloadJson = """{"key":"k1"}""", ProcessedAt = DateTimeOffset.UtcNow });
+        var received = DateTimeOffset.Parse("2026-10-08T12:00:00Z");
+        var claim = BackofficeAutoRecharge.Read(new WebhookEvent
+        {
+            PayloadJson = """{"key":"k1","first":"2026-10-08T10:00:00+00:00"}""",
+            ReceivedAt = received,
+            ProcessedAt = received,
+        });
         Assert.Equal("k1", claim!.Key);
         Assert.True(claim.RetryReady);
+        Assert.Equal(DateTimeOffset.Parse("2026-10-08T10:00:00Z"), claim.FirstAttemptAt);
+        Assert.Equal(received, claim.ClaimedAt);
     }
 
     private static string CheckoutEvent(string customerRef, string paymentStatus = "paid", string kind = "payment", string documents = "300") => $$$"""
@@ -160,10 +181,10 @@ public class BillingDomainTests
     {
         var data = Json($$$"""
             {"customer_ref":"{{{Ref}}}","stripe_payment_intent_id":"pi_9","status":"succeeded","amount":4250,"currency":"eur",
-             "metadata":{"type":"auto_recharge","userId":"{{{UserId}}}","documents":"1000"}}
+             "metadata":{"type":"auto_recharge","userId":"{{{UserId}}}","documents":"1000","rechargeAttempt":"k1"}}
             """);
         var payment = BillingEventData.AutoRecharge(data, out _);
-        Assert.Equal(new AutoRechargePayment("pi_9", UserId, 1000, 4250, "eur", null), payment);
+        Assert.Equal(new AutoRechargePayment("pi_9", UserId, 1000, 4250, "eur", null, "k1"), payment);
 
         var checkoutPayment = Json($$$"""{"customer_ref":"{{{Ref}}}","stripe_payment_intent_id":"pi_9","metadata":{"userId":"{{{UserId}}}","documents":"100"}}""");
         Assert.Null(BillingEventData.AutoRecharge(checkoutPayment, out var reason));

@@ -216,6 +216,15 @@ public class AutoRechargeService : IAutoRechargeService
 
         switch (charge.Outcome)
         {
+            case ServiceChargeOutcome.Succeeded when !charge.CreditsGranted:
+                // Paid but not granted (logged by BackofficeAutoRecharge): no success e-mail.
+                return new AutoRechargeResult { Success = false, Error = "Paid, credits not granted" };
+
+            case ServiceChargeOutcome.Abandoned:
+                // An earlier charge never finished; repeating could charge twice. An admin settles it.
+                await DisableAsync(user);
+                return new AutoRechargeResult { Success = false, Error = "Unfinished charge expired; auto-recharge stopped" };
+
             case ServiceChargeOutcome.Succeeded:
                 _failedAttempts.TryRemove(user.Id, out _);
                 _logger.LogInformation("Auto-recharge succeeded for user {UserId}: +{Credits} credits", user.Id, pack.Quantity);

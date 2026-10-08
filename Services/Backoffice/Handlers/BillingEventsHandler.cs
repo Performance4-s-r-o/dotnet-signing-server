@@ -75,30 +75,29 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
             return;
         }
 
-        if (!await CreditGrants.TryGrantAsync(_db, purchase.SessionId, CreditGrants.CheckoutConfirmType, user.Id,
-                purchase.Documents, "backoffice", cancellationToken))
-        {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(user.StripeCustomerId) && !string.IsNullOrWhiteSpace(purchase.StripeCustomerId))
-        {
-            user.StripeCustomerId = purchase.StripeCustomerId;
-        }
-        if (purchase.AutoRecharge)
-        {
-            var pricing = _services.GetRequiredService<ICreditPricingProvider>();
-            await _services.GetRequiredService<IAutoRechargeService>().EnableAsync(user, purchase.Documents, pricing.PricePer100);
-        }
-        _db.Payments.Add(new Payment
-        {
-            UserId = user.Id,
-            StripePaymentIntentId = purchase.PaymentIntentId,
-            AmountCents = (int)(purchase.AmountTotal ?? 0),
-            Currency = (purchase.Currency ?? "").ToUpperInvariant(),
-            Status = "succeeded",
-        });
-        await _db.SaveChangesAsync(cancellationToken);
+        // Credits, the payment record and the auto-recharge opt-in in one transaction.
+        var grantedNow = await CreditGrants.TryGrantAsync(_db, purchase.SessionId, CreditGrants.CheckoutConfirmType, user.Id,
+            purchase.Documents, "backoffice", async () =>
+            {
+                if (string.IsNullOrWhiteSpace(user.StripeCustomerId) && !string.IsNullOrWhiteSpace(purchase.StripeCustomerId))
+                {
+                    user.StripeCustomerId = purchase.StripeCustomerId;
+                }
+                if (purchase.AutoRecharge)
+                {
+                    var pricing = _services.GetRequiredService<ICreditPricingProvider>();
+                    await _services.GetRequiredService<IAutoRechargeService>().EnableAsync(user, purchase.Documents, pricing.PricePer100);
+                }
+                _db.Payments.Add(new Payment
+                {
+                    UserId = user.Id,
+                    StripePaymentIntentId = purchase.PaymentIntentId,
+                    AmountCents = (int)(purchase.AmountTotal ?? 0),
+                    Currency = (purchase.Currency ?? "").ToUpperInvariant(),
+                    Status = "succeeded",
+                });
+            }, cancellationToken);
+        if (!grantedNow) return;
         _logger.LogInformation("[billing] {EventId}: granted {Credits} credits to user {UserId}", evt.Id, purchase.Documents, user.Id);
     }
 
@@ -121,17 +120,20 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
         }
 
         if (succeeded
-            && await CreditGrants.TryGrantAsync(_db, key, CreditGrants.AutoRechargeType, payment.UserId, payment.Documents, "backoffice", cancellationToken))
+            && await CreditGrants.TryGrantAsync(_db, key, CreditGrants.AutoRechargeType, payment.UserId, payment.Documents, "backoffice",
+                () =>
+                {
+                    _db.Payments.Add(new Payment
+                    {
+                        UserId = payment.UserId,
+                        StripePaymentIntentId = payment.PaymentIntentId,
+                        AmountCents = (int)(payment.Amount ?? 0),
+                        Currency = (payment.Currency ?? "").ToUpperInvariant(),
+                        Status = "succeeded",
+                    });
+                    return Task.CompletedTask;
+                }, cancellationToken))
         {
-            _db.Payments.Add(new Payment
-            {
-                UserId = payment.UserId,
-                StripePaymentIntentId = payment.PaymentIntentId,
-                AmountCents = (int)(payment.Amount ?? 0),
-                Currency = (payment.Currency ?? "").ToUpperInvariant(),
-                Status = "succeeded",
-            });
-            await _db.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("[billing] {EventId}: granted {Credits} auto-recharge credits to user {UserId}",
                 evt.Id, payment.Documents, payment.UserId);
         }
@@ -141,8 +143,9 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
                 evt.Id, payment.UserId, payment.FailureCode);
         }
 
-        // The charge is over either way: the next recharge may start with a new key.
-        await BackofficeAutoRecharge.ReleaseAsync(_db, payment.UserId, cancellationToken);
+        // This charge is over either way: the next recharge may start with a new key. Only its
+        // own claim is released — a late event of an earlier charge leaves a newer one alone.
+        await BackofficeAutoRecharge.ReleaseAsync(_db, payment.UserId, payment.AttemptKey, cancellationToken);
     }
 
     private async Task PaymentMethodDetachedAsync(BackofficeEvent evt, CancellationToken cancellationToken)

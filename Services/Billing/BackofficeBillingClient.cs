@@ -10,10 +10,11 @@ namespace DotNetSigningServer.Services.Billing;
 /// service's OpenAPI document — no SDK dependency, so every build can use it.
 ///
 /// Every write carries an <c>Idempotency-Key</c>: a new one per call unless the caller passes
-/// its own (an off-session charge keeps its key across attempts). Within one call a request
-/// that got no answer, or one the service says to repeat, is sent once more with the same
-/// key (<see cref="BillingRetryPolicy"/>). Answers are returned, not thrown; only
-/// cancellation by the caller throws.
+/// its own (an off-session charge keeps its key across attempts). Calls made while a user
+/// waits are sent once (bounded by <see cref="RequestTimeout"/>); the background charge is sent
+/// once more with the same key when it got no answer or the service says to repeat it
+/// (<see cref="BillingRetryPolicy"/>). Answers are returned, not thrown; only cancellation by
+/// the caller throws.
 /// </summary>
 public sealed class BackofficeBillingClient
 {
@@ -22,8 +23,8 @@ public sealed class BackofficeBillingClient
 
     public const string IdempotencyKeyHeader = "Idempotency-Key";
 
-    /// <summary>The service calls Stripe inline (10 s timeout of its own), so this is longer.</summary>
-    public static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(20);
+    /// <summary>The service calls Stripe inline (10 s timeout of its own), so this is a little longer.</summary>
+    public static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(15);
 
     internal static readonly JsonSerializerOptions Json = new()
     {
@@ -49,39 +50,39 @@ public sealed class BackofficeBillingClient
     }
 
     public Task<BillingApiResult> PutCustomerAsync(string customerRef, object body, CancellationToken ct) =>
-        SendAsync(HttpMethod.Put, $"v1/billing/customers/{Uri.EscapeDataString(customerRef)}", body, NewKey(), ct);
+        SendAsync(HttpMethod.Put, $"v1/billing/customers/{Uri.EscapeDataString(customerRef)}", body, NewKey(), ct, attempts: 1);
 
     public Task<BillingApiResult> GetCustomerAsync(string customerRef, CancellationToken ct) =>
-        SendAsync(HttpMethod.Get, $"v1/billing/customers/{Uri.EscapeDataString(customerRef)}", null, null, ct);
+        SendAsync(HttpMethod.Get, $"v1/billing/customers/{Uri.EscapeDataString(customerRef)}", null, null, ct, attempts: 1);
 
     public Task<BillingApiResult> DetachPaymentMethodsAsync(string customerRef, CancellationToken ct) =>
-        SendAsync(HttpMethod.Delete, $"v1/billing/customers/{Uri.EscapeDataString(customerRef)}/payment-methods", null, NewKey(), ct);
+        SendAsync(HttpMethod.Delete, $"v1/billing/customers/{Uri.EscapeDataString(customerRef)}/payment-methods", null, NewKey(), ct, attempts: 1);
 
     public Task<BillingApiResult> CreatePortalSessionAsync(object body, CancellationToken ct) =>
-        SendAsync(HttpMethod.Post, "v1/billing/portal-sessions", body, NewKey(), ct);
+        SendAsync(HttpMethod.Post, "v1/billing/portal-sessions", body, NewKey(), ct, attempts: 1);
 
     public Task<BillingApiResult> ListInvoicesAsync(string customerRef, int limit, CancellationToken ct) =>
         SendAsync(HttpMethod.Get,
             $"v1/billing/invoices?customer_ref={Uri.EscapeDataString(customerRef)}&limit={Math.Clamp(limit, 1, 100)}",
-            null, null, ct);
+            null, null, ct, attempts: 1);
 
     public Task<BillingApiResult> CreateCheckoutAsync(object body, CancellationToken ct) =>
-        SendAsync(HttpMethod.Post, "v1/billing/checkout-sessions", body, NewKey(), ct);
+        SendAsync(HttpMethod.Post, "v1/billing/checkout-sessions", body, NewKey(), ct, attempts: 1);
 
     public Task<BillingApiResult> GetCheckoutAsync(string sessionId, CancellationToken ct) =>
-        SendAsync(HttpMethod.Get, $"v1/billing/checkout-sessions/{Uri.EscapeDataString(sessionId)}", null, null, ct);
+        SendAsync(HttpMethod.Get, $"v1/billing/checkout-sessions/{Uri.EscapeDataString(sessionId)}", null, null, ct, attempts: 1);
 
     /// <summary>Off-session charge with the caller's key: repeating it can never charge twice.</summary>
     public Task<BillingApiResult> CreateChargeAsync(object body, string idempotencyKey, CancellationToken ct) =>
-        SendAsync(HttpMethod.Post, "v1/billing/charges", body, idempotencyKey, ct);
+        SendAsync(HttpMethod.Post, "v1/billing/charges", body, idempotencyKey, ct, BillingRetryPolicy.MaxAttempts);
 
     private static string NewKey() => Guid.NewGuid().ToString("D");
 
-    private async Task<BillingApiResult> SendAsync(HttpMethod method, string path, object? body, string? idempotencyKey, CancellationToken ct)
+    private async Task<BillingApiResult> SendAsync(HttpMethod method, string path, object? body, string? idempotencyKey, CancellationToken ct, int attempts)
     {
         var json = body is null ? null : JsonSerializer.Serialize(body, Json);
         var result = BillingApiResult.NoAnswer();
-        for (var attempt = 1; attempt <= BillingRetryPolicy.MaxAttempts; attempt++)
+        for (var attempt = 1; attempt <= attempts; attempt++)
         {
             if (attempt > 1)
             {

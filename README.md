@@ -433,7 +433,8 @@ Only its own setting switches it: `P4Backoffice__Mode=On` leaves payments Off.
   force (no inline prices). Auto-recharge uses `POST /v1/billing/charges` with
   an `Idempotency-Key` kept in `WebhookEvents` (`auto_recharge_claim_<user>`),
   so replicas never charge twice and a charge without an answer is repeated
-  with the same key. Credits are granted by the confirm page or by
+  with the same key — never after 23 hours (the service keeps answers for 24):
+  such a charge stops auto-recharge and is logged as an error for an admin. Credits are granted by the confirm page or by
   `billing.checkout.completed` / `billing.payment.succeeded`, whichever comes
   first (same keys as the Stripe webhook, which stays as a safety net).
   `billing.payment_method.detached` switches auto-recharge off when no card is

@@ -49,7 +49,10 @@ public static class BillingRegistration
             client.Timeout = BackofficeBillingClient.RequestTimeout;
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretKey);
             client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-billing");
-        });
+        })
+            // The factory's request log prints the full URI, which names the customer
+            // (customer_ref=user:<id>); BackofficeBillingClient logs the path without it.
+            .RemoveAllLoggers();
         services.TryAddSingleton<BackofficeBillingClient>();
         services.TryAddScoped<BackofficePaymentGateway>();
         services.TryAddScoped<IPaymentGateway>(sp => sp.GetRequiredService<BackofficePaymentGateway>());

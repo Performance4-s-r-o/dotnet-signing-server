@@ -18,14 +18,37 @@ public static class CreditGrants
     public static string AutoRechargeKey(string paymentIntentId) => $"auto_recharge_{paymentIntentId}";
 
     /// <summary>
-    /// Claims <paramref name="eventId"/> and adds <paramref name="documents"/> credits. False when
-    /// the payment was already granted (the claim exists). The user row is updated atomically;
-    /// the caller saves anything else it adds (payment record) afterwards.
+    /// In one transaction: claims <paramref name="eventId"/>, adds <paramref name="documents"/>
+    /// credits and runs <paramref name="alongside"/> (the payment record, enabling
+    /// auto-recharge, …), then saves. Either all of it happens or none. False when the payment
+    /// was already granted.
     /// </summary>
-    public static async Task<bool> TryGrantAsync(
+    public static Task<bool> TryGrantAsync(
         ApplicationDbContext db, string eventId, string eventType, Guid userId, int documents, string source,
-        CancellationToken cancellationToken)
+        Func<Task> alongside, CancellationToken cancellationToken)
     {
+        if (db.Database.CurrentTransaction != null)
+        {
+            return GrantInTransactionAsync(db, eventId, eventType, userId, documents, source, alongside, cancellationToken);
+        }
+
+        return db.Database.CreateExecutionStrategy().ExecuteAsync(async ct =>
+        {
+            // A retried attempt starts from what is in the database, not from the failed one.
+            DetachAdded(db);
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            var granted = await GrantInTransactionAsync(db, eventId, eventType, userId, documents, source, alongside, ct);
+            if (granted) await tx.CommitAsync(ct);
+            return granted;
+        }, cancellationToken);
+    }
+
+    private static async Task<bool> GrantInTransactionAsync(
+        ApplicationDbContext db, string eventId, string eventType, Guid userId, int documents, string source,
+        Func<Task> alongside, CancellationToken cancellationToken)
+    {
+        if (await IsGrantedAsync(db, eventId, cancellationToken)) return false;
+
         db.WebhookEvents.Add(new WebhookEvent
         {
             EventId = eventId,
@@ -40,6 +63,7 @@ public static class CreditGrants
         }
         catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
+            // Claimed concurrently; the transaction is aborted and rolls back on dispose.
             DetachAdded(db);
             return false;
         }
@@ -47,10 +71,12 @@ public static class CreditGrants
         await db.Database.ExecuteSqlRawAsync(
             "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" + {0} WHERE \"Id\" = {1}",
             [documents, userId], cancellationToken);
+        await alongside();
+        await db.SaveChangesAsync(cancellationToken);
         return true;
     }
 
-    /// <summary>Whether <paramref name="eventId"/> was already claimed (for Shadow comparisons).</summary>
+    /// <summary>Whether <paramref name="eventId"/> was already claimed.</summary>
     public static Task<bool> IsGrantedAsync(ApplicationDbContext db, string eventId, CancellationToken cancellationToken) =>
         db.WebhookEvents.AnyAsync(w => w.EventId == eventId, cancellationToken);
 
@@ -59,10 +85,10 @@ public static class CreditGrants
         ex.InnerException?.Message.Contains("23505") == true
         || ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) == true;
 
-    /// <summary>Forgets the rows that failed to insert, so the context can be saved again.</summary>
+    /// <summary>Forgets rows added but not saved, so the context can be saved again.</summary>
     internal static void DetachAdded(ApplicationDbContext db)
     {
-        foreach (var entry in db.ChangeTracker.Entries<WebhookEvent>().Where(e => e.State == EntityState.Added).ToList())
+        foreach (var entry in db.ChangeTracker.Entries().Where(e => e.State == EntityState.Added).ToList())
         {
             entry.State = EntityState.Detached;
         }

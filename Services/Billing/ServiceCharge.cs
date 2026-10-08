@@ -20,6 +20,12 @@ public enum ServiceChargeOutcome
 
     /// <summary>Refused (4xx: no card, daily limit, not configured, …): nothing happened; a new attempt gets a new key.</summary>
     Refused,
+
+    /// <summary>
+    /// Not sent: the previous charge stayed unfinished too long to repeat its key safely
+    /// (<see cref="ClaimDecision.Expired"/>). Auto-recharge is stopped.
+    /// </summary>
+    Abandoned,
 }
 
 /// <summary>
@@ -29,6 +35,9 @@ public enum ServiceChargeOutcome
 /// <param name="Reason">Decline code or problem code, for logs and the failure e-mail.</param>
 public sealed record ServiceCharge(ServiceChargeOutcome Outcome, string? PaymentIntentId, long? AmountMinor, string? Currency, string? Reason)
 {
+    /// <summary>The credits of this payment are on the account (granted now or earlier by its event).</summary>
+    public bool CreditsGranted { get; init; }
+
     public static ServiceCharge From(BillingApiResult result)
     {
         if (BillingRetryPolicy.RetryWithSameKey(result))
