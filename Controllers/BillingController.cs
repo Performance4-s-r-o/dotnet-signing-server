@@ -3,6 +3,7 @@ using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Services.Billing;
 using DotNetSigningServer.Services.Pricing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -10,8 +11,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
-using Stripe.Checkout;
-using Stripe;
 
 namespace DotNetSigningServer.Controllers;
 
@@ -21,7 +20,7 @@ public class BillingController : Controller
     private readonly ApplicationDbContext _dbContext;
     private readonly IBillingService _billingService;
     private readonly ICreditPricingProvider _pricing;
-    private readonly IStripeCheckoutService _checkoutService;
+    private readonly IPaymentGateway _payments;
     private readonly IAutoRechargeService _autoRechargeService;
     private readonly ILogger<BillingController> _logger;
     private readonly IStringLocalizer<SharedStrings> _localizer;
@@ -30,7 +29,7 @@ public class BillingController : Controller
         ApplicationDbContext dbContext,
         IBillingService billingService,
         ICreditPricingProvider pricing,
-        IStripeCheckoutService checkoutService,
+        IPaymentGateway payments,
         IAutoRechargeService autoRechargeService,
         ILogger<BillingController> logger,
         IStringLocalizer<SharedStrings> localizer)
@@ -38,7 +37,7 @@ public class BillingController : Controller
         _dbContext = dbContext;
         _billingService = billingService;
         _pricing = pricing;
-        _checkoutService = checkoutService;
+        _payments = payments;
         _autoRechargeService = autoRechargeService;
         _logger = logger;
         _localizer = localizer;
@@ -70,12 +69,12 @@ public class BillingController : Controller
             .Take(20)
             .ToListAsync();
 
-        IReadOnlyList<global::Stripe.Invoice> stripeInvoices = Array.Empty<global::Stripe.Invoice>();
+        IReadOnlyList<InvoiceSummary> stripeInvoices = Array.Empty<InvoiceSummary>();
         if (!string.IsNullOrWhiteSpace(user.StripeCustomerId))
         {
             try
             {
-                stripeInvoices = await _checkoutService.GetInvoicesAsync(user.StripeCustomerId, 10);
+                stripeInvoices = await _payments.ListInvoicesAsync(user, 10);
             }
             catch (Exception ex)
             {
@@ -109,7 +108,7 @@ public class BillingController : Controller
         SavedPaymentMethod? savedPm = null;
         if (!string.IsNullOrWhiteSpace(user.StripeCustomerId))
         {
-            savedPm = await _checkoutService.GetDefaultPaymentMethodAsync(user.StripeCustomerId);
+            savedPm = await _payments.GetSavedPaymentMethodAsync(user);
         }
 
         var model = new BillingViewModel
@@ -196,7 +195,7 @@ public class BillingController : Controller
         try
         {
             var returnUrl = Url.Action(nameof(Index), "Billing", null, Request.Scheme) ?? "/";
-            var portalUrl = await _checkoutService.CreateBillingPortalSessionAsync(user.StripeCustomerId, returnUrl);
+            var portalUrl = await _payments.CreatePortalSessionAsync(user, returnUrl);
             if (string.IsNullOrWhiteSpace(portalUrl))
             {
                 TempData["Error"] = _localizer["PaymentStartFailed"].Value;
@@ -239,17 +238,7 @@ public class BillingController : Controller
         {
             try
             {
-                var customerService = new CustomerService();
-                var customer = await customerService.CreateAsync(new CustomerCreateOptions
-                {
-                    Email = user.Email,
-                    Metadata = new Dictionary<string, string>
-                    {
-                        { "app_user_id", user.Id.ToString() }
-                    }
-                });
-
-                user.StripeCustomerId = customer.Id;
+                await _payments.EnsureCustomerAsync(user);
                 await _dbContext.SaveChangesAsync();
             }
             catch (Exception ex)
@@ -284,7 +273,7 @@ public class BillingController : Controller
             // Auto-recharge opt-in implies the card must be saved
             var effectiveSaveCard = saveCard || autoRecharge;
 
-            var checkoutUrl = await _checkoutService.CreateCheckoutSessionAsync(
+            var checkoutUrl = await _payments.StartCheckoutAsync(
                 user,
                 pack,
                 successUrl,
@@ -304,6 +293,12 @@ public class BillingController : Controller
             }
 
             return Redirect(checkoutUrl);
+        }
+        catch (BillingApiException ex) when (ex.IsOutage)
+        {
+            _logger.LogWarning(ex, "Checkout for user {UserId}: payments unavailable", user.Id);
+            TempData["Error"] = _localizer["PaymentsTemporarilyUnavailable"].Value;
+            return RedirectToAction(nameof(Index));
         }
         catch (Exception ex)
         {
@@ -339,7 +334,7 @@ public class BillingController : Controller
                 return RedirectToAction(nameof(Index));
             }
 
-            var session = await _checkoutService.GetSessionAsync(sessionId);
+            var session = await _payments.GetCheckoutAsync(sessionId);
             if (session == null || session.PaymentStatus != "paid")
             {
                 TempData["Error"] = _localizer["PaymentNotCompleted"].Value;
@@ -347,8 +342,7 @@ public class BillingController : Controller
             }
 
             // Verify the checkout session belongs to the currently authenticated user
-            if (session.Metadata.TryGetValue("userId", out var metaUserId)
-                && metaUserId != userId.Value.ToString())
+            if (!BillingCustomerRef.CheckoutBelongsTo(session, userId.Value))
             {
                 TempData["Error"] = _localizer["PaymentSessionMismatch"].Value;
                 return RedirectToAction(nameof(Index));
@@ -399,9 +393,9 @@ public class BillingController : Controller
                 documents, user.Id);
             await _dbContext.Entry(user).ReloadAsync();
 
-            if (string.IsNullOrWhiteSpace(user.StripeCustomerId) && !string.IsNullOrWhiteSpace(session.CustomerId))
+            if (string.IsNullOrWhiteSpace(user.StripeCustomerId) && !string.IsNullOrWhiteSpace(session.StripeCustomerId))
             {
-                user.StripeCustomerId = session.CustomerId;
+                user.StripeCustomerId = session.StripeCustomerId;
             }
 
             // Enable auto-recharge if the user opted in during checkout
@@ -430,7 +424,7 @@ public class BillingController : Controller
         public decimal PricePer100 { get; set; }
         public string Currency { get; set; } = "EUR";
         public int CreditsRemaining { get; set; }
-        public IReadOnlyList<global::Stripe.Invoice> StripeInvoices { get; set; } = Array.Empty<global::Stripe.Invoice>();
+        public IReadOnlyList<InvoiceSummary> StripeInvoices { get; set; } = Array.Empty<InvoiceSummary>();
         /// <summary>The sold packs at their current prices, smallest first.</summary>
         public IReadOnlyList<CreditPack> Packs { get; set; } = Array.Empty<CreditPack>();
         public bool AutoRechargeEnabled { get; set; }
@@ -484,16 +478,7 @@ public class BillingController : Controller
         {
             try
             {
-                var customerService = new Stripe.CustomerService();
-                var customer = await customerService.CreateAsync(new Stripe.CustomerCreateOptions
-                {
-                    Email = user.Email,
-                    Metadata = new Dictionary<string, string>
-                    {
-                        { "app_user_id", user.Id.ToString() }
-                    }
-                });
-                user.StripeCustomerId = customer.Id;
+                await _payments.EnsureCustomerAsync(user);
                 await _dbContext.SaveChangesAsync();
             }
             catch (Exception ex)
@@ -508,14 +493,7 @@ public class BillingController : Controller
         bool hasCard = false;
         try
         {
-            var pmService = new Stripe.PaymentMethodService();
-            var methods = await pmService.ListAsync(new Stripe.PaymentMethodListOptions
-            {
-                Customer = user.StripeCustomerId,
-                Type = "card",
-                Limit = 1
-            });
-            hasCard = methods.Data.Count > 0;
+            hasCard = await _payments.HasSavedCardAsync(user);
         }
         catch (Exception ex)
         {
@@ -531,8 +509,8 @@ public class BillingController : Controller
 
             try
             {
-                var setupUrl = await _checkoutService.CreateSetupSessionAsync(
-                    user.StripeCustomerId!,
+                var setupUrl = await _payments.StartCardSetupAsync(
+                    user,
                     successUrl,
                     cancelUrl,
                     new Dictionary<string, string>
@@ -576,15 +554,14 @@ public class BillingController : Controller
 
         try
         {
-            var session = await _checkoutService.GetSessionAsync(sessionId);
+            var session = await _payments.GetCheckoutAsync(sessionId);
             if (session == null || session.Mode != "setup" || session.Status != "complete")
             {
                 TempData["Error"] = _localizer["PaymentNotCompleted"].Value;
                 return RedirectToAction(nameof(Index));
             }
 
-            if (session.Metadata.TryGetValue("userId", out var metaUserId)
-                && metaUserId != userId.Value.ToString())
+            if (!BillingCustomerRef.CheckoutBelongsTo(session, userId.Value))
             {
                 TempData["Error"] = _localizer["PaymentSessionMismatch"].Value;
                 return RedirectToAction(nameof(Index));
@@ -601,9 +578,9 @@ public class BillingController : Controller
             var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
             if (user == null) return RedirectToAction("SignIn", "Account");
 
-            if (string.IsNullOrWhiteSpace(user.StripeCustomerId) && !string.IsNullOrWhiteSpace(session.CustomerId))
+            if (string.IsNullOrWhiteSpace(user.StripeCustomerId) && !string.IsNullOrWhiteSpace(session.StripeCustomerId))
             {
-                user.StripeCustomerId = session.CustomerId;
+                user.StripeCustomerId = session.StripeCustomerId;
                 await _dbContext.SaveChangesAsync();
             }
 

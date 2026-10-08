@@ -1,6 +1,7 @@
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Services.Billing;
 using DotNetSigningServer.Services.Email;
 using DotNetSigningServer.Services.Pricing;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +21,8 @@ public class AutoRechargeService : IAutoRechargeService
     private readonly ITemplatedEmailSender _email;
     private readonly ILogger<AutoRechargeService> _logger;
     private readonly AppOptions _appOptions;
+    // Modules:Billing=On: the charge goes through the billing API instead of Stripe directly.
+    private readonly BackofficeAutoRecharge? _viaService;
 
     /// <summary>Tracks last failed auto-recharge attempt per user to implement cooldown.</summary>
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, DateTimeOffset> _failedAttempts = new();
@@ -36,8 +39,10 @@ public class AutoRechargeService : IAutoRechargeService
         ITemplatedEmailSender email,
         ILogger<AutoRechargeService> logger,
         IOptions<AppOptions> appOptions,
-        ICreditPricingProvider pricing)
+        ICreditPricingProvider pricing,
+        BackofficeAutoRecharge? viaService = null)
     {
+        _viaService = viaService;
         _pricing = pricing;
         _dbContext = dbContext;
         _billingService = billingService;
@@ -84,6 +89,11 @@ public class AutoRechargeService : IAutoRechargeService
             {
                 _logger.LogDebug("Auto-recharge cooldown active for user {UserId}, last failure at {LastFailed}", userId, lastFailed);
                 return new AutoRechargeResult { Success = false, Error = "Cooldown active after previous failure" };
+            }
+
+            if (_viaService != null)
+            {
+                return await ChargeViaServiceAsync(user);
             }
 
             // Find a saved payment method
@@ -183,6 +193,61 @@ public class AutoRechargeService : IAutoRechargeService
             _inFlight.TryRemove(userId, out _);
         }
     }
+
+    /// <summary>
+    /// Modules:Billing=On. Only a pack of the price list in force can be charged (catalog
+    /// prices only); the service picks the card and refuses without one.
+    /// </summary>
+    private async Task<AutoRechargeResult> ChargeViaServiceAsync(User user)
+    {
+        var pack = _pricing.GetPack(user.AutoRechargeQuantity);
+        if (pack?.LookupKey == null)
+        {
+            _logger.LogError("Auto-recharge of user {UserId}: the {Quantity}-credit pack has no price in the price list in force",
+                user.Id, user.AutoRechargeQuantity);
+            return new AutoRechargeResult { Success = false, Error = "Pack not in the price list" };
+        }
+
+        var charge = await _viaService!.ChargeAsync(user, pack);
+        if (charge == null)
+        {
+            return new AutoRechargeResult { Success = false, Error = "Auto-recharge already in progress" };
+        }
+
+        switch (charge.Outcome)
+        {
+            case ServiceChargeOutcome.Succeeded:
+                _failedAttempts.TryRemove(user.Id, out _);
+                _logger.LogInformation("Auto-recharge succeeded for user {UserId}: +{Credits} credits", user.Id, pack.Quantity);
+                await SendRechargeSuccessEmailAsync(user, pack.Quantity, pack.Amount, pack.Currency);
+                return new AutoRechargeResult { Success = true, CreditsAdded = pack.Quantity };
+
+            case ServiceChargeOutcome.Pending:
+                _logger.LogInformation("Auto-recharge of user {UserId} is settling; credits follow with billing.payment.succeeded", user.Id);
+                return new AutoRechargeResult { Success = false, Error = "Payment processing" };
+
+            case ServiceChargeOutcome.RetryLater:
+                _failedAttempts[user.Id] = DateTimeOffset.UtcNow;
+                _logger.LogWarning("Auto-recharge of user {UserId}: billing API unavailable ({Reason}); repeated later with the same key",
+                    user.Id, charge.Reason ?? "no answer");
+                return new AutoRechargeResult { Success = false, Error = "Payment service unavailable" };
+
+            default:
+                _failedAttempts[user.Id] = DateTimeOffset.UtcNow;
+                _logger.LogWarning("Auto-recharge failed for user {UserId}: {Outcome} ({Reason})", user.Id, charge.Outcome, charge.Reason);
+                await SendRechargeFailedEmailAsync(user, FailureReason(charge));
+                return new AutoRechargeResult { Success = false, Error = $"Payment {charge.Outcome}: {charge.Reason}" };
+        }
+    }
+
+    /// <summary>The reason in the failure e-mail, worded like the direct path's.</summary>
+    internal static string FailureReason(ServiceCharge charge) => charge switch
+    {
+        { Outcome: ServiceChargeOutcome.RequiresAction } => "Your bank asked for a confirmation we could not request automatically. Please buy credits on the billing page.",
+        { Outcome: ServiceChargeOutcome.Refused, Reason: "no_payment_method" } => "No saved payment method found. Please update your payment method.",
+        { Outcome: ServiceChargeOutcome.Declined } => $"Payment failed: {charge.Reason}",
+        _ => "Payment was not completed. Please check your payment method.",
+    };
 
     public async Task EnableAsync(User user, int quantity, decimal pricePer100)
     {

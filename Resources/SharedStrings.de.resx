@@ -61,6 +61,7 @@
   <data name="InvalidDocumentBundle" xml:space="preserve"><value>Ungültiges Dokumentenpaket ausgewählt.</value></data>
   <data name="CheckoutStartFailed" xml:space="preserve"><value>Der Bezahlvorgang konnte nicht gestartet werden.</value></data>
   <data name="PaymentStartFailed" xml:space="preserve"><value>Die Zahlung konnte nicht gestartet werden. Bitte versuchen Sie es erneut.</value></data>
+  <data name="PaymentsTemporarilyUnavailable" xml:space="preserve"><value>Zahlungen sind vorübergehend nicht verfügbar. Bitte versuchen Sie es in Kürze erneut.</value></data>
   <data name="MissingStripeSession" xml:space="preserve"><value>Stripe-Sitzungs-ID fehlt.</value></data>
   <data name="PaymentAlreadyProcessed" xml:space="preserve"><value>Diese Zahlung wurde bereits verarbeitet.</value></data>
   <data name="PaymentNotCompleted" xml:space="preserve"><value>Zahlung nicht abgeschlossen.</value></data>

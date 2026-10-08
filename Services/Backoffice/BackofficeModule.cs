@@ -20,4 +20,10 @@ public enum BackofficeModule
 
     /// <summary>Support tickets.</summary>
     Support,
+
+    /// <summary>
+    /// Payments (checkout, saved cards, invoices, auto-recharge). Never inherits the global
+    /// <c>Mode</c>: it moves money, so it is switched on by its own setting only.
+    /// </summary>
+    Billing,
 }

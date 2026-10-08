@@ -106,7 +106,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `Sentry__Dsn` | | Error monitoring; disabled when empty |
 | `Loki__Url` | | Log shipping; disabled when empty |
 | `Limits__*` | | Request/PDF/image/attachment size caps and per-key concurrency |
-| `P4Backoffice__Mode` / `P4Backoffice__Modules__*` | | P4 Backoffice integration: `Off` (default), `Shadow` or `On`, globally or per module (`Docs`, `Consents`, `Email`, `Pricing`, `Support`) |
+| `P4Backoffice__Mode` / `P4Backoffice__Modules__*` | | P4 Backoffice integration: `Off` (default), `Shadow` or `On`, globally or per module (`Docs`, `Consents`, `Email`, `Pricing`, `Support`, `Billing`; `Billing` never follows the global mode) |
 | `P4Backoffice__BaseUrl` / `P4Backoffice__SecretKey` | when not `Off` | Service URL (https) and `p4sk_` key; startup fails without them |
 | `P4Backoffice__Webhook__Secret` | | Webhook signing secret (`whsec_` + base64 of at least 24 bytes); `…__PreviousSecret` during rotation |
 | `P4Backoffice__CookieWidget__PublishableKey` / `…__Url` | | Cookie banner of the service: publishable key `p4pk_…` (empty = no banner) and the origin of `widget.js` (default `https://legal.performance4.cz`) |
@@ -417,6 +417,31 @@ user's e-mail address, looked up by account id.
 
 Rollback: `P4Backoffice__Modules__Support=Off` (keep `OsTicket__*` until then).
 Tickets already queued are still delivered.
+
+#### Payments (`Modules:Billing`)
+
+Only its own setting switches it: `P4Backoffice__Mode=On` leaves payments Off.
+
+- `P4Backoffice__Modules__Billing=Off` (default): Stripe directly with
+  `Stripe__*`, as before.
+- `Shadow`: the same; `billing.*` events from the service are only logged and
+  compared with what the direct path granted.
+- `On` (needs `Modules:Pricing=On`, refused at startup otherwise): checkout,
+  card setup, the confirm pages, invoices, the card on file, the portal and the
+  enterprise card removal go through `/v1/billing/*`; the customer is
+  `user:<id>`. Checkout charges the pack's lookup key from the price list in
+  force (no inline prices). Auto-recharge uses `POST /v1/billing/charges` with
+  an `Idempotency-Key` kept in `WebhookEvents` (`auto_recharge_claim_<user>`),
+  so replicas never charge twice and a charge without an answer is repeated
+  with the same key. Credits are granted by the confirm page or by
+  `billing.checkout.completed` / `billing.payment.succeeded`, whichever comes
+  first (same keys as the Stripe webhook, which stays as a safety net).
+  `billing.payment_method.detached` switches auto-recharge off when no card is
+  left. Success and failure e-mails are still sent by this app.
+  Existing Stripe customers must be linked in the service before `On`;
+  otherwise the service creates a new customer without the saved card.
+
+Rollback: `P4Backoffice__Modules__Billing=Off`.
 
 ## Stripe webhooks
 

@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
-using Stripe;
+using DotNetSigningServer.Services.Billing;
 
 namespace DotNetSigningServer.Controllers;
 
@@ -21,6 +21,7 @@ namespace DotNetSigningServer.Controllers;
 public class AdminController : Controller
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly IPaymentGateway _payments;
     private readonly IAutoRechargeService _autoRechargeService;
     private readonly ILogger<AdminController> _logger;
     private readonly IStringLocalizer<SharedStrings> _localizer;
@@ -31,6 +32,7 @@ public class AdminController : Controller
     public AdminController(
         ApplicationDbContext dbContext,
         IAutoRechargeService autoRechargeService,
+        IPaymentGateway payments,
         ILogger<AdminController> logger,
         IStringLocalizer<SharedStrings> localizer,
         IOptions<P4BackofficeProductOptions> backofficeOptions,
@@ -41,6 +43,7 @@ public class AdminController : Controller
         _time = time;
         _dbContext = dbContext;
         _autoRechargeService = autoRechargeService;
+        _payments = payments;
         _logger = logger;
         _localizer = localizer;
         _backofficeOptions = backofficeOptions;
@@ -217,25 +220,7 @@ public class AdminController : Controller
             {
                 try
                 {
-                    var pmService = new PaymentMethodService();
-                    var methods = await pmService.ListAsync(new PaymentMethodListOptions
-                    {
-                        Customer = user.StripeCustomerId,
-                        Type = "card",
-                        Limit = 100,
-                    });
-                    foreach (var pm in methods.Data)
-                    {
-                        try
-                        {
-                            await pmService.DetachAsync(pm.Id);
-                            _logger.LogInformation("Detached payment method {PmId} for enterprise user {UserId}", pm.Id, user.Id);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Failed to detach payment method {PmId} for user {UserId}", pm.Id, user.Id);
-                        }
-                    }
+                    await _payments.DetachPaymentMethodsAsync(user);
                 }
                 catch (Exception ex)
                 {

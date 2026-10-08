@@ -66,7 +66,8 @@ public class P4BackofficeProductOptions
     public BackofficeMode RequestedModeFor(BackofficeModule module)
     {
         var raw = Modules.Get(module);
-        if (string.IsNullOrWhiteSpace(raw)) raw = Mode;
+        // Billing moves money: only its own setting switches it on (see BackofficeModule.Billing).
+        if (string.IsNullOrWhiteSpace(raw) && module != BackofficeModule.Billing) raw = Mode;
         return TryParseMode(raw, out var mode) ? mode : BackofficeMode.Off;
     }
 
@@ -101,6 +102,7 @@ public class P4BackofficeProductOptions
         public string? Email { get; set; }
         public string? Pricing { get; set; }
         public string? Support { get; set; }
+        public string? Billing { get; set; }
 
         public string? Get(BackofficeModule module) => module switch
         {
@@ -109,6 +111,7 @@ public class P4BackofficeProductOptions
             BackofficeModule.Email => Email,
             BackofficeModule.Pricing => Pricing,
             BackofficeModule.Support => Support,
+            BackofficeModule.Billing => Billing,
             _ => throw new ArgumentOutOfRangeException(nameof(module), module, null),
         };
     }

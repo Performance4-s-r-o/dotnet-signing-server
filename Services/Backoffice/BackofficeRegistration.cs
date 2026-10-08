@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services.Backoffice.Consents;
+using DotNetSigningServer.Services.Billing;
 using DotNetSigningServer.Services.Backoffice.Documents;
 using DotNetSigningServer.Services.Backoffice.Handlers;
 using DotNetSigningServer.Services.Backoffice.Inbox;
@@ -58,6 +59,7 @@ public static class BackofficeRegistration
         AddEmail(services, snapshot);
         AddPricing(services, snapshot);
         AddSupport(services, snapshot);
+        BillingRegistration.AddBilling(services, snapshot);
 
         return services;
     }
@@ -497,10 +499,10 @@ internal sealed class BackofficeStartupReport(
         if (o.AnyEnabled)
         {
             logger.LogInformation(
-                "Backoffice: Docs={Docs} Consents={Consents} Email={Email} Pricing={Pricing} Support={Support}",
+                "Backoffice: Docs={Docs} Consents={Consents} Email={Email} Pricing={Pricing} Support={Support} Billing={Billing}",
                 o.ModeFor(BackofficeModule.Docs), o.ModeFor(BackofficeModule.Consents),
                 o.ModeFor(BackofficeModule.Email), o.ModeFor(BackofficeModule.Pricing),
-                o.ModeFor(BackofficeModule.Support));
+                o.ModeFor(BackofficeModule.Support), o.ModeFor(BackofficeModule.Billing));
         }
 
         return Task.CompletedTask;
