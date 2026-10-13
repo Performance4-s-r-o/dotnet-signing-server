@@ -69,7 +69,7 @@ namespace DotNetSigningServer.Controllers
                 var pdfaResult = _pdfConversionService.ConvertToPdfA(input);
                 if (requiredCredits > 0)
                 {
-                    await DebitUserAsync(user, requiredCredits);
+                    if (await ChargeOrFailAsync(user, requiredCredits) is { } paymentRequired) return paymentRequired;
                 }
 
                 var conformance = PdfConversionService.FormatConformance(input.Conformance);
@@ -132,7 +132,7 @@ namespace DotNetSigningServer.Controllers
                 var response = await PdfTemplateService.FillAsync(input, user.Id);
                 if (requiredCredits > 0)
                 {
-                    await DebitUserAsync(user, requiredCredits);
+                    if (await ChargeOrFailAsync(user, requiredCredits) is { } paymentRequired) return paymentRequired;
                 }
                 return Ok(response);
             }
@@ -211,7 +211,7 @@ namespace DotNetSigningServer.Controllers
                 }
 
                 var results = await DetectCodesAsync(input.PdfContent, plan);
-                await DebitUserAsync(user, requiredCredits, operation: "find-codes");
+                if (await ChargeOrFailAsync(user, requiredCredits, operation: "find-codes") is { } paymentRequired) return paymentRequired;
                 // `pages`/`credits` let the portal bill its own tenant at the same
                 // rate without opening the PDF a second time. `credits` is the base
                 // rate before any concurrency tier — the tier is this server's own

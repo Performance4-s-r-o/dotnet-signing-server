@@ -72,7 +72,7 @@ public class PdfTemplateService
         return new CreateTemplateResponse { TemplateId = entity.Id };
     }
 
-    public async Task<FillPdfResponse> FillAsync(FillPdfInput input, Guid userId, CancellationToken cancellationToken = default)
+    public virtual async Task<FillPdfResponse> FillAsync(FillPdfInput input, Guid userId, CancellationToken cancellationToken = default)
     {
         if (input.TemplateId == null && string.IsNullOrWhiteSpace(input.PdfContent))
         {
