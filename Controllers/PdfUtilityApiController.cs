@@ -274,7 +274,7 @@ namespace DotNetSigningServer.Controllers
         }
 
         [NonAction]
-        internal async Task<IReadOnlyList<object>> DetectCodesAsync(
+        internal virtual async Task<IReadOnlyList<object>> DetectCodesAsync(
             string base64Pdf,
             ScanPlan plan)
         {

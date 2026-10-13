@@ -5,11 +5,16 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Options;
+using DotNetSigningServer.Resources;
+using DotNetSigningServer.Controllers;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Tests.Helpers;
 using DotNetSigningServer.Tests.Services.Backoffice.Outbox;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +29,35 @@ using Moq;
 using Npgsql;
 
 namespace DotNetSigningServer.Tests.Security;
+
+/// <summary>find-codes rasterises with Ghostscript, which CI does not have; only the charge is under test.</summary>
+internal sealed class NoScanUtilityController(
+    ApplicationDbContext dbContext,
+    IApiAuthService apiAuthService,
+    Microsoft.Extensions.Logging.ILogger<PdfUtilityApiController> logger,
+    ContentLimitGuard limitGuard,
+    IOptions<BillingOptions> billingOptions,
+    IWebHostEnvironment env,
+    PdfTemplateService pdfTemplateService,
+    PdfConversionService pdfConversionService,
+    IStringLocalizer<SharedStrings> localizer)
+    : PdfUtilityApiController(dbContext, apiAuthService, logger, limitGuard, billingOptions, env, pdfTemplateService, pdfConversionService, localizer)
+{
+    internal override Task<IReadOnlyList<object>> DetectCodesAsync(string base64Pdf, ScanPlan plan) =>
+        Task.FromResult<IReadOnlyList<object>>(Array.Empty<object>());
+}
+
+internal sealed class SwapUtilityController : IControllerActivator
+{
+    public object Create(ControllerContext context)
+    {
+        var type = context.ActionDescriptor.ControllerTypeInfo.AsType();
+        if (type == typeof(PdfUtilityApiController)) type = typeof(NoScanUtilityController);
+        return ActivatorUtilities.CreateInstance(context.HttpContext.RequestServices, type);
+    }
+
+    public void Release(ControllerContext context, object controller) => (controller as IDisposable)?.Dispose();
+}
 
 /// <summary>Theory twin of <see cref="DockerFactAttribute"/>.</summary>
 public sealed class DockerTheoryAttribute : TheoryAttribute
@@ -131,6 +165,8 @@ public sealed class DebitRaceFixture : IAsyncLifetime
                 conversion.Setup(s => s.ConvertToPdfA(It.IsAny<ConvertToPdfAInput>())).Returns(pdf);
                 services.RemoveAll<PdfConversionService>();
                 services.AddScoped(_ => conversion.Object);
+
+                services.AddSingleton<IControllerActivator, SwapUtilityController>();
 
                 services.RemoveAll<PdfTemplateService>();
                 services.AddScoped(sp =>
