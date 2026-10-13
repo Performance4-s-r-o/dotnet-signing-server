@@ -464,12 +464,6 @@ internal sealed class BackofficeStartupReport(
                 break;
         }
 
-        if (BackofficeOptionsValidator.IsTestKeyInProduction(o, environment.IsProduction()))
-        {
-            logger.LogWarning("Backoffice: production is using a test key ({KeyPrefix})",
-                BackofficeOptionsValidator.TestKeyPrefix + "…");
-        }
-
         var emailMode = o.ModeFor(BackofficeModule.Email);
         if (emailMode == BackofficeMode.Shadow)
         {

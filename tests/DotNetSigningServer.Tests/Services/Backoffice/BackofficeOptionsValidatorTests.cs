@@ -106,14 +106,34 @@ public class BackofficeOptionsValidatorTests
     }
 
     [Theory]
-    [InlineData("p4sk_test_x", true, true)]
-    [InlineData("p4sk_test_x", false, false)]
-    [InlineData("p4sk_live_x", true, false)]
-    public void TestKeyInProduction(string key, bool production, bool expected)
+    [InlineData("p4sk_live_x", true, true)]
+    [InlineData("p4sk_test_x", false, true)]
+    [InlineData("p4sk_test_x", true, false)]
+    [InlineData("p4sk_live_x", false, false)]
+    public void KeyKindMustMatchEnvironment(string key, bool production, bool valid)
     {
         var options = Options(mode: "On", baseUrl: Url, secretKey: key);
 
-        Assert.Equal(expected, BackofficeOptionsValidator.IsTestKeyInProduction(options, production));
+        var problems = BackofficeOptionsValidator.Validate(options, production);
+
+        if (valid)
+        {
+            Assert.Empty(problems);
+        }
+        else
+        {
+            var problem = Assert.Single(problems);
+            Assert.Contains("P4Backoffice__SecretKey", problem);
+            Assert.Contains(production ? "test key" : "live key", problem);
+        }
+    }
+
+    [Fact]
+    public void KeyKind_IsNotCheckedWhenNothingIsSwitchedOn()
+    {
+        var options = Options(mode: "Off", secretKey: "p4sk_test_x");
+
+        Assert.Empty(BackofficeOptionsValidator.Validate(options, isProduction: true));
     }
 
     [Theory]

@@ -1,5 +1,6 @@
 using System.Net;
 using DotNetSigningServer.Options;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace DotNetSigningServer.Services.Backoffice;
@@ -23,7 +24,12 @@ public static class BackofficeOptionsValidator
     /// </summary>
     public const int MinWebhookSecretBytes = 24;
 
-    public static IReadOnlyList<string> Validate(P4BackofficeProductOptions options)
+    /// <param name="options">The <c>P4Backoffice</c> section.</param>
+    /// <param name="isProduction">
+    /// Whether the host runs in Production. When given, the kind of the secret key must match it
+    /// (production = <c>p4sk_live_</c>, otherwise <c>p4sk_test_</c>); null skips that check.
+    /// </param>
+    public static IReadOnlyList<string> Validate(P4BackofficeProductOptions options, bool? isProduction = null)
     {
         var problems = new List<string>();
 
@@ -60,6 +66,10 @@ public static class BackofficeOptionsValidator
         {
             CheckBaseUrl(problems, options.BaseUrl);
             CheckSecretKey(problems, options.SecretKey);
+            if (isProduction is { } production)
+            {
+                CheckKeyKind(problems, options.SecretKey, production);
+            }
         }
 
         return problems;
@@ -99,11 +109,25 @@ public static class BackofficeOptionsValidator
         }
     }
 
-    /// <summary>A test key in production is allowed (staging-like setups) but worth a warning.</summary>
-    public static bool IsTestKeyInProduction(P4BackofficeProductOptions options, bool isProduction) =>
-        isProduction
-        && options.AnyEnabled
-        && options.SecretKey?.Trim().StartsWith(TestKeyPrefix, StringComparison.Ordinal) == true;
+    /// <summary>
+    /// A key of the wrong kind writes to the wrong data set: a test key in production would
+    /// feed the service's test data, a live key anywhere else would write live data from a
+    /// development or staging host (p4-backoffice #212). Refuse to start either way.
+    /// </summary>
+    private static void CheckKeyKind(List<string> problems, string? value, bool isProduction)
+    {
+        var key = value?.Trim();
+        if (string.IsNullOrEmpty(key)) return;
+
+        if (isProduction && key.StartsWith(TestKeyPrefix, StringComparison.Ordinal))
+        {
+            problems.Add($"{Setting("SecretKey")} is a test key ({TestKeyPrefix}…) but the environment is Production; use the live key ({LiveKeyPrefix}…).");
+        }
+        else if (!isProduction && key.StartsWith(LiveKeyPrefix, StringComparison.Ordinal))
+        {
+            problems.Add($"{Setting("SecretKey")} is a live key ({LiveKeyPrefix}…) but the environment is not Production; use the test key ({TestKeyPrefix}…).");
+        }
+    }
 
     /// <summary>
     /// What may be shown of a key: its kind prefix only (<c>p4sk_live_…</c>), never the secret part.
@@ -199,11 +223,11 @@ public static class BackofficeOptionsValidator
 }
 
 /// <summary>Adapter that runs <see cref="BackofficeOptionsValidator"/> through the options pipeline (ValidateOnStart).</summary>
-internal sealed class BackofficeOptionsValidation : IValidateOptions<P4BackofficeProductOptions>
+internal sealed class BackofficeOptionsValidation(IHostEnvironment environment) : IValidateOptions<P4BackofficeProductOptions>
 {
     public ValidateOptionsResult Validate(string? name, P4BackofficeProductOptions options)
     {
-        var problems = BackofficeOptionsValidator.Validate(options);
+        var problems = BackofficeOptionsValidator.Validate(options, environment.IsProduction());
         return problems.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(problems);
     }
 }
