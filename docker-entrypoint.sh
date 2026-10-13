@@ -10,4 +10,4 @@ if [ -s /app/sentry-release ]; then
     echo "[entrypoint] Sentry release = ${Sentry__Release}"
 fi
 
-exec dotnet dotnet-signing-server.dll
+exec dotnet dotnet-signing-server.dll "$@"

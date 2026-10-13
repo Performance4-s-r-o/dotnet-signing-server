@@ -16,6 +16,9 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Release step (#85): migrate and exit, serve nothing.
+var migrateOnly = args.Contains(DotNetSigningServer.Services.DatabaseMigrator.MigrateArgument);
+
 // Error monitoring. Reads the "Sentry" config section (DSN, Debug,
 // TracesSampleRate). Captures unhandled exceptions plus everything logged at
 // LogError/LogCritical — including LokiExceptionMiddleware's handled-exception
@@ -400,7 +403,9 @@ var app = builder.Build();
 
 // Fail fast on a missing public origin. Every absolute URL we emit — e-mail
 // links, canonical tags, the sitemap — derives from it, so a deployment without
-// it must not start rather than quietly ship dead links.
+// it must not start rather than quietly ship dead links. The migrate step serves
+// nothing and may be given only the database variables.
+if (!migrateOnly)
 {
     var appOptions = app.Services
         .GetRequiredService<Microsoft.Extensions.Options.IOptions<AppOptions>>().Value;
@@ -584,62 +589,69 @@ if (!app.Environment.IsProduction())
     });
 }
 
+// Migrations are a release step, not a side effect of every start (#85). Local dev
+// (UseLocalDb) and an explicit Database:RunMigrationsOnStart (on-prem, single instance)
+// keep the old behaviour; everything else only verifies nothing is pending.
+var runMigrationsOnStart = useLocalDb
+    || builder.Configuration.GetValue<bool>("Database:RunMigrationsOnStart");
+
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    try
+    if (migrateOnly)
     {
-        // Ensure the target schema exists before EF Core looks up __EFMigrationsHistory.
-        // Npgsql's SET search_path at connection open silently ignores missing schemas,
-        // so on a fresh database the history lookup would fail with 42P01.
-        //
-        // CREATE SCHEMA IF NOT EXISTS still needs CREATE on the database even when
-        // the schema already exists. Managed database environments often run
-        // the app as a least-privilege role that lacks DB-level CREATE — in which
-        // case operators are expected to pre-create the schema with the right
-        // ownership. Probe first, then attempt CREATE; tolerate 42501 if the
-        // schema is already there.
-        if (dbContext.Database.IsNpgsql())
+        // Migrate with the migration role (Database:MigrationUser, falls back to the
+        // runtime one), long command timeout, no retries, then exit before anything serves.
+        // The migration credentials are read only here, never by a serving process.
+        var runtimeConnectionString = useLocalDb
+            ? null
+            : EnsureSearchPath(
+                builder.Configuration.GetConnectionString("DefaultConnection")
+                    ?? BuildConnectionStringFromConfiguration(builder.Configuration)
+                    ?? throw new InvalidOperationException("A database connection string is required."),
+                "dotnet_signing");
+        var migrationUser = builder.Configuration["Database:MigrationUser"];
+        using var migrationContext = runtimeConnectionString is null
+            ? null
+            : DotNetSigningServer.Services.DatabaseMigrator.CreateContext(
+                DotNetSigningServer.Services.DatabaseMigrator.BuildMigrationConnectionString(
+                    runtimeConnectionString, migrationUser, builder.Configuration["Database:MigrationPassword"]));
+        try
         {
-            var conn = dbContext.Database.GetDbConnection();
-            if (conn.State != System.Data.ConnectionState.Open)
+            DotNetSigningServer.Services.DatabaseMigrator.EnsureSchemaAndMigrate(migrationContext ?? dbContext, logger);
+            if (migrationContext != null && runtimeConnectionString != null)
             {
-                conn.Open();
-            }
-
-            using (var probe = conn.CreateCommand())
-            {
-                probe.CommandText =
-                    "SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'dotnet_signing')";
-                var schemaExists = (bool)(probe.ExecuteScalar() ?? false);
-
-                if (!schemaExists)
-                {
-                    try
-                    {
-                        dbContext.Database.ExecuteSqlRaw("CREATE SCHEMA IF NOT EXISTS dotnet_signing");
-                    }
-                    catch (Npgsql.PostgresException ex) when (ex.SqlState == "42501")
-                    {
-                        logger.LogCritical(
-                            "Schema 'dotnet_signing' does not exist and the DB role lacks CREATE on database '{Database}'. " +
-                            "Pre-create the schema manually (e.g. CREATE SCHEMA dotnet_signing AUTHORIZATION <role>) or " +
-                            "switch the connection to a dedicated database where the role has CREATE.",
-                            conn.Database);
-                        throw;
-                    }
-                }
+                DotNetSigningServer.Services.DatabaseMigrator.GrantRuntimeAccess(
+                    migrationContext, new Npgsql.NpgsqlConnectionStringBuilder(runtimeConnectionString).Username, logger);
             }
         }
+        catch (Exception ex)
+        {
+            logger.LogCritical(ex, "Database migration failed.");
+            throw;
+        }
 
-        dbContext.Database.Migrate();
+        logger.LogInformation("Database migrations applied; exiting ({Switch}).", DotNetSigningServer.Services.DatabaseMigrator.MigrateArgument);
+        return;
+    }
+
+    try
+    {
+        if (runMigrationsOnStart)
+        {
+            DotNetSigningServer.Services.DatabaseMigrator.EnsureSchemaAndMigrate(dbContext, logger);
+        }
+        else
+        {
+            DotNetSigningServer.Services.DatabaseMigrator.RequireNoPendingMigrations(dbContext, logger);
+        }
     }
     catch (Exception ex)
     {
         // Fail fast so the orchestrator sees a failed deploy.
         // Serving against a half-migrated database silently breaks runtime queries.
-        logger.LogCritical(ex, "Database migration failed — aborting startup.");
+        logger.LogCritical(ex, "Database is not ready — aborting startup.");
         throw;
     }
 
