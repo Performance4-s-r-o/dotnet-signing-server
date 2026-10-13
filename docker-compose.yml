@@ -25,6 +25,12 @@ services:
       - UseLocalDb=false
       - FqdnServerName=${FQDN_SERVER:-localhost}
       - ConnectionStrings__DefaultConnection=Host=${DB_HOST};Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
+      # Schema migrations are a release step (#85): the `migrate` service below (or
+      # `dotnet dotnet-signing-server.dll --migrate`) runs once before the new version
+      # starts. Without it the server refuses to start while migrations are pending.
+      # true restores migrate-on-start (single instance / on-prem only; the runtime
+      # role then needs DDL rights).
+      - Database__RunMigrationsOnStart=${RUN_MIGRATIONS_ON_START:-false}
       - Token__Secret=${TOKEN_SECRET:-}
       # Internal preprocessing bypass — must match the same key on the calling service
       - Billing__AttachmentDebitBypassKey=${BILLING_ATTACHMENT_DEBIT_BYPASS_KEY:-}
@@ -113,6 +119,23 @@ services:
       # only where documents carrying Acrobat boilerplate scripts must still be signed.
       - Limits__RejectActiveContent=${REJECT_ACTIVE_CONTENT:-true}
       - DATA_PROTECTION_KEYS_PATH=/app/data-protection-keys
+
+  # One-shot release step (#85): `docker compose run --rm migrate` before the new
+  # `server` starts. Applies pending EF migrations and exits. It is the only place
+  # that sees the migration role's credentials; the serving process never does.
+  # MIGRATION_DB_USER empty = the runtime role (DB_USER) migrates. When it is a
+  # different role, the step also grants the runtime role access to what it created.
+  migrate:
+    extends:
+      service: server
+    profiles: ["migrate"]
+    restart: "no"
+    command: ["--migrate"]
+    healthcheck:
+      disable: true
+    environment:
+      - Database__MigrationUser=${MIGRATION_DB_USER:-}
+      - Database__MigrationPassword=${MIGRATION_DB_PASSWORD:-}
 
 volumes:
   data_protection_keys:
