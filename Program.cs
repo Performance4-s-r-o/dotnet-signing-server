@@ -235,22 +235,17 @@ builder.Services.Configure<OsTicketOptions>(builder.Configuration.GetSection("Os
 builder.Services.Configure<AppOptions>(builder.Configuration);
 builder.Services.AddAuthentication(options =>
     {
-        options.DefaultScheme = "SmartAuth";
-        options.DefaultAuthenticateScheme = "SmartAuth";
+        options.DefaultScheme = DotNetSigningServer.Services.AuthenticationSchemeSelection.PolicySchemeName;
+        options.DefaultAuthenticateScheme = DotNetSigningServer.Services.AuthenticationSchemeSelection.PolicySchemeName;
         options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
     })
-    .AddPolicyScheme("SmartAuth", "SmartAuth", options =>
+    .AddPolicyScheme(
+        DotNetSigningServer.Services.AuthenticationSchemeSelection.PolicySchemeName,
+        DotNetSigningServer.Services.AuthenticationSchemeSelection.PolicySchemeName,
+        options =>
     {
-        options.ForwardDefaultSelector = context =>
-        {
-            var authHeader = context.Request.Headers["Authorization"].ToString();
-            if (!string.IsNullOrWhiteSpace(authHeader) &&
-                authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            {
-                return DotNetSigningServer.Services.ApiKeyAuthenticationHandler.SchemeName;
-            }
-            return CookieAuthenticationDefaults.AuthenticationScheme;
-        };
+        // Bearer (API key) only on /api/*; the web UI is cookie-only (#76).
+        options.ForwardDefaultSelector = DotNetSigningServer.Services.AuthenticationSchemeSelection.Select;
     })
     .AddScheme<AuthenticationSchemeOptions, DotNetSigningServer.Services.ApiKeyAuthenticationHandler>(
         DotNetSigningServer.Services.ApiKeyAuthenticationHandler.SchemeName, _ => { })

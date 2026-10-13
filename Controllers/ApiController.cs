@@ -74,8 +74,12 @@ namespace DotNetSigningServer.Controllers
 
         protected async Task<User?> GetAuthenticatedUserAsync(string? originHeader = null)
         {
-            // Prefer cookie-authenticated user
-            if (User?.Identity?.IsAuthenticated == true)
+            // Prefer the principal the authentication middleware established. A cookie
+            // session counts only on actions the web UI calls from the browser
+            // ([AllowCookieSession]); everywhere else /api is API key only (#76).
+            if (User?.Identity?.IsAuthenticated == true
+                && (User.Identity.AuthenticationType == ApiKeyAuthenticationHandler.SchemeName
+                    || HttpContext.GetEndpoint()?.Metadata.GetMetadata<AllowCookieSessionAttribute>() != null))
             {
                 var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
                                   ?? User.FindFirst("sub")?.Value;
@@ -91,7 +95,12 @@ namespace DotNetSigningServer.Controllers
                 }
             }
 
-            // Fallback to API token
+            // Fallback to API token. Same boundary as SmartAuth: a bearer token is an API
+            // credential only under /api, whatever route a future action declares (#76).
+            if (!AuthenticationSchemeSelection.IsApiPath(Request.Path))
+            {
+                return null;
+            }
             Logger.LogDebug("Validating API token from Authorization header");
             var tokenUser = await ApiAuthService.ValidateTokenAsync(Request.Headers["Authorization"].ToString(), originHeader, HttpContext.Connection.RemoteIpAddress);
             if (tokenUser == null)

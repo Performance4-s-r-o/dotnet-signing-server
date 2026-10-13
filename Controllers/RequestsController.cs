@@ -1,3 +1,4 @@
+using DotNetSigningServer.Services;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Resources;
@@ -9,7 +10,7 @@ using System.Security.Claims;
 
 namespace DotNetSigningServer.Controllers;
 
-[Authorize]
+[CookieAuthorize]
 public class RequestsController : Controller
 {
     private const int PageSize = 50;

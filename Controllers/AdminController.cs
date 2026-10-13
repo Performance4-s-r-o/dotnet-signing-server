@@ -17,7 +17,7 @@ using DotNetSigningServer.Services.Billing;
 
 namespace DotNetSigningServer.Controllers;
 
-[Authorize(Policy = "AdminOnly")]
+[CookieAuthorize(Policy = "AdminOnly")]
 public class AdminController : Controller
 {
     private readonly ApplicationDbContext _dbContext;

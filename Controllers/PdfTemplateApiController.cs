@@ -32,6 +32,7 @@ namespace DotNetSigningServer.Controllers
         }
 
         [HttpPost("/api/pdf-template")]
+        [AllowCookieSession] // template builder (Views/Home/TemplateBuilder.cshtml)
         public async Task<IActionResult> CreatePdfTemplate([FromBody] CreateTemplateInput input)
         {
             var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
@@ -69,6 +70,7 @@ namespace DotNetSigningServer.Controllers
         }
 
         [HttpGet("/api/pdf-template/{templateId:guid}")]
+        [AllowCookieSession] // template builder (Views/Home/TemplateBuilder.cshtml)
         [ProducesResponseType(typeof(TemplateDetail), StatusCodes.Status200OK)]
         public async Task<ActionResult<TemplateDetail>> GetPdfTemplate(Guid templateId)
         {
@@ -88,6 +90,7 @@ namespace DotNetSigningServer.Controllers
         }
 
         [HttpPut("/api/pdf-template/{templateId:guid}")]
+        [AllowCookieSession] // template builder (Views/Home/TemplateBuilder.cshtml)
         public async Task<IActionResult> UpdatePdfTemplate(Guid templateId, [FromBody] UpdateTemplateInput input)
         {
             var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
@@ -129,6 +132,7 @@ namespace DotNetSigningServer.Controllers
         }
 
         [HttpPost("/api/ai/detect-fields")]
+        [AllowCookieSession] // template builder (Views/Home/TemplateBuilder.cshtml)
         public async Task<IActionResult> DetectTemplateFields([FromBody] AiDetectFieldsInput input)
         {
             var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
