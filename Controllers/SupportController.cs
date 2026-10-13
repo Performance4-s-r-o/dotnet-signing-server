@@ -29,7 +29,7 @@ namespace DotNetSigningServer.Controllers;
 /// Otherwise (Off, Shadow) the ticket goes to osTicket directly, as before; that path needs the
 /// OsTicket configuration, and with neither the routes 404 and the nav entry is hidden.
 /// </summary>
-[Authorize]
+[CookieAuthorize]
 public class SupportController : Controller
 {
     /// <summary>How long a submission waits for the service's answer before showing "received".</summary>

@@ -92,7 +92,7 @@ public class AccountController : Controller
         return entry.Count > MaxAttemptsPerWindow;
     }
 
-    [Authorize]
+    [CookieAuthorize]
     [HttpGet("/Account")]
     public async Task<IActionResult> Index()
     {
@@ -349,7 +349,7 @@ public class AccountController : Controller
         return RedirectToAction(nameof(TwoFactor));
     }
 
-    [Authorize]
+    [CookieAuthorize]
     [HttpPost("/Account/SignOut")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SignOutUser()
@@ -599,7 +599,7 @@ public class AccountController : Controller
         return RedirectToAction(nameof(SignIn));
     }
 
-    [Authorize]
+    [CookieAuthorize]
     [HttpGet("/Account/Settings")]
     public async Task<IActionResult> Settings()
     {
@@ -612,7 +612,7 @@ public class AccountController : Controller
         return View(user);
     }
 
-    [Authorize]
+    [CookieAuthorize]
     [HttpPost("/Account/Settings")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Settings(bool emailNotificationsEnabled)
@@ -631,7 +631,7 @@ public class AccountController : Controller
         return RedirectToAction(nameof(Settings));
     }
 
-    [Authorize]
+    [CookieAuthorize]
     [HttpPost("/Account/Settings/MaxConcurrent")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> UpdateMaxConcurrent(int? maxConcurrent)
@@ -662,7 +662,7 @@ public class AccountController : Controller
         return RedirectToAction(nameof(Settings));
     }
 
-    [Authorize]
+    [CookieAuthorize]
     [HttpPost("/Account/Settings/QueueTimeout")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> UpdateQueueTimeout(int? queueTimeoutSeconds)
@@ -681,7 +681,7 @@ public class AccountController : Controller
         return RedirectToAction(nameof(Settings));
     }
 
-    [Authorize]
+    [CookieAuthorize]
     [HttpGet("/Account/ChangePassword")]
     public async Task<IActionResult> ChangePassword()
     {
@@ -698,7 +698,7 @@ public class AccountController : Controller
         return View(new ChangePasswordViewModel());
     }
 
-    [Authorize]
+    [CookieAuthorize]
     [HttpPost("/Account/ChangePassword")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ChangePassword(ChangePasswordViewModel model)
@@ -901,7 +901,7 @@ public class AccountController : Controller
     }
 
     /// <summary>Re-consent: documents the signed-in user still has to confirm (see <c>RequireCurrentConsentFilter</c>).</summary>
-    [Authorize]
+    [CookieAuthorize]
     [HttpGet("/Account/Consent")]
     public async Task<IActionResult> Consent(
         string? returnUrl,
@@ -927,7 +927,7 @@ public class AccountController : Controller
         return View(model);
     }
 
-    [Authorize]
+    [CookieAuthorize]
     [HttpPost("/Account/Consent")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Consent(

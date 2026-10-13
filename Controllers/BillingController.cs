@@ -14,7 +14,7 @@ using System.Security.Claims;
 
 namespace DotNetSigningServer.Controllers;
 
-[Authorize]
+[CookieAuthorize]
 public class BillingController : Controller
 {
     private readonly ApplicationDbContext _dbContext;

@@ -121,7 +121,7 @@ public class HomeController : Controller
     }
 
     [HttpGet("/template-builder")]
-    [Authorize]
+    [CookieAuthorize]
     public IActionResult TemplateBuilder()
     {
         var aiEnabled = _aiOptions.Enabled
@@ -132,7 +132,7 @@ public class HomeController : Controller
     }
 
     [HttpGet("/templates")]
-    [Authorize]
+    [CookieAuthorize]
     public async Task<IActionResult> Templates()
     {
         var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
@@ -147,7 +147,7 @@ public class HomeController : Controller
     }
 
     [HttpGet("/templates/{templateId:guid}/docs")]
-    [Authorize]
+    [CookieAuthorize]
     public async Task<IActionResult> TemplateDocs(Guid templateId)
     {
         var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
