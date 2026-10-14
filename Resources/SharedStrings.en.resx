@@ -188,6 +188,11 @@
   <data name="InvalidBase64" xml:space="preserve"><value>PdfContent is not valid base64.</value></data>
   <data name="NoCreditsRemaining" xml:space="preserve"><value>No credits remaining. Please purchase more to continue.</value></data>
   <data name="NotEnoughCredits" xml:space="preserve"><value>Not enough credits. {0} credit(s) required.</value></data>
+  <data name="Error_IDEMPOTENCY_KEY_INVALID" xml:space="preserve"><value>The Idempotency-Key header must be 1–128 characters: letters, digits, '-', '_', '.' or ':'.</value></data>
+  <data name="Error_IDEMPOTENCY_KEY_REUSED" xml:space="preserve"><value>This Idempotency-Key was already used for a different request.</value></data>
+  <data name="Error_OPERATION_IN_PROGRESS" xml:space="preserve"><value>The operation with this Idempotency-Key is still running. Try again shortly.</value></data>
+  <data name="Error_OPERATION_RESULT_EXPIRED" xml:space="preserve"><value>The operation completed, but its result is no longer stored.</value></data>
+  <data name="Error_OPERATION_NOT_FOUND" xml:space="preserve"><value>No operation with this ID was found.</value></data>
 
   <!-- Middleware -->
   <data name="TooManyRequests" xml:space="preserve"><value>Too many concurrent requests. Please slow down.</value></data>

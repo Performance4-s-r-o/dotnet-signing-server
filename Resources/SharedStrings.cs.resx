@@ -188,6 +188,11 @@
   <data name="InvalidBase64" xml:space="preserve"><value>PdfContent není platný formát base64.</value></data>
   <data name="NoCreditsRemaining" xml:space="preserve"><value>Nemáte žádné zbývající kredity. Pro pokračování si prosím zakupte další.</value></data>
   <data name="NotEnoughCredits" xml:space="preserve"><value>Nedostatek kreditů. Je potřeba {0} kredit(ů).</value></data>
+  <data name="Error_IDEMPOTENCY_KEY_INVALID" xml:space="preserve"><value>Hlavička Idempotency-Key musí mít 1–128 znaků: písmena, číslice, '-', '_', '.' nebo ':'.</value></data>
+  <data name="Error_IDEMPOTENCY_KEY_REUSED" xml:space="preserve"><value>Tento Idempotency-Key už byl použit pro jiný požadavek.</value></data>
+  <data name="Error_OPERATION_IN_PROGRESS" xml:space="preserve"><value>Operace s tímto Idempotency-Key ještě probíhá. Zkuste to za chvíli znovu.</value></data>
+  <data name="Error_OPERATION_RESULT_EXPIRED" xml:space="preserve"><value>Operace byla dokončena, ale její výsledek už není uložen.</value></data>
+  <data name="Error_OPERATION_NOT_FOUND" xml:space="preserve"><value>Operace s tímto ID nebyla nalezena.</value></data>
 
   <!-- Middleware -->
   <data name="TooManyRequests" xml:space="preserve"><value>Příliš mnoho souběžných požadavků. Zpomalte prosím.</value></data>

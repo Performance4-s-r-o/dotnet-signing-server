@@ -183,6 +183,9 @@ builder.Services.AddSingleton<ContentLimitGuard>();
 builder.Services.AddSingleton<PdfSafetyGuard>();
 builder.Services.AddScoped<IAutoRechargeService, AutoRechargeService>();
 builder.Services.AddHostedService<PresignCleanupService>();
+// Paid API operations: state, reservation, idempotent retries (#77, #82).
+builder.Services.AddScoped<DotNetSigningServer.Services.Operations.ApiOperationService>();
+builder.Services.AddHostedService<DotNetSigningServer.Services.Operations.OperationMaintenanceService>();
 // PriceChangeMonitorService is registered by AddP4BackofficeIntegration, only while
 // P4Backoffice:Modules:Pricing is not On (then the price.* events replace it).
 builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();
@@ -491,7 +494,8 @@ app.Use(async (context, next) =>
             }
             context.Response.Headers["Access-Control-Allow-Origin"] = origin;
             context.Response.Headers["Vary"] = "Origin";
-            context.Response.Headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type,X-P4PDF-Attachment-Billing-Bypass";
+            context.Response.Headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type,X-P4PDF-Attachment-Billing-Bypass,Idempotency-Key";
+            context.Response.Headers["Access-Control-Expose-Headers"] = "X-Operation-Id,X-Operation-State,Idempotent-Replayed,Retry-After";
             context.Response.Headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS";
         }
 

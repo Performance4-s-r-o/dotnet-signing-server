@@ -80,7 +80,7 @@ namespace DotNetSigningServer.Services
             return (preSignedPdfPath, hashToSign);
         }
 
-        public string HandleSign(SignInput input, string presignedPdfPath, string certificatePem, string fieldName, string? tsaUrl = null, string? tsaUsername = null, string? tsaPassword = null, TsaEndpoint? tsaBackup = null)
+        public virtual string HandleSign(SignInput input, string presignedPdfPath, string certificatePem, string fieldName, string? tsaUrl = null, string? tsaUsername = null, string? tsaPassword = null, TsaEndpoint? tsaBackup = null)
         {
             if (!File.Exists(presignedPdfPath))
             {

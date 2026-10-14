@@ -22,10 +22,6 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
 {
     private const string TimestampQueryContentType = "application/timestamp-query";
 
-    // Shared handler/client: SocketsHttpHandler pools connections, so allocating one
-    // per signing request would exhaust sockets under load.
-    private static readonly HttpClient SharedClient = CreateGuardedClient();
-
     public PinnedIpTsaClient(string url, string? username, string? password)
         : base(url, username, password)
     {
@@ -69,6 +65,19 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
         return responseBytes;
     }
 
+    /// <summary>
+    /// Per authority. The deadlines have to nest — portal (60 s) &gt; this server's /api/sign &gt;
+    /// TSA — and a backup is tried after the primary, so two of these must fit well inside the
+    /// portal's wait (#77). At 30 s each, a slow primary plus backup outlasted the portal and the
+    /// signature finished for nobody.
+    /// </summary>
+    internal static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
+
+    // Shared handler/client: SocketsHttpHandler pools connections, so allocating one
+    // per signing request would exhaust sockets under load. Declared after RequestTimeout:
+    // static fields initialise in order.
+    private static readonly HttpClient SharedClient = CreateGuardedClient();
+
     private static HttpClient CreateGuardedClient() =>
-        PinnedIpHttp.CreateClient("TSA_HOST_NOT_ALLOWED", TimeSpan.FromSeconds(30));
+        PinnedIpHttp.CreateClient("TSA_HOST_NOT_ALLOWED", RequestTimeout);
 }

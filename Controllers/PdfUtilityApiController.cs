@@ -2,6 +2,7 @@ using DotNetSigningServer.Data;
 using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Services.Operations;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
 using Microsoft.AspNetCore.Mvc;
@@ -61,22 +62,17 @@ namespace DotNetSigningServer.Controllers
             {
                 var pageCount = CountPagesFromBase64(input.PdfContent);
                 var requiredCredits = CalculateCreditsForPages(pageCount);
-                if (LacksCredits(user, requiredCredits))
-                {
-                    return PaymentRequired(user, requiredCredits);
-                }
 
-                var pdfaResult = _pdfConversionService.ConvertToPdfA(input);
-                if (requiredCredits > 0)
+                // Reserved before the conversion; 402 here means it never ran.
+                return await RunOperationAsync(user, "pdfa", ApiOperationService.Fingerprint("pdfa", input), requiredCredits, _ =>
                 {
-                    if (await ChargeOrFailAsync(user, requiredCredits) is { } paymentRequired) return paymentRequired;
-                }
-
-                var conformance = PdfConversionService.FormatConformance(input.Conformance);
-                return PdfOrJsonResult(
-                    pdfaResult,
-                    jsonBody: new { result = pdfaResult, conformance },
-                    onPdfResponse: resp => resp.Headers["X-PDF-Conformance"] = conformance);
+                    var pdfaResult = _pdfConversionService.ConvertToPdfA(input);
+                    var conformance = PdfConversionService.FormatConformance(input.Conformance);
+                    return Task.FromResult(new PaidResult(
+                        new { result = pdfaResult, conformance },
+                        pdfaResult,
+                        new Dictionary<string, string> { ["X-PDF-Conformance"] = conformance }));
+                });
             }
             catch (Exception ex)
             {
@@ -122,19 +118,12 @@ namespace DotNetSigningServer.Controllers
 
             try
             {
+                var fingerprint = ApiOperationService.Fingerprint("fill-pdf", input);
                 var (pdfBase64, pageCount) = await ResolvePdfForFillAsync(input, user.Id);
                 var requiredCredits = CalculateCreditsForPages(pageCount) * (input.Data?.Count ?? 0);
-                if (LacksCredits(user, requiredCredits))
-                {
-                    return PaymentRequired(user, requiredCredits);
-                }
 
-                var response = await PdfTemplateService.FillAsync(input, user.Id);
-                if (requiredCredits > 0)
-                {
-                    if (await ChargeOrFailAsync(user, requiredCredits) is { } paymentRequired) return paymentRequired;
-                }
-                return Ok(response);
+                return await RunOperationAsync(user, "fill-pdf", fingerprint, requiredCredits, async ct =>
+                    new PaidResult(await PdfTemplateService.FillAsync(input, user.Id, ct)));
             }
             catch (ApiValidationException ex)
             {
@@ -205,23 +194,21 @@ namespace DotNetSigningServer.Controllers
             {
                 var pageCount = CountPagesFromBase64(input.PdfContent);
                 var requiredCredits = CalculateCreditsForPages(pageCount);
-                if (LacksCredits(user, requiredCredits))
-                {
-                    return PaymentRequired(user, requiredCredits);
-                }
 
-                var results = await DetectCodesAsync(input.PdfContent, plan);
-                if (await ChargeOrFailAsync(user, requiredCredits, operation: "find-codes") is { } paymentRequired) return paymentRequired;
-                // `pages`/`credits` let the portal bill its own tenant at the same
-                // rate without opening the PDF a second time. `credits` is the base
-                // rate before any concurrency tier — the tier is this server's own
-                // throttle and must not leak into the caller's price list.
-                return Ok(new
+                return await RunOperationAsync(user, "find-codes", ApiOperationService.Fingerprint("find-codes", input), requiredCredits, async _ =>
                 {
-                    results,
-                    pages = pageCount,
-                    credits = requiredCredits,
-                    truncated = pageCount > MaxFindCodesRasterPages,
+                    var results = await DetectCodesAsync(input.PdfContent, plan);
+                    // `pages`/`credits` let the portal bill its own tenant at the same
+                    // rate without opening the PDF a second time. `credits` is the base
+                    // rate before any concurrency tier — the tier is this server's own
+                    // throttle and must not leak into the caller's price list.
+                    return new PaidResult(new
+                    {
+                        results,
+                        pages = pageCount,
+                        credits = requiredCredits,
+                        truncated = pageCount > MaxFindCodesRasterPages,
+                    });
                 });
             }
             catch (Exception ex)

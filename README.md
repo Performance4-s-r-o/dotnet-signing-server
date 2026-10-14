@@ -73,6 +73,30 @@ The two-step `presign` → `sign` flow exists so the private key never leaves th
 signer's device: the server returns a digest, the client signs it locally, and
 the server injects the resulting PKCS#7 container into the prepared placeholder.
 
+### Retries, operation state and credits
+
+Every paid call (`sign`, `sign-pfx`, `timestamp`, `extend-signature`,
+`visual-sign`, `seal`, `attachment`, `convert/pdfa`, `fill-pdf`, `find-codes`,
+`ai/detect-fields`, `ai/extract-data`) is a durable operation:
+
+- **Credits are reserved before the work** and returned when it fails. `402`
+  (`code: INSUFFICIENT_CREDITS`) means nothing ran.
+- **`Idempotency-Key: <id>`** (optional, 1–128 characters `A-Z a-z 0-9 - _ . :`)
+  makes a retry safe: the same key with the same request returns the stored
+  result (header `Idempotent-Replayed: true`) without working or charging again,
+  for 60 minutes. `/api/sign` is keyed by its presign even without the header,
+  and the presign is kept until the signature succeeds, so a failed attempt can
+  be retried.
+- While an attempt runs, the same key gets `409 OPERATION_IN_PROGRESS` with
+  `Retry-After`; a key reused for a different request gets
+  `422 IDEMPOTENCY_KEY_REUSED`.
+- Responses carry `X-Operation-Id` and `X-Operation-State`
+  (`running`, `completed`, `failed`, `failed_uncertain`).
+- `GET /api/operations/{id}` reports the state (free): `completed` = done and
+  charged, `failed` = nothing irreversible happened, `failed_uncertain` = an
+  external step (TSA, model) may have happened, but nothing was delivered or
+  charged. `404` = the request never arrived. States are kept for 7 days.
+
 ### Templates and utilities
 
 | Endpoint | Purpose |

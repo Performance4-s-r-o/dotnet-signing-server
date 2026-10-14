@@ -2,6 +2,7 @@ using DotNetSigningServer.Data;
 using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Services.Operations;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
 using Microsoft.AspNetCore.Mvc;
@@ -10,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using iText.Kernel.Pdf;
+using System.Text.Json;
 
 namespace DotNetSigningServer.Controllers
 {
@@ -38,6 +40,16 @@ namespace DotNetSigningServer.Controllers
         /// </summary>
         protected PdfSafetyGuard SafetyGuard =>
             HttpContext.RequestServices.GetRequiredService<PdfSafetyGuard>();
+
+        /// <summary>Operation state and reservations (#77, #82). Request-scoped, like <see cref="SafetyGuard"/>.</summary>
+        protected ApiOperationService Operations =>
+            HttpContext.RequestServices.GetRequiredService<ApiOperationService>();
+
+        /// <summary>The caller's operation id; the portal sends its <c>operationId</c> here.</summary>
+        public const string IdempotencyKeyHeader = "Idempotency-Key";
+        public const string OperationIdHeader = "X-Operation-Id";
+        public const string OperationStateHeader = "X-Operation-State";
+        public const string ReplayedHeader = "Idempotent-Replayed";
 
         protected ApiControllerBase(
             ApplicationDbContext dbContext,
@@ -140,84 +152,253 @@ namespace DotNetSigningServer.Controllers
             return (user, null);
         }
 
-        protected async Task<bool> DebitUserAsync(User user, int debit = 1, string? operation = null, Guid? documentId = null)
+        /// <summary>What a paid operation produced.</summary>
+        /// <param name="Body">The JSON body, exactly as answered (and replayed).</param>
+        /// <param name="PdfBase64">Set when the body's <c>result</c> is a PDF, so <c>Accept: application/pdf</c> gets the bytes.</param>
+        /// <param name="PdfHeaders">Headers that go with a raw PDF answer.</param>
+        protected sealed record PaidResult(object Body, string? PdfBase64 = null, IReadOnlyDictionary<string, string>? PdfHeaders = null);
+
+        /// <summary>
+        /// Runs a paid operation under the state model of #77 with the reservation of #82:
+        ///
+        /// <list type="number">
+        /// <item>finds or creates the operation for <c>Idempotency-Key</c> (or the presign) and
+        /// reserves <paramref name="baseCost"/> × tier — 402 before any work when that fails;</item>
+        /// <item>a completed operation is answered from the stored result, charged once;</item>
+        /// <item>a failure returns the reservation and is rethrown for the endpoint to map as before,
+        /// marked <c>failed_uncertain</c> when an external step (TSA, model) may have happened;</item>
+        /// <item>success stores the result and charges in one transaction, then answers.</item>
+        /// </list>
+        ///
+        /// Without a key the behaviour seen by the caller is the old one, except that the
+        /// credits are taken before the work rather than after it.
+        /// </summary>
+        /// <param name="work">Gets a token that is the request's own only when nobody could fetch the
+        /// result later: a keyed operation runs to the end even if the caller gave up, so the
+        /// retry finds it.</param>
+        /// <param name="afterCompleted">Best-effort clean-up once the result is stored (presign files).</param>
+        protected async Task<IActionResult> RunOperationAsync(
+            User user,
+            string operation,
+            string fingerprint,
+            int baseCost,
+            Func<CancellationToken, Task<PaidResult>> work,
+            string? presignId = null,
+            Func<Task>? afterCompleted = null)
         {
-            if (debit <= 0)
+            string? clientKey = null;
+            if (Request.Headers.TryGetValue(IdempotencyKeyHeader, out var keyValues))
             {
-                return true;
-            }
-
-            // Tier is computed by UserConcurrencyMiddleware at semaphore acquisition (atomic with
-            // WaitAsync success). Reading it from HttpContext.Items avoids the SemaphoreSlim.CurrentCount
-            // race where multiple requests can observe the same drifting inFlight value near tier boundaries.
-            var tier = HttpContext?.Items[DotNetSigningServer.Middleware.UserConcurrencyMiddleware.TierItemKey] is int t ? t : 1;
-            var effectiveDebit = debit * tier;
-
-            // Enterprise users: skip the credits decrement but still record usage for billing
-            if (!user.IsEnterprise)
-            {
-                var rowsAffected = await DbContext.Database.ExecuteSqlRawAsync(
-                    "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" - {0} WHERE \"Id\" = {1} AND \"CreditsRemaining\" >= {2}",
-                    effectiveDebit, user.Id, effectiveDebit);
-
-                if (rowsAffected == 0)
+                clientKey = keyValues.ToString();
+                if (!ApiOperationService.IsValidOperationId(clientKey))
                 {
-                    return false;
+                    return BadRequest(new { code = "IDEMPOTENCY_KEY_INVALID", message = Localizer["Error_IDEMPOTENCY_KEY_INVALID"].Value });
                 }
-
-                // Refresh the in-memory entity to reflect the new value
-                await DbContext.Entry(user).ReloadAsync();
             }
 
-            // Track usage for reporting (base cost, tier, effective debit)
+            var tier = HttpContext.Items[DotNetSigningServer.Middleware.UserConcurrencyMiddleware.TierItemKey] is int t ? t : 1;
+            var begin = await Operations.BeginAsync(
+                new OperationRequest(user.Id, user.IsEnterprise, operation, clientKey, fingerprint, baseCost, tier, presignId),
+                HttpContext.RequestAborted);
+            var op = begin.Operation;
+            if (!string.IsNullOrEmpty(op.OperationId)) Response.Headers[OperationIdHeader] = op.OperationId;
+            Response.Headers[OperationStateHeader] = op.State;
+
+            switch (begin.Outcome)
+            {
+                case OperationStart.Replay:
+                    return ReplayResult(op);
+                case OperationStart.InProgress:
+                    Response.Headers.RetryAfter = "5";
+                    return Conflict(new { code = "OPERATION_IN_PROGRESS", message = Localizer["Error_OPERATION_IN_PROGRESS"].Value, operationId = op.OperationId, state = op.State });
+                case OperationStart.KeyReused:
+                    Response.Headers.Remove(OperationIdHeader);
+                    Response.Headers.Remove(OperationStateHeader);
+                    return UnprocessableEntity(new { code = "IDEMPOTENCY_KEY_REUSED", message = Localizer["Error_IDEMPOTENCY_KEY_REUSED"].Value });
+                case OperationStart.ResultExpired:
+                    return StatusCode(StatusCodes.Status410Gone, new { code = "OPERATION_RESULT_EXPIRED", message = Localizer["Error_OPERATION_RESULT_EXPIRED"].Value, operationId = op.OperationId, state = op.State });
+                case OperationStart.InsufficientCredits:
+                    Logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Reservation failed for user {UserId}", user.Id);
+                    var price = baseCost * tier;
+                    var message = price > 1 ? Localizer["NotEnoughCredits", price].Value : Localizer["NoCreditsRemaining"].Value;
+                    return StatusCode(StatusCodes.Status402PaymentRequired, new { code = ApiOperationService.InsufficientCreditsCode, message });
+            }
+
+            var attempt = begin.Attempt;
+            // Whether anybody can come back for the result: the caller's key, or the presign.
+            var retrievable = op.ClientKey || presignId != null;
+            if (HttpContext.RequestAborted.IsCancellationRequested)
+            {
+                await Operations.FailAsync(op, attempt, uncertain: false, "CLIENT_ABORTED");
+                return StatusCode(499);
+            }
+
+            PaidResult result;
             try
             {
-                DbContext.UsageRecords.Add(new UsageRecord
-                {
-                    UserId = user.Id,
-                    DocumentId = documentId,
-                    Count = effectiveDebit,
-                    BaseCost = debit,
-                    Tier = tier,
-                    Operation = operation,
-                    CreatedAt = DateTimeOffset.UtcNow,
-                });
-                await DbContext.SaveChangesAsync();
+                result = await work(retrievable ? CancellationToken.None : HttpContext.RequestAborted);
             }
             catch (Exception ex)
             {
-                // Usage tracking is best-effort — never fail the request because of it
-                Logger.LogWarning(ex, "Failed to write UsageRecord for user {UserId}", user.Id);
+                var uncertain = IsUncertainFailure(ex);
+                try
+                {
+                    await Operations.FailAsync(op, attempt, uncertain, FailureCode(ex));
+                }
+                catch (Exception releaseError)
+                {
+                    // The lease expires and the sweep returns the credits.
+                    Logger.LogError(releaseError, "Could not release operation {OperationId}", op.OperationId);
+                }
+                Response.Headers[OperationStateHeader] = uncertain ? ApiOperationState.FailedUncertain : ApiOperationState.Failed;
+                throw;
             }
 
-            // Check auto-recharge threshold (fire-and-forget to not block the API response)
-            // Skip for Enterprise users — they're billed manually
-            if (!user.IsEnterprise && user.AutoRechargeEnabled && user.AutoRechargeQuantity > 0)
+            if (!retrievable && HttpContext.RequestAborted.IsCancellationRequested)
             {
-                if (user.CreditsRemaining < AutoRechargeService.ThresholdCredits)
+                // Nobody is listening and nobody can ask again: do not charge for it.
+                await Operations.FailAsync(op, attempt, uncertain: false, "CLIENT_ABORTED");
+                return StatusCode(499);
+            }
+
+            var jsonOptions = HttpContext.RequestServices
+                .GetRequiredService<IOptions<Microsoft.AspNetCore.Mvc.JsonOptions>>().Value.JsonSerializerOptions;
+            var stored = new StoredResult(
+                StatusCodes.Status200OK,
+                JsonSerializer.Serialize(result.Body, result.Body.GetType(), jsonOptions),
+                result.PdfBase64 != null,
+                result.PdfHeaders);
+
+            bool completed;
+            try
+            {
+                completed = await Operations.CompleteAsync(op, attempt, stored);
+            }
+            catch
+            {
+                // Conditional on the attempt: a no-op if the commit did go through.
+                try { await Operations.FailAsync(op, attempt, uncertain: true, "COMPLETE_FAILED"); }
+                catch (Exception releaseError) { Logger.LogError(releaseError, "Could not release operation {OperationId}", op.OperationId); }
+                throw;
+            }
+            if (!completed)
+            {
+                // The lease ran out and the credits went back: this result is not ours to hand out.
+                throw new InvalidOperationException($"Operation {op.OperationId} lost its lease before completion.");
+            }
+
+            Response.Headers[OperationStateHeader] = ApiOperationState.Completed;
+            if (afterCompleted != null)
+            {
+                try { await afterCompleted(); }
+                catch (Exception ex) { Logger.LogWarning(ex, "Post-completion clean-up failed for {OperationId}", op.OperationId); }
+            }
+            await TriggerAutoRechargeIfLowAsync(user);
+
+            if (result.PdfBase64 != null)
+            {
+                return PdfOrJsonResult(result.PdfBase64, result.Body, resp =>
                 {
-                    var userId = user.Id;
-                    var serviceScopeFactory = HttpContext.RequestServices.GetRequiredService<IServiceScopeFactory>();
-                    _ = Task.Run(async () =>
+                    foreach (var (name, value) in result.PdfHeaders ?? new Dictionary<string, string>()) resp.Headers[name] = value;
+                });
+            }
+            return Ok(result.Body);
+        }
+
+        /// <summary>The first answer again, without doing the work or charging.</summary>
+        private IActionResult ReplayResult(ApiOperation op)
+        {
+            var stored = Operations.ReadResult(op);
+            Response.Headers[ReplayedHeader] = "true";
+            if (stored.IsPdf && ClientPrefersPdf(Request.Headers["Accept"].ToString()))
+            {
+                using var doc = JsonDocument.Parse(stored.Json);
+                if (doc.RootElement.TryGetProperty("result", out var pdf) && pdf.ValueKind == JsonValueKind.String)
+                {
+                    try
                     {
-                        try
-                        {
-                            using var scope = serviceScopeFactory.CreateScope();
-                            var rechargeService = scope.ServiceProvider.GetRequiredService<IAutoRechargeService>();
-                            await rechargeService.TryAutoRechargeAsync(userId);
-                        }
-                        catch (Exception ex)
-                        {
-                            using var scope = serviceScopeFactory.CreateScope();
-                            scope.ServiceProvider.GetService<ILoggerFactory>()
-                                ?.CreateLogger("AutoRecharge")
-                                .LogError(ex, "Background auto-recharge failed for user {UserId}", userId);
-                        }
-                    });
+                        var bytes = Convert.FromBase64String(pdf.GetString()!);
+                        foreach (var (name, value) in stored.PdfHeaders ?? new Dictionary<string, string>()) Response.Headers[name] = value;
+                        return File(bytes, "application/pdf");
+                    }
+                    catch (FormatException)
+                    {
+                        // Same fallback as PdfOrJsonResult: the JSON still carries it.
+                    }
                 }
             }
+            return new ContentResult
+            {
+                Content = stored.Json,
+                ContentType = "application/json; charset=utf-8",
+                StatusCode = stored.StatusCode,
+            };
+        }
 
-            return true;
+        /// <summary>
+        /// A failure after which an external effect may have happened: the TSA or the model was
+        /// called and did not answer clearly. Nothing was delivered either way.
+        /// </summary>
+        internal static bool IsUncertainFailure(Exception ex)
+        {
+            for (var e = ex; e != null; e = e.InnerException)
+            {
+                if (e is TsaCommunicationException or TimeoutException or HttpRequestException or OperationCanceledException)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static string FailureCode(Exception ex) => ex switch
+        {
+            ApiValidationException validation => validation.Code,
+            TsaCommunicationException => "TSA_UNREACHABLE",
+            FormatException => "INVALID_BASE64",
+            _ when IsUncertainFailure(ex) => "UPSTREAM_UNCERTAIN",
+            _ => "INTERNAL_ERROR",
+        };
+
+        /// <summary>Auto-recharge below the threshold, fire-and-forget so the answer is not held up.</summary>
+        private async Task TriggerAutoRechargeIfLowAsync(User user)
+        {
+            // Skip for Enterprise users — they're billed manually
+            if (user.IsEnterprise || !user.AutoRechargeEnabled || user.AutoRechargeQuantity <= 0) return;
+
+            try
+            {
+                await DbContext.Entry(user).ReloadAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Could not refresh the balance of user {UserId}", user.Id);
+                return;
+            }
+            if (user.CreditsRemaining >= AutoRechargeService.ThresholdCredits) return;
+
+            StartAutoRecharge(user.Id);
+        }
+
+        private void StartAutoRecharge(Guid userId)
+        {
+            var serviceScopeFactory = HttpContext.RequestServices.GetRequiredService<IServiceScopeFactory>();
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var scope = serviceScopeFactory.CreateScope();
+                    var rechargeService = scope.ServiceProvider.GetRequiredService<IAutoRechargeService>();
+                    await rechargeService.TryAutoRechargeAsync(userId);
+                }
+                catch (Exception ex)
+                {
+                    using var scope = serviceScopeFactory.CreateScope();
+                    scope.ServiceProvider.GetService<ILoggerFactory>()
+                        ?.CreateLogger("AutoRecharge")
+                        .LogError(ex, "Background auto-recharge failed for user {UserId}", userId);
+                }
+            });
         }
 
         protected async Task<PdfFieldDefinition> GetSignatureFieldAsync(Guid templateId, Guid userId)
@@ -273,35 +454,11 @@ namespace DotNetSigningServer.Controllers
         }
 
         /// <summary>
-        /// Debits and refuses the request when the atomic debit fails. The pre-check in
-        /// <see cref="EnsureUserWithCreditsAsync"/> is not enough: concurrent requests all pass it
-        /// and only the first debit succeeds (<c>WHERE CreditsRemaining &gt;= debit</c>), and the
-        /// concurrency tier can multiply the cost beyond the balance. Returns null when charged,
-        /// otherwise the 402 to return instead of the result — never deliver an unpaid result.
-        /// </summary>
-        protected async Task<IActionResult?> ChargeOrFailAsync(User user, int debit = 1, string? operation = null, Guid? documentId = null)
-        {
-            if (await DebitUserAsync(user, debit, operation, documentId))
-            {
-                return null;
-            }
-
-            Logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Debit failed for user {UserId}", user.Id);
-            return StatusCode(StatusCodes.Status402PaymentRequired, new { message = Localizer["NoCreditsRemaining"].Value });
-        }
-
-        protected IActionResult PaymentRequired(User user, int requiredCredits)
-        {
-            Logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Credits insufficient for user {UserId}", user.Id);
-            return StatusCode(StatusCodes.Status402PaymentRequired, new { message = Localizer["NotEnoughCredits", requiredCredits].Value });
-        }
-
-        /// <summary>
         /// Whether the caller must be refused for lack of credits.
         ///
         /// Enterprise users are exempt: they are billed manually from tracked
         /// usage, so CreditsRemaining is meaningless for them (see User.IsEnterprise
-        /// and DebitUserAsync, which skips the decrement but still writes a
+        /// and ApiOperationService, which skips the reservation but still writes a
         /// UsageRecord). The per-endpoint page-count pre-checks used to test
         /// CreditsRemaining directly and so refused exempt callers anyway — route
         /// every such check through here instead.
