@@ -62,9 +62,24 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
+            var maxPending = HttpContext.RequestServices.GetRequiredService<IOptions<LimitsOptions>>().Value.MaxPendingPresignsPerUser;
+            if (maxPending > 0 && await DbContext.SigningData.CountAsync(x => x.UserId == user.Id) >= maxPending)
+            {
+                // Each presign is a PDF on disk until it is signed or expires (#74).
+                Response.Headers.RetryAfter = "60";
+                return StatusCode(StatusCodes.Status429TooManyRequests, new
+                {
+                    code = "TOO_MANY_PENDING_PRESIGNS",
+                    message = Localizer["Error_TOO_MANY_PENDING_PRESIGNS"].Value,
+                });
+            }
+
+            string? writtenPath = null;
+            string? presignId = null;
             try
             {
                 var signingData = new SigningData();
+                presignId = signingData.Id;
                 if (input.TemplateId.HasValue)
                 {
                     var signatureField = await GetSignatureFieldAsync(input.TemplateId.Value, user.Id);
@@ -80,6 +95,7 @@ namespace DotNetSigningServer.Controllers
                     : input.FieldName;
 
                 var (presignedPdfPath, hashToSign) = _signingService.HandlePreSign(input, fieldName);
+                writtenPath = presignedPdfPath;
                 signingData.FieldName = fieldName;
                 signingData.PresignedPdfPath = presignedPdfPath;
                 signingData.HashToSign = hashToSign;
@@ -101,11 +117,26 @@ namespace DotNetSigningServer.Controllers
 
                 DbContext.SigningData.Add(signingData);
                 await DbContext.SaveChangesAsync();
+                writtenPath = null; // the row now owns the file
 
                 return Ok(new { id = signingData.Id, hashToSign = signingData.HashToSign });
             }
             catch (Exception ex)
             {
+                // The PDF was written before the row: if the row never made it, nothing else
+                // knows the file exists and nothing would ever remove it.
+                if (writtenPath != null)
+                {
+                    try
+                    {
+                        // A commit that went through and then lost the connection leaves a row
+                        // that names this file; deleting the file then would orphan the row.
+                        var committed = presignId != null
+                            && await DbContext.SigningData.AsNoTracking().AnyAsync(x => x.Id == presignId);
+                        if (!committed) System.IO.File.Delete(writtenPath);
+                    }
+                    catch { /* the sweep in PresignCleanupService is the backstop */ }
+                }
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Presign failed");
                 return SafeProblem(Localizer["PresignError"], ex);
             }

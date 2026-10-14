@@ -614,6 +614,8 @@
   <data name="Error_ACCOUNT_BLOCKED" xml:space="preserve"><value>This account is blocked. Contact support.</value></data>
   <data name="Error_FEATURE_DISABLED" xml:space="preserve"><value>This function is temporarily unavailable.</value></data>
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Too many requests. Try again later.</value></data>
+  <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Too many documents are waiting to be signed. Finish or wait for them to expire.</value></data>
+  <data name="Error_TOO_MANY_TEMPLATES" xml:space="preserve"><value>The maximum number of stored templates has been reached.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>A page of the PDF is too large to scan for codes (more than about 1.6 m², or one side longer than 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>The PDF contains active content (a launch action or JavaScript that runs on open) and was refused.</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>The attachment exceeds the maximum allowed size.</value></data>
