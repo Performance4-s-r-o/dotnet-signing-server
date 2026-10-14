@@ -23,6 +23,105 @@ namespace dotnetsigningserver.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("DotNetSigningServer.Models.ApiOperation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BaseCost")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("ClientKey")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CreditsCharged")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CreditsReserved")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("LeaseUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("OperationId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("PresignId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("RequestFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("ResultExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("ResultIsPdf")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ResultPdfHeaders")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<byte[]>("ResultProtected")
+                        .HasColumnType("bytea");
+
+                    b.Property<int?>("ResultStatusCode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<int>("Tier")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PresignId")
+                        .IsUnique()
+                        .HasFilter("\"PresignId\" IS NOT NULL");
+
+                    b.HasIndex("UpdatedAt");
+
+                    b.HasIndex("State", "LeaseUntil");
+
+                    b.HasIndex("UserId", "OperationId")
+                        .IsUnique();
+
+                    b.ToTable("ApiOperations", "dotnet_signing");
+                });
+
             modelBuilder.Entity("DotNetSigningServer.Models.ApiToken", b =>
                 {
                     b.Property<Guid>("Id")

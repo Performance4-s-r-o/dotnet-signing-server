@@ -22,10 +22,6 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
 {
     private const string TimestampQueryContentType = "application/timestamp-query";
 
-    // Shared handler/client: SocketsHttpHandler pools connections, so allocating one
-    // per signing request would exhaust sockets under load.
-    private static readonly HttpClient SharedClient = CreateGuardedClient();
-
     public PinnedIpTsaClient(string url, string? username, string? password)
         : base(url, username, password)
     {
@@ -54,10 +50,13 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
             request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
         }
 
-        using var response = await SharedClient.SendAsync(request).ConfigureAwait(false);
+        // Per request rather than HttpClient.Timeout, so the deadline is configurable at startup
+        // on a client that is shared and created once.
+        using var deadline = new CancellationTokenSource(RequestTimeout);
+        using var response = await SharedClient.SendAsync(request, deadline.Token).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
-        var responseBytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+        var responseBytes = await response.Content.ReadAsByteArrayAsync(deadline.Token).ConfigureAwait(false);
 
         // Mirror the stock client: some TSAs answer base64-encoded.
         var encoding = response.Content.Headers.ContentEncoding.FirstOrDefault();
@@ -69,6 +68,31 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
         return responseBytes;
     }
 
+    /// <summary>
+    /// Per authority, default 10 s; <c>Tsa:TimeoutSeconds</c> (env <c>TSA_TIMEOUT_SECONDS</c>),
+    /// applied at startup. The deadlines have to nest — portal (60 s) &gt; this server's
+    /// /api/sign &gt; TSA — and a backup is tried after the primary, so two of these must fit
+    /// well inside the portal's wait (#77). At 30 s each, a slow primary plus backup outlasted
+    /// the portal and the signature finished for nobody. Applies to every TSA call: signing,
+    /// timestamps, extend-signature (LTV) and the probe.
+    /// </summary>
+    internal static TimeSpan RequestTimeout
+    {
+        get => _requestTimeout;
+        set => _requestTimeout = value > TimeSpan.Zero && value <= MaxRequestTimeout
+            ? value
+            : throw new ArgumentOutOfRangeException(nameof(value), value, $"TSA timeout must be within (0, {MaxRequestTimeout}].");
+    }
+
+    private static TimeSpan _requestTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>Upper bound for <see cref="RequestTimeout"/>; also the shared client's own timeout.</summary>
+    internal static readonly TimeSpan MaxRequestTimeout = TimeSpan.FromSeconds(120);
+
+    // Shared handler/client: SocketsHttpHandler pools connections, so allocating one
+    // per signing request would exhaust sockets under load.
+    private static readonly HttpClient SharedClient = CreateGuardedClient();
+
     private static HttpClient CreateGuardedClient() =>
-        PinnedIpHttp.CreateClient("TSA_HOST_NOT_ALLOWED", TimeSpan.FromSeconds(30));
+        PinnedIpHttp.CreateClient("TSA_HOST_NOT_ALLOWED", MaxRequestTimeout);
 }

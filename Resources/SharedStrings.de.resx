@@ -188,6 +188,11 @@
   <data name="InvalidBase64" xml:space="preserve"><value>PdfContent ist kein gültiges Base64.</value></data>
   <data name="NoCreditsRemaining" xml:space="preserve"><value>Keine Credits mehr vorhanden. Bitte erwerben Sie weitere, um fortzufahren.</value></data>
   <data name="NotEnoughCredits" xml:space="preserve"><value>Nicht genügend Credits. {0} Credit(s) erforderlich.</value></data>
+  <data name="Error_IDEMPOTENCY_KEY_INVALID" xml:space="preserve"><value>Der Header Idempotency-Key muss 1–128 Zeichen lang sein: Buchstaben, Ziffern, '-', '_', '.' oder ':'.</value></data>
+  <data name="Error_IDEMPOTENCY_KEY_REUSED" xml:space="preserve"><value>Dieser Idempotency-Key wurde bereits für eine andere Anfrage verwendet.</value></data>
+  <data name="Error_OPERATION_IN_PROGRESS" xml:space="preserve"><value>Der Vorgang mit diesem Idempotency-Key läuft noch. Bitte versuchen Sie es gleich erneut.</value></data>
+  <data name="Error_OPERATION_RESULT_EXPIRED" xml:space="preserve"><value>Der Vorgang wurde abgeschlossen, sein Ergebnis ist jedoch nicht mehr gespeichert.</value></data>
+  <data name="Error_OPERATION_NOT_FOUND" xml:space="preserve"><value>Kein Vorgang mit dieser ID gefunden.</value></data>
 
   <!-- Middleware -->
   <data name="TooManyRequests" xml:space="preserve"><value>Zu viele gleichzeitige Anfragen. Bitte verlangsamen Sie die Anfragerate.</value></data>

@@ -24,6 +24,7 @@ namespace DotNetSigningServer.Data
         public DbSet<BackofficeWebhookInboxItem> BackofficeWebhookInboxItems { get; set; }
         public DbSet<BackofficeState> BackofficeStates { get; set; }
         public DbSet<ConsentRecord> ConsentRecords { get; set; }
+        public DbSet<ApiOperation> ApiOperations { get; set; }
 
         /// <summary>
         /// Outbox items added through this context and not yet announced to the dispatcher;
@@ -182,6 +183,24 @@ namespace DotNetSigningServer.Data
             modelBuilder.Entity<ConsentRecord>()
                 .Property(c => c.ContentHash)
                 .IsFixedLength();
+
+            // The caller's Idempotency-Key is unique per account (#77).
+            modelBuilder.Entity<ApiOperation>()
+                .HasIndex(o => new { o.UserId, o.OperationId })
+                .IsUnique();
+
+            // One operation per presign: only one /api/sign can ever consume it.
+            modelBuilder.Entity<ApiOperation>()
+                .HasIndex(o => o.PresignId)
+                .IsUnique()
+                .HasFilter("\"PresignId\" IS NOT NULL");
+
+            // The maintenance sweep: stale leases, result purge, row retention.
+            modelBuilder.Entity<ApiOperation>()
+                .HasIndex(o => new { o.State, o.LeaseUntil });
+
+            modelBuilder.Entity<ApiOperation>()
+                .HasIndex(o => o.UpdatedAt);
         }
     }
 }
