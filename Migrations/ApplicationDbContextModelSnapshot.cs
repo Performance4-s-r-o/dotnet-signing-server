@@ -838,6 +838,11 @@ namespace dotnetsigningserver.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
+                    b.HasIndex("StripeCustomerId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Users_StripeCustomerId")
+                        .HasFilter("\"StripeCustomerId\" IS NOT NULL AND btrim(\"StripeCustomerId\") <> ''");
+
                     b.ToTable("Users", "dotnet_signing");
                 });
 

@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -61,7 +62,7 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
 
     // --- Stripe webhook ---------------------------------------------------------------
 
-    private async Task PostWebhookAsync(string dataObjectJson, string type)
+    private async Task PostWebhookAsync(string dataObjectJson, string type, IServiceProvider? requestServices = null)
     {
         var payload = $$$"""
             {"id":"{{{Unique("evt")}}}","object":"event","api_version":"2024-06-20","created":{{{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}}},
@@ -84,6 +85,7 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
             NullLogger<StripeWebhookController>.Instance,
             pricing.Object);
         var http = new DefaultHttpContext();
+        if (requestServices != null) http.RequestServices = requestServices;
         http.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(payload));
         http.Request.Headers["Stripe-Signature"] = $"t={timestamp},v1={signature}";
         controller.ControllerContext = new ControllerContext { HttpContext = http };
@@ -92,15 +94,15 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
         Assert.IsType<OkResult>(result);
     }
 
-    private static string CheckoutSession(Guid userId, string? customerId, bool autoRecharge = false) => $$$"""
-        {"id":"{{{Unique("cs")}}}","object":"checkout.session","mode":"payment","status":"complete","payment_status":"paid",
+    private static string CheckoutSession(Guid userId, string? customerId, bool autoRecharge = false, string? id = null) => $$$"""
+        {"id":"{{{id ?? Unique("cs")}}}","object":"checkout.session","mode":"payment","status":"complete","payment_status":"paid",
          "customer":{{{(customerId is null ? "null" : $"\"{customerId}\"")}}},"amount_total":1500,"currency":"eur",
          "payment_intent":"{{{Unique("pi")}}}",
          "metadata":{"userId":"{{{userId}}}","documents":"300","autoRecharge":"{{{autoRecharge}}}"}}
         """;
 
-    private static string AutoRechargeIntent(Guid userId, string customerId) => $$$"""
-        {"id":"{{{Unique("pi")}}}","object":"payment_intent","status":"succeeded","amount":1500,"currency":"eur",
+    private static string AutoRechargeIntent(Guid userId, string customerId, string? id = null) => $$$"""
+        {"id":"{{{id ?? Unique("pi")}}}","object":"payment_intent","status":"succeeded","amount":1500,"currency":"eur",
          "customer":"{{{customerId}}}","metadata":{"type":"auto_recharge","userId":"{{{userId}}}","documents":"300"}}
         """;
 
@@ -110,12 +112,76 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
         var victim = await NewUserAsync(Unique("cus_victim"));
         var attackerCustomer = Unique("cus_other");
 
-        await PostWebhookAsync(CheckoutSession(victim.Id, attackerCustomer, autoRecharge: true), "checkout.session.completed");
+        var sessionId = Unique("cs");
+        await PostWebhookAsync(CheckoutSession(victim.Id, attackerCustomer, autoRecharge: true, sessionId), "checkout.session.completed");
 
         var after = await ReloadAsync(victim.Id);
         Assert.Equal(0, after.CreditsRemaining);
         Assert.Equal(victim.StripeCustomerId, after.StripeCustomerId);
         _autoRecharge.Verify(a => a.EnableAsync(It.IsAny<User>(), It.IsAny<int>(), It.IsAny<decimal>()), Times.Never);
+        var refusal = await RefusalAsync(BillingRefusals.CheckoutRefused, sessionId);
+        Assert.Contains(attackerCustomer, refusal.PayloadJson);
+        Assert.Contains("1500", refusal.PayloadJson);
+        Assert.Null(refusal.ProcessedAt);
+    }
+
+    private async Task<WebhookEvent> RefusalAsync(string type, string stripeObjectId)
+    {
+        await using var db = _pg.CreateContext();
+        var row = await db.WebhookEvents.AsNoTracking()
+            .SingleOrDefaultAsync(w => w.EventId == BillingRefusals.EventIdFor(type, stripeObjectId));
+        Assert.NotNull(row);
+        Assert.Equal(type, row.EventType);
+        Assert.False(string.IsNullOrEmpty(row.Error));
+        return row;
+    }
+
+    private sealed class Factory(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) =>
+            new(handler, disposeHandler: false) { BaseAddress = new Uri("https://backoffice.example.com/") };
+    }
+
+    [Fact]
+    public async Task Webhook_CheckoutTheBillingServiceVouchesFor_Grants_WithoutRelinkingTheCustomer()
+    {
+        var user = await NewUserAsync(Unique("cus_old"));
+        var serviceCustomer = Unique("cus_service");
+        var sessionId = Unique("cs");
+        var stub = new StubServiceHandler();
+        stub.Enqueue(System.Net.HttpStatusCode.OK, $$$"""
+            {"id":"{{{sessionId}}}","customer_ref":"{{{BillingCustomerRef.For(user.Id)}}}","status":"complete","payment_status":"paid",
+             "mode":"payment","metadata":{"userId":"{{{user.Id}}}","documents":"300"}}
+            """);
+        var services = new ServiceCollection()
+            .AddSingleton(new BackofficeBillingClient(new Factory(stub), NullLogger<BackofficeBillingClient>.Instance, _ => TimeSpan.Zero))
+            .BuildServiceProvider();
+
+        await PostWebhookAsync(CheckoutSession(user.Id, serviceCustomer, id: sessionId), "checkout.session.completed", services);
+
+        var after = await ReloadAsync(user.Id);
+        Assert.Equal(300, after.CreditsRemaining);
+        Assert.Equal(user.StripeCustomerId, after.StripeCustomerId);
+    }
+
+    [Fact]
+    public async Task Webhook_CheckoutTheBillingServiceDoesNotVouchFor_IsRefusedAndRecorded()
+    {
+        var user = await NewUserAsync(Unique("cus_old"));
+        var sessionId = Unique("cs");
+        var stub = new StubServiceHandler();
+        stub.Enqueue(System.Net.HttpStatusCode.OK, $$$"""
+            {"id":"{{{sessionId}}}","customer_ref":"user:00000000-0000-0000-0000-000000000001","status":"complete","payment_status":"paid",
+             "mode":"payment","metadata":{"userId":"{{{user.Id}}}","documents":"300"}}
+            """);
+        var services = new ServiceCollection()
+            .AddSingleton(new BackofficeBillingClient(new Factory(stub), NullLogger<BackofficeBillingClient>.Instance, _ => TimeSpan.Zero))
+            .BuildServiceProvider();
+
+        await PostWebhookAsync(CheckoutSession(user.Id, Unique("cus_other"), id: sessionId), "checkout.session.completed", services);
+
+        Assert.Equal(0, (await ReloadAsync(user.Id)).CreditsRemaining);
+        await RefusalAsync(BillingRefusals.CheckoutRefused, sessionId);
     }
 
     [Fact]
@@ -159,8 +225,10 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
     {
         var user = await NewUserAsync(Unique("cus_own"));
 
-        await PostWebhookAsync(AutoRechargeIntent(user.Id, Unique("cus_other")), "payment_intent.succeeded");
+        var intentId = Unique("pi");
+        await PostWebhookAsync(AutoRechargeIntent(user.Id, Unique("cus_other"), intentId), "payment_intent.succeeded");
         Assert.Equal(0, (await ReloadAsync(user.Id)).CreditsRemaining);
+        await RefusalAsync(BillingRefusals.PaymentRefused, intentId);
 
         await PostWebhookAsync(AutoRechargeIntent(user.Id, user.StripeCustomerId!), "payment_intent.succeeded");
         Assert.Equal(300, (await ReloadAsync(user.Id)).CreditsRemaining);
@@ -257,6 +325,7 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
             await Billing(db, dbUser, foreign).ConfirmCheckout(foreign.Id);
         }
         Assert.Equal(0, (await ReloadAsync(user.Id)).CreditsRemaining);
+        await RefusalAsync(BillingRefusals.CheckoutRefused, foreign.Id);
 
         await using (var db = _pg.CreateContext())
         {
@@ -280,5 +349,56 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
         }
 
         Assert.Equal(0, (await ReloadAsync(user.Id)).CreditsRemaining);
+    }
+
+    /// <summary>
+    /// Fires once, right after the "does another user hold this customer?" query has run: the
+    /// race the check alone cannot close.
+    /// </summary>
+    private sealed class AfterHolderCheck(Func<Task> act) : Microsoft.EntityFrameworkCore.Diagnostics.DbCommandInterceptor
+    {
+        private int _fired;
+
+        public override async ValueTask<System.Data.Common.DbDataReader> ReaderExecutedAsync(
+            System.Data.Common.DbCommand command, Microsoft.EntityFrameworkCore.Diagnostics.CommandExecutedEventData eventData,
+            System.Data.Common.DbDataReader result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("StripeCustomerId") && command.CommandText.Contains("EXISTS")
+                && Interlocked.Exchange(ref _fired, 1) == 0)
+            {
+                await act();
+            }
+            return result;
+        }
+    }
+
+    [Fact]
+    public async Task Bind_LosingTheRaceToAnotherUser_IsARefusal_NotAnError()
+    {
+        var other = await NewUserAsync(stripeCustomerId: null);
+        var user = await NewUserAsync(stripeCustomerId: null);
+        var customer = Unique("cus_raced");
+
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>();
+        _pg.Configure(options);
+        options.AddInterceptors(new AfterHolderCheck(async () =>
+        {
+            await using var otherDb = _pg.CreateContext();
+            var o = await otherDb.Users.SingleAsync(u => u.Id == other.Id);
+            o.StripeCustomerId = customer;
+            await otherDb.SaveChangesAsync();
+        }));
+        await using (var db = new ApplicationDbContext(options.Options))
+        {
+            var dbUser = await db.Users.SingleAsync(u => u.Id == user.Id);
+            var bound = await StripeCustomerBinding.TryBindAsync(db, dbUser, customer, NullLogger.Instance);
+
+            Assert.False(bound);
+            Assert.Null(dbUser.StripeCustomerId);
+            await db.SaveChangesAsync(); // the context stays usable
+        }
+
+        Assert.Null((await ReloadAsync(user.Id)).StripeCustomerId);
+        Assert.Equal(customer, (await ReloadAsync(other.Id)).StripeCustomerId);
     }
 }

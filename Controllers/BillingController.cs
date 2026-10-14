@@ -351,8 +351,18 @@ public class BillingController : Controller
             // The session must be this user's, and so must its Stripe customer (#82).
             if (!await StripeCustomerBinding.CheckoutOwnedByAsync(_dbContext, session, user))
             {
-                _logger.LogWarning("Checkout {SessionId} refused for user {UserId}: not the user's session or customer",
-                    sessionId, user.Id);
+                // Paid, but not this user's: kept for a person to settle when the session does
+                // name the user (a foreign session is only logged — it is not their payment).
+                if (BillingCustomerRef.NamesUser(session, user.Id))
+                {
+                    await BillingRefusals.RecordAsync(_dbContext, BillingRefusals.CheckoutRefused, session.Id, user.Id,
+                        session.StripeCustomerId ?? session.CustomerRef, user.StripeCustomerId, amount: null, currency: null,
+                        "session customer is not the user's", "confirm-page", _logger);
+                }
+                else
+                {
+                    _logger.LogWarning("Checkout {SessionId} refused for user {UserId}: not the user's session", sessionId, user.Id);
+                }
                 TempData["Error"] = _localizer["PaymentSessionMismatch"].Value;
                 return RedirectToAction(nameof(Index));
             }

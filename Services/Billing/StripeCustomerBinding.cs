@@ -39,10 +39,16 @@ public static class StripeCustomerBinding
         return true;
     }
 
+    /// <summary>Unique index on <see cref="User.StripeCustomerId"/> (blank values excluded).</summary>
+    public const string UniqueIndexName = "IX_Users_StripeCustomerId";
+
     /// <summary>
     /// Links <paramref name="stripeCustomerId"/> to a user who has no customer yet, unless another
-    /// user holds it. Does not save. False when the link was refused; a user who already has a
-    /// customer keeps it (true when it is the same one).
+    /// user holds it, and saves the link at once. False when the link was refused; a user who
+    /// already has a customer keeps it (true when it is the same one). The check and the write
+    /// are two steps; the unique index <see cref="UniqueIndexName"/> decides a race, and losing
+    /// it is a refusal, not an error. Inside a caller's transaction EF wraps the save in a
+    /// savepoint, so a refusal leaves the transaction usable.
     /// </summary>
     public static async Task<bool> TryBindAsync(
         ApplicationDbContext db, User user, string? stripeCustomerId, ILogger logger, CancellationToken cancellationToken = default)
@@ -54,12 +60,34 @@ public static class StripeCustomerBinding
         }
         if (await HeldByAnotherUserAsync(db, user.Id, stripeCustomerId, cancellationToken))
         {
-            logger.LogError(
-                "Billing: Stripe customer {CustomerId} is already linked to another user; not linking it to user {UserId}",
-                stripeCustomerId, user.Id);
+            LogRefused(logger, stripeCustomerId, user.Id);
             return false;
         }
+
+        var previous = user.StripeCustomerId;
         user.StripeCustomerId = stripeCustomerId;
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (IsCustomerTaken(ex))
+        {
+            var property = db.Entry(user).Property(u => u.StripeCustomerId);
+            property.CurrentValue = previous;
+            property.IsModified = false;
+            LogRefused(logger, stripeCustomerId, user.Id);
+            return false;
+        }
         return true;
     }
+
+    /// <summary>The save broke <see cref="UniqueIndexName"/>: another user took the customer meanwhile.</summary>
+    public static bool IsCustomerTaken(DbUpdateException ex) =>
+        ex.InnerException is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation } pg
+        && pg.ConstraintName == UniqueIndexName;
+
+    private static void LogRefused(ILogger logger, string stripeCustomerId, Guid userId) =>
+        logger.LogError(
+            "Billing: Stripe customer {CustomerId} is already linked to another user; not linking it to user {UserId}",
+            stripeCustomerId, userId);
 }

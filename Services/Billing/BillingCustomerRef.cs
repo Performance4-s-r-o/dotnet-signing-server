@@ -30,9 +30,7 @@ public static class BillingCustomerRef
     /// </summary>
     public static bool CheckoutBelongsTo(CheckoutSessionInfo session, Guid userId, string? userStripeCustomerId)
     {
-        if (!session.Metadata.TryGetValue("userId", out var metaUserId)
-            || !Guid.TryParse(metaUserId, out var metaId)
-            || metaId != userId)
+        if (!NamesUser(session, userId))
         {
             return false;
         }
@@ -42,6 +40,12 @@ public static class BillingCustomerRef
         }
         return StripeCustomerMatches(userStripeCustomerId, session.StripeCustomerId);
     }
+
+    /// <summary>Whether the session's <c>userId</c> metadata names <paramref name="userId"/>.</summary>
+    public static bool NamesUser(CheckoutSessionInfo session, Guid userId) =>
+        session.Metadata.TryGetValue("userId", out var metaUserId)
+        && Guid.TryParse(metaUserId, out var metaId)
+        && metaId == userId;
 
     /// <summary>
     /// Whether a Stripe object's customer may act on a user whose customer is

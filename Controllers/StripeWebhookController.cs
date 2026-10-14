@@ -202,11 +202,16 @@ public class StripeWebhookController : ControllerBase
             new Dictionary<string, string>(session.Metadata ?? new Dictionary<string, string>()),
             session.CustomerId,
             CustomerRef: null);
-        if (!await StripeCustomerBinding.CheckoutOwnedByAsync(_dbContext, sessionInfo, user))
+        var ownedDirectly = await StripeCustomerBinding.CheckoutOwnedByAsync(_dbContext, sessionInfo, user);
+        // A session the billing service started uses the service's customer; when the service
+        // is in use, it can vouch for the session. It never decides the user's own link.
+        var confirmedByService = !ownedDirectly && await BillingRefusals.ConfirmedByBillingServiceAsync(
+            HttpContext?.RequestServices?.GetService<BackofficeBillingClient>(), session.Id, userId, _logger);
+        if (!ownedDirectly && !confirmedByService)
         {
-            _logger.LogError(
-                "checkout.session.completed: session {SessionId} names user {UserId}, but its customer {CustomerId} is not theirs; nothing granted",
-                session.Id, userId, session.CustomerId);
+            await BillingRefusals.RecordAsync(_dbContext, BillingRefusals.CheckoutRefused, session.Id, userId,
+                session.CustomerId, user.StripeCustomerId, session.AmountTotal, session.Currency,
+                "session customer is not the user's", "stripe-webhook", _logger);
             return;
         }
 
@@ -237,10 +242,13 @@ public class StripeWebhookController : ControllerBase
             "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" + {0} WHERE \"Id\" = {1}",
             documents, user.Id);
 
-        await StripeCustomerBinding.TryBindAsync(_dbContext, user, session.CustomerId, _logger);
+        if (!confirmedByService)
+        {
+            await StripeCustomerBinding.TryBindAsync(_dbContext, user, session.CustomerId, _logger);
+        }
 
         // Enable auto-recharge if opted in during checkout
-        if (session.Metadata.TryGetValue("autoRecharge", out var autoRechargeValue)
+        if (sessionInfo.Metadata.TryGetValue("autoRecharge", out var autoRechargeValue)
             && bool.TryParse(autoRechargeValue, out var autoRecharge)
             && autoRecharge)
         {
@@ -317,9 +325,9 @@ public class StripeWebhookController : ControllerBase
         // Auto-recharge charges the user's own customer; a charge of any other grants nothing (#82).
         if (!BillingCustomerRef.ChargeBelongsTo(user.StripeCustomerId, paymentIntent.CustomerId))
         {
-            _logger.LogError(
-                "payment_intent.succeeded: {PaymentIntentId} names user {UserId}, but its customer {CustomerId} is not theirs; nothing granted",
-                paymentIntent.Id, userId, paymentIntent.CustomerId);
+            await BillingRefusals.RecordAsync(_dbContext, BillingRefusals.PaymentRefused, paymentIntent.Id, userId,
+                paymentIntent.CustomerId, user.StripeCustomerId, paymentIntent.Amount, paymentIntent.Currency,
+                "charge customer is not the user's", "stripe-webhook", _logger);
             return;
         }
 
