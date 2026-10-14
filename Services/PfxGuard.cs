@@ -2,6 +2,7 @@ using DotNetSigningServer.Exceptions;
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.X509;
+using Org.BouncyCastle.Math;
 
 namespace DotNetSigningServer.Services;
 
@@ -23,7 +24,7 @@ public static class PfxGuard
             throw new ApiValidationException("PFX_TOO_LARGE");
         }
 
-        long highest;
+        BigInteger highest;
         try
         {
             highest = HighestIterationCount(pfx);
@@ -34,16 +35,16 @@ public static class PfxGuard
             return;
         }
 
-        if (highest > MaxIterations)
+        if (highest.CompareTo(BigInteger.ValueOf(MaxIterations)) > 0)
         {
             throw new ApiValidationException("PFX_TOO_EXPENSIVE");
         }
     }
 
-    private static long HighestIterationCount(byte[] pfx)
+    private static BigInteger HighestIterationCount(byte[] pfx)
     {
         var parsed = Pfx.GetInstance(Asn1Sequence.GetInstance(Asn1Object.FromByteArray(pfx)));
-        long highest = parsed.MacData?.Iterations.Value.LongValue ?? 0;
+        var highest = parsed.MacData?.Iterations.Value ?? BigInteger.Zero;
 
         var content = parsed.AuthSafe;
         if (!PkcsObjectIdentifiers.Data.Equals(content.ContentType)) return highest;
@@ -57,7 +58,7 @@ public static class PfxGuard
             if (PkcsObjectIdentifiers.EncryptedData.Equals(info.ContentType))
             {
                 var enc = EncryptedData.GetInstance(info.Content);
-                highest = Math.Max(highest, Iterations(enc.EncryptionAlgorithm));
+                highest = Max(highest, Iterations(enc.EncryptionAlgorithm));
             }
             else if (PkcsObjectIdentifiers.Data.Equals(info.ContentType))
             {
@@ -68,7 +69,7 @@ public static class PfxGuard
                     if (PkcsObjectIdentifiers.Pkcs8ShroudedKeyBag.Equals(bag.BagID))
                     {
                         var key = EncryptedPrivateKeyInfo.GetInstance(bag.BagValue);
-                        highest = Math.Max(highest, Iterations(key.EncryptionAlgorithm));
+                        highest = Max(highest, Iterations(key.EncryptionAlgorithm));
                     }
                 }
             }
@@ -77,7 +78,9 @@ public static class PfxGuard
         return highest;
     }
 
-    private static long Iterations(AlgorithmIdentifier algorithm)
+    private static BigInteger Max(BigInteger a, BigInteger b) => a.CompareTo(b) >= 0 ? a : b;
+
+    private static BigInteger Iterations(AlgorithmIdentifier algorithm)
     {
         if (PkcsObjectIdentifiers.IdPbeS2.Equals(algorithm.Algorithm))
         {
@@ -85,12 +88,13 @@ public static class PfxGuard
             var kdf = pbes2.KeyDerivationFunc;
             if (PkcsObjectIdentifiers.IdPbkdf2.Equals(kdf.Algorithm))
             {
-                return Pbkdf2Params.GetInstance(kdf.Parameters).IterationCount.LongValue;
+                return Pbkdf2Params.GetInstance(kdf.Parameters).IterationCount;
             }
-            return 0;
+            // A derivation function this guard cannot price (scrypt, ...) is refused, not waved through.
+            throw new ApiValidationException("PFX_TOO_EXPENSIVE");
         }
 
         // pbeWithSHAAnd3-KeyTripleDES-CBC and the other PKCS#12 PBE schemes.
-        return Pkcs12PbeParams.GetInstance(algorithm.Parameters).Iterations.LongValue;
+        return Pkcs12PbeParams.GetInstance(algorithm.Parameters).Iterations;
     }
 }

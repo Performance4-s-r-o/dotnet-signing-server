@@ -118,11 +118,6 @@ namespace DotNetSigningServer.Controllers
             {
                 var fingerprint = ApiOperationService.Fingerprint("fill-pdf", input);
                 var (pdfBase64, pageCount) = await ResolvePdfForFillAsync(input, user.Id);
-                if (hasTemplate)
-                {
-                    // A stored template skipped the check above: it is the same engine, the same PDF.
-                    SafetyGuard.EnsureSafePdf(pdfBase64, "Fill PDF (template)");
-                }
                 var requiredCredits = CalculateCreditsForPages(pageCount) * (input.Data?.Count ?? 0);
 
                 return await RunOperationAsync(user, "fill-pdf", fingerprint, requiredCredits, async ct =>
@@ -509,6 +504,8 @@ namespace DotNetSigningServer.Controllers
             if (input.TemplateId != null)
             {
                 var template = await PdfTemplateService.GetTemplateAsync(input.TemplateId.Value, userId);
+                // A stored template skipped the check in FillPdf; run it before anything parses it.
+                SafetyGuard.EnsureSafePdf(template.PdfContent, "Fill PDF (template)");
                 var pages = CountPagesFromBase64(template.PdfContent);
                 return (template.PdfContent, pages);
             }

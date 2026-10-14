@@ -217,6 +217,14 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Sign with PFX");
+                try
+                {
+                    PfxGuard.EnsureSafe(Convert.FromBase64String(input.PfxContent));
+                }
+                catch (FormatException)
+                {
+                    // Not base64: the signing service answers that with its own message.
+                }
                 SafetyGuard.EnsureSafePdf(input.PdfContent, "Sign with PFX");
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }

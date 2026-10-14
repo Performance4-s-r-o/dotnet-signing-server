@@ -160,6 +160,15 @@ public class InputLimitsTests
     }
 
     [Fact]
+    public void Base64_with_line_breaks_is_read_like_any_other()
+    {
+        var flat = Convert.ToBase64String(Png(600, 200));
+        var wrapped = string.Join("\r\n", Enumerable.Range(0, (flat.Length + 7) / 8).Select(i => flat.Substring(i * 8, Math.Min(8, flat.Length - i * 8))));
+        Assert.Contains('\n', wrapped);
+        Limits().EnsureImageWithinLimit(wrapped, "Signature image");
+    }
+
+    [Fact]
     public void Fill_images_have_a_looser_limit_than_signatures()
     {
         var photo = Convert.ToBase64String(Png(6_000, 4_000)); // 24 Mpx, over a signature's 4 Mpx

@@ -65,5 +65,12 @@ public class EndpointInputGuardTests
             "/api/sign-pfx", "/api/timestamp", "/api/visual-sign",
         };
         Assert.Equal(expected, withPdf);
+
+        var unguarded = Actions()
+            .Where(a => withPdf.Contains(a.Action))
+            .Where(a => !a.Body.Contains("EnsureSafePdf("))
+            .Select(a => $"{a.File}: {a.Action}")
+            .ToList();
+        Assert.True(unguarded.Count == 0, "Takes a PDF but never calls PdfSafetyGuard: " + string.Join(", ", unguarded));
     }
 }

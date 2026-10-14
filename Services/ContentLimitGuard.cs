@@ -58,11 +58,14 @@ public class ContentLimitGuard
     {
         // A JPEG's frame header can sit behind a large EXIF/ICC segment, so look further than a PNG needs.
         const int headBytes = 64 * 1024;
-        var chars = Math.Min(base64.Length - (base64.Length % 4), headBytes / 3 * 4);
+        // Whitespace is legal in base64 and does not count towards the 4-char groups.
+        var compact = new string(base64.AsSpan(0, Math.Min(base64.Length, headBytes / 3 * 4 + 1024))
+            .ToArray().Where(c => !char.IsWhiteSpace(c)).ToArray());
+        var chars = Math.Min(compact.Length - (compact.Length % 4), headBytes / 3 * 4);
         byte[] head;
         try
         {
-            head = Convert.FromBase64String(base64.Substring(0, chars));
+            head = Convert.FromBase64String(compact.Substring(0, chars));
         }
         catch (FormatException)
         {
