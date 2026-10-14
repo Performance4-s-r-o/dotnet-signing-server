@@ -17,6 +17,7 @@ using iText.Kernel.Colors;
 using iText.Barcodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
+using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
 using System.Text.RegularExpressions;
 using System.Globalization;
@@ -28,6 +29,7 @@ public class PdfTemplateService
     private readonly ApplicationDbContext _dbContext;
     private readonly ILogger<PdfTemplateService> _logger;
     private readonly ContentLimitGuard _limitGuard;
+    private readonly LimitsOptions _limits;
     // Text, který jde DO PDF (odkaz na pokračování tabulky, nadpis generované
     // stránky). Řídí se jazykem požadavku — jiný jazyk dokument nenese.
     private readonly IStringLocalizer _strings;
@@ -38,6 +40,7 @@ public class PdfTemplateService
         ContentLimitGuard limitGuard,
         IStringLocalizerFactory localizerFactory)
     {
+        _limits = limitGuard.Limits;
         _dbContext = dbContext;
         _logger = logger;
         _limitGuard = limitGuard;
@@ -101,9 +104,35 @@ public class PdfTemplateService
             throw new ApiValidationException("DATA_REQUIRED");
         }
 
+        if (input.Data.Count > _limits.FillMaxDocuments)
+        {
+            throw new ApiValidationException("FILL_TOO_MANY_DOCUMENTS");
+        }
+
         var templateBytes = await ResolveTemplateBytesAsync(input, userId, cancellationToken);
         var fields = await ResolveFieldsAsync(input, userId, cancellationToken);
         var results = new List<string>();
+
+        if (fields.Count > _limits.FillMaxFields)
+        {
+            throw new ApiValidationException("FILL_TOO_MANY_FIELDS");
+        }
+        // Images are measured from their headers before any of them is decoded.
+        var imageFields = fields
+            .Where(f => f.Type == PdfFieldType.Image)
+            .Select(f => f.FieldName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var dataset in input.Data)
+        {
+            foreach (var value in dataset?.Data ?? new List<PdfFieldValue>())
+            {
+                if (imageFields.Contains(value.FieldName))
+                {
+                    _limitGuard.EnsureFillImageWithinLimit(value.Value);
+                }
+            }
+        }
+        long outputBytes = 0;
 
         // Strop se kontroluje předem pro všechny sady: jinak se napřed vysází
         // všechny dokumenty před tou přerostlou a pak se stejně vše zahodí.
@@ -127,6 +156,11 @@ public class PdfTemplateService
                 continuationNote,
                 generatedTableTitle,
                 _logger);
+            outputBytes += filled.LongLength;
+            if (outputBytes > _limits.FillMaxOutputBytes)
+            {
+                throw new ApiValidationException("FILL_OUTPUT_TOO_LARGE");
+            }
             results.Add(Convert.ToBase64String(filled));
         }
 

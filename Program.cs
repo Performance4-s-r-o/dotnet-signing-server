@@ -200,6 +200,11 @@ TsaCircuitBreaker.Default = new TsaCircuitBreaker(new TsaCircuitBreakerOptions
 // when the policy did not take: Ghostscript on untrusted PDFs without it is not an option.
 DotNetSigningServer.Services.CodeScanRaster.Configure(
     builder.Configuration.GetValue<long?>("Limits:FindCodesMagickMemoryBytes") ?? 0);
+// PFX limits (#70) are read by a static helper that has no DI at the call site.
+DotNetSigningServer.Services.PfxGuard.MaxBytes =
+    builder.Configuration.GetValue<int?>("Limits:PfxMaxBytes") ?? DotNetSigningServer.Services.PfxGuard.MaxBytes;
+DotNetSigningServer.Services.PfxGuard.MaxIterations =
+    builder.Configuration.GetValue<long?>("Limits:PfxMaxIterations") ?? DotNetSigningServer.Services.PfxGuard.MaxIterations;
 // PriceChangeMonitorService is registered by AddP4BackofficeIntegration, only while
 // P4Backoffice:Modules:Pricing is not On (then the price.* events replace it).
 builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();

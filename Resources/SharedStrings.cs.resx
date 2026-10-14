@@ -601,6 +601,14 @@
   <data name="Error_PDF_INVALID" xml:space="preserve"><value>Soubor není platné PDF.</value></data>
   <data name="Error_PDF_ENCRYPTED" xml:space="preserve"><value>PDF je šifrované. Odstraňte heslo a zkuste to znovu.</value></data>
   <data name="Error_PDF_TOO_MANY_PAGES" xml:space="preserve"><value>PDF má víc stran, než je povoleno.</value></data>
+  <data name="Error_PDF_TOO_COMPLEX" xml:space="preserve"><value>PDF je příliš složité (příliš mnoho objektů, podpisů, polí formuláře či revizí, nebo se rozbalí na příliš velký objem).</value></data>
+  <data name="Error_IMAGE_DIMENSIONS_EXCEEDED" xml:space="preserve"><value>Obrázek má víc pixelů nebo delší stranu, než je povoleno.</value></data>
+  <data name="Error_IMAGE_FORMAT_UNSUPPORTED" xml:space="preserve"><value>Přijímají se jen obrázky PNG a JPEG.</value></data>
+  <data name="Error_PFX_TOO_LARGE" xml:space="preserve"><value>Soubor PFX překračuje maximální povolenou velikost.</value></data>
+  <data name="Error_PFX_TOO_EXPENSIVE" xml:space="preserve"><value>Soubor PFX vyžaduje víc iterací odvození klíče, než je povoleno.</value></data>
+  <data name="Error_FILL_TOO_MANY_DOCUMENTS" xml:space="preserve"><value>V jednom požadavku na vyplnění je příliš mnoho dokumentů.</value></data>
+  <data name="Error_FILL_TOO_MANY_FIELDS" xml:space="preserve"><value>Šablona má víc polí, než je pro vyplnění povoleno.</value></data>
+  <data name="Error_FILL_OUTPUT_TOO_LARGE" xml:space="preserve"><value>Vygenerované dokumenty překračují maximální celkovou velikost.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Stránka PDF je pro hledání kódů příliš velká (víc než asi 1,6 m² nebo strana delší než 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>PDF obsahuje aktivní obsah (akci Launch nebo JavaScript spouštěný při otevření) a bylo odmítnuto.</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>Příloha překračuje maximální povolenou velikost.</value></data>
