@@ -28,7 +28,10 @@ services:
       - Limits__MaxPendingPresignsPerUser=${MAX_PENDING_PRESIGNS_PER_USER:-0}
       - Limits__MaxTemplatesPerUser=${MAX_TEMPLATES_PER_USER:-0}
       - FqdnServerName=${FQDN_SERVER:-localhost}
-      - ConnectionStrings__DefaultConnection=Host=${DB_HOST};Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
+      # Pool and timeouts (#75): the database is shared with the portal's PostgREST and pool,
+      # so this server must not take what its connection-limited role would refuse anyway.
+      # Max Pool Size stays under the role's `connection limit` (25), leaving room for migrations.
+      - ConnectionStrings__DefaultConnection=Host=${DB_HOST};Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD};Maximum Pool Size=${DB_MAX_POOL_SIZE:-20};Timeout=15;Command Timeout=${DB_COMMAND_TIMEOUT_SECONDS:-15}
       # Schema migrations are a release step (#85): the `migrate` service below (or
       # `dotnet dotnet-signing-server.dll --migrate`) runs once before the new version
       # starts. Without it the server refuses to start while migrations are pending.
@@ -153,6 +156,9 @@ services:
     healthcheck:
       disable: true
     environment:
+      # The serving process runs with a short Command Timeout (#75); a migration (an index on a
+      # large table) is allowed minutes.
+      - ConnectionStrings__DefaultConnection=Host=${DB_HOST};Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD};Timeout=15;Command Timeout=600
       - Database__MigrationUser=${MIGRATION_DB_USER:-}
       - Database__MigrationPassword=${MIGRATION_DB_PASSWORD:-}
 

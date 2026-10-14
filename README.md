@@ -128,6 +128,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | Variable | Required | Purpose |
 |---|---|---|
 | `ConnectionStrings__DefaultConnection` | yes (unless `UseLocalDb`) | PostgreSQL connection string |
+| `DB_MAX_POOL_SIZE` / `DB_COMMAND_TIMEOUT_SECONDS` | no (20 / 15) | Npgsql `Maximum Pool Size` and `Command Timeout` appended to the connection string in `docker-compose.yml` (#75) |
 | `Token__Secret` | yes | Signing key for issued API tokens |
 | `FqdnServerName` | yes | Public hostname, used in generated links |
 | `AllowedHosts` | recommended | Host filtering, `*` by default |

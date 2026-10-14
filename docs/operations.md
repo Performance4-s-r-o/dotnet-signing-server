@@ -136,3 +136,21 @@ delete from dotnet_signing."OperatorSwitches" where "Name" = 'feature:find-codes
 ```
 
 Limity (`RateLimits:*`, env `RateLimits__…`): neautentizované `/api` 30/min na IP (`CF-Connecting-IP`), klíč 600/min, `tsa-probe` 6/min, `inspect-signatures` 30/min, registrace 5/h, přihlášení a reset hesla 20/10 min na IP; blok klíče po `RateLimits:FailuresBeforeBlock` odmítnutých vstupech (400/413) na těžkých cestách za 10 min na 15 min (429 + `Retry-After`) je **ve výchozím stavu vypnutý (0)**: portál volá s jedním účtem za všechny nájemce, takže před zapnutím je třeba jeho účet uvést v `RateLimits:ExemptUserIds`. `CF-Connecting-IP` se věří jen od peeru ze soukromé sítě.
+
+## Role databáze `dotnet_user` (#75)
+
+Dotnet sdílí Supabase projekt s portálem (schéma `dotnet_signing`). Izolace dat je ověřená; chybí provozní limity role. **Provozní krok (ručně, jednou, pod vlastníkem):**
+
+```sql
+alter role dotnet_user connection limit 25;
+alter role dotnet_user set statement_timeout = '15s';
+alter role dotnet_user set lock_timeout = '5s';
+alter role dotnet_user set idle_in_transaction_session_timeout = '30s';
+alter role dotnet_user set search_path = dotnet_signing;
+```
+
+Ověření: `select rolconnlimit, rolconfig from pg_roles where rolname = 'dotnet_user';`
+
+- Connection string runtime služby nese `Maximum Pool Size` (výchozí 20, `DB_MAX_POOL_SIZE`), `Timeout=15` a `Command Timeout` (výchozí 15 s, `DB_COMMAND_TIMEOUT_SECONDS`). Služba `migrate` má vlastní connection string s `Command Timeout=600`; `statement_timeout` 15 s nastavený na roli ale platí i pro ni, takže migrace pod rolí `dotnet_user` s dlouhým příkazem musí použít jinou roli (`MIGRATION_DB_USER`) nebo `SET LOCAL statement_timeout`.
+- Supabase pooler v transakčním režimu (port 6543) vyžaduje navíc `No Reset On Close=true;Max Auto Prepare=0`.
+- Delší operace (úklid, migrace dat) si timeout zvýší lokálně: `SET LOCAL statement_timeout = '5min'`.
