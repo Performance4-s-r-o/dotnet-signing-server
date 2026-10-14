@@ -75,9 +75,11 @@ namespace DotNetSigningServer.Controllers
             }
 
             string? writtenPath = null;
+            string? presignId = null;
             try
             {
                 var signingData = new SigningData();
+                presignId = signingData.Id;
                 if (input.TemplateId.HasValue)
                 {
                     var signatureField = await GetSignatureFieldAsync(input.TemplateId.Value, user.Id);
@@ -125,7 +127,14 @@ namespace DotNetSigningServer.Controllers
                 // knows the file exists and nothing would ever remove it.
                 if (writtenPath != null)
                 {
-                    try { System.IO.File.Delete(writtenPath); }
+                    try
+                    {
+                        // A commit that went through and then lost the connection leaves a row
+                        // that names this file; deleting the file then would orphan the row.
+                        var committed = presignId != null
+                            && await DbContext.SigningData.AsNoTracking().AnyAsync(x => x.Id == presignId);
+                        if (!committed) System.IO.File.Delete(writtenPath);
+                    }
                     catch { /* the sweep in PresignCleanupService is the backstop */ }
                 }
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Presign failed");

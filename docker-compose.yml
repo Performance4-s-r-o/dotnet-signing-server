@@ -23,6 +23,10 @@ services:
       - ASPNETCORE_URLS=http://+:8085
       - AllowedHosts=${ALLOWED_HOSTS:-*}
       - UseLocalDb=false
+      # Per-account caps (#74); 0 = no limit. The portal uses one account for every tenant, so a
+      # number here caps the whole platform: set it with that in mind.
+      - Limits__MaxPendingPresignsPerUser=${MAX_PENDING_PRESIGNS_PER_USER:-0}
+      - Limits__MaxTemplatesPerUser=${MAX_TEMPLATES_PER_USER:-0}
       - FqdnServerName=${FQDN_SERVER:-localhost}
       # Pool and timeouts (#75): the database is shared with the portal's PostgREST and pool,
       # so this server must not take what its connection-limited role would refuse anyway.
