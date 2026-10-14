@@ -17,7 +17,7 @@ public class BackofficeRegistrationTests
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddSingleton<IHostEnvironment>(new TestHostEnvironment());
+        services.AddSingleton<IHostEnvironment>(new TestHostEnvironment { EnvironmentName = Environments.Development });
         services.AddP4BackofficeIntegration(configuration, new PrivateServerOptions { Enabled = privateServer });
         return services;
     }
