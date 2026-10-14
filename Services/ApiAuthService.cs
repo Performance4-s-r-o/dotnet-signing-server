@@ -13,6 +13,8 @@ public class ApiAuthService : IApiAuthService
 {
     private static readonly TimeSpan PositiveTtl = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan NegativeTtl = TimeSpan.FromSeconds(5);
+    private const int MaxKeysPerToken = 64;
+    private const int MaxOriginLength = 256;
 
     // Reverse index: tokenId -> cache keys, used to purge all entries for a token on revoke.
     private static readonly ConcurrentDictionary<Guid, ConcurrentBag<string>> _keysByTokenId = new();
@@ -56,6 +58,14 @@ public class ApiAuthService : IApiAuthService
 
         token = NormalizeToken(token);
 
+        // A rejected token is remembered by the token alone: keyed with Origin and IP, every
+        // variation of a nonsense token was a separate entry and a separate database query.
+        var negativeKey = $"apiauth-neg:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)))}";
+        if (_cache.TryGetValue(negativeKey, out _))
+        {
+            return null;
+        }
+
         var cacheKey = BuildCacheKey(token, originHeader, clientIp);
         if (_cache.TryGetValue<CachedValidation>(cacheKey, out var cached))
         {
@@ -64,11 +74,21 @@ public class ApiAuthService : IApiAuthService
 
         var result = await ValidateFromDatabaseAsync(token, originHeader, clientIp);
 
-        _cache.Set(cacheKey, result, result?.User != null ? PositiveTtl : NegativeTtl);
-
-        if (result?.TokenId is Guid id)
+        if (result?.User == null)
         {
-            _keysByTokenId.GetOrAdd(id, _ => new ConcurrentBag<string>()).Add(cacheKey);
+            _cache.Set(negativeKey, true, NegativeTtl);
+            return null;
+        }
+
+        _cache.Set(cacheKey, result, PositiveTtl);
+
+        if (result.TokenId is Guid id)
+        {
+            var bag = _keysByTokenId.GetOrAdd(id, _ => new ConcurrentBag<string>());
+            // One entry per (origin, ip) seen with this token; an Origin that changes on every
+            // call must not make this bag grow without end. Past the cap the entry simply
+            // expires on its 60 s TTL instead of being purged early on revoke.
+            if (bag.Count < MaxKeysPerToken) bag.Add(cacheKey);
         }
 
         return result?.User;
@@ -146,6 +166,7 @@ public class ApiAuthService : IApiAuthService
     {
         var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
         var origin = originHeader?.Trim().ToLowerInvariant() ?? string.Empty;
+        if (origin.Length > MaxOriginLength) origin = origin[..MaxOriginLength];
         var ip = clientIp?.ToString() ?? string.Empty;
         return $"apiauth:{tokenHash}:{origin}:{ip}";
     }

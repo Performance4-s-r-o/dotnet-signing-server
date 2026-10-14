@@ -609,6 +609,11 @@
   <data name="Error_FILL_TOO_MANY_DOCUMENTS" xml:space="preserve"><value>Too many documents in one fill request.</value></data>
   <data name="Error_FILL_TOO_MANY_FIELDS" xml:space="preserve"><value>The template has more fields than allowed for filling.</value></data>
   <data name="Error_FILL_OUTPUT_TOO_LARGE" xml:space="preserve"><value>The generated documents exceed the maximum total size.</value></data>
+  <data name="Error_UNAUTHENTICATED" xml:space="preserve"><value>Missing or invalid API key.</value></data>
+  <data name="Error_TOO_MANY_FAILURES" xml:space="preserve"><value>Too many failed requests. This key is paused for a while.</value></data>
+  <data name="Error_ACCOUNT_BLOCKED" xml:space="preserve"><value>This account is blocked. Contact support.</value></data>
+  <data name="Error_FEATURE_DISABLED" xml:space="preserve"><value>This function is temporarily unavailable.</value></data>
+  <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Too many requests. Try again later.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>A page of the PDF is too large to scan for codes (more than about 1.6 m², or one side longer than 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>The PDF contains active content (a launch action or JavaScript that runs on open) and was refused.</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>The attachment exceeds the maximum allowed size.</value></data>

@@ -25,6 +25,7 @@ namespace DotNetSigningServer.Data
         public DbSet<BackofficeState> BackofficeStates { get; set; }
         public DbSet<ConsentRecord> ConsentRecords { get; set; }
         public DbSet<ApiOperation> ApiOperations { get; set; }
+        public DbSet<OperatorSwitch> OperatorSwitches { get; set; }
 
         /// <summary>
         /// Outbox items added through this context and not yet announced to the dispatcher;

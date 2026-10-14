@@ -523,6 +523,24 @@ namespace dotnetsigningserver.Migrations
                     b.ToTable("LegalDocuments", "dotnet_signing");
                 });
 
+            modelBuilder.Entity("DotNetSigningServer.Models.OperatorSwitch", b =>
+                {
+                    b.Property<string>("Name")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Name");
+
+                    b.ToTable("OperatorSwitches", "dotnet_signing");
+                });
+
             modelBuilder.Entity("DotNetSigningServer.Models.Payment", b =>
                 {
                     b.Property<Guid>("Id")
