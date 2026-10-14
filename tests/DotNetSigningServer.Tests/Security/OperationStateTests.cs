@@ -774,6 +774,116 @@ public class OperationStateTests : IClassFixture<OperationStateFixture>, IDispos
         Assert.Single(await _fx.UsageAsync(userId));
     }
 
+    // #77 owner decision: a retry after failed_uncertain may run the work again, but the
+    // operationId is charged at most once (debits minus refunds == one price, one usage row).
+
+    private static TsaCommunicationException TsaDown() =>
+        new("https://tsa.example.com", "The operation has timed out.");
+
+    private async Task AssertChargedOnceAsync(Guid userId, int startCredits)
+    {
+        var usage = Assert.Single(await _fx.UsageAsync(userId));
+        Assert.Equal(startCredits - usage.Count, await _fx.BalanceAsync(userId));
+        var op = await _fx.OperationAsync(userId);
+        Assert.Equal(ApiOperationState.Completed, op.State);
+        Assert.Equal(usage.Count, op.CreditsCharged);
+        Assert.Equal(0, op.CreditsReserved);
+    }
+
+    [DockerFact]
+    public async Task Retry_after_failed_uncertain_reruns_the_work_and_nets_exactly_one_charge()
+    {
+        var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+        var key = Guid.NewGuid().ToString();
+        var body = new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() };
+        var calls = 0;
+        _fx.Timestamp = () => ++calls == 1 ? throw TsaDown() : SignedPdf;
+
+        var first = await client.SendAsync(Post("/api/timestamp", body, key));
+        Assert.Equal(ApiOperationState.FailedUncertain, Header(first, ApiControllerBase.OperationStateHeader));
+        Assert.Equal(5, await _fx.BalanceAsync(userId));
+        Assert.Empty(await _fx.UsageAsync(userId));
+
+        var retry = await client.SendAsync(Post("/api/timestamp", body, key));
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        Assert.Equal(2, _fx.TimestampCalls);
+        await AssertChargedOnceAsync(userId, 5);
+    }
+
+    [DockerFact]
+    public async Task Retry_after_completed_is_a_replay_without_another_debit()
+    {
+        var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+        var key = Guid.NewGuid().ToString();
+        var body = new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() };
+        var calls = 0;
+        _fx.Timestamp = () => ++calls == 1 ? throw TsaDown() : SignedPdf;
+
+        await client.SendAsync(Post("/api/timestamp", body, key));
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(Post("/api/timestamp", body, key))).StatusCode);
+        var balance = await _fx.BalanceAsync(userId);
+
+        var replay = await client.SendAsync(Post("/api/timestamp", body, key));
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.Equal("true", Header(replay, "Idempotent-Replayed"));
+        Assert.Equal(2, _fx.TimestampCalls);
+        Assert.Equal(balance, await _fx.BalanceAsync(userId));
+        await AssertChargedOnceAsync(userId, 5);
+    }
+
+    [DockerFact]
+    public async Task Concurrent_retries_after_failed_uncertain_do_the_work_once_and_debit_once()
+    {
+        var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+        var key = Guid.NewGuid().ToString();
+        var body = new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() };
+
+        using var entered = new SemaphoreSlim(0);
+        using var release = new ManualResetEventSlim(false);
+        var calls = 0;
+        _fx.Timestamp = () =>
+        {
+            if (Interlocked.Increment(ref calls) == 1) throw TsaDown();
+            entered.Release();
+            release.Wait(TimeSpan.FromSeconds(30));
+            return SignedPdf;
+        };
+
+        await client.SendAsync(Post("/api/timestamp", body, key));
+        var attempts = Enumerable.Range(0, 2).Select(_ => client.SendAsync(Post("/api/timestamp", body, key))).ToList();
+        Assert.True(await entered.WaitAsync(TimeSpan.FromSeconds(10)));
+        release.Set();
+        var responses = await Task.WhenAll(attempts);
+
+        Assert.Equal(1, responses.Count(r => r.StatusCode == HttpStatusCode.OK
+                                             && Header(r, "Idempotent-Replayed") != "true"));
+        Assert.All(responses, r => Assert.Contains(r.StatusCode, new[] { HttpStatusCode.OK, HttpStatusCode.Conflict }));
+        Assert.Equal(2, _fx.TimestampCalls);
+        await AssertChargedOnceAsync(userId, 5);
+    }
+
+    [DockerFact]
+    public async Task Two_failed_uncertain_retries_then_success_still_net_one_charge()
+    {
+        var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+        var key = Guid.NewGuid().ToString();
+        var body = new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() };
+        var calls = 0;
+        _fx.Timestamp = () => ++calls <= 2 ? throw TsaDown() : SignedPdf;
+
+        for (var i = 0; i < 2; i++)
+        {
+            var failed = await client.SendAsync(Post("/api/timestamp", body, key));
+            Assert.Equal(ApiOperationState.FailedUncertain, Header(failed, ApiControllerBase.OperationStateHeader));
+            Assert.Equal(5, await _fx.BalanceAsync(userId));
+        }
+
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(Post("/api/timestamp", body, key))).StatusCode);
+        Assert.Equal(3, _fx.TimestampCalls);
+        Assert.Equal(3, (await _fx.OperationAsync(userId)).Attempts);
+        await AssertChargedOnceAsync(userId, 5);
+    }
+
     [Fact]
     public void Tsa_deadlines_nest_inside_the_portal_wait()
     {
