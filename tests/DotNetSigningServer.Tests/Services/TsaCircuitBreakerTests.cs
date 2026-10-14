@@ -115,6 +115,110 @@ public class TsaCircuitBreakerTests
             var chain = new List<Exception>();
             for (var e = ex; e != null; e = e.InnerException) chain.Add(e);
             Assert.Contains(chain, e => e is TsaCircuitOpenException);
+            // One exception type for "could not talk to the authority", whatever iText did around it.
+            Assert.Contains(chain, e => e is TsaCommunicationException);
+        }
+        finally
+        {
+            TsaCircuitBreaker.Default = previous;
+        }
+    }
+
+    [Fact]
+    public void Only_transport_errors_timeouts_and_5xx_count_against_the_host()
+    {
+        Assert.False(TsaCircuitBreaker.CountsAsHostFailure(
+            new HttpRequestException("401", null, System.Net.HttpStatusCode.Unauthorized)));
+        Assert.False(TsaCircuitBreaker.CountsAsHostFailure(
+            new HttpRequestException("404", null, System.Net.HttpStatusCode.NotFound)));
+        Assert.True(TsaCircuitBreaker.CountsAsHostFailure(
+            new HttpRequestException("503", null, System.Net.HttpStatusCode.ServiceUnavailable)));
+        Assert.True(TsaCircuitBreaker.CountsAsHostFailure(new HttpRequestException("refused")));
+        Assert.True(TsaCircuitBreaker.CountsAsHostFailure(new TaskCanceledException()));
+        Assert.False(TsaCircuitBreaker.CountsAsHostFailure(new FormatException()));
+    }
+
+    [Fact]
+    public void Failures_far_apart_are_not_in_a_row()
+    {
+        var time = new FakeTime();
+        var breaker = Breaker(time, threshold: 3, openSeconds: 30);
+        breaker.RecordFailure("h");
+        breaker.RecordFailure("h");
+        time.Now += TimeSpan.FromMinutes(10);
+        breaker.RecordFailure("h");
+
+        breaker.Acquire("h"); // the count restarted: one failure, not three
+    }
+
+    [Fact]
+    public void Probe_scope_does_not_feed_the_breaker()
+    {
+        var previous = TsaCircuitBreaker.Default;
+        TsaCircuitBreaker.Default = Breaker(new FakeTime(), threshold: 2);
+        try
+        {
+            var client = new PinnedIpTsaClient("https://tsa.probe-test.invalid/tsr", null, null);
+            var imprint = System.Security.Cryptography.SHA256.HashData(new byte[] { 1 });
+
+            using (TsaCircuitBreaker.Bypass())
+            {
+                for (var i = 0; i < 5; i++) Assert.ThrowsAny<Exception>(() => client.GetTimeStampToken(imprint));
+            }
+
+            Assert.False(TsaCircuitBreaker.Default.IsOpen(client.BreakerKey));
+        }
+        finally
+        {
+            TsaCircuitBreaker.Default = previous;
+        }
+    }
+
+    [Fact]
+    public void Credentials_are_part_of_the_key_so_one_wrong_password_is_not_everybodys_outage()
+    {
+        var a = new PinnedIpTsaClient("https://tsa.example.com/tsr", "tenant-a", "wrong");
+        var b = new PinnedIpTsaClient("https://tsa.example.com/tsr", "tenant-b", "right");
+        var a2 = new PinnedIpTsaClient("https://tsa.example.com/tsr", "tenant-a", "wrong");
+
+        Assert.NotEqual(a.BreakerKey, b.BreakerKey);
+        Assert.Equal(a.BreakerKey, a2.BreakerKey);
+        Assert.DoesNotContain("wrong", a.BreakerKey);
+    }
+
+    [Fact]
+    public void The_host_map_stays_bounded_under_a_flood_of_made_up_hosts()
+    {
+        var breaker = Breaker(new FakeTime(), threshold: 1);
+        for (var i = 0; i < 3000; i++) breaker.RecordFailure($"h{i}.example.com");
+
+        Assert.True(breaker.TrackedHosts <= 1024, $"tracked {breaker.TrackedHosts}");
+    }
+
+    [Fact]
+    public void Abandoned_work_that_reads_a_disposed_deadline_does_not_count_against_the_authority()
+    {
+        var previous = TsaCircuitBreaker.Default;
+        TsaCircuitBreaker.Default = Breaker(new FakeTime(), threshold: 1);
+        try
+        {
+            var client = new PinnedIpTsaClient("https://tsa.abandoned-test.invalid/tsr", null, null);
+            var imprint = System.Security.Cryptography.SHA256.HashData(new byte[] { 1 });
+            var deadline = new DotNetSigningServer.Services.Operations.OperationDeadline(
+                TimeSpan.FromMinutes(1), CancellationToken.None);
+
+            // The attempt was abandoned: its token was cancelled and the request is long gone.
+            deadline.Cancel();
+            deadline.Dispose();
+            var work = deadline.Run(_ =>
+            {
+                Assert.ThrowsAny<Exception>(() => client.GetTimeStampToken(imprint));
+                return Task.FromResult(0);
+            });
+            work.GetAwaiter().GetResult();
+
+            Assert.False(TsaCircuitBreaker.Default.IsOpen(client.BreakerKey),
+                "our own cancellation must not be recorded as the authority failing");
         }
         finally
         {

@@ -96,7 +96,7 @@ Every paid call (`sign`, `sign-pfx`, `timestamp`, `extend-signature`,
   charged, `failed` = nothing irreversible happened, `failed_uncertain` = an
   external step (TSA, model) may have happened, but nothing was delivered or
   charged. `404` = the request never arrived. States are kept for 7 days.
-- **Deadlines** (under Cloudflare's 100 s): 45 s sign/timestamp/seal/…, 60 s
+- **Deadlines** (under Cloudflare's 100 s; the portal's post-sign wait is 30 s, see docs/operations.md): 45 s sign/timestamp/seal/…, 60 s
   fill-pdf and PDF/A, 75 s find-codes/extend-signature/AI. Expiry cancels the work
   and answers `504 OPERATION_DEADLINE_EXCEEDED` (`failed`, or `failed_uncertain`
   when a TSA or model call had started).

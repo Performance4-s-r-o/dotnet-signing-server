@@ -26,35 +26,69 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
     public PinnedIpTsaClient(string url, string? username, string? password)
         : base(url, username, password)
     {
+        BreakerKey = KeyFor(url, username, password);
+    }
+
+    /// <summary>
+    /// What the circuit breaker is keyed by: the host, plus a hash of the credentials when
+    /// there are any. One tenant's wrong password must not take the authority away from the
+    /// others, and platform authorities (the same credentials everywhere) still share one.
+    /// </summary>
+    internal string BreakerKey { get; }
+
+    private static string KeyFor(string url, string? username, string? password)
+    {
+        var host = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : url;
+        if (string.IsNullOrEmpty(username)) return host;
+        var hash = System.Security.Cryptography.SHA256.HashData(
+            Encoding.UTF8.GetBytes($"{username}\0{password}"));
+        return $"{host}#{Convert.ToHexString(hash, 0, 6)}";
     }
 
     protected override byte[] GetTSAResponse(byte[] requestBytes)
     {
-        // The breaker comes first: an authority that has just failed N times in a row is not
-        // asked again for a while, which also hands a primary's turn to the backup at once (#72).
-        var host = Uri.TryCreate(tsaURL, UriKind.Absolute, out var uri) ? uri.Host : tsaURL;
         var breaker = TsaCircuitBreaker.Default;
-        breaker.Acquire(host);
-
-        // From here the authority may issue (and bill) a token whatever comes back.
-        OperationDeadline.MarkExternalCall();
+        var feed = !TsaCircuitBreaker.IsBypassed;
         try
         {
+            // The breaker comes first: an authority that has just failed N times in a row is not
+            // asked again for a while, which also hands a primary's turn to the backup at once (#72).
+            if (feed) breaker.Acquire(BreakerKey);
+
+            // From here the authority may issue (and bill) a token whatever comes back.
+            OperationDeadline.MarkExternalCall();
+
             // iText's ITSAClient contract is synchronous; this runs on a request thread
             // that is already blocked inside the signing pipeline.
             var response = GetTsaResponseAsync(requestBytes).GetAwaiter().GetResult();
-            breaker.RecordSuccess(host);
+            if (feed) breaker.RecordSuccess(BreakerKey);
             return response;
         }
-        catch (OperationCanceledException) when (OperationDeadline.CurrentToken.IsCancellationRequested)
+        catch (TsaCircuitOpenException open)
         {
-            // Our own side gave up (deadline, caller): says nothing about the authority.
-            breaker.Release(host);
+            throw new TsaCommunicationException(tsaURL, "The timestamp authority's circuit breaker is open.", open);
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException || OperationDeadline.CurrentToken.IsCancellationRequested)
+        {
+            // Our own side gave up (deadline, caller, an abandoned attempt): says nothing
+            // about the authority.
+            if (feed) breaker.Release(BreakerKey);
             throw;
         }
-        catch
+        catch (Exception ex)
         {
-            breaker.RecordFailure(host);
+            if (feed)
+            {
+                if (TsaCircuitBreaker.CountsAsHostFailure(ex)) breaker.RecordFailure(BreakerKey);
+                else breaker.Release(BreakerKey);
+            }
+
+            // One place that turns "could not talk to the authority" into the exception the API
+            // maps to TSA_UNREACHABLE; iText's own wrapping does not do it for transport errors.
+            if (ex is HttpRequestException or TimeoutException or OperationCanceledException or System.IO.IOException)
+            {
+                throw new TsaCommunicationException(tsaURL, $"The timestamp authority request failed ({ex.GetType().Name}).", ex);
+            }
             throw;
         }
     }

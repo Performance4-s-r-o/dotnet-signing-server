@@ -201,6 +201,8 @@ namespace DotNetSigningServer.Services
         /// </summary>
         public void ProbeTsa(string url, string? username, string? password)
         {
+            // Free, and takes any URL and password: it must not feed the circuit breaker (#72).
+            using var noBreaker = TsaCircuitBreaker.Bypass();
             if (string.IsNullOrWhiteSpace(url))
             {
                 throw new TsaCommunicationException("(empty)", "TSA URL is required.");

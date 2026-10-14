@@ -24,6 +24,7 @@ public sealed class OperationDeadline : IDisposable
 
     private readonly CancellationTokenSource _deadline;
     private readonly CancellationTokenSource _linked;
+    private readonly CancellationToken _token;
     private volatile bool _externalCallStarted;
 
     public OperationDeadline(TimeSpan limit, CancellationToken callerToken)
@@ -31,12 +32,15 @@ public sealed class OperationDeadline : IDisposable
         Limit = limit;
         _deadline = new CancellationTokenSource(limit);
         _linked = CancellationTokenSource.CreateLinkedTokenSource(_deadline.Token, callerToken);
+        // Held as a value: abandoned work keeps reading it after the request is gone and the
+        // sources are disposed, and a token struct stays valid where its source's property throws.
+        _token = _linked.Token;
     }
 
     public TimeSpan Limit { get; }
 
     /// <summary>Cancelled by the deadline or by the caller giving up (when nobody can ask again).</summary>
-    public CancellationToken Token => _linked.Token;
+    public CancellationToken Token => _token;
 
     public bool Expired => _deadline.IsCancellationRequested;
 
@@ -63,7 +67,11 @@ public sealed class OperationDeadline : IDisposable
             return work(Token);
         });
 
-    public void Cancel() => _linked.Cancel();
+    public void Cancel()
+    {
+        try { _linked.Cancel(); }
+        catch (ObjectDisposedException) { /* already over */ }
+    }
 
     public void Dispose()
     {
@@ -83,4 +91,55 @@ public sealed class OperationDeadlineExceededException : Exception
 
     /// <summary>The TSA or model may have done its part: the state is <c>failed_uncertain</c>.</summary>
     public bool ExternalCallStarted { get; }
+}
+
+/// <summary>
+/// Work that outlived its deadline and is still running (#72). iText cannot be interrupted,
+/// so after a 504 the task keeps its CPU and memory until it ends; the caller's concurrency
+/// slot is already free, so retrying on 504 would otherwise stack up unbounded running jobs.
+/// New paid operations are refused while a user (or the process) has too many of these.
+/// </summary>
+public static class AbandonedWork
+{
+    private static readonly object Gate = new();
+    private static readonly Dictionary<Guid, int> PerUser = new();
+    private static int _total;
+
+    public static int Total { get { lock (Gate) return _total; } }
+
+    public static int For(Guid userId)
+    {
+        lock (Gate) return PerUser.TryGetValue(userId, out var n) ? n : 0;
+    }
+
+    /// <summary>Whether a new operation of this user must be refused, and whether the process limit says so.</summary>
+    public static bool IsOverLimit(Guid userId, int perUser, int total, out bool global)
+    {
+        lock (Gate)
+        {
+            global = _total >= total;
+            return global || (PerUser.TryGetValue(userId, out var n) && n >= perUser);
+        }
+    }
+
+    /// <summary>Counts <paramref name="running"/> as abandoned until it ends, however it ends.</summary>
+    public static void Track(Guid userId, Task running, Action? whenOver = null)
+    {
+        lock (Gate)
+        {
+            _total++;
+            PerUser[userId] = PerUser.GetValueOrDefault(userId) + 1;
+        }
+        _ = running.ContinueWith(t =>
+        {
+            _ = t.Exception; // observed
+            lock (Gate)
+            {
+                _total--;
+                var left = PerUser.GetValueOrDefault(userId) - 1;
+                if (left <= 0) PerUser.Remove(userId); else PerUser[userId] = left;
+            }
+            whenOver?.Invoke();
+        }, TaskScheduler.Default);
+    }
 }

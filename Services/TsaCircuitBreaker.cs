@@ -82,8 +82,55 @@ public sealed class TsaCircuitBreaker
         public readonly object Gate = new();
         public int Failures;
         public DateTimeOffset OpenUntil;
+        public DateTimeOffset LastFailure;
+        public long Touched;
         public bool Probing;
     }
+
+    private long _clock;
+
+    /// <summary>
+    /// Failures must be close together to count as "in a row": a count older than this is
+    /// forgotten, so a slow trickle over days never opens the breaker.
+    /// </summary>
+    private TimeSpan FailureWindow => TimeSpan.FromSeconds(Math.Max(60, _options.OpenSeconds * 2));
+
+    internal int TrackedHosts => _hosts.Count;
+
+    private static readonly AsyncLocal<bool> Bypassed = new();
+
+    /// <summary>
+    /// While the scope is open, calls on this flow neither consult nor feed any breaker. For
+    /// <c>/api/tsa-probe</c>: it is free and takes any URL and password, so letting it feed the
+    /// breaker would let anyone open it for a platform authority.
+    /// </summary>
+    public static IDisposable Bypass()
+    {
+        var previous = Bypassed.Value;
+        Bypassed.Value = true;
+        return new Scope(previous);
+    }
+
+    internal static bool IsBypassed => Bypassed.Value;
+
+    private sealed class Scope(bool previous) : IDisposable
+    {
+        public void Dispose() => Bypassed.Value = previous;
+    }
+
+    /// <summary>
+    /// Whether a failure says the authority itself is unwell: transport errors, timeouts and
+    /// 5xx. A 4xx is the authority answering — wrong credentials or a malformed request of one
+    /// caller — and must not take the authority away from everybody else.
+    /// </summary>
+    internal static bool CountsAsHostFailure(Exception ex) => ex switch
+    {
+        HttpRequestException h => h.StatusCode is null or >= System.Net.HttpStatusCode.InternalServerError,
+        TimeoutException => true,
+        OperationCanceledException => true,
+        System.IO.IOException => true,
+        _ => false,
+    };
 
     /// <summary>
     /// Whether a call may go out. Throws <see cref="TsaCircuitOpenException"/> when not. The
@@ -119,11 +166,20 @@ public sealed class TsaCircuitBreaker
         var state = _hosts.GetOrAdd(host, _ => new HostState());
         lock (state.Gate)
         {
+            var now = _time.GetUtcNow();
+            // Not in a row any more: the earlier failures are too old to mean anything.
+            if (state.Failures > 0 && state.Failures < _options.FailureThreshold
+                && now - state.LastFailure > FailureWindow)
+            {
+                state.Failures = 0;
+            }
             state.Failures++;
+            state.LastFailure = now;
+            state.Touched = Interlocked.Increment(ref _clock);
             state.Probing = false;
             if (state.Failures >= _options.FailureThreshold)
             {
-                state.OpenUntil = _time.GetUtcNow().AddSeconds(_options.OpenSeconds);
+                state.OpenUntil = now.AddSeconds(_options.OpenSeconds);
             }
         }
     }
@@ -144,11 +200,22 @@ public sealed class TsaCircuitBreaker
 
     private void Prune()
     {
-        // Below the threshold nothing is refused yet, so forgetting those hosts costs only
-        // their partial count.
+        // First what no longer matters: counts below the threshold (nothing is refused yet)
+        // and breakers whose open period and failure window are both over.
+        var now = _time.GetUtcNow();
         foreach (var (host, state) in _hosts)
         {
-            if (state.Failures < _options.FailureThreshold) _hosts.TryRemove(host, out _);
+            var stale = state.Failures < _options.FailureThreshold
+                || now - state.OpenUntil > FailureWindow;
+            if (stale && !state.Probing) _hosts.TryRemove(host, out _);
+        }
+
+        // Still full: every entry is an open breaker. Drop the least recently touched, so a
+        // flood of made-up hosts cannot grow the map and cannot keep real ones pinned either.
+        while (_hosts.Count >= MaxTrackedHosts)
+        {
+            var oldest = _hosts.MinBy(kv => kv.Value.Touched);
+            if (oldest.Key is null || !_hosts.TryRemove(oldest.Key, out _)) break;
         }
     }
 }

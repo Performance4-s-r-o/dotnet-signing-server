@@ -24,7 +24,7 @@ public class OperationsOptions
 
     /// <summary>
     /// Deadline of the quick paid operations (sign, sign-pfx, timestamp, visual-sign, seal,
-    /// attachment), in seconds (#72). Under Cloudflare's 100 s and under the portal's wait; on
+    /// attachment), in seconds (#72). Under Cloudflare's 100 s (the portal's own wait for post-sign is 30 s, shorter: aligning it is the portal's task); on
     /// expiry the work is cancelled and the operation fails. Env <c>OPERATION_DEADLINE_SIGN_SECONDS</c>.
     /// </summary>
     public int SignDeadlineSeconds { get; set; } = 45;
@@ -45,4 +45,14 @@ public class OperationsOptions
         "find-codes" or "extend-signature" or "ai-detect-fields" or "ai-extract-data" => HeavyDeadlineSeconds,
         _ => SignDeadlineSeconds,
     });
+
+    /// <summary>
+    /// Operations of one user that outlived their deadline and still run (iText cannot be
+    /// interrupted). Above this a new paid operation is refused with 429. Config only
+    /// (<c>Operations:MaxAbandonedPerUser</c>).
+    /// </summary>
+    public int MaxAbandonedPerUser { get; set; } = 2;
+
+    /// <summary>The same for the whole process; above it 503. <c>Operations:MaxAbandonedTotal</c>.</summary>
+    public int MaxAbandonedTotal { get; set; } = 16;
 }

@@ -980,8 +980,9 @@ public class OperationStateTests : IClassFixture<OperationStateFixture>, IDispos
     public async Task Open_breaker_answers_503_with_retry_after_and_the_same_code()
     {
         var (_, client) = await _fx.NewAccountAsync(credits: 5);
-        _fx.Timestamp = () => throw new TsaCommunicationException(
-            "https://tsa.example.com", "open", new TsaCircuitOpenException("tsa.example.com", TimeSpan.FromSeconds(17)));
+        // As iText hands it up from inside its signing pipeline: wrapped, not the bare exception.
+        _fx.Timestamp = () => throw new InvalidOperationException("signing failed", new TsaCommunicationException(
+            "https://tsa.example.com", "open", new TsaCircuitOpenException("tsa.example.com", TimeSpan.FromSeconds(17))));
         var body = new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() };
 
         var response = await client.SendAsync(Post("/api/timestamp", body, Guid.NewGuid().ToString()));
@@ -989,6 +990,89 @@ public class OperationStateTests : IClassFixture<OperationStateFixture>, IDispos
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Equal("17", response.Headers.RetryAfter?.Delta?.TotalSeconds.ToString());
         Assert.Contains("TSA_UNREACHABLE", await response.Content.ReadAsStringAsync());
+    }
+
+    [DockerFact]
+    public async Task Transport_failure_wrapped_by_the_library_is_still_tsa_unreachable()
+    {
+        var (_, client) = await _fx.NewAccountAsync(credits: 5);
+        _fx.Timestamp = () => throw new InvalidOperationException(
+            "signing failed", new TsaCommunicationException("https://tsa.example.com", "x", new HttpRequestException("refused 10.9.8.7")));
+        var body = new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() };
+
+        var response = await client.SendAsync(Post("/api/timestamp", body, Guid.NewGuid().ToString()));
+        var text = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        Assert.Contains("TSA_UNREACHABLE", text);
+        Assert.DoesNotContain("10.9.8.7", text);
+    }
+
+    [DockerFact]
+    public async Task Work_that_finishes_during_the_grace_is_delivered_and_charged_not_thrown_away()
+    {
+        var options = LiveOptions();
+        var original = options.SignDeadlineSeconds;
+        options.SignDeadlineSeconds = 1;
+        try
+        {
+            var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+            var body = new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() };
+            _fx.Timestamp = () =>
+            {
+                OperationDeadline.MarkExternalCall();
+                Thread.Sleep(TimeSpan.FromMilliseconds(1500)); // past the deadline, inside the grace
+                return SignedPdf;
+            };
+
+            var response = await client.SendAsync(Post("/api/timestamp", body, Guid.NewGuid().ToString()));
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal(SignedPdf, await ResultAsync(response));
+            Assert.Equal(4, await _fx.BalanceAsync(userId));
+            Assert.Single(await _fx.UsageAsync(userId));
+        }
+        finally
+        {
+            options.SignDeadlineSeconds = original;
+        }
+    }
+
+    [DockerFact]
+    public async Task Abandoned_work_counts_against_the_user_until_it_ends()
+    {
+        var options = LiveOptions();
+        var (deadline, perUser) = (options.SignDeadlineSeconds, options.MaxAbandonedPerUser);
+        options.SignDeadlineSeconds = 1;
+        options.MaxAbandonedPerUser = 1;
+        Guid userId = default;
+        try
+        {
+            HttpClient client;
+            (userId, client) = await _fx.NewAccountAsync(credits: 5);
+            var body = new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() };
+            _fx.Timestamp = () =>
+            {
+                Thread.Sleep(TimeSpan.FromSeconds(7)); // deaf to cancellation, like iText mid-page
+                return SignedPdf;
+            };
+
+            var first = await client.SendAsync(Post("/api/timestamp", body, Guid.NewGuid().ToString()));
+            Assert.Equal(HttpStatusCode.GatewayTimeout, first.StatusCode);
+            Assert.Equal(1, AbandonedWork.For(userId));
+
+            // Retrying on 504 must not stack up another job beside the one still running.
+            var second = await client.SendAsync(Post("/api/timestamp", body, Guid.NewGuid().ToString()));
+            Assert.Equal(HttpStatusCode.TooManyRequests, second.StatusCode);
+            Assert.Equal(1, _fx.TimestampCalls);
+            Assert.Equal(5, await _fx.BalanceAsync(userId));
+        }
+        finally
+        {
+            options.SignDeadlineSeconds = deadline;
+            options.MaxAbandonedPerUser = perUser;
+            for (var i = 0; i < 100 && AbandonedWork.For(userId) > 0; i++) await Task.Delay(100);
+        }
     }
 
     [Fact]
