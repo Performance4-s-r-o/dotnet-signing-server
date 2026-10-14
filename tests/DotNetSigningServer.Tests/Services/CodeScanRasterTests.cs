@@ -190,6 +190,22 @@ public class CodeScanRasterTests
     }
 
     [GhostscriptFact]
+    public async Task A_code_on_a_CMYK_page_is_found()
+    {
+        // CMYK content makes ImageMagick route the page through the ps:cmyk delegate and read PAM back.
+        var pdf = Pdf(new[] { (A4W, A4H) }, page =>
+        {
+            Qr(page, "P4-71-CMYK", x: 100, y: 600, module: 4);
+            var canvas = new PdfCanvas(page);
+            canvas.SetFillColorCmyk(0, 0, 0, 1).Rectangle(10, 10, 5, 5).Fill();
+            canvas.Release();
+        });
+
+        var hit = Assert.Single(await Scan(pdf));
+        Assert.Equal("P4-71-CMYK", hit.GetProperty("value").GetString());
+    }
+
+    [GhostscriptFact]
     public async Task A_code_on_an_A0_page_is_found_at_the_reduced_dpi()
     {
         var pdf = Pdf(new[] { (A0W, A0H) }, page => Qr(page, "P4-71-A0", x: 1500, y: 2000, module: 8));
@@ -205,7 +221,7 @@ public class CodeScanRasterTests
     }
 
     [GhostscriptFact]
-    public async Task Thirty_A4_pages_stay_under_500_MB()
+    public async Task Thirty_A4_pages_keep_ImageMagick_process_memory_under_500_MB()
     {
         var pdf = Pdf(Enumerable.Repeat((A4W, A4H), 30).ToArray(), page => Qr(page, "P4-71-MEM", 100, 600, 4));
 

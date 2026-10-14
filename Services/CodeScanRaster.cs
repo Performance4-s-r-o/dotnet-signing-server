@@ -68,7 +68,7 @@ public static class CodeScanRaster
     internal const string Policy = """
         <policymap>
           <policy domain="coder" rights="none" pattern="*" />
-          <policy domain="coder" rights="read" pattern="{PDF,PNG}" />
+          <policy domain="coder" rights="read" pattern="{PDF,PNG,PAM}" />
           <policy domain="coder" rights="write" pattern="GRAY" />
           <policy domain="delegate" rights="none" pattern="*" />
           <policy domain="delegate" rights="execute" pattern="gs" />
