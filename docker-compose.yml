@@ -118,6 +118,9 @@ services:
       # (PDF_ACTIVE_CONTENT). false switches the whole check off, Launch included —
       # only where documents carrying Acrobat boilerplate scripts must still be signed.
       - Limits__RejectActiveContent=${REJECT_ACTIVE_CONTENT:-true}
+      # find-codes (#71): ImageMagick pixel-cache memory for the whole process, bytes.
+      # 0 = by cores (1.5 GB below 8, 2.5 GB from 8). Over it a scan fails; nothing spills to disk.
+      - Limits__FindCodesMagickMemoryBytes=${FIND_CODES_MAGICK_MEMORY_BYTES:-0}
       # Paid operations (#77): results above this size are delivered but not kept for
       # an Idempotency-Key replay (the retry then gets 410).
       - Operations__MaxStoredResultBytes=${OPERATION_MAX_STORED_RESULT_BYTES:-26214400}
