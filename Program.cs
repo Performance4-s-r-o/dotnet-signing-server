@@ -254,6 +254,16 @@ builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection("Rese
 builder.Services.Configure<LokiOptions>(builder.Configuration.GetSection("Loki"));
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("AI"));
 builder.Services.Configure<LimitsOptions>(builder.Configuration.GetSection("Limits"));
+// Slow-body protection (#72). Kestrel's defaults are 30 s for headers and 240 B/s for the
+// body: a 40 MB upload may take days. 50 KB/s after a 5 s grace, headers within 15 s.
+builder.WebHost.ConfigureKestrel(kestrel =>
+{
+    kestrel.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(
+        builder.Configuration.GetValue<int?>("Limits:RequestHeadersTimeoutSeconds") ?? 15);
+    kestrel.Limits.MinRequestBodyDataRate = new Microsoft.AspNetCore.Server.Kestrel.Core.MinDataRate(
+        bytesPerSecond: builder.Configuration.GetValue<int?>("Limits:MinRequestBodyBytesPerSecond") ?? 50 * 1024,
+        gracePeriod: TimeSpan.FromSeconds(5));
+});
 builder.Services.Configure<SealOptions>(builder.Configuration.GetSection("Seal"));
 builder.Services.Configure<EvidenceOptions>(builder.Configuration.GetSection("Evidence"));
 builder.Services.Configure<OsTicketOptions>(builder.Configuration.GetSection("OsTicket"));

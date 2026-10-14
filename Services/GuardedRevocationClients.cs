@@ -69,6 +69,15 @@ internal sealed class GuardedResourceRetriever : DefaultResourceRetriever
     {
         if (!UrlFilter(url)) return null;
 
+        // One operation gets a fixed number of fetches and a window of time (#72).
+        if (!RevocationFetchPolicy.TryConsume()) return null;
+
+        var isOcsp = body is not null;
+        if (!isOcsp && RevocationFetchPolicy.TryGetCrl(url, out var cached))
+        {
+            return new MemoryStream(cached, writable: false);
+        }
+
         using var request = new HttpRequestMessage(
             body is null ? HttpMethod.Get : HttpMethod.Post, url);
 
@@ -90,16 +99,20 @@ internal sealed class GuardedResourceRetriever : DefaultResourceRetriever
 
         // The operation's deadline reaches the socket (#72); CRL and OCSP are read-only, so no
         // "external call" mark: a cancelled fetch leaves nothing uncertain behind.
-        var response = Client.Send(request, DotNetSigningServer.Services.Operations.OperationDeadline.CurrentToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            response.Dispose();
-            return null;
-        }
+        var token = DotNetSigningServer.Services.Operations.OperationDeadline.CurrentToken;
+        using var response = Client.Send(request, HttpCompletionOption.ResponseHeadersRead, token);
+        if (!response.IsSuccessStatusCode) return null;
 
-        // The stream is read by iText and must outlive this call, so the response is
-        // not disposed here — closing the stream releases the connection.
-        return response.Content.ReadAsStream();
+        // The answer is read here, with a cap, rather than handed to iText as a stream it reads
+        // for as long as the peer keeps sending. OCSP 64 KB, CRL 32 MB.
+        var bytes = RevocationFetchPolicy.ReadBounded(
+            response.Content,
+            isOcsp ? RevocationFetchPolicy.OcspMaxBytes : RevocationFetchPolicy.CrlMaxBytes,
+            token);
+        if (bytes is null) return null;
+
+        if (!isOcsp) RevocationFetchPolicy.PutCrl(url, bytes);
+        return new MemoryStream(bytes, writable: false);
     }
 
     public override Stream? GetInputStreamByUrl(Uri url) => Get(url, null, null);

@@ -114,10 +114,14 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
         // Linked to the operation's deadline, so a request that ran out of time stops waiting here.
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(OperationDeadline.CurrentToken);
         deadline.CancelAfter(RequestTimeout);
-        using var response = await SharedClient.SendAsync(request, deadline.Token).ConfigureAwait(false);
+        using var response = await SharedClient
+            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
-        var responseBytes = await response.Content.ReadAsByteArrayAsync(deadline.Token).ConfigureAwait(false);
+        // A timestamp token is a few kilobytes. 1 MB is generous; more is not a token.
+        var responseBytes = await RevocationFetchPolicy
+            .ReadBoundedAsync(response.Content, RevocationFetchPolicy.TsaMaxBytes, deadline.Token).ConfigureAwait(false)
+            ?? throw new HttpRequestException("The timestamp authority's answer exceeds the size limit.");
 
         // Mirror the stock client: some TSAs answer base64-encoded.
         var encoding = response.Content.Headers.ContentEncoding.FirstOrDefault();
