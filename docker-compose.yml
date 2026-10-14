@@ -24,7 +24,10 @@ services:
       - AllowedHosts=${ALLOWED_HOSTS:-*}
       - UseLocalDb=false
       - FqdnServerName=${FQDN_SERVER:-localhost}
-      - ConnectionStrings__DefaultConnection=Host=${DB_HOST};Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
+      # Pool and timeouts (#75): the database is shared with the portal's PostgREST and pool,
+      # so this server must not take what its connection-limited role would refuse anyway.
+      # Max Pool Size stays under the role's `connection limit` (25), leaving room for migrations.
+      - ConnectionStrings__DefaultConnection=Host=${DB_HOST};Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD};Maximum Pool Size=${DB_MAX_POOL_SIZE:-20};Timeout=15;Command Timeout=${DB_COMMAND_TIMEOUT_SECONDS:-15}
       # Schema migrations are a release step (#85): the `migrate` service below (or
       # `dotnet dotnet-signing-server.dll --migrate`) runs once before the new version
       # starts. Without it the server refuses to start while migrations are pending.
