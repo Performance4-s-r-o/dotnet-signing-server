@@ -11,12 +11,13 @@ namespace DotNetSigningServer.Tests.Services;
 public class UserEmailsTests
 {
     [Theory]
-    [InlineData("Foo@Example.CZ", "foo@example.cz")]
-    [InlineData("  foo@example.cz ", "foo@example.cz")]
-    [InlineData(null, "")]
-    public void Normalize_TrimsAndLowercases(string? input, string expected)
+    [InlineData("Foo@Example.CZ", "Foo@Example.CZ", "foo@example.cz")]
+    [InlineData("  foo@example.cz ", "foo@example.cz", "foo@example.cz")]
+    [InlineData(null, "", "")]
+    public void Trim_KeepsCase_KeyFoldsIt(string? input, string trimmed, string key)
     {
-        Assert.Equal(expected, UserEmails.Normalize(input));
+        Assert.Equal(trimmed, UserEmails.Trim(input));
+        Assert.Equal(key, UserEmails.Key(input));
     }
 
     [Theory]
@@ -103,5 +104,37 @@ public class UserEmailsPostgresTests : IClassFixture<OutboxPostgresFixture>
         // Resolved by a person (here: the second account removed), the migration goes through.
         await db.Users.Where(u => u.Email != lower.Email && u.Email.ToLower() == lower.Email).ExecuteDeleteAsync();
         await migrator.MigrateAsync();
+    }
+
+    /// <summary>
+    /// A database whose <c>LC_CTYPE</c> is C folds only ASCII in <c>lower()</c>. Folding the
+    /// typed address in .NET instead (ToLowerInvariant) would then never match a stored
+    /// non-ASCII address, not even typed exactly as stored.
+    /// </summary>
+    [Fact]
+    public async Task NonAsciiAddress_IsFound_InADatabaseWithCLocale()
+    {
+        var name = $"c_locale_{Guid.NewGuid():N}";
+        await using (var admin = new Npgsql.NpgsqlConnection(_pg.ConnectionString))
+        {
+            await admin.OpenAsync();
+            await using var create = admin.CreateCommand();
+            create.CommandText = $"CREATE DATABASE {name} TEMPLATE template0 LC_COLLATE 'C' LC_CTYPE 'C' ENCODING 'UTF8'";
+            await create.ExecuteNonQueryAsync();
+        }
+        var connection = new Npgsql.NpgsqlConnectionStringBuilder(_pg.ConnectionString) { Database = name }.ConnectionString;
+        var options = new DbContextOptionsBuilder<DotNetSigningServer.Data.ApplicationDbContext>()
+            .UseNpgsql(connection, o => o.MigrationsHistoryTable("__EFMigrationsHistory", "dotnet_signing"))
+            .Options;
+
+        await using var db = new DotNetSigningServer.Data.ApplicationDbContext(options);
+        await db.Database.MigrateAsync();
+        var user = TestHelpers.CreateTestUser("Žaneta.Nováková@Example.cz");
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        Assert.Equal(user.Id, (await db.Users.FindByEmailAsync("Žaneta.Nováková@Example.cz"))?.Id);
+        Assert.Equal(user.Id, (await db.Users.FindByEmailAsync(" Žaneta.Nováková@EXAMPLE.cz"))?.Id);
+        Assert.True(await db.Users.AnyWithEmailAsync("Žaneta.Nováková@example.CZ"));
     }
 }

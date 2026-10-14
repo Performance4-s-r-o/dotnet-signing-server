@@ -193,8 +193,9 @@ public class AccountController : Controller
         var verificationToken = SecureTokens.Generate();
         var user = new User
         {
-            // Stored normalised: one account per address whatever the case (#82).
-            Email = UserEmails.Normalize(model.Email),
+            // Trimmed; one account per address whatever the case is the lookup's and the
+            // unique index's job (lower("Email"), #82).
+            Email = UserEmails.Trim(model.Email),
             PasswordHash = hash,
             PasswordSalt = salt,
             PasswordIterations = iterations,
@@ -268,7 +269,7 @@ public class AccountController : Controller
         }
         if (!ModelState.IsValid) return View(model);
 
-        var rateLimitKey = $"signin:{(model.Email ?? "").ToLowerInvariant()}";
+        var rateLimitKey = $"signin:{UserEmails.Key(model.Email)}";
         if (IsRateLimited(rateLimitKey))
         {
             ModelState.AddModelError(string.Empty, _localizer["TooManySignInAttempts"]);
@@ -447,7 +448,7 @@ public class AccountController : Controller
             return RedirectToAction(nameof(SignIn));
         }
 
-        var rateLimitKey = $"2fa:{email.ToLowerInvariant()}";
+        var rateLimitKey = $"2fa:{UserEmails.Key(email)}";
         if (IsRateLimited(rateLimitKey))
         {
             TempData["Error"] = _localizer["TooManyVerificationAttempts"].Value;
@@ -508,7 +509,7 @@ public class AccountController : Controller
         }
         if (!ModelState.IsValid) return View(model);
 
-        var rateLimitKey = $"forgot:{(model.Email ?? "").ToLowerInvariant()}";
+        var rateLimitKey = $"forgot:{UserEmails.Key(model.Email)}";
         if (IsRateLimited(rateLimitKey))
         {
             // Always show success to prevent email enumeration
