@@ -553,8 +553,9 @@ public class OperationStateTests : IClassFixture<OperationStateFixture>, IDispos
             var retry = await service.BeginAsync(request);
             Assert.Equal(OperationStart.Started, retry.Outcome);
             Assert.Equal(2, retry.Attempt);
+            Assert.Equal(8, await _fx.BalanceAsync(userId));
+            Assert.True(await service.FailAsync(retry.Operation, retry.Attempt, uncertain: false, "TEST_DONE"));
         }
-        Assert.Equal(8, await _fx.BalanceAsync(userId));
     }
 
     [DockerFact]
@@ -629,9 +630,81 @@ public class OperationStateTests : IClassFixture<OperationStateFixture>, IDispos
                 .ExecuteUpdateAsync(s => s.SetProperty(o => o.ResultExpiresAt, DateTimeOffset.UtcNow.AddSeconds(-1)));
         }
 
+        Assert.False((await StatusAsync(client, key)).GetProperty("resultAvailable").GetBoolean());
+
         var retry = await client.SendAsync(Post("/api/timestamp", body, key));
         Assert.Equal(HttpStatusCode.Gone, retry.StatusCode);
         Assert.Equal(1, _fx.TimestampCalls);
+    }
+
+    [DockerFact]
+    public async Task A_signature_over_the_storage_limit_is_still_kept_for_the_retry()
+    {
+        // A presign is consumed once the signature completes; a lost result there would be a
+        // paid signature nobody can fetch.
+        var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+        var presign = await _fx.NewPresignAsync(userId);
+        var big = Convert.ToBase64String(new byte[(int)OperationStateFixture.Options.MaxStoredResultBytes]);
+        _fx.Sign = () => big;
+
+        var first = await client.SendAsync(Post("/api/sign", new SignInput { Id = presign, SignedHash = "00" }));
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        var retry = await client.SendAsync(Post("/api/sign", new SignInput { Id = presign, SignedHash = "00" }));
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        Assert.Equal(big, await ResultAsync(retry));
+        Assert.Equal(1, _fx.SignCalls);
+        Assert.Equal(4, await _fx.BalanceAsync(userId));
+    }
+
+    [DockerFact]
+    public async Task A_stored_result_that_cannot_be_decrypted_is_410_not_500()
+    {
+        var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+        var key = Guid.NewGuid().ToString();
+        var body = new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() };
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(Post("/api/timestamp", body, key))).StatusCode);
+
+        // As if written by another build (purpose string) or under a lost key.
+        await using (var db = _fx.Postgres.CreateContext())
+        {
+            await db.ApiOperations.Where(o => o.UserId == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(o => o.ResultProtected, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }));
+        }
+
+        var retry = await client.SendAsync(Post("/api/timestamp", body, key));
+        Assert.Equal(HttpStatusCode.Gone, retry.StatusCode);
+        Assert.Contains("OPERATION_RESULT_EXPIRED", await retry.Content.ReadAsStringAsync());
+        Assert.Equal(1, _fx.TimestampCalls);
+        Assert.Equal(4, await _fx.BalanceAsync(userId));
+    }
+
+    [DockerFact]
+    public async Task Expiry_rechecks_the_lease_so_a_renewed_attempt_survives()
+    {
+        var (userId, _) = await _fx.NewAccountAsync(credits: 10);
+        var request = new OperationRequest(userId, Enterprise: false, "seal", Guid.NewGuid().ToString(),
+            ApiOperationService.Fingerprint("z"), BaseCost: 1, Tier: 1);
+
+        await using var db = _fx.Postgres.CreateContext();
+        var service = _fx.Service(db);
+        var started = await service.BeginAsync(request);
+        await db.ApiOperations.Where(o => o.Id == started.Operation.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(o => o.LeaseUntil, DateTimeOffset.UtcNow.AddSeconds(-1)));
+
+        // The sweep reads the row as expired ...
+        var stale = await db.ApiOperations.AsNoTracking().SingleAsync(o => o.Id == started.Operation.Id);
+        // ... the heartbeat renews it in between ...
+        Assert.True(await service.ExtendLeaseAsync(started.Operation.Id, started.Attempt));
+        // ... so the expiry must not end the live attempt.
+        Assert.False(await service.ExpireAsync(stale, DateTimeOffset.UtcNow));
+
+        var row = await db.ApiOperations.AsNoTracking().SingleAsync(o => o.Id == started.Operation.Id);
+        Assert.Equal(ApiOperationState.Running, row.State);
+        Assert.Equal(9, await _fx.BalanceAsync(userId));
+
+        // Leave no running row behind for the global sweep in other tests.
+        Assert.True(await service.FailAsync(started.Operation, started.Attempt, uncertain: false, "TEST_DONE"));
     }
 
     [DockerFact]
@@ -687,7 +760,9 @@ public class OperationStateTests : IClassFixture<OperationStateFixture>, IDispos
         while (DateTime.UtcNow < until)
         {
             await using var db = _fx.Postgres.CreateContext();
-            Assert.Equal(0, await _fx.Service(db).SweepAsync(DateTimeOffset.UtcNow));
+            // The sweep is global: other tests' rows may expire, ours must not.
+            await _fx.Service(db).SweepAsync(DateTimeOffset.UtcNow);
+            Assert.Equal(ApiOperationState.Running, (await _fx.OperationAsync(userId)).State);
             await Task.Delay(100);
         }
         Assert.Equal(HttpStatusCode.Conflict, (await client.SendAsync(Post("/api/timestamp", body, key))).StatusCode);

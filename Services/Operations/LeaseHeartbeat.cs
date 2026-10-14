@@ -13,9 +13,11 @@ public sealed class LeaseHeartbeat : IAsyncDisposable
 {
     private readonly CancellationTokenSource _stop = new();
     private readonly Task _loop;
+    private readonly ILogger _logger;
 
     public LeaseHeartbeat(IServiceScopeFactory scopes, Guid operationRowId, int attempt, TimeSpan interval, ILogger logger)
     {
+        _logger = logger;
         _loop = RunAsync(scopes, operationRowId, attempt, interval, logger, _stop.Token);
     }
 
@@ -49,7 +51,19 @@ public sealed class LeaseHeartbeat : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _stop.Cancel();
-        try { await _loop; } catch (OperationCanceledException) { }
+        try
+        {
+            await _loop;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Called once the work is done: a broken heartbeat must neither lose the result
+            // nor hide the work's own exception. The lease then simply runs its course.
+            _logger.LogError(ex, "Lease heartbeat loop failed");
+        }
+        catch (OperationCanceledException)
+        {
+        }
         _stop.Dispose();
     }
 }

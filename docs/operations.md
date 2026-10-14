@@ -15,7 +15,7 @@ Endpoints: `sign`, `sign-pfx`, `timestamp`, `extend-signature`, `visual-sign`,
 | Replay | Same key + same request → the stored response, no work, no charge. Kept 60 min (`Operations:ResultRetention`). |
 | `409 OPERATION_IN_PROGRESS` | Another attempt holds the key; `Retry-After: 5`. |
 | `422 IDEMPOTENCY_KEY_REUSED` | The key belongs to a different request (endpoint, body or presign). |
-| `410 OPERATION_RESULT_EXPIRED` | Completed and charged, but the result is not kept (past retention, over the size limit, or storing it failed). |
+| `410 OPERATION_RESULT_EXPIRED` | Completed and charged, but the result is not kept (past retention, over the size limit, storing it failed, or it can no longer be decrypted). **Not a refund**: from `/api/sign` it means "done and paid, result lost" — the credits are not returned. |
 | `400 IDEMPOTENCY_KEY_INVALID` | Malformed key. |
 | `402` + `code: INSUFFICIENT_CREDITS` | The reservation failed; nothing ran. |
 | `GET /api/operations/{operationId}` | Free. `state`, `creditsCharged`, `creditsReserved`, `attempts`, `errorCode`, `resultAvailable`, timestamps, `leaseUntil`. `404 OPERATION_NOT_FOUND` = never arrived (or older than 7 days). |
@@ -48,7 +48,12 @@ delivered either (500).
 The result is stored (Data Protection, bound to the row and the account) only when somebody
 can come back for it — a caller's `Idempotency-Key`, or the presign of `/api/sign` — and only
 up to `Operations:MaxStoredResultBytes` (25 MB, env `OPERATION_MAX_STORED_RESULT_BYTES`).
-Larger results are delivered but not kept. Without a key nothing is stored.
+Larger results are delivered but not kept. Without a key nothing is stored. `/api/sign` is
+exempt from the size limit (one PDF, and the presign is gone once it completes); its presign
+is deleted only after the result is safely stored.
+
+`Operations` options are validated at startup: `HeartbeatInterval` > 0 and at most a third
+of `Lease`, `ResultRetention` > 0, `MaxStoredResultBytes` ≥ 0.
 
 ## Behaviour changes for existing callers
 

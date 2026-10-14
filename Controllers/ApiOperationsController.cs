@@ -45,11 +45,12 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = "IDEMPOTENCY_KEY_INVALID", message = Localizer["Error_IDEMPOTENCY_KEY_INVALID"].Value });
             }
 
+            var now = DateTimeOffset.UtcNow;
             var op = await Operations.FindAsync(user.Id, operationId, HttpContext.RequestAborted);
-            if (op != null && op.State == ApiOperationState.Running && op.LeaseUntil < DateTimeOffset.UtcNow)
+            if (op != null && op.State == ApiOperationState.Running && op.LeaseUntil < now)
             {
                 // Do not report a dead attempt as running: expire it (returns its credits) first.
-                await Operations.FailAsync(op, op.Attempts, uncertain: true, ApiOperationService.LeaseExpiredCode);
+                await Operations.ExpireAsync(op, now);
                 op = await Operations.FindAsync(user.Id, operationId, HttpContext.RequestAborted);
             }
             if (op == null)
@@ -66,7 +67,8 @@ namespace DotNetSigningServer.Controllers
                 creditsCharged = op.CreditsCharged,
                 creditsReserved = op.CreditsReserved,
                 errorCode = op.ErrorCode,
-                resultAvailable = op.State == ApiOperationState.Completed && op.ResultProtected != null,
+                // Same rule as a replay: stored and not past its retention.
+                resultAvailable = op.State == ApiOperationState.Completed && op.ResultProtected != null && op.ResultExpiresAt > now,
                 createdAt = op.CreatedAt,
                 updatedAt = op.UpdatedAt,
                 completedAt = op.CompletedAt,

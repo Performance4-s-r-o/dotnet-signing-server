@@ -275,7 +275,9 @@ namespace DotNetSigningServer.Controllers
                 var jsonOptions = HttpContext.RequestServices
                     .GetRequiredService<IOptions<Microsoft.AspNetCore.Mvc.JsonOptions>>().Value.JsonSerializerOptions;
                 var json = JsonSerializer.SerializeToUtf8Bytes(result.Body, result.Body.GetType(), jsonOptions);
-                if (json.LongLength <= Operations.Options.MaxStoredResultBytes)
+                // The presign path is one PDF, not a batch, and it is the only way back to a
+                // signature already paid for (the presign goes once it completes): no size limit.
+                if (presignId != null || json.LongLength <= Operations.Options.MaxStoredResultBytes)
                 {
                     stored = new StoredResult(StatusCodes.Status200OK, json, result.PdfBase64 != null, result.PdfHeaders);
                 }
@@ -287,14 +289,17 @@ namespace DotNetSigningServer.Controllers
                 }
             }
 
-            if (!await CompleteOperationAsync(op, attempt, stored))
+            var (completed, kept) = await CompleteOperationAsync(op, attempt, stored);
+            if (!completed)
             {
                 // The lease ran out and the credits went back: this result is not ours to hand out.
                 throw new InvalidOperationException($"Operation {op.OperationId} lost its lease before completion.");
             }
 
             Response.Headers[OperationStateHeader] = ApiOperationState.Completed;
-            if (afterCompleted != null)
+            // Clean-up (the presign) only once the result is safely kept: otherwise a retry
+            // would find neither the result nor the presign.
+            if (afterCompleted != null && kept)
             {
                 try { await afterCompleted(); }
                 catch (Exception ex) { Logger.LogWarning(ex, "Post-completion clean-up failed for {OperationId}", op.OperationId); }
@@ -317,13 +322,15 @@ namespace DotNetSigningServer.Controllers
         /// retry gets 410. Only when even that cannot be recorded is the reservation returned —
         /// and then nothing is delivered either.
         /// </summary>
-        private async Task<bool> CompleteOperationAsync(ApiOperation op, int attempt, StoredResult? stored)
+        /// <returns>Whether it completed, and whether the result was kept for replay.</returns>
+        private async Task<(bool Completed, bool Kept)> CompleteOperationAsync(ApiOperation op, int attempt, StoredResult? stored)
         {
             if (stored != null)
             {
                 try
                 {
-                    return await Operations.CompleteAsync(op, attempt, stored);
+                    var done = await Operations.CompleteAsync(op, attempt, stored);
+                    return (done, done);
                 }
                 catch (Exception storeError)
                 {
@@ -335,7 +342,7 @@ namespace DotNetSigningServer.Controllers
             {
                 // After a failed store this is also how a commit that did go through is
                 // recognised: the row is already completed by this attempt.
-                return await Operations.CompleteAsync(op, attempt, null);
+                return (await Operations.CompleteAsync(op, attempt, null), false);
             }
             catch
             {
@@ -349,7 +356,18 @@ namespace DotNetSigningServer.Controllers
         /// <summary>The first answer again, without doing the work or charging.</summary>
         private IActionResult ReplayResult(ApiOperation op)
         {
-            var stored = Operations.ReadResult(op);
+            StoredResult stored;
+            try
+            {
+                stored = Operations.ReadResult(op);
+            }
+            catch (System.Security.Cryptography.CryptographicException ex)
+            {
+                // A row the current key ring or purpose cannot open (an older build, a lost
+                // key): the result is gone, the operation is still done and paid for.
+                Logger.LogWarning(ex, "Stored result of operation {OperationId} cannot be decrypted", op.OperationId);
+                return StatusCode(StatusCodes.Status410Gone, new { code = "OPERATION_RESULT_EXPIRED", message = Localizer["Error_OPERATION_RESULT_EXPIRED"].Value, operationId = op.OperationId, state = op.State });
+            }
             Response.Headers[ReplayedHeader] = "true";
             if (stored.IsPdf && ClientPrefersPdf(Request.Headers["Accept"].ToString()))
             {

@@ -2,6 +2,7 @@ using DotNetSigningServer.Data;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Services.Backoffice;
+using DotNetSigningServer.Services.Operations;
 using DotNetSigningServer.Middleware;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
@@ -184,11 +185,9 @@ builder.Services.AddSingleton<PdfSafetyGuard>();
 builder.Services.AddScoped<IAutoRechargeService, AutoRechargeService>();
 builder.Services.AddHostedService<PresignCleanupService>();
 // Paid API operations: state, reservation, idempotent retries (#77, #82).
-builder.Services.Configure<DotNetSigningServer.Options.OperationsOptions>(builder.Configuration.GetSection("Operations"));
-builder.Services.AddScoped<DotNetSigningServer.Services.Operations.ApiOperationService>();
+builder.Services.AddApiOperations(builder.Configuration);
 // TSA deadline per authority (#77); the shared TSA client reads it per request.
 PinnedIpTsaClient.RequestTimeout = TimeSpan.FromSeconds(builder.Configuration.GetValue<int?>("Tsa:TimeoutSeconds") ?? 10);
-builder.Services.AddHostedService<DotNetSigningServer.Services.Operations.OperationMaintenanceService>();
 // PriceChangeMonitorService is registered by AddP4BackofficeIntegration, only while
 // P4Backoffice:Modules:Pricing is not On (then the price.* events replace it).
 builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();

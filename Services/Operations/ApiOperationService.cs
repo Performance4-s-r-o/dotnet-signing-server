@@ -152,7 +152,7 @@ public class ApiOperationService
             var now = DateTimeOffset.UtcNow;
             if (op.State == ApiOperationState.Running && op.LeaseUntil < now)
             {
-                await FailAsync(op, op.Attempts, uncertain: true, LeaseExpiredCode);
+                await ExpireAsync(op, now);
                 continue;
             }
 
@@ -401,21 +401,35 @@ public class ApiOperationService
     /// is no longer the running one (already completed, failed or expired) — so a reservation
     /// is never returned twice.
     /// </summary>
-    public Task<bool> FailAsync(ApiOperation op, int attempt, bool uncertain, string errorCode)
+    public Task<bool> FailAsync(ApiOperation op, int attempt, bool uncertain, string errorCode) =>
+        EndAsync(op, attempt, uncertain ? ApiOperationState.FailedUncertain : ApiOperationState.Failed, errorCode, expiredBefore: null);
+
+    /// <summary>
+    /// Ends an attempt whose lease ran out (<c>failed_uncertain</c>) and returns its credits —
+    /// only if the lease is still expired at the moment of the UPDATE. A heartbeat that
+    /// renewed it after the caller read the row keeps the attempt alive.
+    /// </summary>
+    public Task<bool> ExpireAsync(ApiOperation op, DateTimeOffset now) =>
+        EndAsync(op, op.Attempts, ApiOperationState.FailedUncertain, LeaseExpiredCode, expiredBefore: now);
+
+    private Task<bool> EndAsync(ApiOperation op, int attempt, string state, string errorCode, DateTimeOffset? expiredBefore)
     {
-        var state = uncertain ? ApiOperationState.FailedUncertain : ApiOperationState.Failed;
         var code = errorCode.Length > 64 ? errorCode[..64] : errorCode;
         var strategy = _db.Database.CreateExecutionStrategy();
         return strategy.ExecuteAsync(async token =>
         {
             await using var tx = await _db.Database.BeginTransactionAsync(token);
             // Read the reservation under the row lock; the snapshot the caller holds may be older.
-            var reserved = await _db.ApiOperations
-                .Where(o => o.Id == op.Id && o.State == ApiOperationState.Running && o.Attempts == attempt)
+            var attemptRow = _db.ApiOperations
+                .Where(o => o.Id == op.Id && o.State == ApiOperationState.Running && o.Attempts == attempt);
+            if (expiredBefore is { } cutoff)
+            {
+                attemptRow = attemptRow.Where(o => o.LeaseUntil < cutoff);
+            }
+            var reserved = await attemptRow
                 .Select(o => (int?)o.CreditsReserved)
                 .FirstOrDefaultAsync(token);
-            var ended = await _db.ApiOperations
-                .Where(o => o.Id == op.Id && o.State == ApiOperationState.Running && o.Attempts == attempt)
+            var ended = await attemptRow
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(o => o.State, state)
                     .SetProperty(o => o.ErrorCode, code)
@@ -464,7 +478,7 @@ public class ApiOperationService
         var expired = 0;
         foreach (var op in stale)
         {
-            if (await FailAsync(op, op.Attempts, uncertain: true, LeaseExpiredCode))
+            if (await ExpireAsync(op, now))
             {
                 expired++;
                 _logger.LogWarning(
