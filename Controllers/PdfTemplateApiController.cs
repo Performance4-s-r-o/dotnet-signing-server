@@ -50,8 +50,14 @@ namespace DotNetSigningServer.Controllers
 
             try
             {
+                LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Template");
+                SafetyGuard.EnsureSafePdf(input.PdfContent, "Template");
                 var response = await PdfTemplateService.CreateTemplateAsync(input, user.Id);
                 return Ok(response);
+            }
+            catch (ApiValidationException ex)
+            {
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
             catch (Exception ex)
             {
@@ -104,8 +110,17 @@ namespace DotNetSigningServer.Controllers
 
             try
             {
+                if (!string.IsNullOrWhiteSpace(input.PdfContent))
+                {
+                    LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Template");
+                    SafetyGuard.EnsureSafePdf(input.PdfContent, "Template");
+                }
                 var response = await PdfTemplateService.UpdateTemplateAsync(templateId, user.Id, input);
                 return Ok(response);
+            }
+            catch (ApiValidationException ex)
+            {
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
             catch (Exception ex)
             {
@@ -154,6 +169,7 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "AI detect");
+                SafetyGuard.EnsureSafePdf(input.PdfContent, "AI detect");
             }
             catch (ApiValidationException ex)
             {

@@ -2,6 +2,7 @@ using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Options;
 using iText.Kernel.Exceptions;
 using iText.Kernel.Pdf;
+using iText.Signatures;
 using Microsoft.Extensions.Options;
 
 namespace DotNetSigningServer.Services;
@@ -43,7 +44,7 @@ public class PdfSafetyGuard
         _options = options.Value;
     }
 
-    public void EnsureSafePdf(string? base64, string context)
+    public void EnsureSafePdf(string? base64, string context, bool checkActiveContent = true)
     {
         if (string.IsNullOrWhiteSpace(base64))
         {
@@ -60,26 +61,52 @@ public class PdfSafetyGuard
             throw new ApiValidationException("PDF_INVALID", $"{context}: not base64");
         }
 
-        EnsureSafePdf(bytes, context);
+        EnsureSafePdf(bytes, context, checkActiveContent);
     }
 
-    public void EnsureSafePdf(byte[] bytes, string context)
+    /// <param name="checkActiveContent">
+    /// False for read-only endpoints (signature inspection): scripts do no harm to a
+    /// document that is only read, and refusing them would refuse verifying it.
+    /// The structural limits apply either way.
+    /// </param>
+    public void EnsureSafePdf(byte[] bytes, string context, bool checkActiveContent = true)
     {
+        if (bytes.LongLength > _options.PdfMaxBytes)
+        {
+            throw new ApiValidationException("PDF_SIZE_EXCEEDED", $"{context}: {bytes.LongLength} bytes");
+        }
         if (!HasPdfHeader(bytes))
         {
             throw new ApiValidationException("PDF_INVALID", $"{context}: no PDF header");
+        }
+        var updates = CountIncrementalUpdates(bytes);
+        if (updates > _options.PdfMaxIncrementalUpdates)
+        {
+            throw new ApiValidationException(
+                "PDF_TOO_COMPLEX",
+                $"{context}: {updates} incremental updates, limit {_options.PdfMaxIncrementalUpdates}");
         }
 
         PdfDocument document;
         PdfReader reader;
         try
         {
-            reader = new PdfReader(new MemoryStream(bytes));
+            // Bounds what a hostile file can make the parser allocate. The default
+            // handler has limits too, but far above what this server has memory for.
+            var handler = new MemoryLimitsAwareHandler();
+            handler.SetMaxSizeOfSingleDecompressedPdfStream((int)Math.Min(_options.PdfMaxStreamBytes, int.MaxValue));
+            handler.SetMaxSizeOfDecompressedPdfStreamsSum(_options.PdfMaxTotalStreamBytes);
+            handler.SetMaxNumberOfElementsInXrefStructure(_options.PdfMaxObjects);
+            reader = new PdfReader(new MemoryStream(bytes), new ReaderProperties().SetMemoryLimitsAwareHandler(handler));
             document = new PdfDocument(reader);
         }
         catch (BadPasswordException)
         {
             throw new ApiValidationException("PDF_ENCRYPTED", $"{context}: password protected");
+        }
+        catch (MemoryLimitsAwareException)
+        {
+            throw new ApiValidationException("PDF_TOO_COMPLEX", $"{context}: structure above the limits");
         }
         catch (Exception ex) when (ex is PdfException || ex is IOException)
         {
@@ -103,7 +130,9 @@ public class PdfSafetyGuard
                     $"{context}: {pages} pages, limit {_options.PdfMaxPages}");
             }
 
-            if (_options.RejectActiveContent)
+            EnsureStructure(document, context);
+
+            if (checkActiveContent && _options.RejectActiveContent)
             {
                 var offender = FindActiveContent(document);
                 if (offender != null)
@@ -112,6 +141,109 @@ public class PdfSafetyGuard
                 }
             }
         }
+    }
+
+    private void EnsureStructure(PdfDocument document, string context)
+    {
+        try
+        {
+            var objects = document.GetNumberOfPdfObjects();
+            if (objects > _options.PdfMaxObjects)
+            {
+                throw new ApiValidationException("PDF_TOO_COMPLEX", $"{context}: {objects} objects, limit {_options.PdfMaxObjects}");
+            }
+
+            for (var i = 1; i <= document.GetNumberOfPages(); i++)
+            {
+                var page = document.GetPage(i);
+                var box = page.GetMediaBox();
+                var unit = page.GetPdfObject().GetAsNumber(PdfName.UserUnit)?.DoubleValue() ?? 1.0;
+                if (unit <= 0) unit = 1.0;
+                var side = Math.Max(Math.Abs(box.GetWidth()), Math.Abs(box.GetHeight())) * unit;
+                if (side > _options.PdfMaxPageSidePoints)
+                {
+                    throw new ApiValidationException(
+                        "PDF_PAGE_TOO_LARGE",
+                        $"{context}: page {i} side {side:0} pt, limit {_options.PdfMaxPageSidePoints:0}");
+                }
+            }
+
+            var signatures = new SignatureUtil(document).GetSignatureNames().Count;
+            if (signatures > _options.PdfMaxSignatures)
+            {
+                throw new ApiValidationException("PDF_TOO_COMPLEX", $"{context}: {signatures} signatures, limit {_options.PdfMaxSignatures}");
+            }
+
+            var fields = document.GetCatalog().GetPdfObject()
+                .GetAsDictionary(PdfName.AcroForm)?.GetAsArray(PdfName.Fields);
+            if (fields != null)
+            {
+                var count = 0;
+                if (!CountFields(fields, ref count, _options.PdfMaxFormFields, depth: 0, new HashSet<PdfIndirectReference>()))
+                {
+                    throw new ApiValidationException("PDF_TOO_COMPLEX", $"{context}: more than {_options.PdfMaxFormFields} form fields");
+                }
+            }
+
+            // Decompress every stream once with the limits in force. A stream bomb is a few
+            // kilobytes of deflate that expands to gigabytes; nothing earlier in this method
+            // reads a stream, so without this the bomb goes off in a later service instead,
+            // which has no limits.
+            for (var n = 1; n <= objects; n++)
+            {
+                if (document.GetPdfObject(n) is not PdfStream stream) continue;
+                try
+                {
+                    stream.GetBytes(true);
+                }
+                catch (MemoryLimitsAwareException)
+                {
+                    throw;
+                }
+                catch (PdfException)
+                {
+                    // A corrupt stream is the downstream service's problem, not a limit.
+                }
+            }
+        }
+        catch (MemoryLimitsAwareException)
+        {
+            throw new ApiValidationException("PDF_TOO_COMPLEX", $"{context}: structure above the limits");
+        }
+    }
+
+    /// <summary>Counts fields, stopping as soon as the limit is passed. False = over the limit.</summary>
+    private static bool CountFields(PdfArray fields, ref int count, int limit, int depth, HashSet<PdfIndirectReference> seen)
+    {
+        if (depth > 32) return true;
+        for (var i = 0; i < fields.Size(); i++)
+        {
+            var field = fields.GetAsDictionary(i);
+            if (field == null) continue;
+            var reference = field.GetIndirectReference();
+            if (reference != null && !seen.Add(reference)) continue;
+            if (++count > limit) return false;
+            var kids = field.GetAsArray(PdfName.Kids);
+            if (kids != null && !CountFields(kids, ref count, limit, depth + 1, seen)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>One %%EOF per revision; the first is the file itself.</summary>
+    private static int CountIncrementalUpdates(byte[] bytes)
+    {
+        var marker = "%%EOF"u8;
+        var count = 0;
+        var span = bytes.AsSpan();
+        var from = 0;
+        while (from < span.Length)
+        {
+            var at = span[from..].IndexOf(marker);
+            if (at < 0) break;
+            count++;
+            from += at + marker.Length;
+        }
+        return Math.Max(0, count - 1);
     }
 
     private static bool HasPdfHeader(byte[] bytes)

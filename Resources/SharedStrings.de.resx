@@ -591,6 +591,14 @@
   <data name="Error_PDF_INVALID" xml:space="preserve"><value>Die Datei ist kein gültiges PDF.</value></data>
   <data name="Error_PDF_ENCRYPTED" xml:space="preserve"><value>Das PDF ist verschlüsselt. Entfernen Sie das Passwort und versuchen Sie es erneut.</value></data>
   <data name="Error_PDF_TOO_MANY_PAGES" xml:space="preserve"><value>Das PDF hat mehr Seiten als erlaubt.</value></data>
+  <data name="Error_PDF_TOO_COMPLEX" xml:space="preserve"><value>Das PDF ist zu komplex (zu viele Objekte, Signaturen, Formularfelder oder Revisionen, oder es entpackt sich zu groß).</value></data>
+  <data name="Error_IMAGE_DIMENSIONS_EXCEEDED" xml:space="preserve"><value>Das Bild hat mehr Pixel oder eine längere Seite als zulässig.</value></data>
+  <data name="Error_IMAGE_FORMAT_UNSUPPORTED" xml:space="preserve"><value>Es werden nur PNG- und JPEG-Bilder akzeptiert.</value></data>
+  <data name="Error_PFX_TOO_LARGE" xml:space="preserve"><value>Die PFX-Datei überschreitet die maximal zulässige Größe.</value></data>
+  <data name="Error_PFX_TOO_EXPENSIVE" xml:space="preserve"><value>Die PFX-Datei verlangt mehr Schlüsselableitungs-Iterationen als zulässig.</value></data>
+  <data name="Error_FILL_TOO_MANY_DOCUMENTS" xml:space="preserve"><value>Zu viele Dokumente in einer Ausfüllanfrage.</value></data>
+  <data name="Error_FILL_TOO_MANY_FIELDS" xml:space="preserve"><value>Die Vorlage hat mehr Felder als zum Ausfüllen zulässig.</value></data>
+  <data name="Error_FILL_OUTPUT_TOO_LARGE" xml:space="preserve"><value>Die erzeugten Dokumente überschreiten die maximale Gesamtgröße.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Eine Seite des PDF ist zu groß für die Codesuche (mehr als etwa 1,6 m² oder eine Seite länger als 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>Das PDF enthält aktive Inhalte (eine Launch-Aktion oder beim Öffnen ausgeführtes JavaScript) und wurde abgelehnt.</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>Der Anhang überschreitet die maximal zulässige Größe.</value></data>

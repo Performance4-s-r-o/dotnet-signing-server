@@ -50,6 +50,7 @@ namespace DotNetSigningServer.Services
 
         public static (IX509Certificate[] Chain, ICipherParameters PrivateKey) LoadFromPfxBytes(byte[] pfxBytes, string? password)
         {
+            PfxGuard.EnsureSafe(pfxBytes);
             using var ms = new MemoryStream(pfxBytes);
             var store = new Pkcs12StoreBuilder().Build();
             store.Load(ms, (password ?? string.Empty).ToCharArray());

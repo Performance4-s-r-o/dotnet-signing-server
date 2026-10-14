@@ -217,6 +217,15 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Sign with PFX");
+                try
+                {
+                    PfxGuard.EnsureSafe(Convert.FromBase64String(input.PfxContent));
+                }
+                catch (FormatException)
+                {
+                    // Not base64: the signing service answers that with its own message.
+                }
+                SafetyGuard.EnsureSafePdf(input.PdfContent, "Sign with PFX");
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }
             catch (ApiValidationException ex)
@@ -257,6 +266,7 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Timestamp");
+                SafetyGuard.EnsureSafePdf(input.PdfContent, "Timestamp");
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }
             catch (ApiValidationException ex)
@@ -307,6 +317,7 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Extend signature");
+                SafetyGuard.EnsureSafePdf(input.PdfContent, "Extend signature");
             }
             catch (ApiValidationException ex)
             {
@@ -409,6 +420,7 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Signature inspection");
+                SafetyGuard.EnsureSafePdf(input.PdfContent, "Signature inspection", checkActiveContent: false);
             }
             catch (ApiValidationException ex)
             {
@@ -482,6 +494,7 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Visual sign");
+                SafetyGuard.EnsureSafePdf(input.PdfContent, "Visual sign");
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }
             catch (ApiValidationException ex)
@@ -599,6 +612,7 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Attachment PDF");
+                SafetyGuard.EnsureSafePdf(input.PdfContent, "Attachment PDF");
                 LimitGuard.EnsureAttachmentWithinLimit(input.AttachmentContent, "Attachment");
             }
             catch (ApiValidationException ex)

@@ -601,6 +601,14 @@
   <data name="Error_PDF_INVALID" xml:space="preserve"><value>The file is not a valid PDF.</value></data>
   <data name="Error_PDF_ENCRYPTED" xml:space="preserve"><value>The PDF is encrypted. Remove the password and try again.</value></data>
   <data name="Error_PDF_TOO_MANY_PAGES" xml:space="preserve"><value>The PDF has more pages than allowed.</value></data>
+  <data name="Error_PDF_TOO_COMPLEX" xml:space="preserve"><value>The PDF is too complex (too many objects, signatures, form fields or revisions, or unpacks too large).</value></data>
+  <data name="Error_IMAGE_DIMENSIONS_EXCEEDED" xml:space="preserve"><value>The image has more pixels or a longer side than allowed.</value></data>
+  <data name="Error_IMAGE_FORMAT_UNSUPPORTED" xml:space="preserve"><value>Only PNG and JPEG images are accepted.</value></data>
+  <data name="Error_PFX_TOO_LARGE" xml:space="preserve"><value>The PFX file exceeds the maximum allowed size.</value></data>
+  <data name="Error_PFX_TOO_EXPENSIVE" xml:space="preserve"><value>The PFX file demands more key-derivation iterations than allowed.</value></data>
+  <data name="Error_FILL_TOO_MANY_DOCUMENTS" xml:space="preserve"><value>Too many documents in one fill request.</value></data>
+  <data name="Error_FILL_TOO_MANY_FIELDS" xml:space="preserve"><value>The template has more fields than allowed for filling.</value></data>
+  <data name="Error_FILL_OUTPUT_TOO_LARGE" xml:space="preserve"><value>The generated documents exceed the maximum total size.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>A page of the PDF is too large to scan for codes (more than about 1.6 m², or one side longer than 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>The PDF contains active content (a launch action or JavaScript that runs on open) and was refused.</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>The attachment exceeds the maximum allowed size.</value></data>

@@ -49,6 +49,7 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "PDF/A conversion");
+                SafetyGuard.EnsureSafePdf(input.PdfContent, "PDF/A conversion");
             }
             catch (ApiValidationException ex)
             {
@@ -503,6 +504,8 @@ namespace DotNetSigningServer.Controllers
             if (input.TemplateId != null)
             {
                 var template = await PdfTemplateService.GetTemplateAsync(input.TemplateId.Value, userId);
+                // A stored template skipped the check in FillPdf; run it before anything parses it.
+                SafetyGuard.EnsureSafePdf(template.PdfContent, "Fill PDF (template)");
                 var pages = CountPagesFromBase64(template.PdfContent);
                 return (template.PdfContent, pages);
             }
