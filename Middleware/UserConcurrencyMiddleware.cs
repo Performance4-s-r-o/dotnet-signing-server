@@ -16,6 +16,12 @@ namespace DotNetSigningServer.Middleware;
 /// Also computes the concurrency tier atomically at semaphore acquisition and stores it in
 /// HttpContext.Items[TierItemKey], so the billing debit in ApiController sees a deterministic
 /// slot index — not a value that drifts due to Release races while the request processes.
+///
+/// Order of acquisition (#69): the user's slot first — including the wait in the user's queue —
+/// and only then the global slot, taken without waiting. A request queued behind its own user's
+/// limit therefore never holds a global slot, so one user's backlog cannot starve other users.
+/// Every slot taken is released in a <c>finally</c> on every path: success, 429, 503, an
+/// exception from the pipeline and a request cancelled by the client.
 /// </summary>
 public class UserConcurrencyMiddleware
 {
@@ -35,8 +41,6 @@ public class UserConcurrencyMiddleware
     }
 
     private static readonly ConcurrentDictionary<Guid, SemaphoreEntry> Semaphores = new();
-    private static SemaphoreSlim? _globalSemaphore;
-    private static int _globalCapacity;
 
     private const int LimitCacheDurationSeconds = 60;
     private static readonly ConcurrentDictionary<Guid, (int Limit, int QueueTimeoutSeconds, DateTimeOffset ExpiresAt)> LimitCache = new();
@@ -76,6 +80,17 @@ public class UserConcurrencyMiddleware
     private readonly RequestDelegate _next;
     private readonly ILogger<UserConcurrencyMiddleware> _logger;
     private readonly BillingOptions _billingOptions;
+    // One middleware instance serves the whole pipeline, so the global cap lives on the instance.
+    // It used to be static and was swapped in the constructor; a request releasing into a
+    // semaphore it never took from could then overfill it.
+    private readonly SemaphoreSlim? _globalSemaphore;
+    private readonly int _globalCapacity;
+
+    /// <summary>
+    /// Free global slots, or null when the global cap is off. Diagnostics and tests: after any
+    /// mix of finished, rejected, failed and cancelled requests it must be back at capacity.
+    /// </summary>
+    public int? GlobalSlotsAvailable => _globalSemaphore?.CurrentCount;
 
     public UserConcurrencyMiddleware(
         RequestDelegate next,
@@ -87,14 +102,10 @@ public class UserConcurrencyMiddleware
         _billingOptions = billingOptions.Value;
 
         var globalLimit = _billingOptions.GlobalConcurrencyLimit;
-        if (globalLimit > 0 && (_globalSemaphore == null || _globalCapacity != globalLimit))
+        if (globalLimit > 0)
         {
             _globalSemaphore = new SemaphoreSlim(globalLimit, globalLimit);
             _globalCapacity = globalLimit;
-        }
-        else if (globalLimit == 0)
-        {
-            _globalSemaphore = null;
         }
     }
 
@@ -114,24 +125,6 @@ public class UserConcurrencyMiddleware
             return;
         }
 
-        // Global cap: protects the server as a whole regardless of per-user limits.
-        var globalSlotAcquired = false;
-        if (_globalSemaphore != null && !await _globalSemaphore.WaitAsync(TimeSpan.Zero))
-        {
-            _logger.LogWarning("Global concurrency limit ({Limit}) reached", _globalCapacity);
-            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-            context.Response.Headers["Retry-After"] = "10";
-            var factory = context.RequestServices.GetRequiredService<IStringLocalizerFactory>();
-            var localizer = factory.Create(typeof(SharedStrings));
-            await context.Response.WriteAsJsonAsync(new
-            {
-                message = localizer["ServerAtCapacity"].Value,
-                retryAfter = 10,
-            });
-            return;
-        }
-        if (_globalSemaphore != null) globalSlotAcquired = true;
-
         var (limit, queueTimeoutSeconds) = await GetUserSettings(userId.Value, context.RequestServices);
 
         var entry = Semaphores.AddOrUpdate(
@@ -143,37 +136,77 @@ public class UserConcurrencyMiddleware
             ? TimeSpan.FromSeconds(queueTimeoutSeconds)
             : TimeSpan.Zero;
 
-        if (!await entry.Semaphore.WaitAsync(waitTimeout))
-        {
-            _logger.LogWarning("User {UserId} exceeded concurrency limit ({Limit}), queue timeout {QueueTimeout}s",
-                userId.Value, limit, queueTimeoutSeconds);
-            context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-            context.Response.Headers["Retry-After"] = queueTimeoutSeconds > 0 ? "1" : "5";
-            var factory = context.RequestServices.GetRequiredService<IStringLocalizerFactory>();
-            var localizer = factory.Create(typeof(SharedStrings));
-            await context.Response.WriteAsJsonAsync(new
-            {
-                message = localizer["TooManyRequests"].Value,
-                limit,
-                retryAfter = queueTimeoutSeconds > 0 ? 1 : 5,
-            });
-            return;
-        }
-
-        // Atomic: this request's slot is determined right here, not later at debit time.
-        var slot = Interlocked.Increment(ref entry.InFlight);
-        var tier = ComputeTier(slot, _billingOptions.ConcurrencyTierSize, _billingOptions.MaxConcurrencyTier);
-        context.Items[TierItemKey] = tier;
+        // Both semaphores are captured locally: the finally releases exactly what was taken,
+        // even if the user's entry is replaced (limit changed) while the request runs.
+        var userSemaphore = entry.Semaphore;
+        var globalSemaphore = _globalSemaphore;
+        var userSlotAcquired = false;
+        var globalSlotAcquired = false;
+        var inFlightCounted = false;
 
         try
         {
+            // 1) The user's own slot, waiting in the user's queue. No global slot is held here.
+            try
+            {
+                userSlotAcquired = await userSemaphore.WaitAsync(waitTimeout, context.RequestAborted);
+            }
+            catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+            {
+                // The client went away while queued; nobody is left to answer.
+                return;
+            }
+
+            if (!userSlotAcquired)
+            {
+                _logger.LogWarning("User {UserId} exceeded concurrency limit ({Limit}), queue timeout {QueueTimeout}s",
+                    userId.Value, limit, queueTimeoutSeconds);
+                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                context.Response.Headers["Retry-After"] = queueTimeoutSeconds > 0 ? "1" : "5";
+                var factory = context.RequestServices.GetRequiredService<IStringLocalizerFactory>();
+                var localizer = factory.Create(typeof(SharedStrings));
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    message = localizer["TooManyRequests"].Value,
+                    limit,
+                    retryAfter = queueTimeoutSeconds > 0 ? 1 : 5,
+                });
+                return;
+            }
+
+            // 2) The global slot, without waiting: protects the server as a whole.
+            if (globalSemaphore != null)
+            {
+                globalSlotAcquired = globalSemaphore.Wait(0);
+                if (!globalSlotAcquired)
+                {
+                    _logger.LogWarning("Global concurrency limit ({Limit}) reached", _globalCapacity);
+                    context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                    context.Response.Headers["Retry-After"] = "10";
+                    var factory = context.RequestServices.GetRequiredService<IStringLocalizerFactory>();
+                    var localizer = factory.Create(typeof(SharedStrings));
+                    await context.Response.WriteAsJsonAsync(new
+                    {
+                        message = localizer["ServerAtCapacity"].Value,
+                        retryAfter = 10,
+                    });
+                    return;
+                }
+            }
+
+            // Atomic: this request's slot is determined right here, not later at debit time.
+            var slot = Interlocked.Increment(ref entry.InFlight);
+            inFlightCounted = true;
+            var tier = ComputeTier(slot, _billingOptions.ConcurrencyTierSize, _billingOptions.MaxConcurrencyTier);
+            context.Items[TierItemKey] = tier;
+
             await _next(context);
         }
         finally
         {
-            Interlocked.Decrement(ref entry.InFlight);
-            entry.Semaphore.Release();
-            if (globalSlotAcquired) _globalSemaphore!.Release();
+            if (inFlightCounted) Interlocked.Decrement(ref entry.InFlight);
+            if (globalSlotAcquired) globalSemaphore!.Release();
+            if (userSlotAcquired) userSemaphore.Release();
         }
     }
 
