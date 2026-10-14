@@ -80,6 +80,7 @@ public class PdfLtvService
         var added = false;
         foreach (var name in signatureNames)
         {
+            DotNetSigningServer.Services.Operations.OperationDeadline.ThrowIfCancelled();
             // WHOLE_CHAIN: a verifier years from now needs the intermediates too,
             // not just the leaf. OCSP_OPTIONAL_CRL takes OCSP where the CA offers
             // it and falls back to a CRL where it does not.

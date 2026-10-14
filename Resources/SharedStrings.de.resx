@@ -193,6 +193,9 @@
   <data name="Error_OPERATION_IN_PROGRESS" xml:space="preserve"><value>Der Vorgang mit diesem Idempotency-Key läuft noch. Bitte versuchen Sie es gleich erneut.</value></data>
   <data name="Error_OPERATION_RESULT_EXPIRED" xml:space="preserve"><value>Der Vorgang wurde abgeschlossen, sein Ergebnis ist jedoch nicht mehr gespeichert.</value></data>
   <data name="Error_OPERATION_NOT_FOUND" xml:space="preserve"><value>Kein Vorgang mit dieser ID gefunden.</value></data>
+  <data name="Error_TSA_UNREACHABLE" xml:space="preserve"><value>Die Zeitstempelbehörde ist nicht erreichbar oder hat die Anfrage abgelehnt.</value></data>
+  <data name="Error_TSA_PROBE_FAILED" xml:space="preserve"><value>Die Prüfung der Zeitstempelbehörde ist fehlgeschlagen.</value></data>
+  <data name="Error_OPERATION_DEADLINE_EXCEEDED" xml:space="preserve"><value>Der Vorgang wurde nicht innerhalb des Zeitlimits abgeschlossen und abgebrochen.</value></data>
 
   <!-- Middleware -->
   <data name="TooManyRequests" xml:space="preserve"><value>Zu viele gleichzeitige Anfragen. Bitte verlangsamen Sie die Anfragerate.</value></data>
@@ -692,4 +695,13 @@
   <data name="CookieCulturePurpose" xml:space="preserve"><value>Remembers the language you chose.</value></data>
   <data name="CookieDurationSession" xml:space="preserve"><value>Session</value></data>
   <data name="CookieDurationOneYear" xml:space="preserve"><value>1 year</value></data>
+  <data name="ApiDocOperationsTitle" xml:space="preserve"><value>Vorgangsstatus und sichere Wiederholung</value></data>
+  <data name="ApiDocOperationsPurpose" xml:space="preserve"><value>Status eines kostenpflichtigen Aufrufs, Idempotency-Key</value></data>
+  <data name="ApiDocOperationsCredits" xml:space="preserve"><value>Kostenlos</value></data>
+  <data name="ApiDocOperationsMeta" xml:space="preserve"><value>So wiederholen Sie kostenpflichtige API-Aufrufe sicher: Header Idempotency-Key, Vorgangsstatus, GET /api/operations/{id} und die zugehörigen Fehlercodes.</value></data>
+  <data name="ApiDocOperationsIntro" xml:space="preserve"><value>Jeder kostenpflichtige Aufruf ist ein dauerhafter Vorgang. Senden Sie einen eigenen Idempotency-Key (1–128 Zeichen A-Z a-z 0-9 - _ . :); eine wiederholte Anfrage mit demselben Schlüssel und Inhalt liefert die gespeicherte Antwort, ohne die Arbeit erneut auszuführen oder abzurechnen. Dieser Endpunkt zeigt, was aus einem Vorgang wurde, dessen Antwort Sie nie erhalten haben.</value></data>
+  <data name="ApiDocOperationsNote1" xml:space="preserve"><value>Die Header X-Operation-Id und X-Operation-State begleiten jeden kostenpflichtigen Aufruf; Idempotent-Replayed: true kennzeichnet eine gespeicherte Antwort. Sie wird 60 Minuten aufbewahrt. Gleicher Schlüssel mit anderer Anfrage: 422 IDEMPOTENCY_KEY_REUSED; ungültiger Schlüssel: 400 IDEMPOTENCY_KEY_INVALID; läuft noch: 409 OPERATION_IN_PROGRESS mit Retry-After; abgeschlossen, aber nicht mehr gespeichert: 410 OPERATION_RESULT_EXPIRED (erledigt und abgerechnet, keine Erstattung).</value></data>
+  <data name="ApiDocOperationsNote2" xml:space="preserve"><value>Status: completed (erledigt, einmal abgerechnet); failed (nichts Unumkehrbares geschah, Guthaben zurück, eine Wiederholung führt die Arbeit erneut aus); failed_uncertain (eine Zeitstempelbehörde oder ein Modell wurde möglicherweise erreicht, Guthaben zurück, eine Wiederholung führt die Arbeit erneut aus und wird höchstens einmal abgerechnet); running (ein Versuch hält den Vorgang). Unbekannte ID: 404 OPERATION_NOT_FOUND.</value></data>
+  <data name="ApiDocOperationsNote3" xml:space="preserve"><value>Das Guthaben wird vor Beginn der Arbeit reserviert. Ohne ausreichendes Guthaben läuft nichts: 402 mit Code INSUFFICIENT_CREDITS.</value></data>
+  <data name="ApiDocOperationsNote4" xml:space="preserve"><value>Zeitlimits: 45 s für sign, sign-pfx, timestamp, visual-sign, seal und attachment; 60 s für fill-pdf und PDF/A; 75 s für find-codes, extend-signature und KI. Nach Ablauf wird die Arbeit abgebrochen und die Antwort ist 504 OPERATION_DEADLINE_EXCEEDED. Eine Zeitstempelbehörde, die wiederholt ausfällt, wird kurzzeitig übersprungen: 503 TSA_UNREACHABLE mit Retry-After. TSA-Fehler enthalten einen Code und eine allgemeine Meldung, nie den Text der Behörde.</value></data>
 </root>

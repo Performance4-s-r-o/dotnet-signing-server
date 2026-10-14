@@ -884,6 +884,113 @@ public class OperationStateTests : IClassFixture<OperationStateFixture>, IDispos
         await AssertChargedOnceAsync(userId, 5);
     }
 
+    // #72: deadline, uncertain vs. certain failure, no leaking of exception text.
+
+    private OperationsOptions LiveOptions() =>
+        _fx.App.Services.GetRequiredService<IOptions<OperationsOptions>>().Value;
+
+    [DockerFact]
+    public async Task Deadline_answers_504_fails_the_operation_and_returns_the_credits()
+    {
+        var options = LiveOptions();
+        var original = options.SignDeadlineSeconds;
+        options.SignDeadlineSeconds = 1;
+        try
+        {
+            var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+            var key = Guid.NewGuid().ToString();
+            var body = new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() };
+            // Synchronous and deaf to cancellation, like iText in the middle of a page.
+            _fx.Timestamp = () =>
+            {
+                Thread.Sleep(TimeSpan.FromSeconds(8));
+                return SignedPdf;
+            };
+
+            var started = DateTime.UtcNow;
+            var response = await client.SendAsync(Post("/api/timestamp", body, key));
+            var elapsed = DateTime.UtcNow - started;
+
+            Assert.Equal(HttpStatusCode.GatewayTimeout, response.StatusCode);
+            Assert.True(elapsed < TimeSpan.FromSeconds(6), $"answered after {elapsed}");
+            Assert.Contains("OPERATION_DEADLINE_EXCEEDED", await response.Content.ReadAsStringAsync());
+            // Nothing external was reached: a plain failure, not an uncertain one.
+            Assert.Equal(ApiOperationState.Failed, Header(response, ApiControllerBase.OperationStateHeader));
+            Assert.Equal(5, await _fx.BalanceAsync(userId));
+            Assert.Empty(await _fx.UsageAsync(userId));
+            Assert.Equal("DEADLINE_EXCEEDED", (await StatusAsync(client, key)).GetProperty("errorCode").GetString());
+        }
+        finally
+        {
+            options.SignDeadlineSeconds = original;
+        }
+    }
+
+    [DockerFact]
+    public async Task Deadline_after_the_tsa_was_called_is_failed_uncertain()
+    {
+        var options = LiveOptions();
+        var original = options.SignDeadlineSeconds;
+        options.SignDeadlineSeconds = 1;
+        try
+        {
+            var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+            var key = Guid.NewGuid().ToString();
+            var body = new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() };
+            _fx.Timestamp = () =>
+            {
+                OperationDeadline.MarkExternalCall(); // what the TSA client does before its request
+                Thread.Sleep(TimeSpan.FromSeconds(6));
+                return SignedPdf;
+            };
+
+            var response = await client.SendAsync(Post("/api/timestamp", body, key));
+
+            Assert.Equal(HttpStatusCode.GatewayTimeout, response.StatusCode);
+            Assert.Equal(ApiOperationState.FailedUncertain, Header(response, ApiControllerBase.OperationStateHeader));
+            Assert.Equal("failed_uncertain", (await StatusAsync(client, key)).GetProperty("state").GetString());
+            Assert.Equal(5, await _fx.BalanceAsync(userId));
+        }
+        finally
+        {
+            options.SignDeadlineSeconds = original;
+        }
+    }
+
+    [DockerFact]
+    public async Task Tsa_failure_response_carries_a_code_and_never_the_exception_text()
+    {
+        var (_, client) = await _fx.NewAccountAsync(credits: 5);
+        const string secret = "Connection refused (10.1.2.3:6379) internal-redis.corp";
+        _fx.Timestamp = () => throw new TsaCommunicationException(
+            "https://tsa.example.com", $"TSA at https://tsa.example.com is unreachable: {secret}");
+        var body = new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() };
+
+        var response = await client.SendAsync(Post("/api/timestamp", body, Guid.NewGuid().ToString()));
+        var text = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        Assert.Contains("TSA_UNREACHABLE", text);
+        Assert.DoesNotContain("10.1.2.3", text);
+        Assert.DoesNotContain("internal-redis", text);
+        Assert.DoesNotContain("Connection refused", text);
+    }
+
+    [DockerFact]
+    public async Task Open_breaker_answers_503_with_retry_after_and_the_same_code()
+    {
+        var (_, client) = await _fx.NewAccountAsync(credits: 5);
+        _fx.Timestamp = () => throw new TsaCommunicationException(
+            "https://tsa.example.com", "open", new TsaCircuitOpenException("tsa.example.com", TimeSpan.FromSeconds(17)));
+        var body = new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() };
+
+        var response = await client.SendAsync(Post("/api/timestamp", body, Guid.NewGuid().ToString()));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal("17", response.Headers.RetryAfter?.Delta?.TotalSeconds.ToString());
+        Assert.Contains("TSA_UNREACHABLE", await response.Content.ReadAsStringAsync());
+    }
+
     [Fact]
     public void Tsa_deadlines_nest_inside_the_portal_wait()
     {

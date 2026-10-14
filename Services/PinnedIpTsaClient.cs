@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text;
+using DotNetSigningServer.Services.Operations;
 using iText.Signatures;
 
 namespace DotNetSigningServer.Services;
@@ -29,9 +30,33 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
 
     protected override byte[] GetTSAResponse(byte[] requestBytes)
     {
-        // iText's ITSAClient contract is synchronous; this runs on a request thread
-        // that is already blocked inside the signing pipeline.
-        return GetTsaResponseAsync(requestBytes).GetAwaiter().GetResult();
+        // The breaker comes first: an authority that has just failed N times in a row is not
+        // asked again for a while, which also hands a primary's turn to the backup at once (#72).
+        var host = Uri.TryCreate(tsaURL, UriKind.Absolute, out var uri) ? uri.Host : tsaURL;
+        var breaker = TsaCircuitBreaker.Default;
+        breaker.Acquire(host);
+
+        // From here the authority may issue (and bill) a token whatever comes back.
+        OperationDeadline.MarkExternalCall();
+        try
+        {
+            // iText's ITSAClient contract is synchronous; this runs on a request thread
+            // that is already blocked inside the signing pipeline.
+            var response = GetTsaResponseAsync(requestBytes).GetAwaiter().GetResult();
+            breaker.RecordSuccess(host);
+            return response;
+        }
+        catch (OperationCanceledException) when (OperationDeadline.CurrentToken.IsCancellationRequested)
+        {
+            // Our own side gave up (deadline, caller): says nothing about the authority.
+            breaker.Release(host);
+            throw;
+        }
+        catch
+        {
+            breaker.RecordFailure(host);
+            throw;
+        }
     }
 
     private async Task<byte[]> GetTsaResponseAsync(byte[] requestBytes)
@@ -52,7 +77,9 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
 
         // Per request rather than HttpClient.Timeout, so the deadline is configurable at startup
         // on a client that is shared and created once.
-        using var deadline = new CancellationTokenSource(RequestTimeout);
+        // Linked to the operation's deadline, so a request that ran out of time stops waiting here.
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(OperationDeadline.CurrentToken);
+        deadline.CancelAfter(RequestTimeout);
         using var response = await SharedClient.SendAsync(request, deadline.Token).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 

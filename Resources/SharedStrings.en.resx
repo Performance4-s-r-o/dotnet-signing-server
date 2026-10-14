@@ -193,6 +193,9 @@
   <data name="Error_OPERATION_IN_PROGRESS" xml:space="preserve"><value>The operation with this Idempotency-Key is still running. Try again shortly.</value></data>
   <data name="Error_OPERATION_RESULT_EXPIRED" xml:space="preserve"><value>The operation completed, but its result is no longer stored.</value></data>
   <data name="Error_OPERATION_NOT_FOUND" xml:space="preserve"><value>No operation with this ID was found.</value></data>
+  <data name="Error_TSA_UNREACHABLE" xml:space="preserve"><value>The timestamp authority is unreachable or rejected the request.</value></data>
+  <data name="Error_TSA_PROBE_FAILED" xml:space="preserve"><value>The timestamp authority check failed.</value></data>
+  <data name="Error_OPERATION_DEADLINE_EXCEEDED" xml:space="preserve"><value>The operation did not finish within its time limit and was cancelled.</value></data>
 
   <!-- Middleware -->
   <data name="TooManyRequests" xml:space="preserve"><value>Too many concurrent requests. Please slow down.</value></data>
@@ -693,4 +696,13 @@
   <data name="CookieCulturePurpose" xml:space="preserve"><value>Remembers the language you chose.</value></data>
   <data name="CookieDurationSession" xml:space="preserve"><value>Session</value></data>
   <data name="CookieDurationOneYear" xml:space="preserve"><value>1 year</value></data>
+  <data name="ApiDocOperationsTitle" xml:space="preserve"><value>Operation state and safe retries</value></data>
+  <data name="ApiDocOperationsPurpose" xml:space="preserve"><value>State of a paid call, Idempotency-Key</value></data>
+  <data name="ApiDocOperationsCredits" xml:space="preserve"><value>Free</value></data>
+  <data name="ApiDocOperationsMeta" xml:space="preserve"><value>How to retry paid API calls safely: the Idempotency-Key header, operation states, GET /api/operations/{id} and the error codes involved.</value></data>
+  <data name="ApiDocOperationsIntro" xml:space="preserve"><value>Every paid call is a durable operation. Send an Idempotency-Key of your own (1–128 characters A-Z a-z 0-9 - _ . :) and a repeated request with the same key and body returns the stored answer without doing the work or charging again. This endpoint tells you what became of an operation whose answer you never received.</value></data>
+  <data name="ApiDocOperationsNote1" xml:space="preserve"><value>Response headers X-Operation-Id and X-Operation-State accompany every paid call; Idempotent-Replayed: true marks a stored answer. The answer is kept for 60 minutes. Same key with a different request: 422 IDEMPOTENCY_KEY_REUSED; malformed key: 400 IDEMPOTENCY_KEY_INVALID; still running: 409 OPERATION_IN_PROGRESS with Retry-After; completed but no longer stored: 410 OPERATION_RESULT_EXPIRED (done and charged, not a refund).</value></data>
+  <data name="ApiDocOperationsNote2" xml:space="preserve"><value>States: completed (done, charged once); failed (nothing irreversible happened, credits returned, a retry runs it again); failed_uncertain (a timestamp authority or model may have been reached, credits returned, a retry runs the work again and is still charged at most once); running (an attempt holds the operation). Unknown id: 404 OPERATION_NOT_FOUND.</value></data>
+  <data name="ApiDocOperationsNote3" xml:space="preserve"><value>Credits are reserved before the work starts. Without enough credits nothing runs: 402 with code INSUFFICIENT_CREDITS.</value></data>
+  <data name="ApiDocOperationsNote4" xml:space="preserve"><value>Time limits: 45 s for sign, sign-pfx, timestamp, visual-sign, seal and attachment; 60 s for fill-pdf and PDF/A; 75 s for find-codes, extend-signature and AI. On expiry the work is cancelled and the answer is 504 OPERATION_DEADLINE_EXCEEDED. A timestamp authority that keeps failing is skipped for a short time: 503 TSA_UNREACHABLE with Retry-After. TSA errors carry a code and a generic message, never the authority's own text.</value></data>
 </root>

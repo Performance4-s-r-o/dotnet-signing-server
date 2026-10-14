@@ -38,6 +38,8 @@ public class TemplateAiService
             return Array.Empty<PdfFieldDefinition>();
         }
 
+        // The model may bill and answer whatever reaches us: an expired deadline is then uncertain (#72).
+        DotNetSigningServer.Services.Operations.OperationDeadline.MarkExternalCall();
         var apiKey = _options.Google.ApiKey!;
         var model = _options.Google.Model ?? "gemini-1.5-flash";
         var endpointBase = _options.Google.Endpoint?.TrimEnd('/') ?? "https://generativelanguage.googleapis.com/v1beta";
@@ -132,6 +134,8 @@ Rules:
             return columns.Select(c => new AiExtractedValue { Key = c.Key, Result = null }).ToList();
         }
 
+        // The model may bill and answer whatever reaches us: an expired deadline is then uncertain (#72).
+        DotNetSigningServer.Services.Operations.OperationDeadline.MarkExternalCall();
         var apiKey = _options.Google.ApiKey!;
         var model = _options.Google.Model ?? "gemini-2.5-flash";
         var endpointBase = _options.Google.Endpoint?.TrimEnd('/') ?? "https://generativelanguage.googleapis.com/v1beta";

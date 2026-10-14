@@ -121,6 +121,7 @@ public class PdfTemplateService
 
         foreach (var dataset in input.Data)
         {
+            Operations.OperationDeadline.ThrowIfCancelled();
             var filled = FillSingle(
                 templateBytes, fields, dataset,
                 continuationNote,

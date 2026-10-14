@@ -21,4 +21,28 @@ public class OperationsOptions
     /// <c>OPERATION_MAX_STORED_RESULT_BYTES</c>.
     /// </summary>
     public long MaxStoredResultBytes { get; set; } = 25L * 1024 * 1024;
+
+    /// <summary>
+    /// Deadline of the quick paid operations (sign, sign-pfx, timestamp, visual-sign, seal,
+    /// attachment), in seconds (#72). Under Cloudflare's 100 s and under the portal's wait; on
+    /// expiry the work is cancelled and the operation fails. Env <c>OPERATION_DEADLINE_SIGN_SECONDS</c>.
+    /// </summary>
+    public int SignDeadlineSeconds { get; set; } = 45;
+
+    /// <summary>fill-pdf and PDF/A conversion. Env <c>OPERATION_DEADLINE_DOCUMENT_SECONDS</c>.</summary>
+    public int DocumentDeadlineSeconds { get; set; } = 60;
+
+    /// <summary>find-codes, extend-signature and the AI endpoints. Env <c>OPERATION_DEADLINE_HEAVY_SECONDS</c>.</summary>
+    public int HeavyDeadlineSeconds { get; set; } = 75;
+
+    /// <summary>Cloudflare answers 524 after 100 s; a deadline at or above it would never be seen.</summary>
+    public const int MaxDeadlineSeconds = 95;
+
+    /// <summary>The deadline for an operation name as passed to <c>RunOperationAsync</c>.</summary>
+    public TimeSpan DeadlineFor(string operation) => TimeSpan.FromSeconds(operation switch
+    {
+        "fill-pdf" or "pdfa" => DocumentDeadlineSeconds,
+        "find-codes" or "extend-signature" or "ai-detect-fields" or "ai-extract-data" => HeavyDeadlineSeconds,
+        _ => SignDeadlineSeconds,
+    });
 }

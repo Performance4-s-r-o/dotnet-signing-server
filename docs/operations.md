@@ -73,6 +73,31 @@ of `Lease`, `ResultRetention` > 0, `MaxStoredResultBytes` ≥ 0.
   max 120). Qualified/archival authorities that answer slowly may need a higher value —
   the deadline chain portal > dotnet > TSA must still hold.
 
+## Deadlines, cancellation, TSA breaker (#72)
+
+| Operations | Deadline | Env |
+|---|---|---|
+| sign, sign-pfx, timestamp, visual-sign, seal, attachment | 45 s | `OPERATION_DEADLINE_SIGN_SECONDS` |
+| fill-pdf, pdfa | 60 s | `OPERATION_DEADLINE_DOCUMENT_SECONDS` |
+| find-codes, extend-signature, ai-detect-fields, ai-extract-data | 75 s | `OPERATION_DEADLINE_HEAVY_SECONDS` |
+
+Valid range 1–95 s (Cloudflare answers 524 after 100 s); anything else fails startup.
+
+- **Expiry** answers `504 OPERATION_DEADLINE_EXCEEDED` (`operationId`, `state`), cancels the
+  work's token and returns the reservation. The state is `failed_uncertain` when a TSA or model
+  call had been started, `failed` when nothing external was reached. `errorCode` is `DEADLINE_EXCEEDED`.
+- **Cancellation** reaches the TSA request, the CRL/OCSP fetches (`Client.Send` with the token),
+  the AI calls, the signature loop of LTV and the row loop of fill-pdf. iText itself cannot be
+  interrupted: a call stuck inside it is answered on time and abandoned, and it stops at its next
+  outbound call. Light operations (inspect, probe) are not paid operations and have no deadline.
+- **Breaker per TSA host**: `TSA_BREAKER_FAILURE_THRESHOLD` (default 5, `0` = off, max 100)
+  consecutive transport failures open it for `TSA_BREAKER_OPEN_SECONDS` (default 30, 1–3600);
+  calls then fail at once as `503 TSA_UNREACHABLE` with `Retry-After`; a backup authority is
+  asked immediately. After that one probe goes through; success closes it, failure re-opens it.
+  State is per process. Invalid values fail startup.
+- **TSA errors** carry `code: TSA_UNREACHABLE`, a generic `message` and the caller's `tsaUrl`;
+  the exception text goes to the log only (also in `/api/tsa-probe`).
+
 ## Open decisions
 
 - Retry after `failed_uncertain` runs the work again (a TSA may issue and bill a second
