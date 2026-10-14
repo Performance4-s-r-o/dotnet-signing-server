@@ -147,7 +147,7 @@ public class BackofficeBillingClientTests
 
         Assert.NotNull(session);
         Assert.Equal("paid", session.PaymentStatus);
-        Assert.True(BillingCustomerRef.CheckoutBelongsTo(session, _user.Id));
+        Assert.True(BillingCustomerRef.CheckoutBelongsTo(session, _user.Id, _user.StripeCustomerId));
         Assert.Equal("300", session.Metadata["documents"]);
         Assert.Null(missing);
         Assert.False(_service.Requests[0].Request.Headers.Contains(BackofficeBillingClient.IdempotencyKeyHeader));

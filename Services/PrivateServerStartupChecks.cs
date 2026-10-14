@@ -106,7 +106,7 @@ public static class PrivateServerStartupChecks
         var (hash, salt, iterations) = authService.HashPassword(password!);
         dbContext.Users.Add(new User
         {
-            Email = email!,
+            Email = UserEmails.Trim(email),
             PasswordHash = hash,
             PasswordSalt = salt,
             PasswordIterations = iterations,

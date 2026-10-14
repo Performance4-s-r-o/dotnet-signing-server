@@ -188,6 +188,13 @@ builder.Services.AddHostedService<PresignCleanupService>();
 builder.Services.AddApiOperations(builder.Configuration);
 // TSA deadline per authority (#77); the shared TSA client reads it per request.
 PinnedIpTsaClient.RequestTimeout = TimeSpan.FromSeconds(builder.Configuration.GetValue<int?>("Tsa:TimeoutSeconds") ?? 10);
+// Circuit breaker per TSA host (#72). Invalid values throw here: startup fails closed rather
+// than running with the protection silently off.
+TsaCircuitBreaker.Default = new TsaCircuitBreaker(new TsaCircuitBreakerOptions
+{
+    FailureThreshold = builder.Configuration.GetValue<int?>("Tsa:Breaker:FailureThreshold") ?? 5,
+    OpenSeconds = builder.Configuration.GetValue<int?>("Tsa:Breaker:OpenSeconds") ?? 30,
+});
 // PriceChangeMonitorService is registered by AddP4BackofficeIntegration, only while
 // P4Backoffice:Modules:Pricing is not On (then the price.* events replace it).
 builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();

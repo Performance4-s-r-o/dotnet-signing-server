@@ -31,9 +31,23 @@ public class OperationsOptionsTests
     [InlineData("HeartbeatInterval", "00:05:00")] // more than a third of the 10 min lease
     [InlineData("MaxStoredResultBytes", "-1")]
     [InlineData("ResultRetention", "00:00:00")]
+    [InlineData("SignDeadlineSeconds", "0")]
+    [InlineData("DocumentDeadlineSeconds", "100")] // Cloudflare answers 524 after 100 s
+    [InlineData("HeavyDeadlineSeconds", "-5")]
     public void Invalid_values_are_refused(string key, string value)
     {
         Assert.Throws<OptionsValidationException>(() => Resolve((key, value)).Value);
+    }
+
+    [Fact]
+    public void Deadlines_follow_the_endpoint_classes_of_72()
+    {
+        var options = Resolve().Value;
+        Assert.Equal(TimeSpan.FromSeconds(45), options.DeadlineFor("sign"));
+        Assert.Equal(TimeSpan.FromSeconds(45), options.DeadlineFor("timestamp"));
+        Assert.Equal(TimeSpan.FromSeconds(60), options.DeadlineFor("fill-pdf"));
+        Assert.Equal(TimeSpan.FromSeconds(75), options.DeadlineFor("find-codes"));
+        Assert.Equal(TimeSpan.FromSeconds(75), options.DeadlineFor("extend-signature"));
     }
 
     [Fact]

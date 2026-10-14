@@ -196,6 +196,18 @@ namespace DotNetSigningServer.Controllers
                 }
             }
 
+            // Work that outlived its deadline still holds CPU and memory (iText cannot be
+            // interrupted) after its slot was freed: refuse more until it has ended (#72).
+            if (AbandonedWork.IsOverLimit(user.Id, Operations.Options.MaxAbandonedPerUser, Operations.Options.MaxAbandonedTotal, out var globalLimit))
+            {
+                Response.Headers.RetryAfter = "10";
+                Logger.LogWarning("User {UserId} refused: {Count} abandoned operations still running ({Total} in the process)",
+                    user.Id, AbandonedWork.For(user.Id), AbandonedWork.Total);
+                return StatusCode(
+                    globalLimit ? StatusCodes.Status503ServiceUnavailable : StatusCodes.Status429TooManyRequests,
+                    new { message = Localizer[globalLimit ? "ServerAtCapacity" : "TooManyRequests"].Value, retryAfter = 10 });
+            }
+
             var tier = HttpContext.Items[DotNetSigningServer.Middleware.UserConcurrencyMiddleware.TierItemKey] is int t ? t : 1;
             var begin = await Operations.BeginAsync(
                 new OperationRequest(user.Id, user.IsEnterprise, operation, clientKey, fingerprint, baseCost, tier, presignId),
@@ -234,17 +246,25 @@ namespace DotNetSigningServer.Controllers
             }
 
             PaidResult result;
+            // The deadline of the operation (#72): under Cloudflare's 100 s and the portal's wait.
+            // A keyed operation ignores the caller leaving; one nobody can ask about stops with it.
+            // Not `using`: abandoned work keeps the token, so it is disposed when the work ends.
+            var deadline = new OperationDeadline(
+                Operations.Options.DeadlineFor(operation),
+                retrievable ? CancellationToken.None : HttpContext.RequestAborted);
             var heartbeat = new LeaseHeartbeat(
                 HttpContext.RequestServices.GetRequiredService<IServiceScopeFactory>(),
                 op.Id, attempt, Operations.Options.HeartbeatInterval, Logger);
             try
             {
-                result = await work(retrievable ? CancellationToken.None : HttpContext.RequestAborted);
+                result = await AwaitWithDeadlineAsync(deadline, user.Id, work);
             }
             catch (Exception ex)
             {
                 await heartbeat.DisposeAsync();
-                var uncertain = IsUncertainFailure(ex);
+                var uncertain = ex is OperationDeadlineExceededException late
+                    ? late.ExternalCallStarted
+                    : IsUncertainFailure(ex);
                 try
                 {
                     await Operations.FailAsync(op, attempt, uncertain, FailureCode(ex));
@@ -255,6 +275,26 @@ namespace DotNetSigningServer.Controllers
                     Logger.LogError(releaseError, "Could not release operation {OperationId}", op.OperationId);
                 }
                 Response.Headers[OperationStateHeader] = uncertain ? ApiOperationState.FailedUncertain : ApiOperationState.Failed;
+                if (FindTsaFailure(ex) is { } tsaFailure)
+                {
+                    // However iText wrapped it (or the call site forgot to): a TSA that could not
+                    // be talked to is TSA_UNREACHABLE, not a 500 (#72).
+                    Logger.LogWarning(tsaFailure, "Operation {OperationId} ({Operation}) failed: TSA communication error ({TsaUrl})",
+                        op.OperationId, operation, tsaFailure.TsaUrl);
+                    return TsaUnreachableResult(tsaFailure);
+                }
+                if (ex is OperationDeadlineExceededException)
+                {
+                    Logger.LogWarning("Operation {OperationId} ({Operation}) exceeded its deadline of {Seconds} s; state {State}",
+                        op.OperationId, operation, deadline.Limit.TotalSeconds, Response.Headers[OperationStateHeader].ToString());
+                    return StatusCode(StatusCodes.Status504GatewayTimeout, new
+                    {
+                        code = "OPERATION_DEADLINE_EXCEEDED",
+                        message = Localizer["Error_OPERATION_DEADLINE_EXCEEDED"].Value,
+                        operationId = op.OperationId,
+                        state = Response.Headers[OperationStateHeader].ToString(),
+                    });
+                }
                 throw;
             }
             await heartbeat.DisposeAsync();
@@ -314,6 +354,73 @@ namespace DotNetSigningServer.Controllers
                 });
             }
             return Ok(result.Body);
+        }
+
+        /// <summary>
+        /// The answer for a TSA failure (#72, #82): a code and a generic message, the detail only
+        /// in the log. The exception text carries whatever the connection said (addresses, ports,
+        /// TLS errors) and a tenant-chosen URL made that a free probe of the network behind us.
+        /// An open circuit breaker answers 503 with Retry-After, at once; the code stays the same.
+        /// </summary>
+        protected IActionResult TsaUnreachableResult(TsaCommunicationException ex)
+        {
+            for (Exception? e = ex; e != null; e = e.InnerException)
+            {
+                if (e is TsaCircuitOpenException open)
+                {
+                    Response.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling(open.RetryAfter.TotalSeconds)).ToString();
+                    return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                        new { code = "TSA_UNREACHABLE", message = Localizer["Error_TSA_UNREACHABLE"].Value, tsaUrl = ex.TsaUrl });
+                }
+            }
+            return StatusCode(StatusCodes.Status502BadGateway,
+                new { code = "TSA_UNREACHABLE", message = Localizer["Error_TSA_UNREACHABLE"].Value, tsaUrl = ex.TsaUrl });
+        }
+
+        /// <summary>
+        /// Runs the work on the pool with the deadline ambient, and stops waiting for it when the
+        /// deadline passes: iText cannot be interrupted, so the answer must not depend on it. The
+        /// token is cancelled first and the work gets a short grace to unwind (it shares this
+        /// request's database context), then the operation is settled whatever it is still doing.
+        /// </summary>
+        private static async Task<PaidResult> AwaitWithDeadlineAsync(
+            OperationDeadline deadline, Guid userId, Func<CancellationToken, Task<PaidResult>> work)
+        {
+            var running = deadline.Run(work);
+            var abandoned = false;
+            try
+            {
+                using var timer = new CancellationTokenSource();
+                var finished = await Task.WhenAny(running, Task.Delay(deadline.Limit, timer.Token));
+                if (finished == running)
+                {
+                    timer.Cancel();
+                    try { return await running; }
+                    catch (OperationCanceledException) when (deadline.Expired)
+                    {
+                        throw new OperationDeadlineExceededException(deadline.Limit, deadline.ExternalCallStarted);
+                    }
+                }
+
+                deadline.Cancel();
+                using var grace = new CancellationTokenSource();
+                await Task.WhenAny(running, Task.Delay(OperationDeadline.CancelGrace, grace.Token));
+                grace.Cancel();
+                // It finished while being cancelled: the result exists (and the TSA may have
+                // issued and billed a token for it). Throwing it away would charge nothing and
+                // invite a retry that stamps a second time.
+                if (running.IsCompletedSuccessfully) return running.Result;
+
+                if (!running.IsCompleted) abandoned = true;
+                else _ = running.Exception; // ended badly during the grace; observed, the deadline is the answer
+                throw new OperationDeadlineExceededException(deadline.Limit, deadline.ExternalCallStarted);
+            }
+            finally
+            {
+                if (abandoned) AbandonedWork.Track(userId, running, deadline.Dispose);
+                else if (running.IsCompleted) deadline.Dispose();
+                else _ = running.ContinueWith(_ => deadline.Dispose(), TaskScheduler.Default);
+            }
         }
 
         /// <summary>
@@ -402,7 +509,8 @@ namespace DotNetSigningServer.Controllers
         {
             for (var e = ex; e != null; e = e.InnerException)
             {
-                if (e is TsaCommunicationException or TimeoutException or HttpRequestException or OperationCanceledException)
+                if (e is TsaCommunicationException or TimeoutException or HttpRequestException or OperationCanceledException
+                    or OperationDeadlineExceededException { ExternalCallStarted: true })
                 {
                     return true;
                 }
@@ -410,10 +518,20 @@ namespace DotNetSigningServer.Controllers
             return false;
         }
 
+        private static TsaCommunicationException? FindTsaFailure(Exception ex)
+        {
+            for (var e = ex; e != null; e = e.InnerException)
+            {
+                if (e is TsaCommunicationException tsa) return tsa;
+            }
+            return null;
+        }
+
         private static string FailureCode(Exception ex) => ex switch
         {
             ApiValidationException validation => validation.Code,
-            TsaCommunicationException => "TSA_UNREACHABLE",
+            OperationDeadlineExceededException => "DEADLINE_EXCEEDED",
+            _ when FindTsaFailure(ex) != null => "TSA_UNREACHABLE",
             FormatException => "INVALID_BASE64",
             _ when IsUncertainFailure(ex) => "UPSTREAM_UNCERTAIN",
             _ => "INTERNAL_ERROR",

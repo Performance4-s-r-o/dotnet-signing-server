@@ -10,6 +10,8 @@ public static class OperationsRegistration
     /// work is done, one close to the lease would let live attempts expire, and a negative
     /// size would quietly stop keeping results.
     /// </summary>
+    private static bool IsDeadline(int seconds) => seconds >= 1 && seconds <= OperationsOptions.MaxDeadlineSeconds;
+
     public static IServiceCollection AddApiOperations(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<OperationsOptions>()
@@ -18,8 +20,14 @@ public static class OperationsRegistration
                 o => o.HeartbeatInterval > TimeSpan.Zero
                      && o.HeartbeatInterval * 3 <= o.Lease
                      && o.ResultRetention > TimeSpan.Zero
-                     && o.MaxStoredResultBytes >= 0,
-                "Operations: HeartbeatInterval must be > 0 and at most a third of Lease, ResultRetention > 0, MaxStoredResultBytes >= 0.")
+                     && o.MaxStoredResultBytes >= 0
+                     && IsDeadline(o.SignDeadlineSeconds)
+                     && IsDeadline(o.DocumentDeadlineSeconds)
+                     && IsDeadline(o.HeavyDeadlineSeconds)
+                     && o.MaxAbandonedPerUser >= 1
+                     && o.MaxAbandonedTotal >= o.MaxAbandonedPerUser,
+                "Operations: HeartbeatInterval must be > 0 and at most a third of Lease, ResultRetention > 0, MaxStoredResultBytes >= 0, "
+                + $"the three deadlines within 1..{OperationsOptions.MaxDeadlineSeconds} s (Cloudflare answers 524 after 100 s), MaxAbandonedPerUser >= 1 and MaxAbandonedTotal >= MaxAbandonedPerUser.")
             .ValidateOnStart();
         services.AddScoped<ApiOperationService>();
         services.AddHostedService<OperationMaintenanceService>();

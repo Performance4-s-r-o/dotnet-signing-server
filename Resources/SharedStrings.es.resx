@@ -193,6 +193,9 @@
   <data name="Error_OPERATION_IN_PROGRESS" xml:space="preserve"><value>La operación con esta Idempotency-Key sigue en curso. Inténtelo de nuevo en breve.</value></data>
   <data name="Error_OPERATION_RESULT_EXPIRED" xml:space="preserve"><value>La operación se completó, pero su resultado ya no está almacenado.</value></data>
   <data name="Error_OPERATION_NOT_FOUND" xml:space="preserve"><value>No se encontró ninguna operación con este ID.</value></data>
+  <data name="Error_TSA_UNREACHABLE" xml:space="preserve"><value>La autoridad de sellado de tiempo no está disponible o rechazó la solicitud.</value></data>
+  <data name="Error_TSA_PROBE_FAILED" xml:space="preserve"><value>La comprobación de la autoridad de sellado de tiempo falló.</value></data>
+  <data name="Error_OPERATION_DEADLINE_EXCEEDED" xml:space="preserve"><value>La operación no terminó dentro del límite de tiempo y fue cancelada.</value></data>
 
   <!-- Middleware -->
   <data name="TooManyRequests" xml:space="preserve"><value>Demasiadas solicitudes simultáneas. Por favor, reduzca la frecuencia.</value></data>
@@ -692,4 +695,13 @@
   <data name="CookieCulturePurpose" xml:space="preserve"><value>Remembers the language you chose.</value></data>
   <data name="CookieDurationSession" xml:space="preserve"><value>Session</value></data>
   <data name="CookieDurationOneYear" xml:space="preserve"><value>1 year</value></data>
+  <data name="ApiDocOperationsTitle" xml:space="preserve"><value>Estado de la operación y reintentos seguros</value></data>
+  <data name="ApiDocOperationsPurpose" xml:space="preserve"><value>Estado de una llamada de pago, Idempotency-Key</value></data>
+  <data name="ApiDocOperationsCredits" xml:space="preserve"><value>Gratis</value></data>
+  <data name="ApiDocOperationsMeta" xml:space="preserve"><value>Cómo reintentar con seguridad las llamadas de pago de la API: cabecera Idempotency-Key, estados de operación, GET /api/operations/{id} y los códigos de error implicados.</value></data>
+  <data name="ApiDocOperationsIntro" xml:space="preserve"><value>Cada llamada de pago es una operación duradera. Envíe su propia Idempotency-Key (1–128 caracteres A-Z a-z 0-9 - _ . :); una solicitud repetida con la misma clave y cuerpo devuelve la respuesta almacenada sin repetir el trabajo ni cobrar de nuevo. Este endpoint indica qué ocurrió con una operación cuya respuesta nunca recibió.</value></data>
+  <data name="ApiDocOperationsNote1" xml:space="preserve"><value>Las cabeceras X-Operation-Id y X-Operation-State acompañan a cada llamada de pago; Idempotent-Replayed: true indica una respuesta almacenada. Se conserva 60 minutos. Misma clave con otra solicitud: 422 IDEMPOTENCY_KEY_REUSED; clave mal formada: 400 IDEMPOTENCY_KEY_INVALID; sigue en curso: 409 OPERATION_IN_PROGRESS con Retry-After; completada pero ya no almacenada: 410 OPERATION_RESULT_EXPIRED (hecha y cobrada, no es un reembolso).</value></data>
+  <data name="ApiDocOperationsNote2" xml:space="preserve"><value>Estados: completed (hecha, cobrada una vez); failed (no ocurrió nada irreversible, créditos devueltos, un reintento ejecuta el trabajo de nuevo); failed_uncertain (puede haberse alcanzado una autoridad de sellado o un modelo, créditos devueltos, un reintento ejecuta el trabajo de nuevo y se cobra como máximo una vez); running (un intento mantiene la operación). ID desconocido: 404 OPERATION_NOT_FOUND.</value></data>
+  <data name="ApiDocOperationsNote3" xml:space="preserve"><value>Los créditos se reservan antes de empezar el trabajo. Sin créditos suficientes no se ejecuta nada: 402 con el código INSUFFICIENT_CREDITS.</value></data>
+  <data name="ApiDocOperationsNote4" xml:space="preserve"><value>Límites de tiempo: 45 s para sign, sign-pfx, timestamp, visual-sign, seal y attachment; 60 s para fill-pdf y PDF/A; 75 s para find-codes, extend-signature e IA. Al expirar, el trabajo se cancela y la respuesta es 504 OPERATION_DEADLINE_EXCEEDED. Una autoridad de sellado que falla repetidamente se omite durante un tiempo: 503 TSA_UNREACHABLE con Retry-After. Los errores de TSA llevan un código y un mensaje genérico, nunca el texto de la autoridad.</value></data>
 </root>

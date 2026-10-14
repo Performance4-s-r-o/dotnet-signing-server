@@ -171,7 +171,7 @@ public class AccountController : Controller
             return View(model);
         }
 
-        bool exists = await _dbContext.Users.AnyAsync(u => u.Email == model.Email);
+        bool exists = await _dbContext.Users.AnyWithEmailAsync(model.Email);
         if (exists)
         {
             // Do not reveal that the address is already registered — that turns signup
@@ -193,7 +193,9 @@ public class AccountController : Controller
         var verificationToken = SecureTokens.Generate();
         var user = new User
         {
-            Email = model.Email,
+            // Trimmed; one account per address whatever the case is the lookup's and the
+            // unique index's job (lower("Email"), #82).
+            Email = UserEmails.Trim(model.Email),
             PasswordHash = hash,
             PasswordSalt = salt,
             PasswordIterations = iterations,
@@ -267,14 +269,14 @@ public class AccountController : Controller
         }
         if (!ModelState.IsValid) return View(model);
 
-        var rateLimitKey = $"signin:{(model.Email ?? "").ToLowerInvariant()}";
+        var rateLimitKey = $"signin:{UserEmails.Key(model.Email)}";
         if (IsRateLimited(rateLimitKey))
         {
             ModelState.AddModelError(string.Empty, _localizer["TooManySignInAttempts"]);
             return View(model);
         }
 
-        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == model.Email);
+        var user = await _dbContext.Users.FindByEmailAsync(model.Email);
         if (user == null || !_authService.VerifyPassword(model.Password, user.PasswordHash, user.PasswordSalt, user.PasswordIterations))
         {
             ModelState.AddModelError(string.Empty, _localizer["InvalidCredentials"]);
@@ -446,14 +448,14 @@ public class AccountController : Controller
             return RedirectToAction(nameof(SignIn));
         }
 
-        var rateLimitKey = $"2fa:{email.ToLowerInvariant()}";
+        var rateLimitKey = $"2fa:{UserEmails.Key(email)}";
         if (IsRateLimited(rateLimitKey))
         {
             TempData["Error"] = _localizer["TooManyVerificationAttempts"].Value;
             return RedirectToAction(nameof(SignIn));
         }
 
-        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == email);
+        var user = await _dbContext.Users.FindByEmailAsync(email);
         if (user == null || user.EmailOtpCode == null || user.EmailOtpExpiresAt == null)
         {
             TempData["Error"] = _localizer["VerificationCodeInvalid"].Value;
@@ -507,7 +509,7 @@ public class AccountController : Controller
         }
         if (!ModelState.IsValid) return View(model);
 
-        var rateLimitKey = $"forgot:{(model.Email ?? "").ToLowerInvariant()}";
+        var rateLimitKey = $"forgot:{UserEmails.Key(model.Email)}";
         if (IsRateLimited(rateLimitKey))
         {
             // Always show success to prevent email enumeration
@@ -515,7 +517,7 @@ public class AccountController : Controller
             return View(new ForgotPasswordViewModel());
         }
 
-        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == model.Email);
+        var user = await _dbContext.Users.FindByEmailAsync(model.Email);
         if (user != null && user.IsActive && user.EmailVerified)
         {
             var token = SecureTokens.Generate();

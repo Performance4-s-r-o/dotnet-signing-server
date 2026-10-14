@@ -69,6 +69,14 @@ namespace DotNetSigningServer.Data
                 .HasIndex(u => u.Email)
                 .IsUnique();
 
+            // One user per Stripe customer (#82): the customer drives the billing portal,
+            // invoices and the auto-recharge charge. Blank values are not a customer.
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.StripeCustomerId)
+                .HasDatabaseName(DotNetSigningServer.Services.Billing.StripeCustomerBinding.UniqueIndexName)
+                .IsUnique()
+                .HasFilter("\"StripeCustomerId\" IS NOT NULL AND btrim(\"StripeCustomerId\") <> ''");
+
             // One row per (slug, locale, version); the lookup then picks the
             // newest non-draft row whose EffectiveFrom has already passed.
             modelBuilder.Entity<LegalDocument>()

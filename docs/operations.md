@@ -73,6 +73,43 @@ of `Lease`, `ResultRetention` > 0, `MaxStoredResultBytes` ≥ 0.
   max 120). Qualified/archival authorities that answer slowly may need a higher value —
   the deadline chain portal > dotnet > TSA must still hold.
 
+## Deadlines, cancellation, TSA breaker (#72)
+
+| Operations | Deadline | Env |
+|---|---|---|
+| sign, sign-pfx, timestamp, visual-sign, seal, attachment | 45 s | `OPERATION_DEADLINE_SIGN_SECONDS` |
+| fill-pdf, pdfa | 60 s | `OPERATION_DEADLINE_DOCUMENT_SECONDS` |
+| find-codes, extend-signature, ai-detect-fields, ai-extract-data | 75 s | `OPERATION_DEADLINE_HEAVY_SECONDS` |
+
+Valid range 1–95 s (Cloudflare answers 524 after 100 s); anything else fails startup.
+
+**Caution:** the portal waits only 30 s for post-sign (`service.ts`), less than the 45 s sign
+deadline, so a slow TSA can make the portal give up before this server answers. The deadlines
+here are under Cloudflare, not under the portal; aligning the portal's timeout is tracked on
+the portal side (#259). A keyed retry finds the operation either way.
+
+- **Expiry** answers `504 OPERATION_DEADLINE_EXCEEDED` (`operationId`, `state`), cancels the
+  work's token and returns the reservation. The state is `failed_uncertain` when a TSA or model
+  call had been started, `failed` when nothing external was reached. `errorCode` is `DEADLINE_EXCEEDED`.
+- **Cancellation** reaches the TSA request, the CRL/OCSP fetches (`Client.Send` with the token),
+  the AI calls, the signature loop of LTV and the row loop of fill-pdf. iText itself cannot be
+  interrupted: a call stuck inside it is answered on time and abandoned, and it stops at its next
+  outbound call. Light operations (inspect, probe) are not paid operations and have no deadline.
+- **Breaker per TSA host** (and a hash of the credentials, so one tenant's wrong password
+  does not switch the authority off for the others): `TSA_BREAKER_FAILURE_THRESHOLD`
+  (default 5, `0` = off, max 100) consecutive transport failures, timeouts or 5xx within
+  2 × the open period (a 4xx, our own cancellation and `/api/tsa-probe` never count) open it for `TSA_BREAKER_OPEN_SECONDS` (default 30, 1–3600);
+  calls then fail at once as `503 TSA_UNREACHABLE` with `Retry-After`; a backup authority is
+  asked immediately. After that one probe goes through; success closes it, failure re-opens it.
+  State is per process. Invalid values fail startup.
+- **Abandoned work:** a task still running after its 504 counts against the user
+  (`Operations:MaxAbandonedPerUser`, default 2, then `429`) and the process
+  (`Operations:MaxAbandonedTotal`, default 16, then `503`) until it ends. Config keys only,
+  no env variable. A task that finishes inside the 2 s grace after the deadline is delivered
+  and charged normally.
+- **TSA errors** carry `code: TSA_UNREACHABLE`, a generic `message` and the caller's `tsaUrl`;
+  the exception text goes to the log only (also in `/api/tsa-probe`).
+
 ## Open decisions
 
 - Retry after `failed_uncertain` runs the work again (a TSA may issue and bill a second

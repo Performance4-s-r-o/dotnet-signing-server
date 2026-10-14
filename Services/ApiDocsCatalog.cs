@@ -488,6 +488,43 @@ Response:
 """,
                 Curl: $$"""curl -X DELETE -H "Authorization: Bearer <token>" {{b}}/pdf-template/a1b2c3d4-0000-0000-0000-000000000000""",
                 NoteKeys: new[] { "ApiDocTemplateDeleteNote1" }),
+
+            new ApiEndpointDoc(
+                Slug: "operations",
+                Method: "GET",
+                Path: "/api/operations/{operationId}",
+                TitleKey: "ApiDocOperationsTitle",
+                PurposeKey: "ApiDocOperationsPurpose",
+                CreditsKey: "ApiDocOperationsCredits",
+                MetaKey: "ApiDocOperationsMeta",
+                IntroKey: "ApiDocOperationsIntro",
+                Sample: """
+POST /api/timestamp
+Authorization: Bearer <token>
+Idempotency-Key: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+Content-Type: application/json
+
+Response headers:
+X-Operation-Id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+X-Operation-State: completed
+Idempotent-Replayed: true        (only when the stored result is sent again)
+
+GET /api/operations/7c9e6679-7425-40de-944b-e07fc1f90ae7
+Authorization: Bearer <token>
+
+Response:
+{
+  "operationId": "7c9e6679-…",
+  "state": "failed_uncertain",
+  "creditsCharged": 0,
+  "creditsReserved": 0,
+  "attempts": 1,
+  "errorCode": "TSA_UNREACHABLE",
+  "resultAvailable": false
+}
+""",
+                Curl: $$"""curl -H "Authorization: Bearer <token>" {{b}}/operations/7c9e6679-7425-40de-944b-e07fc1f90ae7""",
+                NoteKeys: new[] { "ApiDocOperationsNote1", "ApiDocOperationsNote2", "ApiDocOperationsNote3", "ApiDocOperationsNote4" }),
         };
     }
 

@@ -88,7 +88,9 @@ internal sealed class GuardedResourceRetriever : DefaultResourceRetriever
             }
         }
 
-        var response = Client.Send(request);
+        // The operation's deadline reaches the socket (#72); CRL and OCSP are read-only, so no
+        // "external call" mark: a cancelled fetch leaves nothing uncertain behind.
+        var response = Client.Send(request, DotNetSigningServer.Services.Operations.OperationDeadline.CurrentToken);
         if (!response.IsSuccessStatusCode)
         {
             response.Dispose();
