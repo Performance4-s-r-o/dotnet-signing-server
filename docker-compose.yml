@@ -152,6 +152,9 @@ services:
     healthcheck:
       disable: true
     environment:
+      # The serving process runs with a short Command Timeout (#75); a migration (an index on a
+      # large table) is allowed minutes.
+      - ConnectionStrings__DefaultConnection=Host=${DB_HOST};Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD};Timeout=15;Command Timeout=600
       - Database__MigrationUser=${MIGRATION_DB_USER:-}
       - Database__MigrationPassword=${MIGRATION_DB_PASSWORD:-}
 
