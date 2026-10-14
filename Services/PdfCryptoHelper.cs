@@ -163,7 +163,10 @@ namespace DotNetSigningServer.Services
             {
                 try
                 {
-                    addresses = System.Net.Dns.GetHostAddresses(host);
+                    // Bounded: the resolver's own timeout is tens of seconds (#72).
+                    var lookup = System.Net.Dns.GetHostAddressesAsync(host);
+                    if (!lookup.Wait(PinnedIpHttp.DnsTimeout)) return true;
+                    addresses = lookup.Result;
                 }
                 catch
                 {
@@ -186,6 +189,10 @@ namespace DotNetSigningServer.Services
         /// </summary>
         public static bool IsPrivateOrLocalAddress(System.Net.IPAddress ip) => IsPrivateOrLocal(ip);
 
+        /// <summary>
+        /// Only global unicast is allowed. Everything that is not routable on the public
+        /// internet, or that embeds an IPv4 address and so can be pointed at one, is refused.
+        /// </summary>
         private static bool IsPrivateOrLocal(System.Net.IPAddress ip)
         {
             if (System.Net.IPAddress.IsLoopback(ip)) return true;
@@ -193,23 +200,39 @@ namespace DotNetSigningServer.Services
             if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
             {
                 var b = ip.GetAddressBytes();
-                // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10 (CGNAT), 0.0.0.0/8
-                if (b[0] == 10) return true;
-                if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return true;
-                if (b[0] == 192 && b[1] == 168) return true;
-                if (b[0] == 169 && b[1] == 254) return true;
-                if (b[0] == 100 && b[1] >= 64 && b[1] <= 127) return true;
-                if (b[0] == 0) return true;
+                if (b[0] == 0) return true;                                   // 0.0.0.0/8 "this network"
+                if (b[0] == 10) return true;                                  // 10.0.0.0/8
+                if (b[0] == 100 && b[1] >= 64 && b[1] <= 127) return true;    // 100.64.0.0/10 CGNAT
+                if (b[0] == 169 && b[1] == 254) return true;                  // 169.254.0.0/16 link-local, metadata
+                if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return true;     // 172.16.0.0/12
+                if (b[0] == 192 && b[1] == 0 && b[2] == 0) return true;       // 192.0.0.0/24 IETF protocol
+                if (b[0] == 192 && b[1] == 0 && b[2] == 2) return true;       // 192.0.2.0/24 documentation
+                if (b[0] == 192 && b[1] == 168) return true;                  // 192.168.0.0/16
+                if (b[0] == 198 && (b[1] == 18 || b[1] == 19)) return true;   // 198.18.0.0/15 benchmarking
+                if (b[0] == 198 && b[1] == 51 && b[2] == 100) return true;    // 198.51.100.0/24 documentation
+                if (b[0] == 203 && b[1] == 0 && b[2] == 113) return true;     // 203.0.113.0/24 documentation
+                if (b[0] >= 224) return true;                                 // 224.0.0.0/4 multicast, 240.0.0.0/4 reserved, broadcast
+                return false;
             }
-            else if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+
+            if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
             {
-                if (ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal) return true;
+                // IPv4-mapped (::ffff:a.b.c.d): judge the embedded v4.
+                if (ip.IsIPv4MappedToIPv6) return IsPrivateOrLocal(ip.MapToIPv4());
+
                 var b = ip.GetAddressBytes();
-                if ((b[0] & 0xfe) == 0xfc) return true; // fc00::/7 unique-local
-                // IPv4-mapped (::ffff:a.b.c.d) → re-check the embedded v4
-                if (ip.IsIPv4MappedToIPv6 && IsPrivateOrLocal(ip.MapToIPv4())) return true;
+
+                // Global unicast is 2000::/3. That alone drops ::, ::1, fc00::/7, fe80::/10,
+                // ff00::/8 and NAT64 (64:ff9b::/96).
+                if ((b[0] & 0xE0) != 0x20) return true;
+
+                if (b[0] == 0x20 && b[1] == 0x02) return true;                          // 2002::/16 6to4 (embeds v4)
+                if (b[0] == 0x20 && b[1] == 0x01 && b[2] == 0x00 && b[3] == 0x00) return true;   // 2001::/32 Teredo
+                if (b[0] == 0x20 && b[1] == 0x01 && b[2] == 0x0D && b[3] == 0xB8) return true;   // 2001:db8::/32 documentation
+                return false;
             }
-            return false;
+
+            return true;
         }
 
         public static byte[] EncryptAttachmentPayload(byte[] attachmentBytes, string recipientCertificatePem, bool compressBeforeEncrypt)

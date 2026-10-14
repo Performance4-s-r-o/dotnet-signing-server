@@ -48,7 +48,13 @@ public class PdfLtvService
             throw new ApiValidationException("TSA_REQUIRED_FOR_ARCHIVE_TIMESTAMP");
         }
 
-        var withValidationData = AddValidationData(signedPdf);
+        // The whole operation shares one fetch budget (#72): at most 20 revocation downloads in 30 s.
+        // The archive timestamp below goes to the TSA, which has its own timeout and breaker.
+        byte[] withValidationData;
+        using (RevocationFetchPolicy.Begin())
+        {
+            withValidationData = AddValidationData(signedPdf);
+        }
 
         return addArchiveTimestamp
             ? AddArchiveTimestamp(withValidationData, tsaClient!)

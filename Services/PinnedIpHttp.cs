@@ -19,6 +19,8 @@ namespace DotNetSigningServer.Services;
 /// </summary>
 internal static class PinnedIpHttp
 {
+    internal static readonly TimeSpan DnsTimeout = TimeSpan.FromSeconds(3);
+
     /// <param name="errorCode">
     /// Thrown as <see cref="ApiValidationException"/> when the resolved address is
     /// private. Callers pass their own code so the refusal stays legible to whoever
@@ -31,6 +33,11 @@ internal static class PinnedIpHttp
             // SocketsHttpHandler pools connections; one handler per request would
             // exhaust sockets under load, so callers keep these in static fields.
             PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+            // A redirect is a second destination the certificate's owner chose, and it would not
+            // go through the address check of the first (#72). The authorities and responders we
+            // talk to answer where they were addressed.
+            AllowAutoRedirect = false,
+            MaxResponseHeadersLength = 32, // KB
             ConnectCallback = async (context, cancellationToken) =>
             {
                 var target = await ResolvePublicAddressAsync(
@@ -69,7 +76,17 @@ internal static class PinnedIpHttp
         }
         else
         {
-            addresses = await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
+            // A resolver that does not answer must not hold the request for its own timeout.
+            using var dnsDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            dnsDeadline.CancelAfter(DnsTimeout);
+            try
+            {
+                addresses = await Dns.GetHostAddressesAsync(host, dnsDeadline.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new ApiValidationException(errorCode);
+            }
         }
 
         var target = addresses.FirstOrDefault(a => !PdfCryptoHelper.IsPrivateOrLocalAddress(a));

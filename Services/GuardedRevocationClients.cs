@@ -69,38 +69,82 @@ internal sealed class GuardedResourceRetriever : DefaultResourceRetriever
     {
         if (!UrlFilter(url)) return null;
 
-        using var request = new HttpRequestMessage(
-            body is null ? HttpMethod.Get : HttpMethod.Post, url);
-
-        if (body is not null)
+        var isOcsp = body is not null;
+        if (!isOcsp && RevocationFetchPolicy.TryGetCrl(url, out var cached))
         {
-            request.Content = new ByteArrayContent(body);
-            request.Content.Headers.ContentType = new MediaTypeHeaderValue(OcspRequestContentType);
+            return new MemoryStream(cached, writable: false);
         }
 
-        if (headers is not null)
+        // One operation gets a fixed number of fetches and a window of time (#72). A cache hit
+        // above did not spend one.
+        if (!RevocationFetchPolicy.TryConsume()) return null;
+
+        var token = DotNetSigningServer.Services.Operations.OperationDeadline.CurrentToken;
+        // The Timeout of the HttpClient ends at the response headers; the body gets its own
+        // limit, otherwise a responder that sends one byte a second holds the thread for as long
+        // as the size cap allows.
+        using var readDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        readDeadline.CancelAfter(BodyReadTimeout);
+
+        var current = url;
+        // Redirects are followed by hand, a couple at most, and every hop is checked like the
+        // first address. CRL distribution points on plain HTTP often redirect to a CDN.
+        for (var hop = 0; hop <= MaxRedirects; hop++)
         {
-            foreach (var header in headers)
+            using var request = new HttpRequestMessage(isOcsp ? HttpMethod.Post : HttpMethod.Get, current);
+            if (isOcsp)
             {
-                // Content headers are rejected on the request object; the content type
-                // above is the only one either protocol actually needs.
-                request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                request.Content = new ByteArrayContent(body!);
+                request.Content.Headers.ContentType = new MediaTypeHeaderValue(OcspRequestContentType);
             }
+            if (headers is not null)
+            {
+                foreach (var header in headers)
+                {
+                    // Content headers are rejected on the request object; the content type
+                    // above is the only one either protocol actually needs.
+                    request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                }
+            }
+
+            // The operation's deadline reaches the socket (#72); CRL and OCSP are read-only, so no
+            // "external call" mark: a cancelled fetch leaves nothing uncertain behind.
+            using var response = Client.Send(request, HttpCompletionOption.ResponseHeadersRead, readDeadline.Token);
+
+            if (IsRedirect(response.StatusCode) && !isOcsp && response.Headers.Location is { } location)
+            {
+                var next = location.IsAbsoluteUri ? location : new Uri(current, location);
+                if (!UrlFilter(next)) return null;
+                current = next;
+                continue;
+            }
+
+            if (!response.IsSuccessStatusCode) return null;
+
+            // The answer is read here, with a cap and a deadline, rather than handed to iText as
+            // a stream it reads for as long as the peer keeps sending. OCSP 64 KB, CRL 32 MB.
+            var bytes = RevocationFetchPolicy
+                .ReadBoundedAsync(
+                    response.Content,
+                    isOcsp ? RevocationFetchPolicy.OcspMaxBytes : RevocationFetchPolicy.CrlMaxBytes,
+                    readDeadline.Token)
+                .GetAwaiter().GetResult();
+            if (bytes is null) return null;
+
+            if (!isOcsp) RevocationFetchPolicy.PutCrl(url, bytes);
+            return new MemoryStream(bytes, writable: false);
         }
 
-        // The operation's deadline reaches the socket (#72); CRL and OCSP are read-only, so no
-        // "external call" mark: a cancelled fetch leaves nothing uncertain behind.
-        var response = Client.Send(request, DotNetSigningServer.Services.Operations.OperationDeadline.CurrentToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            response.Dispose();
-            return null;
-        }
-
-        // The stream is read by iText and must outlive this call, so the response is
-        // not disposed here — closing the stream releases the connection.
-        return response.Content.ReadAsStream();
+        return null;
     }
+
+    private const int MaxRedirects = 2;
+    private static readonly TimeSpan BodyReadTimeout = TimeSpan.FromSeconds(20);
+
+    private static bool IsRedirect(System.Net.HttpStatusCode code) =>
+        code is System.Net.HttpStatusCode.MovedPermanently or System.Net.HttpStatusCode.Found
+            or System.Net.HttpStatusCode.SeeOther or System.Net.HttpStatusCode.TemporaryRedirect
+            or System.Net.HttpStatusCode.PermanentRedirect;
 
     public override Stream? GetInputStreamByUrl(Uri url) => Get(url, null, null);
 
