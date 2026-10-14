@@ -47,6 +47,8 @@ public class PresignCleanupService : BackgroundService
             .Where(s => s.CreatedAt < cutoff)
             .ToListAsync(cancellationToken);
 
+        SweepOrphanFiles(cutoff);
+
         if (staleRecords.Count == 0) return;
 
         foreach (var record in staleRecords)
@@ -69,6 +71,38 @@ public class PresignCleanupService : BackgroundService
 
         await dbContext.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Cleaned up {Count} abandoned presign record(s)", staleRecords.Count);
+    }
+
+    /// <summary>
+    /// Files with no row. The records above are the only thing that names a presign file, so a
+    /// file whose row was never written (the insert failed) or was deleted by another instance
+    /// would stay in /tmp for good. A row lives at most <see cref="MaxPresignAge"/> before the
+    /// pass above removes it, so a file older than that has no business being here.
+    /// </summary>
+    internal void SweepOrphanFiles(DateTime cutoffUtc, string? directory = null)
+    {
+        try
+        {
+            foreach (var path in Directory.EnumerateFiles(directory ?? Path.GetTempPath(), "presigned_*.pdf"))
+            {
+                try
+                {
+                    if (File.GetLastWriteTimeUtc(path) < cutoffUtc)
+                    {
+                        File.Delete(path);
+                        _logger.LogInformation("Deleted orphan presign temp file: {Path}", path);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to delete orphan presign file: {Path}", path);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not enumerate presign temp files");
+        }
     }
 
 }

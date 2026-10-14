@@ -604,6 +604,8 @@
   <data name="Error_ACCOUNT_BLOCKED" xml:space="preserve"><value>Esta cuenta está bloqueada. Póngase en contacto con soporte.</value></data>
   <data name="Error_FEATURE_DISABLED" xml:space="preserve"><value>Esta función no está disponible temporalmente.</value></data>
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Demasiadas solicitudes. Inténtelo más tarde.</value></data>
+  <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Demasiados documentos esperan la firma. Termínelos o espere a que caduquen.</value></data>
+  <data name="Error_TOO_MANY_TEMPLATES" xml:space="preserve"><value>Se ha alcanzado el número máximo de plantillas almacenadas.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Una página del PDF es demasiado grande para buscar códigos (más de unos 1,6 m² o un lado de más de 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>El PDF contiene contenido activo (una acción Launch o JavaScript que se ejecuta al abrir) y fue rechazado.</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>El archivo adjunto supera el tamaño máximo permitido.</value></data>

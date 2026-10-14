@@ -67,4 +67,14 @@ public class LimitsOptions
     public long FillImageMaxBytes { get; set; } = 5L * 1024 * 1024;
     public long FillImageMaxPixels { get; set; } = 25_000_000;
     public int FillImageMaxSide { get; set; } = 10_000;
+
+    // ── Disk and storage per account (#74). 0 = no limit, the default: the portal calls this
+    // server with one account for every tenant, so a per-account number that suits one customer
+    // would cap all of them. Set deliberately, with the portal's account in mind. ──
+
+    /// <summary>Presigns waiting for /api/sign, per account. Each holds a PDF of up to 20 MB in /tmp.</summary>
+    public int MaxPendingPresignsPerUser { get; set; }
+
+    /// <summary>Stored templates (up to 27 MB each), per account.</summary>
+    public int MaxTemplatesPerUser { get; set; }
 }

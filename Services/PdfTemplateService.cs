@@ -61,6 +61,13 @@ public class PdfTemplateService
         ValidateFields(input.Fields);
         _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Template");
 
+        var maxTemplates = _limits.MaxTemplatesPerUser;
+        if (maxTemplates > 0
+            && await _dbContext.StoredPdfTemplates.CountAsync(t => t.UserId == userId, cancellationToken) >= maxTemplates)
+        {
+            throw new ApiValidationException("TOO_MANY_TEMPLATES");
+        }
+
         var entity = new StoredPdfTemplate
         {
             UserId = userId,
