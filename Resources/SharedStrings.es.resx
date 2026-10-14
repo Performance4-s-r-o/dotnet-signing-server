@@ -545,7 +545,7 @@
   <data name="ApiDocFindCodesCredits" xml:space="preserve"><value>1 credit / 3 pages</value></data>
   <data name="ApiDocFindCodesMeta" xml:space="preserve"><value>Extraiga códigos QR, DataMatrix, PDF417 y Aztec de un PDF mediante la API, con el número de página y la posición de cada hallazgo.</value></data>
   <data name="ApiDocFindCodesIntro" xml:space="preserve"><value>Analiza el documento en busca de códigos legibles por máquina y devuelve su valor decodificado, tipo, página y posición: suficiente para enrutar o conciliar un documento automáticamente.</value></data>
-  <data name="ApiDocFindCodesNote1" xml:space="preserve"><value>Cuesta 1 crédito por cada 3 páginas empezadas.</value></data>
+  <data name="ApiDocFindCodesNote1" xml:space="preserve"><value>Cuesta 1 crédito por cada 3 páginas analizadas empezadas; las páginas posteriores a las analizadas no se cobran.</value></data>
   <data name="ApiDocTemplateCreateTitle" xml:space="preserve"><value>Create a PDF template</value></data>
   <data name="ApiDocTemplateCreatePurpose" xml:space="preserve"><value>Guardar un PDF con posiciones de campo con nombre</value></data>
   <data name="ApiDocTemplateCreateCredits" xml:space="preserve"><value>0</value></data>
@@ -591,6 +591,7 @@
   <data name="Error_PDF_INVALID" xml:space="preserve"><value>El archivo no es un PDF válido.</value></data>
   <data name="Error_PDF_ENCRYPTED" xml:space="preserve"><value>El PDF está cifrado. Elimine la contraseña e inténtelo de nuevo.</value></data>
   <data name="Error_PDF_TOO_MANY_PAGES" xml:space="preserve"><value>El PDF tiene más páginas de las permitidas.</value></data>
+  <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Una página del PDF es demasiado grande para buscar códigos (más de unos 1,6 m² o un lado de más de 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>El PDF contiene contenido activo (una acción Launch o JavaScript que se ejecuta al abrir) y fue rechazado.</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>El archivo adjunto supera el tamaño máximo permitido.</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>El contenido del PDF es obligatorio.</value></data>
@@ -625,7 +626,7 @@
   <data name="Error_TABLE_COLUMN_VALIGN_INVALID" xml:space="preserve"><value>La alineación vertical de la columna de tabla debe ser una de: top, center, bottom.</value></data>
   <data name="Error_TABLE_COLUMN_BORDER_INVALID" xml:space="preserve"><value>El borde de la columna de tabla debe ser uno de: none, dashed, filled.</value></data>
   <data name="Error_TABLE_NO_COLUMNS" xml:space="preserve"><value>El campo de tabla debe definir al menos una columna.</value></data>
-  <data name="ApiDocFindCodesNote2" xml:space="preserve"><value>Solo se analizan las primeras 30 páginas del documento.</value></data>
+  <data name="ApiDocFindCodesNote2" xml:space="preserve"><value>Solo se analizan las primeras 30 páginas del documento. Las páginas grandes se analizan con menor resolución; una página de más de unos 1,6 m² se rechaza con PDF_PAGE_TOO_LARGE. La respuesta incluye pages (todas) y pagesProcessed (analizadas).</value></data>
   <data name="EnterpriseBillingManaged" xml:space="preserve"><value>Su cuenta usa facturación empresarial: las compras de créditos y la recarga automática las gestiona su gestor de cuenta.</value></data>
   <data name="EnterpriseBillingHeading" xml:space="preserve"><value>Facturación empresarial</value></data>
   <data name="EnterpriseBillingDescription" xml:space="preserve"><value>Su cuenta se factura según el uso registrado. Las compras de créditos y la recarga automática están desactivadas.</value></data>

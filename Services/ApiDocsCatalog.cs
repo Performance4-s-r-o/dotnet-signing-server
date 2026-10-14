@@ -347,7 +347,11 @@ Response:
 {
   "results": [
     { "value": "INV-2024-001", "codeType": "QR_CODE", "position": { "x": 212.5, "y": 412.0 }, "page": 2 }
-  ]
+  ],
+  "pages": 42,
+  "pagesProcessed": 30,
+  "credits": 10,
+  "truncated": true
 }
 """,
                 Curl: $$"""curl -X POST {{b}}/find-codes -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"pdfContent":"base64-pdf","codeType":"any"}'""",

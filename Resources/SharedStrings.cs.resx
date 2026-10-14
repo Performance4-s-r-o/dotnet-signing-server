@@ -555,7 +555,7 @@
   <data name="ApiDocFindCodesCredits" xml:space="preserve"><value>1 kredit / 3 strany</value></data>
   <data name="ApiDocFindCodesMeta" xml:space="preserve"><value>Získejte z PDF přes API QR kódy, DataMatrix, PDF417 a Aztec, včetně čísla strany a pozice každého nálezu.</value></data>
   <data name="ApiDocFindCodesIntro" xml:space="preserve"><value>Prohledá dokument na strojově čitelné kódy a vrátí jejich dekódovanou hodnotu, typ, stránku a pozici — dost na to, aby se dokument dal automaticky směrovat nebo spárovat.</value></data>
-  <data name="ApiDocFindCodesNote1" xml:space="preserve"><value>Stojí 1 kredit za každé započaté 3 strany.</value></data>
+  <data name="ApiDocFindCodesNote1" xml:space="preserve"><value>Stojí 1 kredit za každé započaté 3 prohledané strany; strany za prohledanými se neúčtují.</value></data>
   <data name="ApiDocTemplateCreateTitle" xml:space="preserve"><value>Vytvoření šablony PDF</value></data>
   <data name="ApiDocTemplateCreatePurpose" xml:space="preserve"><value>Uloží PDF s pojmenovanými pozicemi polí</value></data>
   <data name="ApiDocTemplateCreateCredits" xml:space="preserve"><value>0</value></data>
@@ -601,6 +601,7 @@
   <data name="Error_PDF_INVALID" xml:space="preserve"><value>Soubor není platné PDF.</value></data>
   <data name="Error_PDF_ENCRYPTED" xml:space="preserve"><value>PDF je šifrované. Odstraňte heslo a zkuste to znovu.</value></data>
   <data name="Error_PDF_TOO_MANY_PAGES" xml:space="preserve"><value>PDF má víc stran, než je povoleno.</value></data>
+  <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Stránka PDF je pro hledání kódů příliš velká (víc než asi 1,6 m² nebo strana delší než 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>PDF obsahuje aktivní obsah (akci Launch nebo JavaScript spouštěný při otevření) a bylo odmítnuto.</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>Příloha překračuje maximální povolenou velikost.</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>Obsah PDF je povinný.</value></data>
@@ -635,7 +636,7 @@
   <data name="Error_TABLE_COLUMN_VALIGN_INVALID" xml:space="preserve"><value>Vertikální zarovnání sloupce tabulky musí být jedno z: top, center, bottom.</value></data>
   <data name="Error_TABLE_COLUMN_BORDER_INVALID" xml:space="preserve"><value>Rámeček sloupce tabulky musí být jedno z: none, dashed, filled.</value></data>
   <data name="Error_TABLE_NO_COLUMNS" xml:space="preserve"><value>Pole tabulky musí definovat alespoň jeden sloupec.</value></data>
-  <data name="ApiDocFindCodesNote2" xml:space="preserve"><value>Prohledá se jen prvních 30 stránek dokumentu.</value></data>
+  <data name="ApiDocFindCodesNote2" xml:space="preserve"><value>Prohledá se jen prvních 30 stránek dokumentu. Velké stránky se prohledají v nižším rozlišení; stránka nad asi 1,6 m² se odmítne s PDF_PAGE_TOO_LARGE. Odpověď nese pages (všechny) a pagesProcessed (prohledané).</value></data>
   <data name="AdminBackofficeTitle" xml:space="preserve"><value>Napojení na backoffice</value></data>
   <data name="AdminBackofficeDisabledPrivateServer" xml:space="preserve"><value>Na privátním serveru vypnuto: všechny moduly jsou Off.</value></data>
   <data name="AdminBackofficeModuleDocs" xml:space="preserve"><value>Právní dokumenty</value></data>

@@ -195,6 +195,11 @@ TsaCircuitBreaker.Default = new TsaCircuitBreaker(new TsaCircuitBreakerOptions
     FailureThreshold = builder.Configuration.GetValue<int?>("Tsa:Breaker:FailureThreshold") ?? 5,
     OpenSeconds = builder.Configuration.GetValue<int?>("Tsa:Breaker:OpenSeconds") ?? 30,
 });
+// ImageMagick (find-codes, #71): security policy and resource limits are process-wide and
+// the policy only takes effect before the first image is touched, so it is set here. Throws
+// when the policy did not take: Ghostscript on untrusted PDFs without it is not an option.
+DotNetSigningServer.Services.CodeScanRaster.Configure(
+    builder.Configuration.GetValue<long?>("Limits:FindCodesMagickMemoryBytes") ?? 0);
 // PriceChangeMonitorService is registered by AddP4BackofficeIntegration, only while
 // P4Backoffice:Modules:Pricing is not On (then the price.* events replace it).
 builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();

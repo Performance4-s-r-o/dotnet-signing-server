@@ -545,7 +545,7 @@
   <data name="ApiDocFindCodesCredits" xml:space="preserve"><value>1 credit / 3 pages</value></data>
   <data name="ApiDocFindCodesMeta" xml:space="preserve"><value>Extrahieren Sie per API QR-Codes, DataMatrix, PDF417 und Aztec aus einem PDF — mit Seitenzahl und Position jedes Treffers.</value></data>
   <data name="ApiDocFindCodesIntro" xml:space="preserve"><value>Durchsucht das Dokument nach maschinenlesbaren Codes und gibt deren dekodierten Wert, Typ, Seite und Position zurück — genug, um ein Dokument automatisch zu routen oder abzugleichen.</value></data>
-  <data name="ApiDocFindCodesNote1" xml:space="preserve"><value>Kostet 1 Credit je angefangene 3 Seiten.</value></data>
+  <data name="ApiDocFindCodesNote1" xml:space="preserve"><value>Kostet 1 Credit je angefangene 3 durchsuchte Seiten; Seiten nach den durchsuchten werden nicht berechnet.</value></data>
   <data name="ApiDocTemplateCreateTitle" xml:space="preserve"><value>Create a PDF template</value></data>
   <data name="ApiDocTemplateCreatePurpose" xml:space="preserve"><value>Ein PDF mit benannten Feldpositionen speichern</value></data>
   <data name="ApiDocTemplateCreateCredits" xml:space="preserve"><value>0</value></data>
@@ -591,6 +591,7 @@
   <data name="Error_PDF_INVALID" xml:space="preserve"><value>Die Datei ist kein gültiges PDF.</value></data>
   <data name="Error_PDF_ENCRYPTED" xml:space="preserve"><value>Das PDF ist verschlüsselt. Entfernen Sie das Passwort und versuchen Sie es erneut.</value></data>
   <data name="Error_PDF_TOO_MANY_PAGES" xml:space="preserve"><value>Das PDF hat mehr Seiten als erlaubt.</value></data>
+  <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Eine Seite des PDF ist zu groß für die Codesuche (mehr als etwa 1,6 m² oder eine Seite länger als 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>Das PDF enthält aktive Inhalte (eine Launch-Aktion oder beim Öffnen ausgeführtes JavaScript) und wurde abgelehnt.</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>Der Anhang überschreitet die maximal zulässige Größe.</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>PDF-Inhalt ist erforderlich.</value></data>
@@ -625,7 +626,7 @@
   <data name="Error_TABLE_COLUMN_VALIGN_INVALID" xml:space="preserve"><value>Die vertikale Ausrichtung der Tabellenspalte muss eines sein von: top, center, bottom.</value></data>
   <data name="Error_TABLE_COLUMN_BORDER_INVALID" xml:space="preserve"><value>Der Rahmen der Tabellenspalte muss eines sein von: none, dashed, filled.</value></data>
   <data name="Error_TABLE_NO_COLUMNS" xml:space="preserve"><value>Das Tabellenfeld muss mindestens eine Spalte definieren.</value></data>
-  <data name="ApiDocFindCodesNote2" xml:space="preserve"><value>Es werden nur die ersten 30 Seiten eines Dokuments durchsucht.</value></data>
+  <data name="ApiDocFindCodesNote2" xml:space="preserve"><value>Es werden nur die ersten 30 Seiten eines Dokuments durchsucht. Große Seiten werden mit geringerer Auflösung durchsucht; eine Seite über etwa 1,6 m² wird mit PDF_PAGE_TOO_LARGE abgelehnt. Die Antwort enthält pages (alle) und pagesProcessed (durchsucht).</value></data>
   <data name="EnterpriseBillingManaged" xml:space="preserve"><value>Ihr Konto läuft über Enterprise-Abrechnung — Guthabenkäufe und automatische Aufladung verwaltet Ihr Kundenbetreuer.</value></data>
   <data name="EnterpriseBillingHeading" xml:space="preserve"><value>Enterprise-Abrechnung</value></data>
   <data name="EnterpriseBillingDescription" xml:space="preserve"><value>Ihr Konto wird auf Basis der erfassten Nutzung abgerechnet. Guthabenkäufe und automatische Aufladung sind deaktiviert.</value></data>

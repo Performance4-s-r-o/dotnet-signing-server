@@ -1,0 +1,296 @@
+using System.Diagnostics;
+using System.Text.Json;
+using DotNetSigningServer.Controllers;
+using DotNetSigningServer.Exceptions;
+using DotNetSigningServer.Services;
+using ImageMagick;
+using iText.Kernel.Geom;
+using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas;
+using ZXing;
+using ZXing.QrCode;
+
+namespace DotNetSigningServer.Tests.Services;
+
+/// <summary>Skips when Ghostscript is not installed (CI has none; the image and dev machines do).</summary>
+public sealed class GhostscriptFactAttribute : FactAttribute
+{
+    public GhostscriptFactAttribute()
+    {
+        if (!Available) Skip = "Ghostscript (gs) is not on PATH";
+    }
+
+    private static readonly bool Available = Probe();
+
+    private static bool Probe()
+    {
+        try
+        {
+            using var p = Process.Start(new ProcessStartInfo("gs", "--version")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            });
+            if (p == null) return false;
+            p.WaitForExit(5000);
+            return p.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+}
+
+/// <summary>
+/// find-codes rasterisation (#71): resolution chosen from the page size before Ghostscript,
+/// pages read one at a time, only scanned pages charged, ImageMagick policy in force.
+/// </summary>
+public class CodeScanRasterTests
+{
+    private const float A4W = 595.28f, A4H = 841.89f;
+    private const float A0W = 2383.94f, A0H = 3370.39f;
+    private const float PtPerMetre = 72f / 0.0254f;
+
+    // ── DPI from page size ─────────────────────────────────────────────────
+
+    [Fact]
+    public void A4_and_A3_stay_at_300_dpi()
+    {
+        Assert.Equal(300, CodeScanRaster.DpiFor(A4W, A4H));
+        Assert.Equal(300, CodeScanRaster.DpiFor(841.89, 1190.55));
+    }
+
+    [Fact]
+    public void A0_is_rendered_at_a_lower_dpi_within_the_pixel_budget()
+    {
+        var dpi = CodeScanRaster.DpiFor(A0W, A0H);
+        Assert.NotNull(dpi);
+        Assert.InRange(dpi!.Value, 120, 130);
+        var px = (A0W / 72.0 * dpi.Value) * (A0H / 72.0 * dpi.Value);
+        Assert.True(px <= CodeScanRaster.PixelBudget, $"{px} px");
+    }
+
+    [Fact]
+    public void Five_by_five_metres_is_too_large()
+    {
+        Assert.Null(CodeScanRaster.DpiFor(5 * PtPerMetre, 5 * PtPerMetre));
+        // About 1.6 m² is where the budget meets 100 DPI.
+        Assert.Null(CodeScanRaster.DpiFor(1.4 * PtPerMetre, 1.4 * PtPerMetre));
+        Assert.NotNull(CodeScanRaster.DpiFor(1.2 * PtPerMetre, 1.2 * PtPerMetre));
+    }
+
+    [Fact]
+    public void A_long_thin_page_is_capped_by_the_side_limit()
+    {
+        // 4.5 m × 10 cm is well under the area budget at 300 DPI, but 53 000 px long.
+        var dpi = CodeScanRaster.DpiFor(4.5 * PtPerMetre, 0.1 * PtPerMetre);
+        Assert.NotNull(dpi);
+        Assert.True(4.5 / 0.0254 * dpi!.Value < CodeScanRaster.MaxSidePx);
+    }
+
+    // ── Plan: before any credit or Ghostscript ─────────────────────────────
+
+    [Fact]
+    public void Plan_scans_the_first_30_pages_and_charges_only_those()
+    {
+        var pdf = Pdf(Enumerable.Repeat((A4W, A4H), 35).ToArray());
+        var pages = CodeScanRaster.Plan(pdf);
+
+        Assert.Equal(35, pages.TotalPages);
+        Assert.Equal(30, pages.PagesProcessed);
+        Assert.True(pages.Truncated);
+        // ceil(30 / 3) = 10; charging all 35 pages was ceil(35 / 3) = 12.
+        Assert.Equal(10, PdfUtilityApiController.FindCodesCredits(pages));
+    }
+
+    [Fact]
+    public void Plan_charges_a_short_document_as_before()
+    {
+        var pages = CodeScanRaster.Plan(Pdf((A4W, A4H), (A4W, A4H), (A4W, A4H), (A4W, A4H)));
+        Assert.Equal(4, pages.PagesProcessed);
+        Assert.False(pages.Truncated);
+        Assert.Equal(2, PdfUtilityApiController.FindCodesCredits(pages));
+    }
+
+    [Fact]
+    public void Plan_refuses_a_page_too_large_before_rasterising()
+    {
+        var huge = 5 * PtPerMetre;
+        var ex = Assert.Throws<ApiValidationException>(() => CodeScanRaster.Plan(Pdf((A4W, A4H), (huge, huge))));
+        Assert.Equal("PDF_PAGE_TOO_LARGE", ex.Code);
+    }
+
+    [Fact]
+    public void Plan_ignores_a_huge_page_that_is_not_scanned()
+    {
+        var sizes = Enumerable.Repeat((A4W, A4H), 30).Append((5 * PtPerMetre, 5 * PtPerMetre)).ToArray();
+        var pages = CodeScanRaster.Plan(Pdf(sizes));
+        Assert.Equal(31, pages.TotalPages);
+        Assert.Equal(30, pages.PagesProcessed);
+    }
+
+    [Fact]
+    public void Plan_counts_UserUnit()
+    {
+        // 1 m × 1 m in points, times UserUnit 3 = 9 m²: refused.
+        var pdf = Pdf((PtPerMetre, PtPerMetre));
+        using var input = new MemoryStream(pdf);
+        using var output = new MemoryStream();
+        using (var doc = new PdfDocument(new PdfReader(input), new PdfWriter(output)))
+        {
+            doc.GetPage(1).GetPdfObject().Put(PdfName.UserUnit, new PdfNumber(3));
+        }
+        var ex = Assert.Throws<ApiValidationException>(() => CodeScanRaster.Plan(output.ToArray()));
+        Assert.Equal("PDF_PAGE_TOO_LARGE", ex.Code);
+    }
+
+    // ── ImageMagick policy and limits ──────────────────────────────────────
+
+    [Fact]
+    public void Policy_refuses_MVG_and_other_coders()
+    {
+        CodeScanRaster.EnsureConfigured();
+        Assert.True(CodeScanRaster.PolicyRefuses(MagickFormat.Mvg));
+        Assert.True(CodeScanRaster.PolicyRefuses(MagickFormat.Msl));
+        Assert.True(CodeScanRaster.PolicyRefuses(MagickFormat.Svg));
+        Assert.True(CodeScanRaster.PolicyRefuses(MagickFormat.Text));
+        Assert.True(CodeScanRaster.PolicyRefuses(MagickFormat.Http));
+        Assert.Throws<MagickPolicyErrorException>(() => new MagickImage("xc:red", new MagickReadSettings { Width = 2, Height = 2 }));
+    }
+
+    [Fact]
+    public void Resource_limits_are_set()
+    {
+        CodeScanRaster.EnsureConfigured();
+        Assert.Equal(20_000ul, (ulong)ResourceLimits.Width);
+        Assert.Equal(20_000ul, (ulong)ResourceLimits.Height);
+        Assert.Equal(32_000_000ul, (ulong)ResourceLimits.Area);
+        Assert.Equal(0ul, (ulong)ResourceLimits.Disk);
+        Assert.Equal(60ul, (ulong)ResourceLimits.Time);
+        Assert.InRange((ulong)ResourceLimits.Thread, 1ul, 2ul);
+        Assert.Equal((ulong)CodeScanRaster.DefaultMemoryBytes(), (ulong)ResourceLimits.Memory);
+    }
+
+    // ── Rendering (needs Ghostscript) ──────────────────────────────────────
+
+    [GhostscriptFact]
+    public async Task A_code_on_an_A4_page_is_found_where_it_is()
+    {
+        var pdf = Pdf(new[] { (A4W, A4H) }, page => Qr(page, "P4-71-A4", x: 100, y: 600, module: 4));
+        var hits = await Scan(pdf);
+
+        var hit = Assert.Single(hits);
+        Assert.Equal("P4-71-A4", hit.GetProperty("value").GetString());
+        var box = hit.GetProperty("boundingBox");
+        // ZXing reports the finder-pattern centres, 3.5 modules in from the corner.
+        Assert.InRange(box.GetProperty("x").GetDouble(), 105, 125);
+        Assert.InRange(box.GetProperty("y").GetDouble(), 605, 625);
+    }
+
+    [GhostscriptFact]
+    public async Task A_code_on_a_CMYK_page_is_found()
+    {
+        // CMYK content makes ImageMagick route the page through the ps:cmyk delegate and read PAM back.
+        var pdf = Pdf(new[] { (A4W, A4H) }, page =>
+        {
+            Qr(page, "P4-71-CMYK", x: 100, y: 600, module: 4);
+            var canvas = new PdfCanvas(page);
+            canvas.SetFillColorCmyk(0, 0, 0, 1).Rectangle(10, 10, 5, 5).Fill();
+            canvas.Release();
+        });
+
+        var hit = Assert.Single(await Scan(pdf));
+        Assert.Equal("P4-71-CMYK", hit.GetProperty("value").GetString());
+    }
+
+    [GhostscriptFact]
+    public async Task A_code_on_an_A0_page_is_found_at_the_reduced_dpi()
+    {
+        var pdf = Pdf(new[] { (A0W, A0H) }, page => Qr(page, "P4-71-A0", x: 1500, y: 2000, module: 8));
+        var pages = CodeScanRaster.Plan(pdf);
+        Assert.True(pages.Dpi[0] < 300);
+
+        var hit = Assert.Single(await Scan(pdf));
+        Assert.Equal("P4-71-A0", hit.GetProperty("value").GetString());
+        // Coordinates are converted with the page's own DPI, not 300.
+        var box = hit.GetProperty("boundingBox");
+        Assert.InRange(box.GetProperty("x").GetDouble(), 1515, 1545);
+        Assert.InRange(box.GetProperty("y").GetDouble(), 2015, 2045);
+    }
+
+    [GhostscriptFact]
+    public async Task Thirty_A4_pages_keep_ImageMagick_process_memory_under_500_MB()
+    {
+        var pdf = Pdf(Enumerable.Repeat((A4W, A4H), 30).ToArray(), page => Qr(page, "P4-71-MEM", 100, 600, 4));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        var process = Process.GetCurrentProcess();
+        process.Refresh();
+        var baseline = process.WorkingSet64;
+        long peak = baseline;
+        using var stop = new CancellationTokenSource();
+        var sampler = Task.Run(async () =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                process.Refresh();
+                peak = Math.Max(peak, process.WorkingSet64);
+                await Task.Delay(10);
+            }
+        });
+
+        var hits = await Scan(pdf);
+        stop.Cancel();
+        await sampler;
+
+        Assert.Equal(30, hits.Count);
+        var grownMb = (peak - baseline) / (1024.0 * 1024.0);
+        Assert.True(grownMb < 500, $"Process grew by {grownMb:F0} MB while scanning 30 A4 pages");
+    }
+
+    // ── helpers ────────────────────────────────────────────────────────────
+
+    private static async Task<List<JsonElement>> Scan(byte[] pdf)
+    {
+        var pages = CodeScanRaster.Plan(pdf);
+        var results = await PdfUtilityApiController.ScanCodesAsync(
+            pdf, pages, PdfUtilityApiController.ParseFormats("qr"), CancellationToken.None);
+        return JsonSerializer.SerializeToElement(results, JsonSerializerOptions.Web).EnumerateArray().ToList();
+    }
+
+    private static byte[] Pdf(params (float W, float H)[] sizes) => Pdf(sizes, null);
+
+    private static byte[] Pdf((float W, float H)[] sizes, Action<PdfPage>? draw)
+    {
+        using var ms = new MemoryStream();
+        using (var doc = new PdfDocument(new PdfWriter(ms)))
+        {
+            foreach (var (w, h) in sizes)
+            {
+                var page = doc.AddNewPage(new PageSize(w, h));
+                draw?.Invoke(page);
+            }
+        }
+        return ms.ToArray();
+    }
+
+    /// <summary>A QR code drawn as vector modules, bottom-left corner at (x, y) in points.</summary>
+    private static void Qr(PdfPage page, string text, float x, float y, float module)
+    {
+        var matrix = new QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, 0, 0,
+            new Dictionary<EncodeHintType, object> { [EncodeHintType.MARGIN] = 0 });
+        var canvas = new PdfCanvas(page);
+        canvas.SetFillColorRgb(0, 0, 0);
+        for (var row = 0; row < matrix.Height; row++)
+            for (var col = 0; col < matrix.Width; col++)
+            {
+                if (!matrix[col, row]) continue;
+                canvas.Rectangle(x + col * module, y + (matrix.Height - 1 - row) * module, module, module);
+            }
+        canvas.Fill();
+        canvas.Release();
+    }
+}

@@ -20,4 +20,12 @@ public class LimitsOptions
     /// See <c>PdfSafetyGuard</c> for what exactly counts.
     /// </summary>
     public bool RejectActiveContent { get; set; } = true;
+
+    /// <summary>
+    /// ImageMagick pixel-cache memory for find-codes rasterisation, in bytes, for the
+    /// whole process. 0 = by core count: 1.5 GB below 8 cores, 2.5 GB from 8 up. Above
+    /// it the rasterisation fails rather than spilling to disk (the disk limit is 0).
+    /// Env <c>FIND_CODES_MAGICK_MEMORY_BYTES</c>. See <c>CodeScanRaster</c>.
+    /// </summary>
+    public long FindCodesMagickMemoryBytes { get; set; }
 }

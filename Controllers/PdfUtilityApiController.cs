@@ -18,9 +18,6 @@ namespace DotNetSigningServer.Controllers
     [Route("api")]
     public class PdfUtilityApiController : ApiControllerBase
     {
-        // Max PDF pages rasterized by /api/find-codes (DoS guard — see usage).
-        private const int MaxFindCodesRasterPages = 30;
-
         private readonly PdfConversionService _pdfConversionService;
 
         public PdfUtilityApiController(
@@ -190,24 +187,51 @@ namespace DotNetSigningServer.Controllers
             }
 
             var plan = ParseFormats(input.CodeType);
+            CodeScanRaster.ScanPages pages;
+            byte[] pdfBytes;
             try
             {
-                var pageCount = CountPagesFromBase64(input.PdfContent);
-                var requiredCredits = CalculateCreditsForPages(pageCount);
+                pdfBytes = Convert.FromBase64String(input.PdfContent);
+                // Sizes every scanned page before anything is reserved or rendered (#71):
+                // a page too large for the minimum resolution is the caller's 400, not our
+                // memory.
+                pages = CodeScanRaster.Plan(pdfBytes);
+            }
+            catch (ApiValidationException ex)
+            {
+                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
+            }
+            catch (System.FormatException)
+            {
+                return BadRequest(new { message = Localizer["InvalidBase64"].Value });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Barcode scan failed");
+                return SafeProblem(Localizer["ScanCodesError"], ex);
+            }
 
-                return await RunOperationAsync(user, "find-codes", ApiOperationService.Fingerprint("find-codes", input), requiredCredits, async _ =>
+            try
+            {
+                // Charged for the pages that are scanned, not for the whole document (#71):
+                // pages past the first 30 are never rendered.
+                var requiredCredits = FindCodesCredits(pages);
+
+                return await RunOperationAsync(user, "find-codes", ApiOperationService.Fingerprint("find-codes", input), requiredCredits, async ct =>
                 {
-                    var results = await DetectCodesAsync(input.PdfContent, plan);
-                    // `pages`/`credits` let the portal bill its own tenant at the same
-                    // rate without opening the PDF a second time. `credits` is the base
-                    // rate before any concurrency tier — the tier is this server's own
-                    // throttle and must not leak into the caller's price list.
+                    var results = await DetectCodesAsync(pdfBytes, pages, plan, ct);
+                    // `pages`/`pagesProcessed`/`credits` let the portal bill its own tenant
+                    // at the same rate without opening the PDF a second time: `credits` is
+                    // computed from `pagesProcessed`. It is the base rate before any
+                    // concurrency tier — the tier is this server's own throttle and must
+                    // not leak into the caller's price list.
                     return new PaidResult(new
                     {
                         results,
-                        pages = pageCount,
+                        pages = pages.TotalPages,
+                        pagesProcessed = pages.PagesProcessed,
                         credits = requiredCredits,
-                        truncated = pageCount > MaxFindCodesRasterPages,
+                        truncated = pages.Truncated,
                     });
                 });
             }
@@ -261,9 +285,21 @@ namespace DotNetSigningServer.Controllers
         }
 
         [NonAction]
-        internal virtual async Task<IReadOnlyList<object>> DetectCodesAsync(
-            string base64Pdf,
-            ScanPlan plan)
+        internal virtual Task<IReadOnlyList<object>> DetectCodesAsync(
+            byte[] pdfBytes,
+            CodeScanRaster.ScanPages pages,
+            ScanPlan plan,
+            CancellationToken ct) => ScanCodesAsync(pdfBytes, pages, plan, ct);
+
+        /// <summary>Credits for a scan: the pages actually rendered, never the whole document (#71).</summary>
+        internal static int FindCodesCredits(CodeScanRaster.ScanPages pages) =>
+            CalculateCreditsForPages(pages.PagesProcessed);
+
+        internal static async Task<IReadOnlyList<object>> ScanCodesAsync(
+            byte[] pdfBytes,
+            CodeScanRaster.ScanPages pages,
+            ScanPlan plan,
+            CancellationToken ct)
         {
             var formats = plan.Formats;
             // Which spec produced a hit, so the guards can be applied to it by name.
@@ -271,34 +307,8 @@ namespace DotNetSigningServer.Controllers
                 .Where(f => f.ReadFormat.HasValue)
                 .ToDictionary(f => f.ReadFormat!.Value, f => f);
 
-            byte[] pdfBytes;
-            try
-            {
-                pdfBytes = Convert.FromBase64String(base64Pdf);
-            }
-            catch
-            {
-                throw new InvalidOperationException(Localizer["InvalidBase64"].Value);
-            }
-
             var results = new List<object>();
             var seen = new HashSet<string>();
-
-            using var collection = new MagickImageCollection();
-            var settings = new MagickReadSettings
-            {
-                Density = new Density(300, 300),
-                Format = MagickFormat.Pdf,
-                // DoS guard: only rasterize the first N pages. A 300-DPI render of
-                // every page (× several variants) of a 20 MB PDF can exhaust
-                // memory/CPU; barcodes are realistically on the leading pages.
-                FrameCount = MaxFindCodesRasterPages,
-            };
-
-            using (var ms = new MemoryStream(pdfBytes))
-            {
-                await collection.ReadAsync(ms, settings);
-            }
 
             var reader = new BarcodeReaderGeneric(
             reader: null,
@@ -323,79 +333,55 @@ namespace DotNetSigningServer.Controllers
                 AutoRotate = true,
             };
 
-            for (var pageIndex = 0; pageIndex < collection.Count; pageIndex++)
+            // One page at a time (#71): rendered, decoded and released before the next,
+            // so memory is one page, not thirty.
+            for (var pageIndex = 0; pageIndex < pages.PagesProcessed; pageIndex++)
             {
-                var page = collection[pageIndex];
+                ct.ThrowIfCancellationRequested();
+                var dpi = pages.Dpi[pageIndex];
+                var decodedOnPage = await CodeScanRaster.WithPageAsync(
+                    pdfBytes, pageIndex, dpi, page => DecodePage(page, reader, ct), ct);
 
-                var baseVariant = new MagickImage(page)
+                foreach (var (code, pageHeightPx) in decodedOnPage)
                 {
-                    ColorSpace = ColorSpace.sRGB,
-                    Depth = 8
-                };
-                baseVariant.Alpha(AlphaOption.Remove);
+                    var text = code.Text ?? "";
+                    var format = code.BarcodeFormat.ToString();
 
-                var variants = CreateVariants(baseVariant);
-                var pageHeightPx = (double)baseVariant.Height;
+                    // Deduplicate on the VALUE and page, not on coordinates.
+                    // The same code is found again in the other variants, where
+                    // its points may land at slightly different numbers.
+                    if (!seen.Add($"{pageIndex + 1}|{format}|{text}"))
+                        continue;
 
-                try
-                {
-                    foreach (var variant in variants)
+                    // Length floor for the symbologies with no check digit of
+                    // their own, and only when nobody asked for them. Noise
+                    // decodes short; a real shipping or membership number does
+                    // not. It narrows the odds, it does not close them — which
+                    // is why naming the format is what lifts it.
+                    if (plan.Guarded &&
+                        specByFormat.TryGetValue(code.BarcodeFormat, out var spec) &&
+                        !CodeFormats.IsPlausibleWhenUnnamed(spec, text))
                     {
-
-                        var decoded = TryDecodeVariant(variant.Image, reader);
-                        if (decoded.Count == 0) continue;
-
-                        foreach (var code in decoded)
-                        {
-                            var text = code.Text ?? "";
-                            var format = code.BarcodeFormat.ToString();
-
-                            // Deduplicate on the VALUE and page, not on coordinates.
-                            // The same code is found again in the enlarged variants,
-                            // where its points land at different numbers, so a
-                            // coordinate in the key let every code through several
-                            // times over.
-                            if (!seen.Add($"{pageIndex + 1}|{format}|{text}"))
-                                continue;
-
-                            // Length floor for the symbologies with no check digit of
-                            // their own, and only when nobody asked for them. Noise
-                            // decodes short; a real shipping or membership number does
-                            // not. It narrows the odds, it does not close them — which
-                            // is why naming the format is what lifts it.
-                            if (plan.Guarded &&
-                                specByFormat.TryGetValue(code.BarcodeFormat, out var spec) &&
-                                !CodeFormats.IsPlausibleWhenUnnamed(spec, text))
-                            {
-                                continue;
-                            }
-
-                            var box = ToPdfBoundingBox(code.ResultPoints, variant.Scale, pageHeightPx);
-                            results.Add(new
-                            {
-                                value = text,
-                                codeType = format,
-                                // Where the code is, in PDF points with the origin at
-                                // the bottom-left corner — the same units and the same
-                                // corner the rest of the API places things in. Null when
-                                // the decoder returned no usable points; a made-up zero
-                                // would read as "top-left corner of the page".
-                                boundingBox = box,
-                                // Kept for callers written against the old shape. It is
-                                // the bottom-left of the box, no longer a raw raster
-                                // pixel.
-                                position = box == null ? null : new { x = box.X, y = box.Y },
-                                page = pageIndex + 1
-                            });
-                        }
+                        continue;
                     }
-                }
-                finally
-                {
-                    foreach (var v in variants)
-                        v.Image.Dispose();
 
-                    baseVariant.Dispose();
+                    var box = ToPdfBoundingBox(code.ResultPoints, 1.0, pageHeightPx, dpi);
+                    results.Add(new
+                    {
+                        value = text,
+                        codeType = format,
+                        // Where the code is, in PDF points with the origin at
+                        // the bottom-left corner — the same units and the same
+                        // corner the rest of the API places things in. Null when
+                        // the decoder returned no usable points; a made-up zero
+                        // would read as "top-left corner of the page".
+                        boundingBox = box,
+                        // Kept for callers written against the old shape. It is
+                        // the bottom-left of the box, no longer a raw raster
+                        // pixel.
+                        position = box == null ? null : new { x = box.X, y = box.Y },
+                        page = pageIndex + 1
+                    });
                 }
             }
 
@@ -403,21 +389,37 @@ namespace DotNetSigningServer.Controllers
         }
 
         /// <summary>
-        /// One rendering of a page, plus what was done to it.
-        ///
-        /// The scale matters because coordinates come back in the pixel space of
-        /// whichever variant happened to decode. Two of these are enlarged copies,
-        /// so a point found there is 1.5× or 2× off from the page unless it is
-        /// divided back — which is why the old single-point position could not be
-        /// trusted even before it was converted to PDF units.
+        /// Every code on one rendered page, from three variants decoded one after another
+        /// (#71; there used to be up to seven held at once). Grey as rendered; grey with
+        /// contrast; that one thresholded. The sharpened copy and the 1.5×/2× enlargements
+        /// are gone: the sharpen cost more CPU than any other step, and the enlargements
+        /// only ran on renders under 2000 px — at 300 DPI that is pages smaller than A5,
+        /// and four times the pixels of the page each. At most two images are alive at once.
         /// </summary>
-        private sealed record CodeVariant(IMagickImage Image, double Scale);
+        private static List<(Result Code, double PageHeightPx)> DecodePage(
+            MagickImage page, BarcodeReaderGeneric reader, CancellationToken ct)
+        {
+            var found = new List<(Result, double)>();
+            var heightPx = (double)page.Height;
+
+            void Decode(IMagickImage<ushort> variant)
+            {
+                ct.ThrowIfCancellationRequested();
+                foreach (var r in TryDecodeVariant(variant, reader)) found.Add((r, heightPx));
+            }
+
+            Decode(page);
+            using var contrasted = (MagickImage)page.Clone();
+            contrasted.Contrast();
+            Decode(contrasted);
+            // In place: the contrasted copy is not needed once it has been read.
+            contrasted.Threshold(new Percentage(60));
+            Decode(contrasted);
+            return found;
+        }
 
         /// <summary>Rectangle on a page, in PDF points, origin bottom-left.</summary>
         public sealed record CodeBoundingBox(double X, double Y, double Width, double Height);
-
-        /// <summary>Points per inch of the raster the codes are decoded from.</summary>
-        private const double FindCodesRasterDpi = 300.0;
 
         /// <summary>
         /// Decoder points to a rectangle on the page.
@@ -430,12 +432,13 @@ namespace DotNetSigningServer.Controllers
         ///    nothing about where the code ends or how big it is.
         /// 2. **Undo the variant's enlargement.** A code found in the 2× copy is at
         ///    twice the coordinates of the page.
-        /// 3. **Pixels to points, and flip the Y axis.** The raster is 300 DPI with
+        /// 3. **Pixels to points, and flip the Y axis.** The raster is <paramref name="dpi"/>
+        ///    (300, lower for large pages since #71) with
         ///    Y growing downwards; PDF is 72 points to the inch with Y growing up
         ///    from the bottom. Reporting raster pixels as if they were PDF units put
         ///    the answer roughly four times too far, upside down.
         /// </summary>
-        internal static CodeBoundingBox? ToPdfBoundingBox(ResultPoint[]? points, double scale, double pageHeightPx)
+        internal static CodeBoundingBox? ToPdfBoundingBox(ResultPoint[]? points, double scale, double pageHeightPx, double dpi = CodeScanRaster.TargetDpi)
         {
             if (points == null || points.Length == 0) return null;
 
@@ -455,7 +458,7 @@ namespace DotNetSigningServer.Controllers
             }
             if (minX > maxX) return null;
 
-            const double pxToPt = 72.0 / FindCodesRasterDpi;
+            var pxToPt = 72.0 / dpi;
             var pageHeightPt = pageHeightPx * pxToPt;
 
             var left = minX * pxToPt;
@@ -472,48 +475,17 @@ namespace DotNetSigningServer.Controllers
                 Math.Round(top - bottom, 2));
         }
 
-        private static List<CodeVariant> CreateVariants(IMagickImage baseVariant)
+        private static List<Result> TryDecodeVariant(IMagickImage<ushort> variant, BarcodeReaderGeneric reader)
         {
-            var variants = new List<CodeVariant>();
-
-            variants.Add(new CodeVariant(((MagickImage)baseVariant).Clone(), 1.0));
-
-            var gray = ((MagickImage)baseVariant).Clone();
-            gray.ColorType = ColorType.Grayscale;
-            gray.Contrast();
-            variants.Add(new CodeVariant(gray, 1.0));
-
-            var sharpen = gray.Clone();
-            sharpen.AdaptiveSharpen();
-            variants.Add(new CodeVariant(sharpen, 1.0));
-
-            if (baseVariant.Width < 2000 || baseVariant.Height < 2000)
-            {
-                var scaled1 = gray.Clone();
-                scaled1.Resize((uint)(baseVariant.Width * 1.5), (uint)(baseVariant.Height * 1.5));
-                variants.Add(new CodeVariant(scaled1, 1.5));
-
-                var scaled2 = gray.Clone();
-                scaled2.Resize((uint)(baseVariant.Width * 2.0), (uint)(baseVariant.Height * 2.0));
-                variants.Add(new CodeVariant(scaled2, 2.0));
-            }
-
-            var threshold = gray.Clone();
-            threshold.Threshold(new Percentage(60));
-            variants.Add(new CodeVariant(threshold, 1.0));
-
-            return variants;
-        }
-
-        private static List<Result> TryDecodeVariant(IMagickImage variant, BarcodeReaderGeneric reader)
-        {
-            var rgba = variant.ToByteArray(MagickFormat.Rgba);
+            // One byte per pixel: the page is grey already, and RGBA was four times the
+            // memory for the same luminance.
+            var gray = variant.ToByteArray(MagickFormat.Gray);
 
             var luminance = new RGBLuminanceSource(
-                rgba,
+                gray,
                 (int)variant.Width,
                 (int)variant.Height,
-                RGBLuminanceSource.BitmapFormat.RGBA32
+                RGBLuminanceSource.BitmapFormat.Gray8
             );
 
             var decodedMultiple = reader.DecodeMultiple(luminance);
