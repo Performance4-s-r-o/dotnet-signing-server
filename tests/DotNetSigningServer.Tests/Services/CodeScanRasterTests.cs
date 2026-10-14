@@ -285,11 +285,11 @@ public class CodeScanRasterTests
         var canvas = new PdfCanvas(page);
         canvas.SetFillColorRgb(0, 0, 0);
         for (var row = 0; row < matrix.Height; row++)
-        for (var col = 0; col < matrix.Width; col++)
-        {
-            if (!matrix[col, row]) continue;
-            canvas.Rectangle(x + col * module, y + (matrix.Height - 1 - row) * module, module, module);
-        }
+            for (var col = 0; col < matrix.Width; col++)
+            {
+                if (!matrix[col, row]) continue;
+                canvas.Rectangle(x + col * module, y + (matrix.Height - 1 - row) * module, module, module);
+            }
         canvas.Fill();
         canvas.Release();
     }
