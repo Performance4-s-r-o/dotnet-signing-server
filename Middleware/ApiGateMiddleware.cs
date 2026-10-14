@@ -71,6 +71,8 @@ public class ApiGateMiddleware
         if (!anonymous && !authenticated)
         {
             // Nothing is read from the body. The challenge says what is missing.
+            context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger<ApiGateMiddleware>()
+                .LogWarning(Logging.LoggingEvents.AuthFailed, "API auth failed (no credentials) {Path}", path);
             context.Response.Headers.WWWAuthenticate = "Bearer";
             await WriteAsync(context, StatusCodes.Status401Unauthorized, "UNAUTHENTICATED");
             return;
