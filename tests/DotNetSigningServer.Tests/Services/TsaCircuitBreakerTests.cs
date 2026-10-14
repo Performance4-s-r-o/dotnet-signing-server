@@ -196,7 +196,7 @@ public class TsaCircuitBreakerTests
     }
 
     [Fact]
-    public void Abandoned_work_that_reads_a_disposed_deadline_does_not_count_against_the_authority()
+    public async Task Abandoned_work_that_reads_a_disposed_deadline_does_not_count_against_the_authority()
     {
         var previous = TsaCircuitBreaker.Default;
         TsaCircuitBreaker.Default = Breaker(new FakeTime(), threshold: 1);
@@ -215,7 +215,7 @@ public class TsaCircuitBreakerTests
                 Assert.ThrowsAny<Exception>(() => client.GetTimeStampToken(imprint));
                 return Task.FromResult(0);
             });
-            work.GetAwaiter().GetResult();
+            await work;
 
             Assert.False(TsaCircuitBreaker.Default.IsOpen(client.BreakerKey),
                 "our own cancellation must not be recorded as the authority failing");
