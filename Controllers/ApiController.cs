@@ -234,12 +234,16 @@ namespace DotNetSigningServer.Controllers
             }
 
             PaidResult result;
+            var heartbeat = new LeaseHeartbeat(
+                HttpContext.RequestServices.GetRequiredService<IServiceScopeFactory>(),
+                op.Id, attempt, Operations.Options.HeartbeatInterval, Logger);
             try
             {
                 result = await work(retrievable ? CancellationToken.None : HttpContext.RequestAborted);
             }
             catch (Exception ex)
             {
+                await heartbeat.DisposeAsync();
                 var uncertain = IsUncertainFailure(ex);
                 try
                 {
@@ -253,6 +257,7 @@ namespace DotNetSigningServer.Controllers
                 Response.Headers[OperationStateHeader] = uncertain ? ApiOperationState.FailedUncertain : ApiOperationState.Failed;
                 throw;
             }
+            await heartbeat.DisposeAsync();
 
             if (!retrievable && HttpContext.RequestAborted.IsCancellationRequested)
             {
@@ -261,27 +266,28 @@ namespace DotNetSigningServer.Controllers
                 return StatusCode(499);
             }
 
-            var jsonOptions = HttpContext.RequestServices
-                .GetRequiredService<IOptions<Microsoft.AspNetCore.Mvc.JsonOptions>>().Value.JsonSerializerOptions;
-            var stored = new StoredResult(
-                StatusCodes.Status200OK,
-                JsonSerializer.Serialize(result.Body, result.Body.GetType(), jsonOptions),
-                result.PdfBase64 != null,
-                result.PdfHeaders);
+            // Kept for replay only when somebody can come back for it (the caller's key or the
+            // presign), and only up to a size: a signed document is not parked in the database
+            // for a caller that can never ask again, and a huge batch is delivered, not stored.
+            StoredResult? stored = null;
+            if (retrievable)
+            {
+                var jsonOptions = HttpContext.RequestServices
+                    .GetRequiredService<IOptions<Microsoft.AspNetCore.Mvc.JsonOptions>>().Value.JsonSerializerOptions;
+                var json = JsonSerializer.SerializeToUtf8Bytes(result.Body, result.Body.GetType(), jsonOptions);
+                if (json.LongLength <= Operations.Options.MaxStoredResultBytes)
+                {
+                    stored = new StoredResult(StatusCodes.Status200OK, json, result.PdfBase64 != null, result.PdfHeaders);
+                }
+                else
+                {
+                    Logger.LogInformation(
+                        "Result of operation {OperationId} is {Bytes} bytes, over the replay limit; delivered without storing",
+                        op.OperationId, json.LongLength);
+                }
+            }
 
-            bool completed;
-            try
-            {
-                completed = await Operations.CompleteAsync(op, attempt, stored);
-            }
-            catch
-            {
-                // Conditional on the attempt: a no-op if the commit did go through.
-                try { await Operations.FailAsync(op, attempt, uncertain: true, "COMPLETE_FAILED"); }
-                catch (Exception releaseError) { Logger.LogError(releaseError, "Could not release operation {OperationId}", op.OperationId); }
-                throw;
-            }
-            if (!completed)
+            if (!await CompleteOperationAsync(op, attempt, stored))
             {
                 // The lease ran out and the credits went back: this result is not ours to hand out.
                 throw new InvalidOperationException($"Operation {op.OperationId} lost its lease before completion.");
@@ -303,6 +309,41 @@ namespace DotNetSigningServer.Controllers
                 });
             }
             return Ok(result.Body);
+        }
+
+        /// <summary>
+        /// Completes the operation. When keeping the result fails (size, memory, a timeout of the
+        /// one big parameter) the work is still done and paid for: complete without it, and a
+        /// retry gets 410. Only when even that cannot be recorded is the reservation returned —
+        /// and then nothing is delivered either.
+        /// </summary>
+        private async Task<bool> CompleteOperationAsync(ApiOperation op, int attempt, StoredResult? stored)
+        {
+            if (stored != null)
+            {
+                try
+                {
+                    return await Operations.CompleteAsync(op, attempt, stored);
+                }
+                catch (Exception storeError)
+                {
+                    Logger.LogWarning(storeError, "Could not store the result of operation {OperationId}; completing without it", op.OperationId);
+                }
+            }
+
+            try
+            {
+                // After a failed store this is also how a commit that did go through is
+                // recognised: the row is already completed by this attempt.
+                return await Operations.CompleteAsync(op, attempt, null);
+            }
+            catch
+            {
+                // Conditional on the attempt: a no-op if the commit did go through.
+                try { await Operations.FailAsync(op, attempt, uncertain: true, "COMPLETE_FAILED"); }
+                catch (Exception releaseError) { Logger.LogError(releaseError, "Could not release operation {OperationId}", op.OperationId); }
+                throw;
+            }
         }
 
         /// <summary>The first answer again, without doing the work or charging.</summary>
@@ -329,7 +370,7 @@ namespace DotNetSigningServer.Controllers
             }
             return new ContentResult
             {
-                Content = stored.Json,
+                Content = System.Text.Encoding.UTF8.GetString(stored.Json),
                 ContentType = "application/json; charset=utf-8",
                 StatusCode = stored.StatusCode,
             };

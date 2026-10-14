@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -5,6 +6,7 @@ using System.Text.Json;
 using DotNetSigningServer.Controllers;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
+using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Services.Operations;
 using DotNetSigningServer.Tests.Helpers;
@@ -14,10 +16,12 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace DotNetSigningServer.Tests.Security;
@@ -41,6 +45,45 @@ public sealed class OperationStateFixture : IAsyncLifetime
     public Func<string> Timestamp { get; set; } = () => Pdf;
     public int TimestampCalls;
 
+    /// <summary>Short lease, fast heartbeat: a test can outlive the lease within seconds.</summary>
+    public static readonly OperationsOptions Options = new()
+    {
+        Lease = TimeSpan.FromSeconds(2),
+        HeartbeatInterval = TimeSpan.FromMilliseconds(200),
+        MaxStoredResultBytes = 20_000,
+    };
+
+    /// <summary>Makes storing a result fail (the one big bytea parameter), like a timeout would.</summary>
+    public volatile bool FailResultStore;
+
+    private readonly EphemeralDataProtectionProvider _dataProtection = new();
+
+    private sealed class FailingResultStore(OperationStateFixture fx) : DbCommandInterceptor
+    {
+        private void Check(DbCommand command)
+        {
+            if (!fx.FailResultStore || !command.CommandText.Contains("\"ResultProtected\"", StringComparison.Ordinal)) return;
+            if (command.Parameters.Cast<DbParameter>().Any(p => p.Value is byte[]))
+            {
+                throw new TimeoutException("simulated: storing the result timed out");
+            }
+        }
+
+        public override InterceptionResult<int> NonQueryExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result)
+        {
+            Check(command);
+            return result;
+        }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            Check(command);
+            return new ValueTask<InterceptionResult<int>>(result);
+        }
+    }
+
     private sealed class NoEmail : IEmailSender
     {
         public Task SendAsync(string toEmail, string subject, string htmlBody) => Task.CompletedTask;
@@ -55,6 +98,9 @@ public sealed class OperationStateFixture : IAsyncLifetime
             builder.UseSetting("UseLocalDb", "false");
             builder.UseSetting("ConnectionStrings:DefaultConnection", fx.Postgres.ConnectionString);
             builder.UseSetting("Token:Secret", "integration-test-secret-with-32-plus-characters");
+            builder.UseSetting("Operations:Lease", Options.Lease.ToString());
+            builder.UseSetting("Operations:HeartbeatInterval", Options.HeartbeatInterval.ToString());
+            builder.UseSetting("Operations:MaxStoredResultBytes", Options.MaxStoredResultBytes.ToString());
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();
@@ -64,7 +110,12 @@ public sealed class OperationStateFixture : IAsyncLifetime
                 services.RemoveAll<DbContextOptions<ApplicationDbContext>>();
                 services.RemoveAll<DbContextOptions>();
                 services.RemoveAll<ApplicationDbContext>();
-                services.AddDbContext<ApplicationDbContext>(fx.Postgres.Configure);
+                var failStore = new FailingResultStore(fx);
+                services.AddDbContext<ApplicationDbContext>(o =>
+                {
+                    fx.Postgres.Configure(o);
+                    o.AddInterceptors(failStore);
+                });
 
                 var signing = new Mock<PdfSigningService>(null, null, null);
                 signing.Setup(s => s.HandleSign(
@@ -102,6 +153,7 @@ public sealed class OperationStateFixture : IAsyncLifetime
         Timestamp = () => Pdf;
         SignCalls = 0;
         TimestampCalls = 0;
+        FailResultStore = false;
     }
 
     /// <summary>A fresh account with its own API token, so tests do not share a balance.</summary>
@@ -174,7 +226,13 @@ public sealed class OperationStateFixture : IAsyncLifetime
     }
 
     public ApiOperationService Service(ApplicationDbContext db) =>
-        new(db, new EphemeralDataProtectionProvider(), NullLogger<ApiOperationService>.Instance);
+        new(db, _dataProtection, NullLogger<ApiOperationService>.Instance, Microsoft.Extensions.Options.Options.Create(Options));
+
+    public async Task<ApiOperation> OperationAsync(Guid userId)
+    {
+        await using var db = Postgres.CreateContext();
+        return await db.ApiOperations.AsNoTracking().SingleAsync(o => o.UserId == userId);
+    }
 
     public async Task DisposeAsync()
     {
@@ -443,9 +501,10 @@ public class OperationStateTests : IClassFixture<OperationStateFixture>, IDispos
         await using (var db = _fx.Postgres.CreateContext())
         {
             var service = _fx.Service(db);
-            Assert.True(await service.CompleteAsync(started.Operation, started.Attempt, new StoredResult(200, "{}", false, null)));
-            // A second completion of the same attempt is a no-op, not a second charge.
-            Assert.False(await service.CompleteAsync(started.Operation, started.Attempt, new StoredResult(200, "{}", false, null)));
+            Assert.True(await service.CompleteAsync(started.Operation, started.Attempt, new StoredResult(200, "{}"u8.ToArray(), false, null)));
+            // Completing the same attempt again — what the retry strategy does after a commit
+            // whose acknowledgement was lost — is success, and still not a second charge.
+            Assert.True(await service.CompleteAsync(started.Operation, started.Attempt, new StoredResult(200, "{}"u8.ToArray(), false, null)));
             Assert.False(await service.FailAsync(started.Operation, started.Attempt, uncertain: false, "LATE"));
         }
 
@@ -490,12 +549,154 @@ public class OperationStateTests : IClassFixture<OperationStateFixture>, IDispos
         {
             var service = _fx.Service(db);
             // The zombie finishing late must not deliver nor charge.
-            Assert.False(await service.CompleteAsync(started.Operation, started.Attempt, new StoredResult(200, "{}", false, null)));
+            Assert.False(await service.CompleteAsync(started.Operation, started.Attempt, new StoredResult(200, "{}"u8.ToArray(), false, null)));
             var retry = await service.BeginAsync(request);
             Assert.Equal(OperationStart.Started, retry.Outcome);
             Assert.Equal(2, retry.Attempt);
         }
         Assert.Equal(8, await _fx.BalanceAsync(userId));
+    }
+
+    [DockerFact]
+    public async Task A_result_over_the_storage_limit_is_delivered_and_charged_but_not_kept()
+    {
+        var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+        var key = Guid.NewGuid().ToString();
+        var body = new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() };
+        var big = Convert.ToBase64String(new byte[(int)OperationStateFixture.Options.MaxStoredResultBytes]);
+        _fx.Timestamp = () => big;
+
+        var first = await client.SendAsync(Post("/api/timestamp", body, key));
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(big, await ResultAsync(first));
+        Assert.Equal(4, await _fx.BalanceAsync(userId));
+
+        var state = await StatusAsync(client, key);
+        Assert.Equal("completed", state.GetProperty("state").GetString());
+        Assert.False(state.GetProperty("resultAvailable").GetBoolean());
+
+        var retry = await client.SendAsync(Post("/api/timestamp", body, key));
+        Assert.Equal(HttpStatusCode.Gone, retry.StatusCode);
+        Assert.Contains("OPERATION_RESULT_EXPIRED", await retry.Content.ReadAsStringAsync());
+        Assert.Equal(1, _fx.TimestampCalls);
+        Assert.Equal(4, await _fx.BalanceAsync(userId));
+    }
+
+    [DockerFact]
+    public async Task A_failure_to_store_the_result_never_refunds_finished_work()
+    {
+        var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+        var key = Guid.NewGuid().ToString();
+        _fx.FailResultStore = true;
+
+        var response = await client.SendAsync(Post("/api/timestamp", new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() }, key));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(Pdf, await ResultAsync(response));
+        Assert.Equal(4, await _fx.BalanceAsync(userId));
+        Assert.Single(await _fx.UsageAsync(userId));
+
+        var op = await _fx.OperationAsync(userId);
+        Assert.Equal(ApiOperationState.Completed, op.State);
+        Assert.Null(op.ResultProtected);
+    }
+
+    [DockerFact]
+    public async Task Without_a_key_the_result_is_not_kept()
+    {
+        var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+
+        var response = await client.SendAsync(Post("/api/timestamp", new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() }));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // Nobody can ask for it again, so a signed document is not parked in the database.
+        var op = await _fx.OperationAsync(userId);
+        Assert.Equal(ApiOperationState.Completed, op.State);
+        Assert.Null(op.ResultProtected);
+        Assert.Equal(1, op.CreditsCharged);
+    }
+
+    [DockerFact]
+    public async Task A_result_past_its_retention_is_not_replayed_even_before_the_sweep()
+    {
+        var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+        var key = Guid.NewGuid().ToString();
+        var body = new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() };
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(Post("/api/timestamp", body, key))).StatusCode);
+
+        await using (var db = _fx.Postgres.CreateContext())
+        {
+            await db.ApiOperations.Where(o => o.UserId == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(o => o.ResultExpiresAt, DateTimeOffset.UtcNow.AddSeconds(-1)));
+        }
+
+        var retry = await client.SendAsync(Post("/api/timestamp", body, key));
+        Assert.Equal(HttpStatusCode.Gone, retry.StatusCode);
+        Assert.Equal(1, _fx.TimestampCalls);
+    }
+
+    [DockerFact]
+    public async Task A_stored_result_is_bound_to_its_operation()
+    {
+        var (userA, _) = await _fx.NewAccountAsync(credits: 5);
+        var (userB, _) = await _fx.NewAccountAsync(credits: 5);
+
+        async Task<OperationBegin> CompletedAsync(Guid user, string json)
+        {
+            await using var db = _fx.Postgres.CreateContext();
+            var service = _fx.Service(db);
+            var begin = await service.BeginAsync(new OperationRequest(user, false, "seal", Guid.NewGuid().ToString(),
+                ApiOperationService.Fingerprint(json), 1, 1));
+            Assert.True(await service.CompleteAsync(begin.Operation, begin.Attempt,
+                new StoredResult(200, System.Text.Encoding.UTF8.GetBytes(json), false, null)));
+            return begin;
+        }
+
+        var a = await CompletedAsync(userA, "{\"result\":\"secret-of-a\"}");
+        var b = await CompletedAsync(userB, "{\"result\":\"b\"}");
+
+        await using var ctx = _fx.Postgres.CreateContext();
+        var stolen = await ctx.ApiOperations.AsNoTracking().Where(o => o.Id == a.Operation.Id).Select(o => o.ResultProtected).SingleAsync();
+        await ctx.ApiOperations.Where(o => o.Id == b.Operation.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(o => o.ResultProtected, stolen));
+        var rowB = await ctx.ApiOperations.AsNoTracking().SingleAsync(o => o.Id == b.Operation.Id);
+
+        Assert.ThrowsAny<System.Security.Cryptography.CryptographicException>(() => _fx.Service(ctx).ReadResult(rowB));
+    }
+
+    [DockerFact]
+    public async Task A_keyed_operation_that_outlives_its_lease_is_kept_alive_and_completes_once()
+    {
+        var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+        var key = Guid.NewGuid().ToString();
+        var body = new DocumentTimestampInput { PdfContent = Pdf, SignRect = new SignRect() };
+
+        using var entered = new SemaphoreSlim(0);
+        using var release = new ManualResetEventSlim(false);
+        _fx.Timestamp = () =>
+        {
+            entered.Release();
+            release.Wait(TimeSpan.FromSeconds(30));
+            return SignedPdf;
+        };
+
+        var running = client.SendAsync(Post("/api/timestamp", body, key));
+        Assert.True(await entered.WaitAsync(TimeSpan.FromSeconds(10)));
+
+        // Twice the lease, with the sweep running all along: the heartbeat keeps it alive.
+        var until = DateTime.UtcNow + OperationStateFixture.Options.Lease * 2;
+        while (DateTime.UtcNow < until)
+        {
+            await using var db = _fx.Postgres.CreateContext();
+            Assert.Equal(0, await _fx.Service(db).SweepAsync(DateTimeOffset.UtcNow));
+            await Task.Delay(100);
+        }
+        Assert.Equal(HttpStatusCode.Conflict, (await client.SendAsync(Post("/api/timestamp", body, key))).StatusCode);
+
+        release.Set();
+        Assert.Equal(HttpStatusCode.OK, (await running).StatusCode);
+        Assert.Equal(1, _fx.TimestampCalls);
+        Assert.Equal(4, await _fx.BalanceAsync(userId));
+        Assert.Single(await _fx.UsageAsync(userId));
     }
 
     [Fact]

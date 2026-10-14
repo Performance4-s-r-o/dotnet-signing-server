@@ -84,7 +84,7 @@ Every paid call (`sign`, `sign-pfx`, `timestamp`, `extend-signature`,
 - **`Idempotency-Key: <id>`** (optional, 1–128 characters `A-Z a-z 0-9 - _ . :`)
   makes a retry safe: the same key with the same request returns the stored
   result (header `Idempotent-Replayed: true`) without working or charging again,
-  for 60 minutes. `/api/sign` is keyed by its presign even without the header,
+  for 60 minutes (results over 25 MB are delivered but not kept). `/api/sign` is keyed by its presign even without the header,
   and the presign is kept until the signature succeeds, so a failed attempt can
   be retried.
 - While an attempt runs, the same key gets `409 OPERATION_IN_PROGRESS` with
@@ -96,6 +96,8 @@ Every paid call (`sign`, `sign-pfx`, `timestamp`, `extend-signature`,
   charged, `failed` = nothing irreversible happened, `failed_uncertain` = an
   external step (TSA, model) may have happened, but nothing was delivered or
   charged. `404` = the request never arrived. States are kept for 7 days.
+
+Details, limits and the behaviour changes for existing callers: [docs/operations.md](docs/operations.md).
 
 ### Templates and utilities
 

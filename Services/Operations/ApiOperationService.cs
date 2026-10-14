@@ -3,9 +3,11 @@ using System.Text;
 using System.Text.Json;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
+using DotNetSigningServer.Options;
 using DotNetSigningServer.Services.Billing;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace DotNetSigningServer.Services.Operations;
 
@@ -44,9 +46,9 @@ public enum OperationStart
 public sealed record OperationBegin(OperationStart Outcome, ApiOperation Operation, int Attempt = 0);
 
 /// <summary>A response body kept for replays.</summary>
-/// <param name="Json">The body exactly as the first answer serialised it.</param>
+/// <param name="Json">The body exactly as the first answer serialised it (UTF-8 JSON).</param>
 /// <param name="IsPdf">The body's <c>result</c> is the PDF, so a raw <c>application/pdf</c> answer can be rebuilt.</param>
-public sealed record StoredResult(int StatusCode, string Json, bool IsPdf, IReadOnlyDictionary<string, string>? PdfHeaders);
+public sealed record StoredResult(int StatusCode, byte[] Json, bool IsPdf, IReadOnlyDictionary<string, string>? PdfHeaders);
 
 /// <summary>
 /// Durable state of paid API operations (#77) and the reservation of their credits (#82).
@@ -64,15 +66,6 @@ public sealed record StoredResult(int StatusCode, string Json, bool IsPdf, IRead
 /// </summary>
 public class ApiOperationService
 {
-    /// <summary>A running attempt not finished by then is presumed dead and its credits come back.</summary>
-    public static readonly TimeSpan Lease = TimeSpan.FromMinutes(10);
-
-    /// <summary>
-    /// How long a completed result can be fetched again. The portal holds a reservation 15 min
-    /// (utilities) or 35 min (two-step signature) and retries within that.
-    /// </summary>
-    public static readonly TimeSpan ResultRetention = TimeSpan.FromMinutes(60);
-
     /// <summary>How long the state stays queryable — the portal's reconciliation asks after its TTL.</summary>
     public static readonly TimeSpan RowRetention = TimeSpan.FromDays(7);
 
@@ -84,13 +77,28 @@ public class ApiOperationService
     private readonly ApplicationDbContext _db;
     private readonly IDataProtector _protector;
     private readonly ILogger<ApiOperationService> _logger;
+    private readonly OperationsOptions _options;
 
-    public ApiOperationService(ApplicationDbContext db, IDataProtectionProvider dataProtection, ILogger<ApiOperationService> logger)
+    public ApiOperationService(
+        ApplicationDbContext db,
+        IDataProtectionProvider dataProtection,
+        ILogger<ApiOperationService> logger,
+        IOptions<OperationsOptions> options)
     {
         _db = db;
         _protector = dataProtection.CreateProtector("ApiOperations.Result");
         _logger = logger;
+        _options = options.Value;
     }
+
+    public OperationsOptions Options => _options;
+
+    /// <summary>
+    /// Bound to the row and its owner: a stored result copied onto another operation, or read
+    /// for another account, does not decrypt.
+    /// </summary>
+    private IDataProtector ProtectorFor(ApiOperation op) =>
+        _protector.CreateProtector(op.Id.ToString("N"), op.UserId.ToString("N"));
 
     /// <summary>
     /// A key the portal can send: a UUID in practice; anything printable from a safe alphabet,
@@ -151,8 +159,10 @@ public class ApiOperationService
             switch (op.State)
             {
                 case ApiOperationState.Completed:
-                    return new OperationBegin(
-                        op.ResultProtected != null ? OperationStart.Replay : OperationStart.ResultExpired, op);
+                    // Expiry is checked here, not left to the sweep: a result past its
+                    // retention is gone whether or not the sweep has run yet.
+                    var stored = op.ResultProtected != null && !(op.ResultExpiresAt <= now);
+                    return new OperationBegin(stored ? OperationStart.Replay : OperationStart.ResultExpired, op);
                 case ApiOperationState.Running:
                     return new OperationBegin(OperationStart.InProgress, op);
             }
@@ -232,7 +242,7 @@ public class ApiOperationService
         {
             await using var tx = await _db.Database.BeginTransactionAsync(token);
             var now = DateTimeOffset.UtcNow;
-            var leaseUntil = now + Lease;
+            var leaseUntil = now + _options.Lease;
             var seen = op.Attempts;
 
             // The row lock taken here serialises a concurrent claim of the same key: the
@@ -307,14 +317,15 @@ public class ApiOperationService
     };
 
     /// <summary>
-    /// Stores the result and turns the reservation into the charge, in one transaction.
+    /// Marks the operation completed and turns the reservation into the charge, storing
+    /// <paramref name="result"/> for replays when given (null: nothing kept, a retry gets 410).
     /// False when this attempt no longer owns the operation (its lease expired and the credits
     /// went back) — then the result must not be delivered.
     /// </summary>
-    public Task<bool> CompleteAsync(ApiOperation op, int attempt, StoredResult result)
+    public Task<bool> CompleteAsync(ApiOperation op, int attempt, StoredResult? result)
     {
-        var body = _protector.Protect(Encoding.UTF8.GetBytes(result.Json));
-        var headers = result.PdfHeaders is { Count: > 0 } ? JsonSerializer.Serialize(result.PdfHeaders) : null;
+        var body = result == null ? null : ProtectorFor(op).Protect(result.Json);
+        var headers = result?.PdfHeaders is { Count: > 0 } ? JsonSerializer.Serialize(result.PdfHeaders) : null;
         var charged = op.BaseCost * op.Tier;
         UsageRecord? usage = null;
 
@@ -335,14 +346,21 @@ public class ApiOperationService
                     .SetProperty(o => o.CreditsReserved, 0)
                     .SetProperty(o => o.LeaseUntil, (DateTimeOffset?)null)
                     .SetProperty(o => o.ErrorCode, (string?)null)
-                    .SetProperty(o => o.ResultStatusCode, result.StatusCode)
-                    .SetProperty(o => o.ResultIsPdf, result.IsPdf)
+                    .SetProperty(o => o.ResultStatusCode, result == null ? (int?)null : result.StatusCode)
+                    .SetProperty(o => o.ResultIsPdf, result != null && result.IsPdf)
                     .SetProperty(o => o.ResultProtected, body)
                     .SetProperty(o => o.ResultPdfHeaders, headers)
-                    .SetProperty(o => o.ResultExpiresAt, now + ResultRetention)
+                    .SetProperty(o => o.ResultExpiresAt, result == null ? (DateTimeOffset?)null : now + _options.ResultRetention)
                     .SetProperty(o => o.CompletedAt, now)
                     .SetProperty(o => o.UpdatedAt, now), token);
-            if (done == 0) return false;
+            if (done == 0)
+            {
+                // The execution strategy re-runs this after a commit whose acknowledgement was
+                // lost. Then the row is already ours and completed: that is success, not a lost
+                // lease (and the usage record was written by that commit).
+                return await _db.ApiOperations.AsNoTracking()
+                    .AnyAsync(o => o.Id == op.Id && o.State == ApiOperationState.Completed && o.Attempts == attempt, token);
+            }
 
             if (charged > 0)
             {
@@ -363,6 +381,19 @@ public class ApiOperationService
             await tx.CommitAsync(token);
             return true;
         }, CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Pushes the lease of a live attempt forward (heartbeat). False when the attempt is no
+    /// longer the running one — the heartbeat then stops.
+    /// </summary>
+    public async Task<bool> ExtendLeaseAsync(Guid operationRowId, int attempt, CancellationToken ct = default)
+    {
+        var until = DateTimeOffset.UtcNow + _options.Lease;
+        var extended = await _db.ApiOperations
+            .Where(o => o.Id == operationRowId && o.State == ApiOperationState.Running && o.Attempts == attempt)
+            .ExecuteUpdateAsync(s => s.SetProperty(o => o.LeaseUntil, until), ct);
+        return extended == 1;
     }
 
     /// <summary>
@@ -411,7 +442,7 @@ public class ApiOperationService
         {
             throw new InvalidOperationException($"Operation {op.Id} has no stored result.");
         }
-        var json = Encoding.UTF8.GetString(_protector.Unprotect(op.ResultProtected));
+        var json = ProtectorFor(op).Unprotect(op.ResultProtected);
         var headers = string.IsNullOrEmpty(op.ResultPdfHeaders)
             ? null
             : JsonSerializer.Deserialize<Dictionary<string, string>>(op.ResultPdfHeaders);
