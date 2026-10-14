@@ -599,6 +599,11 @@
   <data name="Error_FILL_TOO_MANY_DOCUMENTS" xml:space="preserve"><value>Zu viele Dokumente in einer Ausfüllanfrage.</value></data>
   <data name="Error_FILL_TOO_MANY_FIELDS" xml:space="preserve"><value>Die Vorlage hat mehr Felder als zum Ausfüllen zulässig.</value></data>
   <data name="Error_FILL_OUTPUT_TOO_LARGE" xml:space="preserve"><value>Die erzeugten Dokumente überschreiten die maximale Gesamtgröße.</value></data>
+  <data name="Error_UNAUTHENTICATED" xml:space="preserve"><value>API-Schlüssel fehlt oder ist ungültig.</value></data>
+  <data name="Error_TOO_MANY_FAILURES" xml:space="preserve"><value>Zu viele fehlgeschlagene Anfragen. Dieser Schlüssel ist vorübergehend pausiert.</value></data>
+  <data name="Error_ACCOUNT_BLOCKED" xml:space="preserve"><value>Dieses Konto ist gesperrt. Wenden Sie sich an den Support.</value></data>
+  <data name="Error_FEATURE_DISABLED" xml:space="preserve"><value>Diese Funktion ist vorübergehend nicht verfügbar.</value></data>
+  <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Zu viele Anfragen. Bitte später erneut versuchen.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Eine Seite des PDF ist zu groß für die Codesuche (mehr als etwa 1,6 m² oder eine Seite länger als 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>Das PDF enthält aktive Inhalte (eine Launch-Aktion oder beim Öffnen ausgeführtes JavaScript) und wurde abgelehnt.</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>Der Anhang überschreitet die maximal zulässige Größe.</value></data>

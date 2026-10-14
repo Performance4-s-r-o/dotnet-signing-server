@@ -254,6 +254,8 @@ builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection("Rese
 builder.Services.Configure<LokiOptions>(builder.Configuration.GetSection("Loki"));
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("AI"));
 builder.Services.Configure<LimitsOptions>(builder.Configuration.GetSection("Limits"));
+builder.Services.Configure<RateLimitOptions>(builder.Configuration.GetSection("RateLimits"));
+DotNetSigningServer.Middleware.RateLimiting.Register(builder.Services, builder.Configuration);
 // Slow-body protection (#72). Kestrel's defaults are 30 s for headers and 240 B/s for the
 // body: a 40 MB upload may take days. 20 KB/s after a 10 s grace, headers within 15 s.
 builder.WebHost.ConfigureKestrel(kestrel =>
@@ -589,6 +591,11 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Before any body is read (#73): rate limits by IP / key / route, then 401 for what has no
+// credentials, operator switches, and the block for keys that keep failing.
+app.UseRateLimiter();
+app.UseMiddleware<DotNetSigningServer.Middleware.ApiGateMiddleware>();
 
 // Concurrency limiting runs AFTER authentication so ClaimsPrincipal carries the user id.
 app.UseMiddleware<UserConcurrencyMiddleware>();

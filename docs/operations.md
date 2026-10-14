@@ -116,3 +116,23 @@ the portal side (#259). A keyed retry finds the operation either way.
   token). Alternative: require explicit confirmation. Default kept: retry runs.
 - The dotnet 402 code is `INSUFFICIENT_CREDITS`; the portal's tenant quota is
   `QUOTA_EXCEEDED`. Not renamed.
+
+## Páky bez nasazení (#73)
+
+Tabulka `dotnet_signing."OperatorSwitches"`: jeden řádek = jedna zapnutá páka, smazáním řádku se uvolní. Změna platí do 15 s na všech instancích.
+
+| `Name` | Efekt |
+|---|---|
+| `feature:find-codes` | find-codes vrací 503 `FEATURE_DISABLED` všem |
+| `feature:extend-signature` | totéž pro extend-signature |
+| `feature:ai` | totéž pro `/api/ai/*` |
+| `feature:sign`, `feature:fill`, `feature:pdfa` | podpisové endpointy / fill-pdf / convert pdfa |
+| `user:{guid}` | účet dostane na `/api` 403 `ACCOUNT_BLOCKED` |
+
+```sql
+insert into dotnet_signing."OperatorSwitches" ("Name", "Reason", "CreatedAt")
+values ('feature:find-codes', 'zahlcení 14. 10.', now());
+delete from dotnet_signing."OperatorSwitches" where "Name" = 'feature:find-codes';
+```
+
+Limity (`RateLimits:*`, env `RateLimits__…`): neautentizované `/api` 30/min na IP (`CF-Connecting-IP`), klíč 600/min, `tsa-probe` 6/min, `inspect-signatures` 30/min, registrace 5/h, přihlášení a reset hesla 20/10 min na IP; blok klíče po `RateLimits:FailuresBeforeBlock` odmítnutých vstupech (400/413) na těžkých cestách za 10 min na 15 min (429 + `Retry-After`) je **ve výchozím stavu vypnutý (0)**: portál volá s jedním účtem za všechny nájemce, takže před zapnutím je třeba jeho účet uvést v `RateLimits:ExemptUserIds`. `CF-Connecting-IP` se věří jen od peeru ze soukromé sítě.

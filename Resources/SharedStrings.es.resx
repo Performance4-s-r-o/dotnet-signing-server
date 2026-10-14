@@ -599,6 +599,11 @@
   <data name="Error_FILL_TOO_MANY_DOCUMENTS" xml:space="preserve"><value>Demasiados documentos en una sola solicitud de relleno.</value></data>
   <data name="Error_FILL_TOO_MANY_FIELDS" xml:space="preserve"><value>La plantilla tiene más campos de los permitidos para rellenar.</value></data>
   <data name="Error_FILL_OUTPUT_TOO_LARGE" xml:space="preserve"><value>Los documentos generados superan el tamaño total máximo.</value></data>
+  <data name="Error_UNAUTHENTICATED" xml:space="preserve"><value>Falta la clave de API o no es válida.</value></data>
+  <data name="Error_TOO_MANY_FAILURES" xml:space="preserve"><value>Demasiadas solicitudes fallidas. Esta clave está en pausa un tiempo.</value></data>
+  <data name="Error_ACCOUNT_BLOCKED" xml:space="preserve"><value>Esta cuenta está bloqueada. Póngase en contacto con soporte.</value></data>
+  <data name="Error_FEATURE_DISABLED" xml:space="preserve"><value>Esta función no está disponible temporalmente.</value></data>
+  <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Demasiadas solicitudes. Inténtelo más tarde.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Una página del PDF es demasiado grande para buscar códigos (más de unos 1,6 m² o un lado de más de 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>El PDF contiene contenido activo (una acción Launch o JavaScript que se ejecuta al abrir) y fue rechazado.</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>El archivo adjunto supera el tamaño máximo permitido.</value></data>

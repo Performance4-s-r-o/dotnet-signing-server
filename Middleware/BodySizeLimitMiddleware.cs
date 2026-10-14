@@ -12,16 +12,30 @@ public class BodySizeLimitMiddleware
     private readonly LimitsOptions _options;
     private readonly ILogger<BodySizeLimitMiddleware> _logger;
 
-    public BodySizeLimitMiddleware(RequestDelegate next, IOptions<LimitsOptions> options, ILogger<BodySizeLimitMiddleware> logger)
+    private readonly RateLimitOptions _rate;
+
+    public BodySizeLimitMiddleware(
+        RequestDelegate next,
+        IOptions<LimitsOptions> options,
+        IOptions<RateLimitOptions> rate,
+        ILogger<BodySizeLimitMiddleware> logger)
     {
         _next = next;
         _options = options.Value;
+        _rate = rate.Value;
         _logger = logger;
     }
 
     public async Task InvokeAsync(HttpContext context)
     {
-        var limit = _options.RequestBodyLimitBytes;
+        // Documents are 40 MB; everything else a browser form or a webhook can carry is much
+        // smaller (#73). The form pages never take a file.
+        var path = context.Request.Path;
+        var limit = path.StartsWithSegments("/api/webhooks", StringComparison.OrdinalIgnoreCase)
+            ? Math.Min(_options.RequestBodyLimitBytes, _rate.WebhookBodyLimitBytes)
+            : path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
+                ? _options.RequestBodyLimitBytes
+                : Math.Min(_options.RequestBodyLimitBytes, _rate.FormBodyLimitBytes);
         var contentLength = context.Request.ContentLength;
 
         var sizeFeature = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
