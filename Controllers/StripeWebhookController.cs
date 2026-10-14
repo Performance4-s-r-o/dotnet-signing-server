@@ -2,6 +2,7 @@ using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Services.Billing;
 using DotNetSigningServer.Services.Email;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -191,6 +192,24 @@ public class StripeWebhookController : ControllerBase
             return;
         }
 
+        // metadata.userId alone is not enough (#82): the session's customer must be the user's,
+        // or one no other user holds when the user has none yet. Otherwise nothing is granted.
+        var sessionInfo = new CheckoutSessionInfo(
+            session.Id,
+            session.Mode,
+            session.Status,
+            session.PaymentStatus,
+            new Dictionary<string, string>(session.Metadata ?? new Dictionary<string, string>()),
+            session.CustomerId,
+            CustomerRef: null);
+        if (!await StripeCustomerBinding.CheckoutOwnedByAsync(_dbContext, sessionInfo, user))
+        {
+            _logger.LogError(
+                "checkout.session.completed: session {SessionId} names user {UserId}, but its customer {CustomerId} is not theirs; nothing granted",
+                session.Id, userId, session.CustomerId);
+            return;
+        }
+
         // Record the session as processed — save immediately to claim the
         // idempotency key before granting credits (prevents double-grant race
         // with ConfirmCheckout).
@@ -218,10 +237,7 @@ public class StripeWebhookController : ControllerBase
             "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" + {0} WHERE \"Id\" = {1}",
             documents, user.Id);
 
-        if (string.IsNullOrWhiteSpace(user.StripeCustomerId) && !string.IsNullOrWhiteSpace(session.CustomerId))
-        {
-            user.StripeCustomerId = session.CustomerId;
-        }
+        await StripeCustomerBinding.TryBindAsync(_dbContext, user, session.CustomerId, _logger);
 
         // Enable auto-recharge if opted in during checkout
         if (session.Metadata.TryGetValue("autoRecharge", out var autoRechargeValue)
@@ -298,6 +314,15 @@ public class StripeWebhookController : ControllerBase
             return;
         }
 
+        // Auto-recharge charges the user's own customer; a charge of any other grants nothing (#82).
+        if (!BillingCustomerRef.ChargeBelongsTo(user.StripeCustomerId, paymentIntent.CustomerId))
+        {
+            _logger.LogError(
+                "payment_intent.succeeded: {PaymentIntentId} names user {UserId}, but its customer {CustomerId} is not theirs; nothing granted",
+                paymentIntent.Id, userId, paymentIntent.CustomerId);
+            return;
+        }
+
         // Record idempotency key first — save immediately to prevent
         // double-grant race with AutoRechargeService.
         _dbContext.WebhookEvents.Add(new WebhookEvent
@@ -359,6 +384,15 @@ public class StripeWebhookController : ControllerBase
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
         if (user == null)
         {
+            return;
+        }
+
+        // Not the user's customer: neither a payment record nor an e-mail for them (#82).
+        if (!BillingCustomerRef.ChargeBelongsTo(user.StripeCustomerId, paymentIntent.CustomerId))
+        {
+            _logger.LogWarning(
+                "payment_intent.payment_failed: {PaymentIntentId} names user {UserId}, but its customer {CustomerId} is not theirs; ignored",
+                paymentIntent.Id, userId, paymentIntent.CustomerId);
             return;
         }
 

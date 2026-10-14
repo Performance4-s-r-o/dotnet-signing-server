@@ -79,10 +79,8 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
         var grantedNow = await CreditGrants.TryGrantAsync(_db, purchase.SessionId, CreditGrants.CheckoutConfirmType, user.Id,
             purchase.Documents, "backoffice", async () =>
             {
-                if (string.IsNullOrWhiteSpace(user.StripeCustomerId) && !string.IsNullOrWhiteSpace(purchase.StripeCustomerId))
-                {
-                    user.StripeCustomerId = purchase.StripeCustomerId;
-                }
+                // customer_ref already matched the user; still never link a customer another user holds (#82).
+                await StripeCustomerBinding.TryBindAsync(_db, user, purchase.StripeCustomerId, _logger, cancellationToken);
                 if (purchase.AutoRecharge)
                 {
                     var pricing = _services.GetRequiredService<ICreditPricingProvider>();

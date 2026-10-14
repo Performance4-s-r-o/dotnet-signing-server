@@ -341,9 +341,18 @@ public class BillingController : Controller
                 return RedirectToAction(nameof(Index));
             }
 
-            // Verify the checkout session belongs to the currently authenticated user
-            if (!BillingCustomerRef.CheckoutBelongsTo(session, userId.Value))
+            var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+            if (user == null)
             {
+                TempData["Error"] = _localizer["UserNotFound"].Value;
+                return RedirectToAction(nameof(Index));
+            }
+
+            // The session must be this user's, and so must its Stripe customer (#82).
+            if (!await StripeCustomerBinding.CheckoutOwnedByAsync(_dbContext, session, user))
+            {
+                _logger.LogWarning("Checkout {SessionId} refused for user {UserId}: not the user's session or customer",
+                    sessionId, user.Id);
                 TempData["Error"] = _localizer["PaymentSessionMismatch"].Value;
                 return RedirectToAction(nameof(Index));
             }
@@ -353,13 +362,6 @@ public class BillingController : Controller
                 documents <= 0)
             {
                 TempData["Error"] = _localizer["CouldNotDetermineCredits"].Value;
-                return RedirectToAction(nameof(Index));
-            }
-
-            var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
-            if (user == null)
-            {
-                TempData["Error"] = _localizer["UserNotFound"].Value;
                 return RedirectToAction(nameof(Index));
             }
 
@@ -393,10 +395,7 @@ public class BillingController : Controller
                 documents, user.Id);
             await _dbContext.Entry(user).ReloadAsync();
 
-            if (string.IsNullOrWhiteSpace(user.StripeCustomerId) && !string.IsNullOrWhiteSpace(session.StripeCustomerId))
-            {
-                user.StripeCustomerId = session.StripeCustomerId;
-            }
+            await StripeCustomerBinding.TryBindAsync(_dbContext, user, session.StripeCustomerId, _logger);
 
             // Enable auto-recharge if the user opted in during checkout
             if (session.Metadata.TryGetValue("autoRecharge", out var autoRechargeValue)
@@ -561,8 +560,15 @@ public class BillingController : Controller
                 return RedirectToAction(nameof(Index));
             }
 
-            if (!BillingCustomerRef.CheckoutBelongsTo(session, userId.Value))
+            var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+            if (user == null) return RedirectToAction("SignIn", "Account");
+
+            // The card was saved on the session's customer: it must be this user's (#82),
+            // otherwise auto-recharge would charge someone else's card.
+            if (!await StripeCustomerBinding.CheckoutOwnedByAsync(_dbContext, session, user))
             {
+                _logger.LogWarning("Auto-recharge setup {SessionId} refused for user {UserId}: not the user's session or customer",
+                    sessionId, user.Id);
                 TempData["Error"] = _localizer["PaymentSessionMismatch"].Value;
                 return RedirectToAction(nameof(Index));
             }
@@ -575,12 +581,13 @@ public class BillingController : Controller
                 return RedirectToAction(nameof(Index));
             }
 
-            var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
-            if (user == null) return RedirectToAction("SignIn", "Account");
-
             if (string.IsNullOrWhiteSpace(user.StripeCustomerId) && !string.IsNullOrWhiteSpace(session.StripeCustomerId))
             {
-                user.StripeCustomerId = session.StripeCustomerId;
+                if (!await StripeCustomerBinding.TryBindAsync(_dbContext, user, session.StripeCustomerId, _logger))
+                {
+                    TempData["Error"] = _localizer["PaymentSessionMismatch"].Value;
+                    return RedirectToAction(nameof(Index));
+                }
                 await _dbContext.SaveChangesAsync();
             }
 

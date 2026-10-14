@@ -54,7 +54,7 @@ public sealed class EmailEventsHandler : IBackofficeEventHandler
             : null;
         if (user == null && String(evt.Data, "to") is { Length: > 0 } to)
         {
-            user = await _db.Users.FirstOrDefaultAsync(u => u.Email == to, cancellationToken);
+            user = await _db.Users.FindByEmailAsync(to, cancellationToken);
         }
         if (user == null)
         {

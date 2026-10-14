@@ -26,18 +26,45 @@ public class BillingDomainTests
     }
 
     [Theory]
-    [InlineData(null, null, true)] // direct path: no metadata check possible beyond what is there
+    [InlineData(null, null, false)] // no userId metadata: every session this product starts carries it (#82)
     [InlineData("6f9619ff-8b86-d011-b42d-00c04fc964ff", null, true)]
     [InlineData("00000000-0000-0000-0000-000000000001", null, false)]
-    [InlineData(null, "user:6f9619ff-8b86-d011-b42d-00c04fc964ff", true)]
-    [InlineData(null, "user:00000000-0000-0000-0000-000000000001", false)]
-    [InlineData(null, "", false)] // a service session without a customer belongs to nobody
+    [InlineData("not-a-guid", null, false)]
+    [InlineData(null, "user:6f9619ff-8b86-d011-b42d-00c04fc964ff", false)]
+    [InlineData("6f9619ff-8b86-d011-b42d-00c04fc964ff", "user:6f9619ff-8b86-d011-b42d-00c04fc964ff", true)]
+    [InlineData("6f9619ff-8b86-d011-b42d-00c04fc964ff", "user:00000000-0000-0000-0000-000000000001", false)]
+    [InlineData("6f9619ff-8b86-d011-b42d-00c04fc964ff", "", false)] // a service session without a customer belongs to nobody
     public void Checkout_BelongsOnlyToItsUser(string? metaUserId, string? customerRef, bool expected)
     {
         var metadata = metaUserId is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["userId"] = metaUserId };
         var session = new CheckoutSessionInfo("cs_1", "payment", "complete", "paid", metadata, null, customerRef);
 
-        Assert.Equal(expected, BillingCustomerRef.CheckoutBelongsTo(session, UserId));
+        Assert.Equal(expected, BillingCustomerRef.CheckoutBelongsTo(session, UserId, userStripeCustomerId: null));
+    }
+
+    [Theory]
+    [InlineData("cus_A", "cus_A", true)]
+    [InlineData("cus_A", "cus_B", false)] // another customer's session never acts on the user (#82)
+    [InlineData("cus_A", null, false)]
+    [InlineData(null, "cus_B", true)] // user without a customer: binding is checked against the database
+    [InlineData(null, null, true)]
+    public void Checkout_DirectPath_SessionCustomerMustBeTheUsers(string? userCustomer, string? sessionCustomer, bool expected)
+    {
+        var metadata = new Dictionary<string, string> { ["userId"] = UserId.ToString() };
+        var session = new CheckoutSessionInfo("cs_1", "payment", "complete", "paid", metadata, sessionCustomer, CustomerRef: null);
+
+        Assert.Equal(expected, BillingCustomerRef.CheckoutBelongsTo(session, UserId, userCustomer));
+    }
+
+    [Theory]
+    [InlineData("cus_A", "cus_A", true)]
+    [InlineData("cus_A", "cus_B", false)]
+    [InlineData("cus_A", null, false)]
+    [InlineData(null, "cus_B", false)]
+    [InlineData(null, null, false)]
+    public void Charge_BelongsOnlyToTheUsersOwnCustomer(string? userCustomer, string? chargeCustomer, bool expected)
+    {
+        Assert.Equal(expected, BillingCustomerRef.ChargeBelongsTo(userCustomer, chargeCustomer));
     }
 
     [Theory]
