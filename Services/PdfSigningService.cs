@@ -97,7 +97,7 @@ namespace DotNetSigningServer.Services
             return Convert.ToBase64String(fullySignedPdf);
         }
 
-        public string SignWithPfx(PfxSignInput input)
+        public virtual string SignWithPfx(PfxSignInput input)
         {
             var (chain, privateKey) = PdfCryptoHelper.LoadFromPfx(input.PfxContent, input.PfxPassword);
             byte[] originalPdf = Convert.FromBase64String(input.PdfContent);
@@ -128,7 +128,7 @@ namespace DotNetSigningServer.Services
             return Convert.ToBase64String(fullySignedPdf);
         }
 
-        public string ApplyDocumentTimestamp(DocumentTimestampInput input)
+        public virtual string ApplyDocumentTimestamp(DocumentTimestampInput input)
         {
             ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(
                 input.TsaUrl, input.TsaUsername, input.TsaPassword,
@@ -245,12 +245,12 @@ namespace DotNetSigningServer.Services
             }
         }
 
-        public string ApplyVisualSign(VisualSignInput input)
+        public virtual string ApplyVisualSign(VisualSignInput input)
         {
             return _visualSigningService.ApplyVisualSign(input);
         }
 
-        public string AddAttachment(AddAttachmentInput input)
+        public virtual string AddAttachment(AddAttachmentInput input)
         {
             if (string.IsNullOrWhiteSpace(input.FileName))
             {

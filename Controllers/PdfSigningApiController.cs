@@ -215,7 +215,7 @@ namespace DotNetSigningServer.Controllers
                         : signatureField.FieldName;
                 }
                 var result = _signingService.SignWithPfx(input);
-                await DebitUserAsync(user);
+                if (await ChargeOrFailAsync(user) is { } paymentRequired) return paymentRequired;
                 return PdfOrJsonResult(result);
             }
             catch (Exception ex)
@@ -253,7 +253,7 @@ namespace DotNetSigningServer.Controllers
                         : signatureField.FieldName;
                 }
                 var result = _signingService.ApplyDocumentTimestamp(input);
-                await DebitUserAsync(user);
+                if (await ChargeOrFailAsync(user) is { } paymentRequired) return paymentRequired;
                 return PdfOrJsonResult(result);
             }
             catch (TsaCommunicationException ex)
@@ -483,7 +483,7 @@ namespace DotNetSigningServer.Controllers
                 Logger.LogInformation("[visual-sign] Applying visual signature...");
                 var result = _signingService.ApplyVisualSign(input);
                 Logger.LogInformation("[visual-sign] Success, result length={Len}", result?.Length ?? 0);
-                await DebitUserAsync(user);
+                if (await ChargeOrFailAsync(user) is { } paymentRequired) return paymentRequired;
                 return PdfOrJsonResult(result);
             }
             catch (Exception ex)
@@ -540,7 +540,7 @@ namespace DotNetSigningServer.Controllers
                 }
 
                 var result = _sealingService.ApplySeal(input);
-                await DebitUserAsync(user);
+                if (await ChargeOrFailAsync(user) is { } paymentRequired) return paymentRequired;
                 return PdfOrJsonResult(result);
             }
             catch (Exception ex)
@@ -586,7 +586,7 @@ namespace DotNetSigningServer.Controllers
                 var result = _signingService.AddAttachment(input);
                 if (!bypassDebitRequested)
                 {
-                    await DebitUserAsync(user);
+                    if (await ChargeOrFailAsync(user) is { } paymentRequired) return paymentRequired;
                 }
                 return PdfOrJsonResult(result);
             }

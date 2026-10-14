@@ -272,6 +272,24 @@ namespace DotNetSigningServer.Controllers
             return false;
         }
 
+        /// <summary>
+        /// Debits and refuses the request when the atomic debit fails. The pre-check in
+        /// <see cref="EnsureUserWithCreditsAsync"/> is not enough: concurrent requests all pass it
+        /// and only the first debit succeeds (<c>WHERE CreditsRemaining &gt;= debit</c>), and the
+        /// concurrency tier can multiply the cost beyond the balance. Returns null when charged,
+        /// otherwise the 402 to return instead of the result — never deliver an unpaid result.
+        /// </summary>
+        protected async Task<IActionResult?> ChargeOrFailAsync(User user, int debit = 1, string? operation = null, Guid? documentId = null)
+        {
+            if (await DebitUserAsync(user, debit, operation, documentId))
+            {
+                return null;
+            }
+
+            Logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Debit failed for user {UserId}", user.Id);
+            return StatusCode(StatusCodes.Status402PaymentRequired, new { message = Localizer["NoCreditsRemaining"].Value });
+        }
+
         protected IActionResult PaymentRequired(User user, int requiredCredits)
         {
             Logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Credits insufficient for user {UserId}", user.Id);

@@ -18,7 +18,7 @@ namespace DotNetSigningServer.Services
             _iccProfilePath = Path.Combine(AppContext.BaseDirectory, "Resources", "srgb.icc");
         }
 
-        public string ConvertToPdfA(ConvertToPdfAInput input)
+        public virtual string ConvertToPdfA(ConvertToPdfAInput input)
         {
             byte[] originalPdf;
             try

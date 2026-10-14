@@ -26,7 +26,7 @@ namespace DotNetSigningServer.Services
             _visualSigningService = visualSigningService;
         }
 
-        public string ApplySeal(SealInput input)
+        public virtual string ApplySeal(SealInput input)
         {
             if (!_sealOptions.Enabled)
             {
