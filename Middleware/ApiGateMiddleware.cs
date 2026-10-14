@@ -82,7 +82,9 @@ public class ApiGateMiddleware
 
         if (userId is Guid id)
         {
-            if (BlockedUntil.TryGetValue(id, out var until))
+            // The block is for the heavy paths only: a blocked key must still be able to ask what
+            // became of an operation it already started, and what this server can do.
+            if (heavy.Feature is not null && BlockedUntil.TryGetValue(id, out var until))
             {
                 if (until > DateTimeOffset.UtcNow)
                 {
@@ -90,7 +92,7 @@ public class ApiGateMiddleware
                     await WriteAsync(context, StatusCodes.Status429TooManyRequests, "TOO_MANY_FAILURES");
                     return;
                 }
-                BlockedUntil.TryRemove(id, out _);
+                ((ICollection<KeyValuePair<Guid, DateTimeOffset>>)BlockedUntil).Remove(new KeyValuePair<Guid, DateTimeOffset>(id, until));
             }
 
             var names = await SwitchesAsync(context.RequestServices);
@@ -99,8 +101,7 @@ public class ApiGateMiddleware
                 await WriteAsync(context, StatusCodes.Status403Forbidden, "ACCOUNT_BLOCKED");
                 return;
             }
-            if (heavy.Feature is not null && (names.Contains(OperatorSwitches.Feature(heavy.Feature))
-                || (heavy.Feature == "ai" && names.Contains(OperatorSwitches.Feature("ai")))))
+            if (heavy.Feature is not null && names.Contains(OperatorSwitches.Feature(heavy.Feature)))
             {
                 context.Response.Headers.RetryAfter = "60";
                 await WriteAsync(context, StatusCodes.Status503ServiceUnavailable, "FEATURE_DISABLED");
@@ -110,14 +111,19 @@ public class ApiGateMiddleware
 
         await _next(context);
 
-        if (userId is Guid user && heavy.Feature is not null && CountsAsFailure(context.Response.StatusCode))
+        if (userId is Guid user && heavy.Feature is not null && _options.FailuresBeforeBlock > 0
+            && !_options.ExemptUserIdSet.Contains(user) && CountsAsFailure(context.Response.StatusCode))
         {
             Record(user);
         }
     }
 
-    /// <summary>400 (a refused input) and 5xx count; 401/402/403/404/409/429 are not the caller's abuse of the heavy path.</summary>
-    private static bool CountsAsFailure(int status) => status == 400 || status == 413 || status >= 500;
+    /// <summary>
+    /// Only what the caller caused: a refused input (400) or a body over the limit (413). A 5xx or a
+    /// 503 from the concurrency limiter is the server's state, not the caller's abuse, and counting
+    /// it would make an overload block the very keys that are retrying.
+    /// </summary>
+    private static bool CountsAsFailure(int status) => status == 400 || status == 413;
 
     private void Record(Guid user)
     {

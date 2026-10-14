@@ -76,7 +76,11 @@ public class ApiAuthService : IApiAuthService
 
         if (result?.User == null)
         {
-            _cache.Set(negativeKey, true, NegativeTtl);
+            // Only "no such token" is remembered by the token alone. A refusal because of the
+            // Origin, the IP list or an inactive user depends on who asked: one such request
+            // must not turn a valid token away for everybody else.
+            if (result is { NotFound: true }) _cache.Set(negativeKey, true, NegativeTtl);
+            else _cache.Set(cacheKey, result, NegativeTtl);
             return null;
         }
 
@@ -123,7 +127,7 @@ public class ApiAuthService : IApiAuthService
         {
             _logger.LogWarning("[auth] token rejected: no active token matched prefix={Prefix} candidates={Count}",
                 prefix, candidates.Count);
-            return null;
+            return new CachedValidation { NotFound = true };
         }
 
         if (apiToken.IsBrowserToken)
@@ -187,5 +191,6 @@ public class ApiAuthService : IApiAuthService
     {
         public User? User { get; init; }
         public Guid? TokenId { get; init; }
+        public bool NotFound { get; init; }
     }
 }

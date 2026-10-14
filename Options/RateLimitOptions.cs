@@ -22,8 +22,23 @@ public class RateLimitOptions
     /// <summary>Sign-in, 2FA, forgot/reset password: per client IP per 10 minutes.</summary>
     public int AuthPer10Minutes { get; set; } = 20;
 
-    /// <summary>Failed heavy operations (PDF_* or 5xx) per key, then a block.</summary>
-    public int FailuresBeforeBlock { get; set; } = 20;
+    /// <summary>
+    /// Refused inputs (400, 413) on the heavy paths per key within <see cref="FailureWindowMinutes"/>,
+    /// then a block of <see cref="BlockMinutes"/>. **0 = off, the default.** The portal calls this
+    /// server with one account for every tenant: switched on without that account in
+    /// <see cref="ExemptUserIds"/>, twenty bad PDFs from one tenant would pause signing for all.
+    /// </summary>
+    public int FailuresBeforeBlock { get; set; } = 0;
+
+    /// <summary>Comma-separated user ids that are never blocked (the portal's service account).</summary>
+    public string? ExemptUserIds { get; set; }
+
+    private HashSet<Guid>? _exempt;
+    internal HashSet<Guid> ExemptUserIdSet => _exempt ??= (ExemptUserIds ?? string.Empty)
+        .Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+        .Select(v => Guid.TryParse(v, out var g) ? g : Guid.Empty)
+        .Where(g => g != Guid.Empty)
+        .ToHashSet();
     public int FailureWindowMinutes { get; set; } = 10;
     public int BlockMinutes { get; set; } = 15;
 

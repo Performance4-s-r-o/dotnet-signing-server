@@ -14,12 +14,28 @@ using Microsoft.Extensions.Options;
 
 namespace DotNetSigningServer.Tests.Middleware;
 
+/// <summary>
+/// The middleware keeps its switch cache and failure log in statics, as it does in production.
+/// This collection runs alone, so a switch set here is never seen by another test class.
+/// </summary>
+[CollectionDefinition("ApiGate", DisableParallelization = true)]
+public class ApiGateCollection
+{
+}
+
 /// <summary>#73: what /api answers before a body is read, rate limits, operator switches, the failure block.</summary>
+[Collection("ApiGate")]
 public class ApiGateMiddlewareTests : IDisposable
 {
     private readonly ApplicationDbContext _db = TestHelpers.CreateInMemoryDbContext();
 
-    public void Dispose() => _db.Dispose();
+    public void Dispose()
+    {
+        // The switch cache and the failure log are static (shared by every instance of the
+        // middleware, as in production): leave them clean for the tests that run next.
+        ResetSwitchCache();
+        _db.Dispose();
+    }
 
     /// <summary>A body that throws when anything reads it: proves a 401 never touches it.</summary>
     private sealed class ExplodingBody : Stream
@@ -149,6 +165,56 @@ public class ApiGateMiddlewareTests : IDisposable
     }
 
     [Fact]
+    public async Task A_blocked_key_can_still_ask_about_its_operations()
+    {
+        var options = new RateLimitOptions { FailuresBeforeBlock = 1 };
+        var (gate, services) = Create(ctx => { ctx.Response.StatusCode = ctx.Request.Path == "/api/presign" ? 400 : 200; return Task.CompletedTask; }, options);
+        var user = Guid.NewGuid();
+        ResetSwitchCache();
+
+        await gate.InvokeAsync(Context(services, "/api/presign", user));
+        var heavy = Context(services, "/api/presign", user);
+        await gate.InvokeAsync(heavy);
+        Assert.Equal(429, heavy.Response.StatusCode);
+
+        var status = Context(services, "/api/operations/abc", user);
+        await gate.InvokeAsync(status);
+        Assert.Equal(200, status.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task An_exempt_account_is_never_blocked_and_the_default_is_off()
+    {
+        var portal = Guid.NewGuid();
+        var exempt = new RateLimitOptions { FailuresBeforeBlock = 1, ExemptUserIds = portal.ToString() };
+        var (gate, services) = Create(ctx => { ctx.Response.StatusCode = 400; return Task.CompletedTask; }, exempt);
+        ResetSwitchCache();
+        for (var i = 0; i < 5; i++)
+        {
+            var ctx = Context(services, "/api/presign", portal);
+            await gate.InvokeAsync(ctx);
+            Assert.Equal(400, ctx.Response.StatusCode);
+        }
+
+        Assert.Equal(0, new RateLimitOptions().FailuresBeforeBlock);
+    }
+
+    [Fact]
+    public async Task Server_errors_do_not_count_towards_the_block()
+    {
+        var options = new RateLimitOptions { FailuresBeforeBlock = 2 };
+        var (gate, services) = Create(ctx => { ctx.Response.StatusCode = 503; return Task.CompletedTask; }, options);
+        var user = Guid.NewGuid();
+        ResetSwitchCache();
+        for (var i = 0; i < 5; i++)
+        {
+            var ctx = Context(services, "/api/presign", user);
+            await gate.InvokeAsync(ctx);
+            Assert.Equal(503, ctx.Response.StatusCode);
+        }
+    }
+
+    [Fact]
     public async Task Refused_credentials_and_payment_do_not_count_as_failures()
     {
         var options = new RateLimitOptions { FailuresBeforeBlock = 2 };
@@ -193,6 +259,7 @@ public class ApiGateMiddlewareTests : IDisposable
         var context = new DefaultHttpContext();
         context.Request.Path = path;
         context.Request.Method = method;
+        context.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("172.18.0.5"); // cloudflared in the Docker network
         context.Request.Headers["CF-Connecting-IP"] = ip;
         if (user != null)
         {
@@ -209,6 +276,22 @@ public class ApiGateMiddlewareTests : IDisposable
         for (var i = 0; i < 3; i++) Assert.True(limiter.AttemptAcquire(Request("/api/presign", "203.0.113.7")).IsAcquired);
         Assert.False(limiter.AttemptAcquire(Request("/api/presign", "203.0.113.7")).IsAcquired);
         Assert.True(limiter.AttemptAcquire(Request("/api/presign", "198.51.100.9")).IsAcquired);
+    }
+
+    [Fact]
+    public void CF_Connecting_IP_from_a_public_peer_is_not_believed()
+    {
+        var limiter = Limiter(new RateLimitOptions { UnauthenticatedPerMinute = 2 });
+        HttpContext FromInternet(string claimed)
+        {
+            var c = Request("/api/presign", claimed);
+            c.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("93.184.216.34");
+            return c;
+        }
+        // Three different claimed addresses, one real peer: one bucket.
+        Assert.True(limiter.AttemptAcquire(FromInternet("203.0.113.1")).IsAcquired);
+        Assert.True(limiter.AttemptAcquire(FromInternet("203.0.113.2")).IsAcquired);
+        Assert.False(limiter.AttemptAcquire(FromInternet("203.0.113.3")).IsAcquired);
     }
 
     [Fact]
