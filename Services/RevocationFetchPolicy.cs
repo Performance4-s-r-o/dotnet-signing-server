@@ -57,7 +57,9 @@ internal static class RevocationFetchPolicy
 
     private static readonly MemoryCache Cache = new(new MemoryCacheOptions { SizeLimit = 64L * 1024 * 1024 });
     internal static readonly TimeSpan MinTtl = TimeSpan.FromMinutes(1);
-    internal static readonly TimeSpan MaxTtl = TimeSpan.FromHours(6);
+    internal static readonly TimeSpan MaxTtl = TimeSpan.FromHours(1);
+    /// <summary>A CRL above this is used but not kept: a few large ones would push out everything else.</summary>
+    internal const int MaxCachedCrlBytes = 4 * 1024 * 1024;
     internal static readonly TimeSpan UnknownTtl = TimeSpan.FromMinutes(15);
 
     internal static bool TryGetCrl(Uri url, out byte[] bytes)
@@ -73,6 +75,7 @@ internal static class RevocationFetchPolicy
 
     internal static void PutCrl(Uri url, byte[] bytes)
     {
+        if (bytes.Length > MaxCachedCrlBytes) return;
         Cache.Set(url.AbsoluteUri, bytes, new MemoryCacheEntryOptions
         {
             Size = Math.Max(1, bytes.Length),
@@ -103,23 +106,6 @@ internal static class RevocationFetchPolicy
     /// The Content-Length is looked at first, so an honest oversized answer is refused
     /// before a byte of it is read.
     /// </summary>
-    internal static byte[]? ReadBounded(HttpContent content, int maxBytes, CancellationToken cancellationToken)
-    {
-        var declared = content.Headers.ContentLength;
-        if (declared > maxBytes) return null;
-
-        using var stream = content.ReadAsStream(cancellationToken);
-        using var buffer = new MemoryStream();
-        var chunk = new byte[16 * 1024];
-        int read;
-        while ((read = stream.Read(chunk, 0, chunk.Length)) > 0)
-        {
-            if (buffer.Length + read > maxBytes) return null;
-            buffer.Write(chunk, 0, read);
-        }
-        return buffer.ToArray();
-    }
-
     internal static async Task<byte[]?> ReadBoundedAsync(HttpContent content, int maxBytes, CancellationToken cancellationToken)
     {
         var declared = content.Headers.ContentLength;
