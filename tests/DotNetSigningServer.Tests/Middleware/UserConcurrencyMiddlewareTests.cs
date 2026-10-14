@@ -185,11 +185,18 @@ public class UserConcurrencyMiddlewareTests
         var middleware = Create(billing, async ctx => await Task.Delay(Timeout.Infinite, ctx.RequestAborted));
         using var cts = new CancellationTokenSource();
 
-        var running = middleware.InvokeAsync(Request(services, Guid.NewGuid(), cts.Token));
+        var user = Guid.NewGuid();
+        var running = middleware.InvokeAsync(Request(services, user, cts.Token));
         cts.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => running.WaitAsync(Bounded));
 
         Assert.Equal(1, middleware.GlobalSlotsAvailable);
+
+        // The user's own slot is back as well: the next request (limit 1, queue 0) is not refused.
+        var next = Request(services, user);
+        var again = Create(billing, ctx => { ctx.Response.StatusCode = 200; return Task.CompletedTask; });
+        await again.InvokeAsync(next);
+        Assert.Equal(200, next.Response.StatusCode);
     }
 
     [Fact]

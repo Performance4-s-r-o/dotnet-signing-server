@@ -138,6 +138,7 @@ public class UserConcurrencyMiddleware
 
         // Both semaphores are captured locally: the finally releases exactly what was taken,
         // even if the user's entry is replaced (limit changed) while the request runs.
+        // Known gap: a replaced entry starts with InFlight = 0, so for a moment the user can run old + new limit.
         var userSemaphore = entry.Semaphore;
         var globalSemaphore = _globalSemaphore;
         var userSlotAcquired = false;
