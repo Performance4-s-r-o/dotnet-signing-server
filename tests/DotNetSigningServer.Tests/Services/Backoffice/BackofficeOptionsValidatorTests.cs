@@ -15,11 +15,13 @@ public class BackofficeOptionsValidatorTests
         string? webhookSecret = null,
         string? previousSecret = null,
         string? pricing = null,
-        BackofficeDisabledReason reason = BackofficeDisabledReason.None) => new()
+        BackofficeDisabledReason reason = BackofficeDisabledReason.None,
+        string? environment = "test") => new()
         {
             Mode = mode,
             BaseUrl = baseUrl,
             SecretKey = secretKey,
+            Environment = environment,
             Webhook = { Secret = webhookSecret, PreviousSecret = previousSecret },
             Modules = { Pricing = pricing },
             DisabledReason = reason,
@@ -33,7 +35,7 @@ public class BackofficeOptionsValidatorTests
         { "Off ignores a bad URL", Options(mode: "off", baseUrl: "not a url"), null },
         { "On with url and key", Options(mode: "On", baseUrl: Url, secretKey: Key), null },
         { "mode is case-insensitive", Options(mode: "sHaDoW", baseUrl: Url, secretKey: Key), null },
-        { "live key", Options(mode: "On", baseUrl: Url, secretKey: "p4sk_live_x"), null },
+        { "live key", Options(mode: "On", baseUrl: Url, secretKey: "p4sk_live_x", environment: "live"), null },
         { "http on localhost", Options(mode: "On", baseUrl: "http://localhost:3000", secretKey: Key), null },
         { "http on 127.0.0.1", Options(mode: "On", baseUrl: "http://127.0.0.1:9", secretKey: Key), null },
         { "http on ::1", Options(mode: "On", baseUrl: "http://[::1]:3000", secretKey: Key), null },
@@ -106,34 +108,82 @@ public class BackofficeOptionsValidatorTests
     }
 
     [Theory]
-    [InlineData("p4sk_live_x", true, true)]
-    [InlineData("p4sk_test_x", false, true)]
-    [InlineData("p4sk_test_x", true, false)]
-    [InlineData("p4sk_live_x", false, false)]
-    public void KeyKindMustMatchEnvironment(string key, bool production, bool valid)
+    [InlineData("p4sk_live_x", "live", null)]
+    [InlineData("p4sk_test_x", "test", null)]
+    [InlineData("p4sk_test_x", " Test ", null)]
+    [InlineData("p4sk_live_x", " TEST ", "live key")]
+    [InlineData("p4sk_test_x", " LIVE ", "test key")]
+    [InlineData("p4sk_test_x", "live", "test key")]
+    [InlineData("p4sk_live_x", "test", "live key")]
+    public void KeyKindMustMatchEnvironment(string key, string environment, string? problem)
     {
-        var options = Options(mode: "On", baseUrl: Url, secretKey: key);
+        var options = Options(mode: "On", baseUrl: Url, secretKey: key, environment: environment);
 
-        var problems = BackofficeOptionsValidator.Validate(options, production);
+        var problems = BackofficeOptionsValidator.Validate(options);
 
-        if (valid)
+        if (problem is null)
         {
             Assert.Empty(problems);
         }
         else
         {
-            var problem = Assert.Single(problems);
-            Assert.Contains("P4Backoffice__SecretKey", problem);
-            Assert.Contains(production ? "test key" : "live key", problem);
+            var single = Assert.Single(problems);
+            Assert.Contains("P4Backoffice__SecretKey", single);
+            Assert.Contains(problem, single);
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void Environment_IsRequiredOnceAModuleIsSwitchedOn(string? environment)
+    {
+        foreach (var mode in new[] { "Shadow", "On" })
+        {
+            var options = Options(mode: mode, baseUrl: Url, secretKey: "p4sk_test_x", environment: environment);
+
+            var single = Assert.Single(BackofficeOptionsValidator.Validate(options));
+            Assert.Contains("P4_BACKOFFICE_ENV", single);
+            Assert.Contains("required", single);
         }
     }
 
     [Fact]
-    public void KeyKind_IsNotCheckedWhenNothingIsSwitchedOn()
+    public void Environment_MustBeLiveOrTest()
     {
-        var options = Options(mode: "Off", secretKey: "p4sk_test_x");
+        var options = Options(mode: "On", baseUrl: Url, secretKey: "p4sk_test_x", environment: "staging");
 
-        Assert.Empty(BackofficeOptionsValidator.Validate(options, isProduction: true));
+        var single = Assert.Single(BackofficeOptionsValidator.Validate(options));
+        Assert.Contains("\"staging\"", single);
+    }
+
+    [Fact]
+    public void Environment_IsCheckedForASingleModuleWithoutTheGlobalMode()
+    {
+        var options = Options(mode: "Off", baseUrl: Url, secretKey: "p4sk_live_x", environment: null);
+        options.Modules.Docs = "On";
+
+        Assert.Contains(BackofficeOptionsValidator.Validate(options), p => p.Contains("P4_BACKOFFICE_ENV"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("live")]
+    public void KeyKind_IsNotCheckedWhenNothingIsSwitchedOn(string? environment)
+    {
+        var options = Options(mode: "Off", secretKey: "p4sk_test_x", environment: environment);
+
+        Assert.Empty(BackofficeOptionsValidator.Validate(options));
+    }
+
+    [Fact]
+    public void KeyKind_IsNotCheckedOnAPrivateServer()
+    {
+        var options = Options(mode: "On", baseUrl: Url, secretKey: "p4sk_test_x", environment: null,
+            reason: BackofficeDisabledReason.PrivateServer);
+
+        Assert.Empty(BackofficeOptionsValidator.Validate(options));
     }
 
     [Theory]

@@ -32,6 +32,7 @@ internal sealed class LegalDocsTestHost : IDisposable
             Modules = { Docs = docsMode },
             BaseUrl = OutboxTestHost.BaseUrl,
             SecretKey = OutboxTestHost.SecretKey,
+            Environment = "test",
             DisabledReason = BackofficeDisabledReason.None,
         };
 

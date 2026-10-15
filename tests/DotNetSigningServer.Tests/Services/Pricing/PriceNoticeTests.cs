@@ -469,6 +469,7 @@ public class PriceNoticeRegistrationTests
             ["P4Backoffice:Modules:Pricing"] = pricing,
             ["P4Backoffice:BaseUrl"] = "https://backoffice.example.com",
             ["P4Backoffice:SecretKey"] = "p4sk_test_abc",
+            ["P4Backoffice:Environment"] = "test",
         }, privateServer);
 
         Assert.Equal(monitor, services.Any(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType == typeof(PriceChangeMonitorService)));
