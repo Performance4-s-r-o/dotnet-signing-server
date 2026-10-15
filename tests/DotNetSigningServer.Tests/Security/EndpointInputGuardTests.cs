@@ -34,12 +34,20 @@ public class EndpointInputGuardTests
         }
     }
 
+    /// <summary>
+    /// Volá PdfSafetyGuard: přímo, nebo přes <c>GuardedPdfFromBase64</c> (limit + dekódování +
+    /// SafetyGuard, JSON kanál). Binární kanál (#74) ho musí volat přímo — čtení multipartu hlídá
+    /// jen velikost.
+    /// </summary>
+    private static bool Guarded(string body) =>
+        body.Contains("EnsureSafePdf(") || body.Contains("GuardedPdfFromBase64(");
+
     [Fact]
     public void Every_action_that_limits_a_pdf_also_checks_its_structure()
     {
         var missing = Actions()
             .Where(a => a.Body.Contains("EnsurePdfWithinLimit("))
-            .Where(a => !a.Body.Contains("EnsureSafePdf("))
+            .Where(a => !Guarded(a.Body))
             .Select(a => $"{a.File}: {a.Action}")
             .ToList();
 
@@ -50,7 +58,8 @@ public class EndpointInputGuardTests
     public void The_endpoints_that_take_a_pdf_are_the_ones_we_know_about()
     {
         var withPdf = Actions()
-            .Where(a => a.Body.Contains("EnsurePdfWithinLimit(") || a.Body.Contains("input.PdfContent"))
+            .Where(a => a.Body.Contains("EnsurePdfWithinLimit(") || a.Body.Contains("input.PdfContent")
+                || a.Body.Contains("ReadBinaryPdfAsync<"))
             .Select(a => a.Action)
             .Distinct()
             .OrderBy(x => x)
@@ -68,7 +77,7 @@ public class EndpointInputGuardTests
 
         var unguarded = Actions()
             .Where(a => withPdf.Contains(a.Action))
-            .Where(a => !a.Body.Contains("EnsureSafePdf("))
+            .Where(a => !Guarded(a.Body))
             .Select(a => $"{a.File}: {a.Action}")
             .ToList();
         Assert.True(unguarded.Count == 0, "Takes a PDF but never calls PdfSafetyGuard: " + string.Join(", ", unguarded));

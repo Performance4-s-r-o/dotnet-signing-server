@@ -51,17 +51,52 @@ namespace DotNetSigningServer.Controllers
             var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
 
+            byte[] pdf;
             try
             {
-                LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Presign");
-                SafetyGuard.EnsureSafePdf(input.PdfContent, "Presign");
+                pdf = GuardedPdfFromBase64(input.PdfContent, "Presign");
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }
             catch (ApiValidationException ex)
             {
-                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
+                return InputRefused(ex);
             }
+            // Dál nesou dokument bajty; řetězec (2× velikost v UTF-16) už nikdo nepotřebuje.
+            input.PdfContent = string.Empty;
+            return await PreSignCoreAsync(user, input, pdf);
+        }
 
+        /// <summary>
+        /// <c>/api/presign</c> v interním binárním kanálu (#74): <c>multipart/form-data</c> s částmi
+        /// <c>metadata</c> a <c>pdf</c>. Stejné ověření, kontroly i odpověď jako JSON varianta.
+        /// Tělo čte jen <see cref="ApiControllerBase.ReadBinaryPdfAsync{T}"/> — <c>Request.Form</c>
+        /// se tu číst nesmí (nabufferoval by celé tělo bez limitu části).
+        /// </summary>
+        [HttpPost("/api/presign")]
+        [Consumes(BinaryPdfChannel.ContentType)]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> PreSignBinary()
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            var (input, pdf, refused) = await ReadBinaryPdfAsync<PreSignInput>("Presign", i => i.PdfContent);
+            if (refused != null) return refused;
+            try
+            {
+                SafetyGuard.EnsureSafePdf(pdf!, "Presign");
+                LimitGuard.EnsureImageWithinLimit(input!.SignImageContent, "Signature image");
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
+            }
+            return await PreSignCoreAsync(user, input!, pdf!);
+        }
+
+        /// <summary>Presign po vstupní kontrole, společný oběma kanálům.</summary>
+        private async Task<IActionResult> PreSignCoreAsync(User user, PreSignInput input, byte[] pdf)
+        {
             var maxPending = HttpContext.RequestServices.GetRequiredService<IOptions<LimitsOptions>>().Value.MaxPendingPresignsPerUser;
             if (maxPending > 0 && await DbContext.SigningData.CountAsync(x => x.UserId == user.Id) >= maxPending)
             {
@@ -94,7 +129,7 @@ namespace DotNetSigningServer.Controllers
                     ? $"Signature_{signingData.Id.Replace("-", string.Empty)}"
                     : input.FieldName;
 
-                var (presignedPdfPath, hashToSign) = _signingService.HandlePreSign(input, fieldName);
+                var (presignedPdfPath, hashToSign) = _signingService.HandlePreSign(input, pdf, fieldName);
                 writtenPath = presignedPdfPath;
                 signingData.FieldName = fieldName;
                 signingData.PresignedPdfPath = presignedPdfPath;

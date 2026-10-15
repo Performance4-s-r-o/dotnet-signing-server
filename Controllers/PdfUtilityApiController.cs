@@ -177,22 +177,65 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { message = Localizer["PdfContentRequired"].Value });
             }
 
-            try
-            {
-                LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Barcode scan");
-                SafetyGuard.EnsureSafePdf(input.PdfContent, "Barcode scan");
-            }
-            catch (ApiValidationException ex)
-            {
-                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
-            }
-
-            var plan = ParseFormats(input.CodeType);
-            CodeScanRaster.ScanPages pages;
             byte[] pdfBytes;
             try
             {
-                pdfBytes = Convert.FromBase64String(input.PdfContent);
+                pdfBytes = GuardedPdfFromBase64(input.PdfContent, "Barcode scan");
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
+            }
+            // Otisk ze stejného těla jako dřív (s base64): opakování s týmž klíčem po nasazení
+            // musí dál sedět. Pak už dokument nesou jen bajty.
+            var fingerprint = ApiOperationService.Fingerprint("find-codes", input);
+            input.PdfContent = string.Empty;
+            return await FindCodesCoreAsync(user, input, pdfBytes, fingerprint);
+        }
+
+        /// <summary>
+        /// <c>/api/find-codes</c> v interním binárním kanálu (#74): <c>multipart/form-data</c> s částmi
+        /// <c>metadata</c> (<c>codeType</c>) a <c>pdf</c>. Stejné ověření, kontroly, účtování
+        /// i odpověď jako JSON varianta. Tělo čte jen <see cref="ApiControllerBase.ReadBinaryPdfAsync{T}"/>
+        /// — <c>Request.Form</c> se tu číst nesmí (nabufferoval by celé tělo bez limitu části).
+        /// </summary>
+        [HttpPost("/api/find-codes")]
+        [Consumes(BinaryPdfChannel.ContentType)]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> FindCodesBinary()
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            var (input, pdfBytes, refused) = await ReadBinaryPdfAsync<FindCodesInput>("Barcode scan", i => i.PdfContent);
+            if (refused != null) return refused;
+            if (pdfBytes!.Length == 0)
+            {
+                return BadRequest(new { message = Localizer["PdfContentRequired"].Value });
+            }
+            try
+            {
+                SafetyGuard.EnsureSafePdf(pdfBytes, "Barcode scan");
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
+            }
+            // Otisk z metadat a hashe dokumentu: base64 tu není, ze kterého by šel spočítat ten
+            // JSON. Klíč je proto vázaný na kanál — tentýž Idempotency-Key poslaný jednou
+            // binárně a podruhé jako JSON skončí 422 IDEMPOTENCY_KEY_REUSED.
+            var fingerprint = ApiOperationService.Fingerprint(
+                "find-codes", input, "pdf-sha256", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(pdfBytes)));
+            return await FindCodesCoreAsync(user, input!, pdfBytes, fingerprint);
+        }
+
+        /// <summary>find-codes po vstupní kontrole, společné oběma kanálům.</summary>
+        private async Task<IActionResult> FindCodesCoreAsync(User user, FindCodesInput input, byte[] pdfBytes, string fingerprint)
+        {
+            var plan = ParseFormats(input.CodeType);
+            CodeScanRaster.ScanPages pages;
+            try
+            {
                 // Sizes every scanned page before anything is reserved or rendered (#71):
                 // a page too large for the minimum resolution is the caller's 400, not our
                 // memory.
@@ -200,11 +243,7 @@ namespace DotNetSigningServer.Controllers
             }
             catch (ApiValidationException ex)
             {
-                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
-            }
-            catch (System.FormatException)
-            {
-                return BadRequest(new { message = Localizer["InvalidBase64"].Value });
+                return InputRefused(ex);
             }
             catch (Exception ex)
             {
@@ -218,7 +257,7 @@ namespace DotNetSigningServer.Controllers
                 // pages past the first 30 are never rendered.
                 var requiredCredits = FindCodesCredits(pages);
 
-                return await RunOperationAsync(user, "find-codes", ApiOperationService.Fingerprint("find-codes", input), requiredCredits, async ct =>
+                return await RunOperationAsync(user, "find-codes", fingerprint, requiredCredits, async ct =>
                 {
                     var results = await DetectCodesAsync(pdfBytes, pages, plan, ct);
                     // `pages`/`pagesProcessed`/`credits` let the portal bill its own tenant

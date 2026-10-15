@@ -107,6 +107,9 @@ Every paid call (`sign`, `sign-pfx`, `timestamp`, `extend-signature`,
 
 Details, limits and the behaviour changes for existing callers: [docs/operations.md](docs/operations.md).
 
+Internal only (the portal, not the public API): `presign` and `find-codes` also take the
+PDF as raw bytes in `multipart/form-data` — see [docs/binary-channel.md](docs/binary-channel.md).
+
 ### Templates and utilities
 
 | Endpoint | Purpose |
