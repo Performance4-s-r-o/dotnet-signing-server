@@ -13,6 +13,11 @@ public class ApiAuthService : IApiAuthService
 {
     private static readonly TimeSpan PositiveTtl = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan NegativeTtl = TimeSpan.FromSeconds(5);
+
+    // The shared IMemoryCache has a SizeLimit (#74): every entry must declare a Size, and a
+    // flood of nonsense tokens fills it up to the limit instead of growing without bound.
+    private static MemoryCacheEntryOptions Entry(TimeSpan ttl) =>
+        new() { AbsoluteExpirationRelativeToNow = ttl, Size = 1 };
     private const int MaxKeysPerToken = 64;
     private const int MaxOriginLength = 256;
 
@@ -79,12 +84,12 @@ public class ApiAuthService : IApiAuthService
             // Only "no such token" is remembered by the token alone. A refusal because of the
             // Origin, the IP list or an inactive user depends on who asked: one such request
             // must not turn a valid token away for everybody else.
-            if (result is { NotFound: true }) _cache.Set(negativeKey, true, NegativeTtl);
-            else _cache.Set(cacheKey, result, NegativeTtl);
+            if (result is { NotFound: true }) _cache.Set(negativeKey, true, Entry(NegativeTtl));
+            else _cache.Set(cacheKey, result, Entry(NegativeTtl));
             return null;
         }
 
-        _cache.Set(cacheKey, result, PositiveTtl);
+        _cache.Set(cacheKey, result, Entry(PositiveTtl));
 
         if (result.TokenId is Guid id)
         {
