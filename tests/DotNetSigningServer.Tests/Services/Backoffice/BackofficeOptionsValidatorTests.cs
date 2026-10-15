@@ -110,6 +110,8 @@ public class BackofficeOptionsValidatorTests
     [Theory]
     [InlineData("p4sk_live_x", "live", null)]
     [InlineData("p4sk_test_x", "test", null)]
+    [InlineData("p4sk_test_x", " Test ", null)]
+    [InlineData("p4sk_live_x", " TEST ", "live key")]
     [InlineData("p4sk_test_x", " LIVE ", "test key")]
     [InlineData("p4sk_test_x", "live", "test key")]
     [InlineData("p4sk_live_x", "test", "live key")]
