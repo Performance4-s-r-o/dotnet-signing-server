@@ -11,7 +11,9 @@ namespace DotNetSigningServer.Services;
 
 public class ApiAuthService : IApiAuthService
 {
-    private static readonly TimeSpan PositiveTtl = TimeSpan.FromSeconds(60);
+    // Per process (#80): a revocation on another instance reaches this one within this time.
+    // Was 60 s; 15 s bounds that delay to about one retry while keeping the hot path cached.
+    public static readonly TimeSpan PositiveTtl = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan NegativeTtl = TimeSpan.FromSeconds(5);
 
     // The shared IMemoryCache has a SizeLimit (#74): every entry must declare a Size, and a
@@ -47,7 +49,10 @@ public class ApiAuthService : IApiAuthService
         _logger = logger;
     }
 
-    public async Task<User?> ValidateTokenAsync(string authorizationHeader, string? originHeader = null, IPAddress? clientIp = null)
+    public async Task<User?> ValidateTokenAsync(string authorizationHeader, string? originHeader = null, IPAddress? clientIp = null) =>
+        (await ValidateTokenDetailedAsync(authorizationHeader, originHeader, clientIp))?.User;
+
+    public async Task<ApiTokenValidation?> ValidateTokenDetailedAsync(string authorizationHeader, string? originHeader = null, IPAddress? clientIp = null)
     {
         if (string.IsNullOrWhiteSpace(authorizationHeader) ||
             !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
@@ -74,7 +79,7 @@ public class ApiAuthService : IApiAuthService
         var cacheKey = BuildCacheKey(token, originHeader, clientIp);
         if (_cache.TryGetValue<CachedValidation>(cacheKey, out var cached))
         {
-            return cached?.User;
+            return cached?.ToResult();
         }
 
         var result = await ValidateFromDatabaseAsync(token, originHeader, clientIp);
@@ -100,7 +105,7 @@ public class ApiAuthService : IApiAuthService
             if (bag.Count < MaxKeysPerToken) bag.Add(cacheKey);
         }
 
-        return result?.User;
+        return result.ToResult();
     }
 
     public void InvalidateTokenCache(Guid tokenId)
@@ -168,7 +173,7 @@ public class ApiAuthService : IApiAuthService
             return null;
         }
 
-        return new CachedValidation { User = apiToken.User, TokenId = apiToken.Id };
+        return new CachedValidation { User = apiToken.User, TokenId = apiToken.Id, IsBrowserToken = apiToken.IsBrowserToken };
     }
 
     private static string BuildCacheKey(string token, string? originHeader, IPAddress? clientIp)
@@ -197,5 +202,9 @@ public class ApiAuthService : IApiAuthService
         public User? User { get; init; }
         public Guid? TokenId { get; init; }
         public bool NotFound { get; init; }
+        public bool IsBrowserToken { get; init; }
+
+        public ApiTokenValidation? ToResult() =>
+            User != null && TokenId is Guid id ? new ApiTokenValidation(User, id, IsBrowserToken) : null;
     }
 }

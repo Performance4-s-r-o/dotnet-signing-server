@@ -252,6 +252,8 @@ builder.Services.AddOptions<StripeOptions>()
         + "Set the Stripe__WebhookSecret environment variable.")
     .ValidateOnStart();
 builder.Services.Configure<TokenOptions>(builder.Configuration.GetSection("Token"));
+builder.Services.Configure<SessionSecurityOptions>(builder.Configuration.GetSection(SessionSecurityOptions.SectionName));
+builder.Services.AddScoped<AuthAttemptLimiter>();
 builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection("Resend"));
 builder.Services.Configure<LokiOptions>(builder.Configuration.GetSection("Loki"));
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("AI"));
@@ -297,27 +299,9 @@ builder.Services.AddAuthentication(options =>
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.Cookie.HttpOnly = true;
-        // Invalidate sessions when password changes (UpdatedAt is used as a security stamp)
-        options.Events.OnValidatePrincipal = async context =>
-        {
-            var stamp = context.Principal?.FindFirst("SecurityStamp")?.Value;
-            var userId = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            if (stamp != null && Guid.TryParse(userId, out var uid))
-            {
-                var db = context.HttpContext.RequestServices
-                    .GetRequiredService<DotNetSigningServer.Data.ApplicationDbContext>();
-                var user = await db.Users.AsNoTracking()
-                    .Where(u => u.Id == uid)
-                    .Select(u => new { u.UpdatedAt })
-                    .FirstOrDefaultAsync();
-                if (user == null || user.UpdatedAt.Ticks.ToString() != stamp)
-                {
-                    context.RejectPrincipal();
-                    await context.HttpContext.SignOutAsync(
-                        Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
-                }
-            }
-        };
+        // Every request: user exists, is active, the stamp (UpdatedAt) matches, and the Admin
+        // role follows the database (#80). See CookieSessionValidator.
+        options.Events.OnValidatePrincipal = DotNetSigningServer.Services.CookieSessionValidator.ValidateAsync;
     });
 builder.Services.AddAuthorization(options =>
 {
@@ -498,8 +482,9 @@ app.UseMiddleware<BodySizeLimitMiddleware>();
 // same path regardless of language. Must stay ahead of UseRequestLocalization.
 app.UseMiddleware<DotNetSigningServer.Middleware.CulturePrefixMiddleware>();
 
-// Swagger only in non-production environments
-if (!app.Environment.IsProduction())
+// Swagger only in Development (#80): staging and test run a production build that is
+// reachable from the internet, and the public reference lives at /api/docs.
+if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI(options =>
@@ -612,8 +597,8 @@ app.MapControllers();
 app.MapHealthChecks("/health");
 app.MapHealthChecks("/healthz");
 
-// Loki test endpoint (non-production only)
-if (!app.Environment.IsProduction())
+// Loki test endpoint (Development only, #80: it is anonymous and writes to the log store)
+if (app.Environment.IsDevelopment())
 {
     app.MapGet("/api/test-loki", async (LokiClient loki) =>
     {
