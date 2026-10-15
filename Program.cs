@@ -170,7 +170,9 @@ builder.Services.AddScoped<IBillingService, BillingService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IStripeCheckoutService, StripeCheckoutService>();
 builder.Services.AddScoped<IApiAuthService, ApiAuthService>();
-builder.Services.AddMemoryCache();
+// SizeLimit counts entries: every cache.Set must carry Size = 1 (#74). Without a limit the
+// token and consent caches grow with whatever a caller sends.
+builder.Services.AddMemoryCache(o => o.SizeLimit = 10_000);
 builder.Services.AddHttpClient("resend", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(15);

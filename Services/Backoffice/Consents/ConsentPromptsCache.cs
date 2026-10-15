@@ -60,7 +60,7 @@ public sealed class ConsentPromptsCache
             ? entry with { FetchedAt = _time.GetUtcNow() }
             : new CachedConsentPrompts(fetch.Prompts ?? [], fetch.ETag, _time.GetUtcNow());
 
-        _cache.Set(CacheKey(context, locale), fresh, new MemoryCacheEntryOptions { SlidingExpiration = StaleRetention });
+        _cache.Set(CacheKey(context, locale), fresh, new MemoryCacheEntryOptions { SlidingExpiration = StaleRetention, Size = 1 });
         return fresh.Prompts;
     }
 }

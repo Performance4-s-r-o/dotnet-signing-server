@@ -78,6 +78,20 @@ public class ApiAuthServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ValidateTokenAsync_WithSizeLimitedCache_RemembersRejectedTokenWithoutThrowing()
+    {
+        // The production cache has a SizeLimit (#74): an entry without Size throws
+        // InvalidOperationException, which would turn every rejected token into a 500.
+        var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 10 });
+        var sut = new ApiAuthService(_dbContext, _tokenService, _allowedOriginService, _ipWhitelistService, cache,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ApiAuthService>.Instance);
+
+        Assert.Null(await sut.ValidateTokenAsync("Bearer not-a-real-token"));
+        Assert.Null(await sut.ValidateTokenAsync("Bearer not-a-real-token"));
+        Assert.Equal(1, cache.Count);
+    }
+
+    [Fact]
     public async Task ValidateTokenAsync_EmptyHeader_ReturnsNull()
     {
         var result = await _sut.ValidateTokenAsync("");

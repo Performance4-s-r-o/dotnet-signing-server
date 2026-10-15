@@ -17,6 +17,11 @@ services:
     restart: unless-stopped
     volumes:
       - data_protection_keys:/app/data-protection-keys
+    # Magick.NET and Ghostscript spill big pages to /tmp (#74). On RAM-backed tmpfs a
+    # conversion cannot fill the container's writable layer, and nothing survives a restart.
+    # tmpfs is charged to the container's memory limit, so the cap is part of the budget.
+    tmpfs:
+      - /tmp:size=512m
     ports:
       - "${HTTP_PORT:-8085}:8085"
     environment:
