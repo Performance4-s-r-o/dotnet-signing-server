@@ -84,6 +84,76 @@ namespace DotNetSigningServer.Controllers
             return Problem(detail: detail, statusCode: StatusCodes.Status500InternalServerError);
         }
 
+        /// <summary>Odmítnutý vstup: 400 s kódem a přeloženou zprávou, jak to dělají všechny endpointy.</summary>
+        protected IActionResult InputRefused(ApiValidationException ex) =>
+            BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
+
+        /// <summary>
+        /// PDF z JSON kanálu (base64), zkontrolované stejně jako dosud — limit velikosti ještě
+        /// před dekódováním, pak <see cref="PdfSafetyGuard"/> — ale dekódované JEDNOU: bajty jdou
+        /// dál do práce, místo aby je každý krok znovu dekódoval z řetězce. Stejné kódy chyb jako
+        /// <see cref="PdfSafetyGuard.EnsureSafePdf(string?, string, bool)"/>.
+        /// </summary>
+        protected byte[] GuardedPdfFromBase64(string? base64, string context, bool checkActiveContent = true)
+        {
+            LimitGuard.EnsurePdfWithinLimit(base64 ?? string.Empty, context);
+            if (string.IsNullOrWhiteSpace(base64))
+            {
+                throw new ApiValidationException("PDF_INVALID", $"{context}: no content");
+            }
+            byte[] bytes;
+            try
+            {
+                bytes = Convert.FromBase64String(base64);
+            }
+            catch (FormatException)
+            {
+                throw new ApiValidationException("PDF_INVALID", $"{context}: not base64");
+            }
+            SafetyGuard.EnsureSafePdf(bytes, context, checkActiveContent);
+            return bytes;
+        }
+
+        /// <summary>
+        /// Tělo binárního kanálu (#74): metadata a PDF jako bajty. Čte se až po ověření volajícího
+        /// (JSON kanál své tělo načte už při bindingu, tady je to přísnější, ne volnější). Limit
+        /// velikosti PDF se hlídá při čtení; <see cref="PdfSafetyGuard"/> volá endpoint sám, stejně
+        /// jako v JSON kanálu.
+        /// </summary>
+        /// <param name="inlinePdf">Base64 PDF v metadatech: v binárním kanálu nesmí být, jinak by
+        /// nebylo jasné, který dokument platí.</param>
+        protected async Task<(T? Metadata, byte[]? Pdf, IActionResult? Error)> ReadBinaryPdfAsync<T>(
+            string context, Func<T, string?> inlinePdf) where T : class
+        {
+            var json = HttpContext.RequestServices
+                .GetRequiredService<IOptions<Microsoft.AspNetCore.Mvc.JsonOptions>>().Value.JsonSerializerOptions;
+            try
+            {
+                var (metadata, pdf) = await BinaryPdfChannel.ReadAsync<T>(
+                    Request.ContentType, Request.Body, Request.ContentLength, json,
+                    LimitGuard.Limits.PdfMaxBytes, HttpContext.RequestAborted);
+                if (!string.IsNullOrEmpty(inlinePdf(metadata)))
+                {
+                    throw new ApiValidationException(BinaryPdfChannel.InvalidCode, "pdfContent in metadata");
+                }
+                return (metadata, pdf, null);
+            }
+            catch (ApiValidationException ex)
+            {
+                Logger.LogInformation("{Context}: binary request refused ({Code}): {Detail}", context, ex.Code, ex.Message);
+                return (null, null, InputRefused(ex));
+            }
+            catch (Microsoft.AspNetCore.Http.BadHttpRequestException ex) when (ex.StatusCode == StatusCodes.Status413PayloadTooLarge)
+            {
+                return (null, null, StatusCode(StatusCodes.Status413PayloadTooLarge, new { message = Localizer["RequestExceededLimit"].Value }));
+            }
+            catch (Microsoft.AspNetCore.Http.BadHttpRequestException ex)
+            {
+                Logger.LogInformation(ex, "{Context}: binary request body unreadable", context);
+                return (null, null, InputRefused(new ApiValidationException(BinaryPdfChannel.InvalidCode)));
+            }
+        }
+
         protected async Task<User?> GetAuthenticatedUserAsync(string? originHeader = null)
         {
             // Prefer the principal the authentication middleware established. A cookie

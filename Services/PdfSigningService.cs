@@ -30,10 +30,15 @@ namespace DotNetSigningServer.Services
             _visualSigningService = visualSigningService ?? new PdfVisualSigningService();
         }
 
-        public (string PresignedPdfPath, string HashToSign) HandlePreSign(PreSignInput input, string fieldName)
-        {
-            byte[] originalPdf = Convert.FromBase64String(input.PdfContent);
+        public (string PresignedPdfPath, string HashToSign) HandlePreSign(PreSignInput input, string fieldName) =>
+            HandlePreSign(input, Convert.FromBase64String(input.PdfContent), fieldName);
 
+        /// <summary>
+        /// Presign nad bajty, které už prošly vstupní kontrolou; <c>input.PdfContent</c> se nečte.
+        /// Oba kanály (JSON i binární, #74) končí tady.
+        /// </summary>
+        public (string PresignedPdfPath, string HashToSign) HandlePreSign(PreSignInput input, byte[] originalPdf, string fieldName)
+        {
             // Add verification metadata/QR page before signing
             if (!string.IsNullOrWhiteSpace(input.VerificationUrl) && input.VerificationMode != "disabled")
             {

@@ -192,4 +192,186 @@ public class LoadProfileTests
         File.WriteAllText(path, sb.ToString());
         _ = a4x30result;
     }
+
+    // ── #74: base64 v JSONu vs. binární kanál ─────────────────────────────
+
+    private sealed record MemoryRow(string Name, double Seconds, double AllocatedMb, double PeakHeapMb, double PeakProcessMb);
+
+    /// <summary>
+    /// Paměť jedné operace: kolik se alokovalo, špička spravované haldy (vzorkovaná po 2 ms, včetně
+    /// smetí, které GC ještě nesebral — to proces opravdu drží) a špička pracovní sady procesu.
+    /// </summary>
+    private static async Task<MemoryRow> MeasureMemory(string name, Func<Task> work)
+    {
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        var process = Process.GetCurrentProcess();
+        process.Refresh();
+        var baseWs = process.WorkingSet64;
+        var baseHeap = GC.GetTotalMemory(false);
+        var baseAlloc = GC.GetTotalAllocatedBytes(precise: true);
+        long peakHeap = baseHeap, peakWs = baseWs;
+        using var stop = new CancellationTokenSource();
+        var sampler = Task.Run(async () =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                peakHeap = Math.Max(peakHeap, GC.GetTotalMemory(false));
+                process.Refresh();
+                peakWs = Math.Max(peakWs, process.WorkingSet64);
+                try { await Task.Delay(2, stop.Token); } catch (OperationCanceledException) { }
+            }
+        });
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            await work();
+        }
+        finally
+        {
+            sw.Stop();
+            peakHeap = Math.Max(peakHeap, GC.GetTotalMemory(false));
+            stop.Cancel();
+            await sampler;
+        }
+        var allocated = GC.GetTotalAllocatedBytes(precise: true) - baseAlloc;
+        return new MemoryRow(name, sw.Elapsed.TotalSeconds, allocated / 1048576.0,
+            (peakHeap - baseHeap) / 1048576.0, (peakWs - baseWs) / 1048576.0);
+    }
+
+    /// <summary>
+    /// Presign nad ~20 MB PDF třemi cestami: JSON jak byl na mainu (SafetyGuard i presign dekódují
+    /// base64 každý zvlášť), JSON po #74 (dekóduje se jednou) a binární kanál. Tělo požadavku je
+    /// připravené předem — v provozu ho drží portál, ne my; server čte z proudu jako zde.
+    /// </summary>
+    [Fact]
+    public async Task BinaryChannelProfile()
+    {
+        if (!Enabled) return;
+        var limits = new LimitsOptions();
+        var guard = new PdfSafetyGuard(TestHelpers.WrapOptions(limits));
+        var limitGuard = new ContentLimitGuard(TestHelpers.WrapOptions(limits));
+        var signing = new PdfSigningService();
+        var json = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+        var pem = TestHelpers.CreateTestCertificate().CertificatePem;
+
+        // Sken: náhodná data v obrázkových streamech (nekomprimují se), těsně pod limitem 20 MB.
+        var rng = new Random(74);
+        var pdf = Pdf(19, 595, 842, (_, p, _) =>
+        {
+            var data = new byte[1_000_000];
+            rng.NextBytes(data);
+            var image = new PdfStream(data);
+            image.Put(PdfName.Type, PdfName.XObject);
+            image.Put(PdfName.Subtype, PdfName.Image);
+            image.Put(PdfName.Width, new PdfNumber(1000));
+            image.Put(PdfName.Height, new PdfNumber(1000));
+            image.Put(PdfName.ColorSpace, PdfName.DeviceGray);
+            image.Put(PdfName.BitsPerComponent, new PdfNumber(8));
+            p.GetPdfObject().Put(new PdfName("Scan"), image);
+        });
+        Assert.True(pdf.LongLength <= limits.PdfMaxBytes, $"{pdf.LongLength} B");
+
+        var metadata = new Models.PreSignInput
+        {
+            CertificatePem = pem,
+            Reason = "profil",
+            SignRect = new Models.SignRect { X = 50, Y = 50, Width = 200, Height = 60 },
+        };
+        var withPdf = new Models.PreSignInput { CertificatePem = pem, Reason = "profil", SignRect = metadata.SignRect, PdfContent = Convert.ToBase64String(pdf) };
+        var jsonBody = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(withPdf, json);
+        withPdf = null;
+
+        byte[] multipartBody;
+        const string boundary = "p4-load-profile-boundary";
+        using (var content = new MultipartFormDataContent(boundary))
+        {
+            content.Add(new StringContent(System.Text.Json.JsonSerializer.Serialize(metadata, json), Encoding.UTF8, "application/json"), BinaryPdfChannel.MetadataPart);
+            var part = new ByteArrayContent(pdf);
+            part.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+            content.Add(part, BinaryPdfChannel.PdfPart, "document.pdf");
+            multipartBody = await content.ReadAsByteArrayAsync();
+        }
+        var contentType = $"multipart/form-data; boundary={boundary}";
+        var written = new List<string>();
+
+        async Task JsonMain()
+        {
+            var input = await System.Text.Json.JsonSerializer.DeserializeAsync<Models.PreSignInput>(new MemoryStream(jsonBody), json);
+            limitGuard.EnsurePdfWithinLimit(input!.PdfContent, "p");
+            guard.EnsureSafePdf(input.PdfContent, "p");
+            written.Add(signing.HandlePreSign(input, "Signature_profile").PresignedPdfPath);
+        }
+
+        async Task JsonOnce()
+        {
+            var input = await System.Text.Json.JsonSerializer.DeserializeAsync<Models.PreSignInput>(new MemoryStream(jsonBody), json);
+            limitGuard.EnsurePdfWithinLimit(input!.PdfContent, "p");
+            var bytes = Convert.FromBase64String(input.PdfContent);
+            guard.EnsureSafePdf(bytes, "p");
+            input.PdfContent = string.Empty;
+            written.Add(signing.HandlePreSign(input, bytes, "Signature_profile").PresignedPdfPath);
+        }
+
+        async Task Binary()
+        {
+            var (input, bytes) = await BinaryPdfChannel.ReadAsync<Models.PreSignInput>(
+                contentType, new MemoryStream(multipartBody), multipartBody.LongLength, json, limits.PdfMaxBytes, CancellationToken.None);
+            guard.EnsureSafePdf(bytes, "p");
+            written.Add(signing.HandlePreSign(input, bytes, "Signature_profile").PresignedPdfPath);
+        }
+
+        // Jen čtení vstupu, bez práce: kolik stojí samotný kanál.
+        async Task JsonParseOnly()
+        {
+            var input = await System.Text.Json.JsonSerializer.DeserializeAsync<Models.PreSignInput>(new MemoryStream(jsonBody), json);
+            GC.KeepAlive(Convert.FromBase64String(input!.PdfContent));
+        }
+
+        async Task BinaryParseOnly()
+        {
+            var (_, bytes) = await BinaryPdfChannel.ReadAsync<Models.PreSignInput>(
+                contentType, new MemoryStream(multipartBody), multipartBody.LongLength, json, limits.PdfMaxBytes, CancellationToken.None);
+            GC.KeepAlive(bytes);
+        }
+
+        var scenarios = new (string Name, Func<Task> Work)[]
+        {
+            ("čtení vstupu: JSON base64 → bajty", JsonParseOnly),
+            ("čtení vstupu: multipart → bajty", BinaryParseOnly),
+            ("presign: JSON jako na mainu (2× dekódování)", JsonMain),
+            ("presign: JSON po #74 (1× dekódování)", JsonOnce),
+            ("presign: binární kanál", Binary),
+            ("presign 4× souběžně: JSON jako na mainu", () => Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(JsonMain)))),
+            ("presign 4× souběžně: JSON po #74", () => Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(JsonOnce)))),
+            ("presign 4× souběžně: binární kanál", () => Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(Binary)))),
+        };
+        var rows = new List<MemoryRow>();
+        foreach (var (name, work) in scenarios)
+        {
+            await work(); // zahřátí (JIT, iText)
+            var samples = new List<MemoryRow>();
+            for (var i = 0; i < 5; i++) samples.Add(await MeasureMemory(name, work));
+            // Medián z pěti podle špičky haldy: špička závisí na tom, kdy přesně GC proběhne.
+            rows.Add(samples.OrderBy(s => s.PeakHeapMb).ElementAt(2));
+        }
+        foreach (var file in written)
+        {
+            try { File.Delete(file); } catch (IOException) { }
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"Stroj: {Environment.ProcessorCount} jader, .NET {Environment.Version}, {DateTime.UtcNow:u}");
+        sb.AppendLine($"PDF {pdf.Length / 1048576.0:0.0} MB, JSON tělo {jsonBody.Length / 1048576.0:0.0} MB, multipart tělo {multipartBody.Length / 1048576.0:0.0} MB");
+        sb.AppendLine();
+        sb.AppendLine("| scénář | čas [s] | alokováno [MB] | špička haldy [MB] | špička procesu [MB] |");
+        sb.AppendLine("|---|---|---|---|---|");
+        foreach (var r in rows) sb.AppendLine($"| {r.Name} | {r.Seconds:0.00} | {r.AllocatedMb:0} | {r.PeakHeapMb:0} | {r.PeakProcessMb:0} |");
+        sb.AppendLine();
+        sb.AppendLine("Pozn.: medián z pěti běhů po zahřátí. Špička haldy zahrnuje smetí, které GC ještě nesebral.");
+        var path = Environment.GetEnvironmentVariable("P4_LOAD_BINARY_OUT")
+            ?? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "p4-load-binary-channel.md");
+        File.WriteAllText(path, sb.ToString());
+    }
 }
