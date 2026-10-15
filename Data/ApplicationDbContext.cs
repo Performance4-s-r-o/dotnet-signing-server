@@ -26,6 +26,8 @@ namespace DotNetSigningServer.Data
         public DbSet<ConsentRecord> ConsentRecords { get; set; }
         public DbSet<ApiOperation> ApiOperations { get; set; }
         public DbSet<OperatorSwitch> OperatorSwitches { get; set; }
+        public DbSet<AdminAuditEntry> AdminAuditEntries { get; set; }
+        public DbSet<AuthAttemptCounter> AuthAttemptCounters { get; set; }
 
         /// <summary>
         /// Outbox items added through this context and not yet announced to the dispatcher;
@@ -210,6 +212,64 @@ namespace DotNetSigningServer.Data
 
             modelBuilder.Entity<ApiOperation>()
                 .HasIndex(o => o.UpdatedAt);
+
+            // Admin audit (#80): read per target account, newest first.
+            modelBuilder.Entity<AdminAuditEntry>()
+                .HasIndex(a => new { a.TargetUserId, a.CreatedAt });
+
+            modelBuilder.Entity<AdminAuditEntry>()
+                .Property(a => a.Change)
+                .HasColumnType(Database.IsNpgsql() ? "jsonb" : null);
+
+            modelBuilder.Entity<AuthAttemptCounter>()
+                .HasIndex(c => c.WindowStart);
+        }
+
+        public override int SaveChanges(bool acceptAllChangesOnSuccess)
+        {
+            ApplySecurityRules();
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+
+        public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+        {
+            ApplySecurityRules();
+            return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        /// <summary>
+        /// Two rules no write path may forget (#80):
+        /// <list type="bullet">
+        /// <item>A change of <c>IsActive</c> or <c>IsAdmin</c> moves the session stamp
+        /// (<c>UpdatedAt</c>), whoever makes it — the user, an admin, a background job. The cookie
+        /// check also reads both flags directly, so even a change made in SQL takes effect.</item>
+        /// <item>Admin audit rows are append-only.</item>
+        /// </list>
+        /// </summary>
+        private void ApplySecurityRules()
+        {
+            foreach (var entry in ChangeTracker.Entries<User>())
+            {
+                if (entry.State != EntityState.Modified) continue;
+                if (entry.Property(u => u.IsActive).IsModified || entry.Property(u => u.IsAdmin).IsModified)
+                {
+                    var stamp = DateTimeOffset.UtcNow;
+                    // Two writes inside one clock tick must still give a new stamp.
+                    if (stamp <= entry.Property(u => u.UpdatedAt).OriginalValue)
+                    {
+                        stamp = entry.Property(u => u.UpdatedAt).OriginalValue.AddTicks(1);
+                    }
+                    entry.Entity.UpdatedAt = stamp;
+                }
+            }
+
+            foreach (var entry in ChangeTracker.Entries<AdminAuditEntry>())
+            {
+                if (entry.State is EntityState.Modified or EntityState.Deleted)
+                {
+                    throw new InvalidOperationException("Admin audit entries are append-only.");
+                }
+            }
         }
     }
 }
