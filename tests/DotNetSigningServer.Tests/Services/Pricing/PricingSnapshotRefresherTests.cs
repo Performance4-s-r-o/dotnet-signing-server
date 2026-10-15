@@ -41,6 +41,7 @@ internal sealed class PricingTestHost : IDisposable
             Modules = { Pricing = mode },
             BaseUrl = OutboxTestHost.BaseUrl,
             SecretKey = OutboxTestHost.SecretKey,
+            Environment = "test",
             DisabledReason = BackofficeDisabledReason.None,
         };
 

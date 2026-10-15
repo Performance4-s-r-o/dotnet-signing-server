@@ -33,6 +33,7 @@ internal sealed class InboxTestHost : IDisposable
             Mode = "On",
             BaseUrl = OutboxTestHost.BaseUrl,
             SecretKey = OutboxTestHost.SecretKey,
+            Environment = "test",
             Webhook = { Secret = Secret },
             DisabledReason = BackofficeDisabledReason.None,
         };

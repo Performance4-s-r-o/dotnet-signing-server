@@ -1,6 +1,5 @@
 using System.Net;
 using DotNetSigningServer.Options;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace DotNetSigningServer.Services.Backoffice;
@@ -24,12 +23,11 @@ public static class BackofficeOptionsValidator
     /// </summary>
     public const int MinWebhookSecretBytes = 24;
 
+    public const string LiveEnvironment = "live";
+    public const string TestEnvironment = "test";
+
     /// <param name="options">The <c>P4Backoffice</c> section.</param>
-    /// <param name="isProduction">
-    /// Whether the host runs in Production. When given, the kind of the secret key must match it
-    /// (production = <c>p4sk_live_</c>, otherwise <c>p4sk_test_</c>); null skips that check.
-    /// </param>
-    public static IReadOnlyList<string> Validate(P4BackofficeProductOptions options, bool? isProduction = null)
+    public static IReadOnlyList<string> Validate(P4BackofficeProductOptions options)
     {
         var problems = new List<string>();
 
@@ -66,10 +64,7 @@ public static class BackofficeOptionsValidator
         {
             CheckBaseUrl(problems, options.BaseUrl);
             CheckSecretKey(problems, options.SecretKey);
-            if (isProduction is { } production)
-            {
-                CheckKeyKind(problems, options.SecretKey, production);
-            }
+            CheckKeyKind(problems, options.SecretKey, options.Environment);
         }
 
         return problems;
@@ -111,21 +106,36 @@ public static class BackofficeOptionsValidator
 
     /// <summary>
     /// A key of the wrong kind writes to the wrong data set: a test key in production would
-    /// feed the service's test data, a live key anywhere else would write live data from a
-    /// development or staging host (p4-backoffice #212). Refuse to start either way.
+    /// feed the service's test data, a live key on test would write live data (p4-backoffice
+    /// #212). The kind follows the explicit <c>Environment</c>, not ASPNETCORE_ENVIRONMENT: the
+    /// test deployment runs as Production with a test key. Refuse to start when it is missing,
+    /// unknown or does not match the key.
     /// </summary>
-    private static void CheckKeyKind(List<string> problems, string? value, bool isProduction)
+    private static void CheckKeyKind(List<string> problems, string? key, string? environment)
     {
-        var key = value?.Trim();
-        if (string.IsNullOrEmpty(key)) return;
-
-        if (isProduction && key.StartsWith(TestKeyPrefix, StringComparison.Ordinal))
+        var setting = $"{Setting("Environment")} / P4_BACKOFFICE_ENV";
+        var target = environment?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(target))
         {
-            problems.Add($"{Setting("SecretKey")} is a test key ({TestKeyPrefix}…) but the environment is Production; use the live key ({LiveKeyPrefix}…).");
+            problems.Add($"{setting} is required when any backoffice module is Shadow or On; set it to {LiveEnvironment} (production) or {TestEnvironment}.");
+            return;
         }
-        else if (!isProduction && key.StartsWith(LiveKeyPrefix, StringComparison.Ordinal))
+        if (target != LiveEnvironment && target != TestEnvironment)
         {
-            problems.Add($"{Setting("SecretKey")} is a live key ({LiveKeyPrefix}…) but the environment is not Production; use the test key ({TestKeyPrefix}…).");
+            problems.Add($"{setting} is \"{environment}\"; expected {LiveEnvironment} or {TestEnvironment}.");
+            return;
+        }
+
+        var trimmed = key?.Trim();
+        if (string.IsNullOrEmpty(trimmed)) return;
+
+        if (target == LiveEnvironment && trimmed.StartsWith(TestKeyPrefix, StringComparison.Ordinal))
+        {
+            problems.Add($"{Setting("SecretKey")} is a test key ({TestKeyPrefix}…) but P4_BACKOFFICE_ENV is {LiveEnvironment}; use the live key ({LiveKeyPrefix}…).");
+        }
+        else if (target == TestEnvironment && trimmed.StartsWith(LiveKeyPrefix, StringComparison.Ordinal))
+        {
+            problems.Add($"{Setting("SecretKey")} is a live key ({LiveKeyPrefix}…) but P4_BACKOFFICE_ENV is {TestEnvironment}; use the test key ({TestKeyPrefix}…).");
         }
     }
 
@@ -223,11 +233,11 @@ public static class BackofficeOptionsValidator
 }
 
 /// <summary>Adapter that runs <see cref="BackofficeOptionsValidator"/> through the options pipeline (ValidateOnStart).</summary>
-internal sealed class BackofficeOptionsValidation(IHostEnvironment environment) : IValidateOptions<P4BackofficeProductOptions>
+internal sealed class BackofficeOptionsValidation : IValidateOptions<P4BackofficeProductOptions>
 {
     public ValidateOptionsResult Validate(string? name, P4BackofficeProductOptions options)
     {
-        var problems = BackofficeOptionsValidator.Validate(options, environment.IsProduction());
+        var problems = BackofficeOptionsValidator.Validate(options);
         return problems.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(problems);
     }
 }

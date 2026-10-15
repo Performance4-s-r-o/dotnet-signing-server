@@ -23,6 +23,7 @@ public class SupportRegistrationTests
             DisabledReason = BackofficeDisabledReason.None,
             BaseUrl = "https://backoffice.test",
             SecretKey = "p4sk_test_x",
+            Environment = "test",
             Modules = { Support = mode },
         };
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(options));

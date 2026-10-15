@@ -48,6 +48,7 @@ public class BackofficeRegistrationTests
             ["P4Backoffice:Mode"] = "Off",
             ["P4Backoffice:BaseUrl"] = "https://backoffice.example.com",
             ["P4Backoffice:SecretKey"] = "p4sk_test_abc",
+            ["P4Backoffice:Environment"] = "test",
         });
         Assert.False(AnyInboxWorker(services));
     }
@@ -93,6 +94,7 @@ public class BackofficeRegistrationTests
             ["P4Backoffice:Modules:Pricing"] = "Off",
             ["P4Backoffice:BaseUrl"] = "https://backoffice.example.com",
             ["P4Backoffice:SecretKey"] = "p4sk_test_abc",
+            ["P4Backoffice:Environment"] = "test",
         });
 
         var options = Resolve(services);
@@ -119,6 +121,7 @@ public class BackofficeRegistrationTests
             ["P4Backoffice:Mode"] = "On",
             ["P4Backoffice:BaseUrl"] = "https://backoffice.example.com",
             ["P4Backoffice:SecretKey"] = "p4sk_test_abc",
+            ["P4Backoffice:Environment"] = "test",
         });
 
         var options = Resolve(services);

@@ -63,6 +63,7 @@ internal sealed class SignUpAppFactory : WebApplicationFactory<Program>
                 o.Modules.Consents = _consentsMode;
                 o.BaseUrl = "https://127.0.0.1:9";
                 o.SecretKey = "p4sk_test_integration";
+                o.Environment = "test";
             });
             _configureServices?.Invoke(services);
         });

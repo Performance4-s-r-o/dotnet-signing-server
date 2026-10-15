@@ -25,6 +25,13 @@ public class P4BackofficeProductOptions
     public string? SecretKey { get; set; }
 
     /// <summary>
+    /// Which service environment this installation belongs to: <c>live</c> or <c>test</c>
+    /// (<c>P4_BACKOFFICE_ENV</c>). The kind of <see cref="SecretKey"/> must match it; required
+    /// once any module is Shadow or On (p4-backoffice #212).
+    /// </summary>
+    public string? Environment { get; set; }
+
+    /// <summary>
     /// How long a legal document from the service is shown without revalidation (the SDK's
     /// setting of the same name). Empty = 5 minutes.
     /// </summary>

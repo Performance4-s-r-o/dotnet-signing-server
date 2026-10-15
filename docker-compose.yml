@@ -102,6 +102,8 @@ services:
       - P4Backoffice__Mode=${P4_BACKOFFICE_MODE:-Off}
       - P4Backoffice__BaseUrl=${P4_BACKOFFICE_URL:-}
       - P4Backoffice__SecretKey=${P4_BACKOFFICE_SECRET_KEY:-}
+      # live | test; the key kind must match it. Required once a module is Shadow/On.
+      - P4Backoffice__Environment=${P4_BACKOFFICE_ENV:-}
       - P4Backoffice__Webhook__Secret=${P4_BACKOFFICE_WEBHOOK_SECRET:-}
       - P4Backoffice__Webhook__PreviousSecret=${P4_BACKOFFICE_WEBHOOK_PREVIOUS_SECRET:-}
       - P4Backoffice__Modules__Docs=${P4_BACKOFFICE_DOCS_MODE:-}

@@ -243,6 +243,7 @@ public class BillingDomainTests
         {
             BaseUrl = "https://backoffice.example.com",
             SecretKey = "p4sk_test_abc",
+            Environment = "test",
             Modules = { Billing = "On", Pricing = "Shadow" },
         };
         Assert.Contains(BackofficeOptionsValidator.Validate(options), p => p.Contains("Modules__Billing"));
@@ -266,6 +267,7 @@ public class BillingRegistrationTests
             ["P4Backoffice:Modules:Billing"] = billing,
             ["P4Backoffice:BaseUrl"] = "https://backoffice.example.com",
             ["P4Backoffice:SecretKey"] = "p4sk_test_abc",
+            ["P4Backoffice:Environment"] = "test",
         }, privateServer);
 
     private static bool Has<T>(Microsoft.Extensions.DependencyInjection.IServiceCollection services) =>

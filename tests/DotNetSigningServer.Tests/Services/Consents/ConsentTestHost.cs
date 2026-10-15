@@ -31,6 +31,7 @@ internal static class ConsentTestHost
         Modules = { Consents = consentsMode },
         BaseUrl = OutboxTestHost.BaseUrl,
         SecretKey = OutboxTestHost.SecretKey,
+        Environment = "test",
         DisabledReason = BackofficeDisabledReason.None,
     };
 

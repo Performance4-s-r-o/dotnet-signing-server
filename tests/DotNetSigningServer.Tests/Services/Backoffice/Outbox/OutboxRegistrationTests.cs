@@ -12,6 +12,7 @@ public class OutboxRegistrationTests
         ["P4Backoffice:Mode"] = "On",
         ["P4Backoffice:BaseUrl"] = "https://backoffice.example.com",
         ["P4Backoffice:SecretKey"] = "p4sk_test_abc",
+        ["P4Backoffice:Environment"] = "test",
     };
 
     private static bool HasDispatcher(IServiceCollection services) =>
@@ -52,6 +53,7 @@ public class OutboxRegistrationTests
             ["P4Backoffice:Modules:Consents"] = "Shadow",
             ["P4Backoffice:BaseUrl"] = "https://backoffice.example.com",
             ["P4Backoffice:SecretKey"] = "p4sk_test_abc",
+            ["P4Backoffice:Environment"] = "test",
         });
 
         Assert.True(HasDispatcher(services));
