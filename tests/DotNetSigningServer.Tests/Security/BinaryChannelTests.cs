@@ -12,6 +12,7 @@ using DotNetSigningServer.Tests.Services.Backoffice.Outbox;
 using iText.Kernel.Geom;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Action;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -34,6 +35,9 @@ public sealed class BinaryChannelFixture : IAsyncLifetime
     public const long PdfMaxBytes = 200_000;
     public const int PdfMaxPages = 5;
     public const int MaxPendingPresigns = 2;
+    public const long ImageMaxBytes = 100_000;
+    /// <summary>Celé tělo: pod součtem stropů částí (metadata ~1,6 MB + PDF 0,2 MB), ať jde narazit na něj.</summary>
+    public const long RequestBodyLimitBytes = 1_000_000;
 
     public OutboxPostgresFixture Postgres { get; } = new();
     internal WebApplicationFactory<Program> App { get; private set; } = null!;
@@ -45,6 +49,39 @@ public sealed class BinaryChannelFixture : IAsyncLifetime
     private sealed class NoEmail : IEmailSender
     {
         public Task SendAsync(string toEmail, string subject, string htmlBody) => Task.CompletedTask;
+    }
+
+    /// <summary>Hlavička, se kterou test chce vědět, kolik těla si APLIKACE přečetla.</summary>
+    public const string CountBodyHeader = "X-Test-Count-Body";
+
+    /// <summary>Kolik bajtů těla aplikace přečetla, než začala odpovídat (podle hodnoty hlavičky).</summary>
+    public readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> BodyReadBeforeResponse = new();
+
+    /// <summary>
+    /// Úplně první middleware: obalí tělo počítadlem. TestServer (jako Kestrel) tělo po odpovědi
+    /// dočte sám; to je transport, ne aplikace — proto se počítá jen do začátku odpovědi.
+    /// </summary>
+    private sealed class CountBody(BinaryChannelFixture fx) : Microsoft.AspNetCore.Hosting.IStartupFilter
+    {
+        public Action<Microsoft.AspNetCore.Builder.IApplicationBuilder> Configure(Action<Microsoft.AspNetCore.Builder.IApplicationBuilder> next) => app =>
+        {
+            app.Use(async (ctx, nextMiddleware) =>
+            {
+                var id = ctx.Request.Headers[CountBodyHeader].ToString();
+                if (!string.IsNullOrEmpty(id))
+                {
+                    var counting = new CountingStream(ctx.Request.Body);
+                    ctx.Request.Body = counting;
+                    ctx.Response.OnStarting(() =>
+                    {
+                        fx.BodyReadBeforeResponse[id] = counting.BytesRead;
+                        return Task.CompletedTask;
+                    });
+                }
+                await nextMiddleware(ctx);
+            });
+            next(app);
+        };
     }
 
     private sealed class Factory(BinaryChannelFixture fx) : WebApplicationFactory<Program>
@@ -59,6 +96,8 @@ public sealed class BinaryChannelFixture : IAsyncLifetime
             builder.UseSetting("Limits:PdfMaxBytes", PdfMaxBytes.ToString());
             builder.UseSetting("Limits:PdfMaxPages", PdfMaxPages.ToString());
             builder.UseSetting("Limits:MaxPendingPresignsPerUser", MaxPendingPresigns.ToString());
+            builder.UseSetting("Limits:ImageMaxBytes", ImageMaxBytes.ToString());
+            builder.UseSetting("Limits:RequestBodyLimitBytes", RequestBodyLimitBytes.ToString());
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();
@@ -81,6 +120,7 @@ public sealed class BinaryChannelFixture : IAsyncLifetime
 
                 // Ghostscript v CI není; sken nic nenajde, účtuje se za stránky jako doopravdy.
                 services.AddSingleton<IControllerActivator, SwapUtilityController>();
+                services.AddSingleton<Microsoft.AspNetCore.Hosting.IStartupFilter>(new CountBody(fx));
             });
         }
     }
@@ -302,7 +342,7 @@ public class BinaryChannelTests : IClassFixture<BinaryChannelFixture>
         {
             certificatePem = _fx.CertificatePem,
             signRect = new { x = 50, y = 50, width = 200, height = 60 },
-            signImageContent = Convert.ToBase64String(new byte[2 * 1024 * 1024]),
+            signImageContent = Convert.ToBase64String(new byte[BinaryChannelFixture.ImageMaxBytes + 50_000]),
         };
 
         var response = await client.SendAsync(Request(channel, "/api/presign", metadata, Pdf()));
@@ -486,6 +526,84 @@ public class BinaryChannelTests : IClassFixture<BinaryChannelFixture>
     }
 
     [DockerFact]
+    public async Task Switching_channel_with_the_same_key_is_422_idempotency_key_reused()
+    {
+        var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+        var key = Guid.NewGuid().ToString();
+        var pdf = Pdf();
+
+        var json = await client.SendAsync(Request("json", "/api/find-codes", new { codeType = "qr" }, pdf, key));
+        Assert.Equal(HttpStatusCode.OK, json.StatusCode);
+        Assert.Equal(4, await _fx.BalanceAsync(userId));
+
+        // Týž dokument, týž klíč, jiný kanál: otisk je vázaný na kanál (viz docs/binary-channel.md).
+        var binary = await client.SendAsync(Request("binary", "/api/find-codes", new { codeType = "qr" }, pdf, key));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, binary.StatusCode);
+        Assert.Equal("IDEMPOTENCY_KEY_REUSED", await CodeAsync(binary));
+        Assert.Equal(4, await _fx.BalanceAsync(userId));
+    }
+
+    private static async Task<StreamContent> ChunkedAsync(MultipartFormDataContent multipart)
+    {
+        var bytes = await multipart.ReadAsByteArrayAsync();
+        var content = new StreamContent(new CountingStream(new MemoryStream(bytes)));
+        content.Headers.ContentType = multipart.Headers.ContentType;
+        Assert.Null(content.Headers.ContentLength);
+        return content;
+    }
+
+    /// <summary>Bez Content-Length i na straně serveru: TestServer by jinak délku dopočítal.</summary>
+    private static HttpRequestMessage ChunkedPost(string path, HttpContent content)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = content };
+        request.Headers.TransferEncodingChunked = true;
+        return request;
+    }
+
+    [DockerFact]
+    public async Task Chunked_multipart_over_the_body_limit_is_413_and_charges_nothing()
+    {
+        var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+        // Každá část pod svým stropem (metadata ~1,6 MB, PDF 0,2 MB), dohromady nad limitem těla
+        // 1 MB — a bez Content-Length, takže předběžná kontrola délky v BodySizeLimitMiddleware
+        // nezabere a musí to uhlídat limit čtení.
+        var metadata = $"{{\"codeType\":\"any\",\"pad\":\"{new string('x', 900_000)}\"}}";
+        var content = await ChunkedAsync(Multipart(metadata, Pdf(noiseBytes: 150_000)));
+
+        var response = await client.SendAsync(ChunkedPost("/api/find-codes", content));
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        Assert.Equal(5, await _fx.BalanceAsync(userId));
+    }
+
+    [DockerFact]
+    public async Task Without_a_token_a_large_body_is_401_and_is_not_read()
+    {
+        var client = _fx.App.CreateClient();
+        // 8 MB, chunked: na délku se odmítnout nedá, přečíst se nesmí.
+        var request = ChunkedPost("/api/find-codes", await ChunkedAsync(Multipart(new { codeType = "any" }, Pdf(noiseBytes: 8_000_000))));
+        var id = Guid.NewGuid().ToString("N");
+        request.Headers.Add(BinaryChannelFixture.CountBodyHeader, id);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(0, _fx.BodyReadBeforeResponse[id]);
+    }
+
+    [Fact]
+    public void Public_api_docs_do_not_mention_the_binary_channel()
+    {
+        foreach (var doc in ApiDocsCatalog.All("/api"))
+        {
+            var text = doc.Sample + doc.Curl;
+            Assert.DoesNotContain("multipart", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("binary-channel", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(BinaryPdfChannel.InvalidCode, text, StringComparison.Ordinal);
+        }
+    }
+
+    [DockerFact]
     public async Task Endpoints_without_the_binary_channel_still_answer_415_to_multipart()
     {
         var (userId, client) = await _fx.NewAccountAsync(credits: 5);
@@ -537,13 +655,91 @@ public class BinaryPdfChannelReadTests
         Assert.Equal("PDF_SIZE_EXCEEDED", ex.Code);
     }
 
+    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+
+    private static async Task<(string ContentType, byte[] Body)> BodyAsync(string metadata, byte[] pdf)
+    {
+        var content = new MultipartFormDataContent("test-boundary");
+        content.Add(new StringContent(metadata, Encoding.UTF8, "application/json"), BinaryPdfChannel.MetadataPart);
+        var part = new ByteArrayContent(pdf);
+        part.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        content.Add(part, BinaryPdfChannel.PdfPart, "a.pdf");
+        return (content.Headers.ContentType!.ToString(), await content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task Metadata_over_its_limit_is_multipart_invalid_before_it_is_parsed()
+    {
+        var (type, body) = await BodyAsync($"{{\"codeType\":\"{new string('x', 5000)}\"}}", new byte[10]);
+
+        var ex = await Assert.ThrowsAsync<DotNetSigningServer.Exceptions.ApiValidationException>(() =>
+            BinaryPdfChannel.ReadAsync<FindCodesInput>(type, new MemoryStream(body), body.Length, Web, 1000, maxMetadataBytes: 1000, CancellationToken.None));
+
+        Assert.Equal(BinaryPdfChannel.InvalidCode, ex.Code);
+    }
+
+    [Fact]
+    public async Task Truncated_body_is_multipart_invalid()
+    {
+        var (type, body) = await BodyAsync("{\"codeType\":\"any\"}", new byte[5000]);
+        var truncated = body[..(body.Length - 2000)];
+
+        var ex = await Assert.ThrowsAsync<DotNetSigningServer.Exceptions.ApiValidationException>(() =>
+            BinaryPdfChannel.ReadAsync<FindCodesInput>(type, new MemoryStream(truncated), body.Length, Web, 100_000, 100_000, CancellationToken.None));
+
+        Assert.Equal(BinaryPdfChannel.InvalidCode, ex.Code);
+    }
+
+    [Fact]
+    public async Task A_large_size_hint_does_not_preallocate()
+    {
+        // Odhad 40 MB, skutečně 10 B: výsledek má přesnou délku a buffer nezačal na odhadu
+        // (ověřeno nepřímo: alokace jsou řádově pod odhadem).
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var read = await BinaryPdfChannel.ReadBoundedAsync(new MemoryStream(new byte[10]), 40_000_000, 20_000_000, CancellationToken.None);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(10, read.Length);
+        Assert.True(allocated < 2 * BinaryPdfChannel.InitialBufferBytes, $"{allocated} B allocated");
+    }
+
     [Fact]
     public async Task Not_multipart_is_multipart_invalid()
     {
         var ex = await Assert.ThrowsAsync<DotNetSigningServer.Exceptions.ApiValidationException>(() =>
             BinaryPdfChannel.ReadAsync<FindCodesInput>("application/json", new MemoryStream(), null,
-                new JsonSerializerOptions(JsonSerializerDefaults.Web), 1000, CancellationToken.None));
+                new JsonSerializerOptions(JsonSerializerDefaults.Web), 1000, 1000, CancellationToken.None));
 
         Assert.Equal(BinaryPdfChannel.InvalidCode, ex.Code);
     }
+}
+
+/// <summary>Proud s počítadlem přečtených bajtů, bez délky (klient pak posílá chunked).</summary>
+public sealed class CountingStream(Stream inner) : Stream
+{
+    private long _bytesRead;
+    public long BytesRead => Interlocked.Read(ref _bytesRead);
+    public override bool CanRead => true;
+    public override bool CanSeek => false;
+    public override bool CanWrite => false;
+    public override long Length => throw new NotSupportedException();
+    public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+    public override void Flush() { }
+    public override int Read(byte[] buffer, int offset, int count)
+    {
+        var n = inner.Read(buffer, offset, count);
+        Interlocked.Add(ref _bytesRead, n);
+        return n;
+    }
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        var n = await inner.ReadAsync(buffer, cancellationToken);
+        Interlocked.Add(ref _bytesRead, n);
+        return n;
+    }
+    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+        ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 }

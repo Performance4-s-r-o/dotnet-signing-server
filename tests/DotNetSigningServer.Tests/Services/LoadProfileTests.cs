@@ -317,7 +317,7 @@ public class LoadProfileTests
         async Task Binary()
         {
             var (input, bytes) = await BinaryPdfChannel.ReadAsync<Models.PreSignInput>(
-                contentType, new MemoryStream(multipartBody), multipartBody.LongLength, json, limits.PdfMaxBytes, CancellationToken.None);
+                contentType, new MemoryStream(multipartBody), multipartBody.LongLength, json, limits.PdfMaxBytes, 8 * 1024 * 1024, CancellationToken.None);
             guard.EnsureSafePdf(bytes, "p");
             written.Add(signing.HandlePreSign(input, bytes, "Signature_profile").PresignedPdfPath);
         }
@@ -332,7 +332,7 @@ public class LoadProfileTests
         async Task BinaryParseOnly()
         {
             var (_, bytes) = await BinaryPdfChannel.ReadAsync<Models.PreSignInput>(
-                contentType, new MemoryStream(multipartBody), multipartBody.LongLength, json, limits.PdfMaxBytes, CancellationToken.None);
+                contentType, new MemoryStream(multipartBody), multipartBody.LongLength, json, limits.PdfMaxBytes, 8 * 1024 * 1024, CancellationToken.None);
             GC.KeepAlive(bytes);
         }
 

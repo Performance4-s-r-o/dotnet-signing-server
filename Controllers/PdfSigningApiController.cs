@@ -69,6 +69,8 @@ namespace DotNetSigningServer.Controllers
         /// <summary>
         /// <c>/api/presign</c> v interním binárním kanálu (#74): <c>multipart/form-data</c> s částmi
         /// <c>metadata</c> a <c>pdf</c>. Stejné ověření, kontroly i odpověď jako JSON varianta.
+        /// Tělo čte jen <see cref="ApiControllerBase.ReadBinaryPdfAsync{T}"/> — <c>Request.Form</c>
+        /// se tu číst nesmí (nabufferoval by celé tělo bez limitu části).
         /// </summary>
         [HttpPost("/api/presign")]
         [Consumes(BinaryPdfChannel.ContentType)]

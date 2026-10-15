@@ -15,8 +15,11 @@ Měření (`LoadProfileTests.BinaryChannelProfile`, PDF 18 MB, viz PR):
 
 | | JSON base64 | multipart |
 |---|---|---|
-| jen čtení vstupu, alokováno | 131 MB | 36 MB |
-| celý presign, alokováno | 511 MB (main) / 492 MB (#74) | 398 MB |
+| jen čtení vstupu, alokováno | 131 MB | 68 MB |
+| celý presign, alokováno | 511 MB (main) / 492 MB (#74) | 430 MB |
+
+(68 MB = zdvojování bufferu od 256 KB a kopie na přesnou délku. Předalokace podle
+`Content-Length` by dala 36 MB, ale velikost alokace by pak určovala hlavička volajícího.)
 
 Zbytek presignu je iText (~360 MB alokací na 18 MB PDF) — to je další páka, ne tato.
 
@@ -102,5 +105,19 @@ jako JSON proto skončí `422 IDEMPOTENCY_KEY_REUSED`.** Portál má opakovat t�
 
 ## Limity
 
-- Celé tělo: `Limits:RequestBodyLimitBytes` (40 MB) jako u JSONu → `413`.
-- Část `pdf`: `Limits:PdfMaxBytes` (20 MB) → `400 PDF_SIZE_EXCEEDED`.
+- Celé tělo: `Limits:RequestBodyLimitBytes` (40 MB) jako u JSONu → `413`. Hlídá se i při
+  čtení multipartu, nejen serverem, takže platí i pro tělo bez `Content-Length` (chunked).
+- Část `pdf`: `Limits:PdfMaxBytes` (20 MB) → `400 PDF_SIZE_EXCEEDED`, hned jak čtení limit
+  přesáhne. Buffer začíná na 256 KB a zdvojuje se; `Content-Length` je jen horní odhad,
+  podle hlavičky se předem nic velkého nealokuje.
+- Část `metadata`: 4 obrázky v base64 po `Limits:ImageMaxBytes` + 1 MB (výchozí ≈ 6,3 MB)
+  → `400 MULTIPART_INVALID`, ještě před deserializací.
+- Preambule a každá část také nejvýš tolik (`MultipartReader.BodyLengthLimit`).
+- Bez platného tokenu odpoví brána `401` a tělo aplikace vůbec nečte (test to měří).
+
+## Pro vývojáře
+
+Akce binárního kanálu **nesmí číst `Request.Form` / `ReadFormAsync`** (ani přes
+`[FromForm]`/`IFormFile`): ASP.NET by celé tělo načetl a nabufferoval (nad 64 KB na disk)
+bez limitu části, dřív než by proběhla kterákoli kontrola. Tělo čte jen
+`ApiControllerBase.ReadBinaryPdfAsync<T>`, proudem a s limitem každé části.

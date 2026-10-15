@@ -120,8 +120,21 @@ namespace DotNetSigningServer.Controllers
         /// velikosti PDF se hlídá při čtení; <see cref="PdfSafetyGuard"/> volá endpoint sám, stejně
         /// jako v JSON kanálu.
         /// </summary>
+        /// <remarks>
+        /// <b>Akce binárního kanálu nesmí sahat na <c>Request.Form</c> / <c>ReadFormAsync</c></b>
+        /// (ani přes <c>[FromForm]</c>/<c>IFormFile</c>): ASP.NET by celé tělo načetl a nabufferoval
+        /// (nad 64 KB na disk) bez limitu části, dřív než by kterákoli kontrola proběhla. Tělo čte
+        /// jen tato metoda, proudem a s limitem každé části.
+        /// </remarks>
         /// <param name="inlinePdf">Base64 PDF v metadatech: v binárním kanálu nesmí být, jinak by
         /// nebylo jasné, který dokument platí.</param>
+        /// <summary>
+        /// Strop části <c>metadata</c>: až čtyři obrázky v base64 (podpis, razítko, logo, pozadí —
+        /// tolik jich nese presign i pečeť) po <see cref="LimitsOptions.ImageMaxBytes"/> a 1 MB
+        /// rezerva na zbytek JSONu. Výchozí limity → zhruba 6,3 MB.
+        /// </summary>
+        protected long MetadataMaxBytes => LimitGuard.Limits.ImageMaxBytes * 4 / 3 * 4 + 1024 * 1024;
+
         protected async Task<(T? Metadata, byte[]? Pdf, IActionResult? Error)> ReadBinaryPdfAsync<T>(
             string context, Func<T, string?> inlinePdf) where T : class
         {
@@ -131,7 +144,8 @@ namespace DotNetSigningServer.Controllers
             {
                 var (metadata, pdf) = await BinaryPdfChannel.ReadAsync<T>(
                     Request.ContentType, Request.Body, Request.ContentLength, json,
-                    LimitGuard.Limits.PdfMaxBytes, HttpContext.RequestAborted);
+                    LimitGuard.Limits.PdfMaxBytes, MetadataMaxBytes, HttpContext.RequestAborted,
+                    maxBodyBytes: LimitGuard.Limits.RequestBodyLimitBytes);
                 if (!string.IsNullOrEmpty(inlinePdf(metadata)))
                 {
                     throw new ApiValidationException(BinaryPdfChannel.InvalidCode, "pdfContent in metadata");
