@@ -27,7 +27,7 @@ RUN dotnet build "dotnet-signing-server.csproj" -c Release --no-restore -o /app/
 RUN dotnet publish "dotnet-signing-server.csproj" -c Release --no-restore -o /app/publish /p:UseAppHost=false
 
 # Stage 2: Create the final, smaller runtime image
-FROM mcr.microsoft.com/dotnet/aspnet:8.0@sha256:1601380775673021a23ea5985669f1daf03719faaa684f839da1752fb48cfc7f AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac AS final
 WORKDIR /app
 
 ENV DOTNET_USE_POLLING_FILE_WATCHER=1
