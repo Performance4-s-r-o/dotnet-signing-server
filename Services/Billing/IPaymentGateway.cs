@@ -53,6 +53,15 @@ public interface IPaymentGateway
 
     /// <summary>Removes every saved card (enterprise accounts are invoiced manually).</summary>
     Task DetachPaymentMethodsAsync(User user, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Account erasure (#217, D-3), direct Stripe path only: unsets the personal fields and the
+    /// metadata of the user's Stripe customer and ends its live subscriptions at once (no invoice,
+    /// no proration); the customer and its invoices stay. <paramref name="erasureKey"/> keys the
+    /// idempotency of the cancellations. Throws on failure. Through the billing service the
+    /// service does this itself (<c>customer_ref</c> of the erasure request).
+    /// </summary>
+    Task<StripeCustomerScrubResult> ScrubCustomerForErasureAsync(User user, string erasureKey, CancellationToken cancellationToken = default);
 }
 
 /// <summary>A checkout session as the confirm pages need it.</summary>

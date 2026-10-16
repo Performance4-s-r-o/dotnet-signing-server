@@ -172,6 +172,13 @@ public sealed class BackofficePaymentGateway : IPaymentGateway
         return Card(doc.RootElement);
     }
 
+    /// <summary>
+    /// Never here: with <c>Modules:Billing=On</c> the billing service erases its customer itself
+    /// (<c>customer_ref</c> of <c>POST /v1/erasures</c>). Calling it would be a wiring mistake.
+    /// </summary>
+    public Task<StripeCustomerScrubResult> ScrubCustomerForErasureAsync(User user, string erasureKey, CancellationToken cancellationToken = default) =>
+        throw new InvalidOperationException("Modules:Billing=On: the billing service erases the Stripe customer (customer_ref).");
+
     public async Task DetachPaymentMethodsAsync(User user, CancellationToken cancellationToken = default)
     {
         var result = await _client.DetachPaymentMethodsAsync(BillingCustomerRef.For(user.Id), cancellationToken);

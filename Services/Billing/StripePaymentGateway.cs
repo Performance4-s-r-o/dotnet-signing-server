@@ -121,4 +121,48 @@ public sealed class StripePaymentGateway : IPaymentGateway
             }
         }
     }
+
+    public async Task<StripeCustomerScrubResult> ScrubCustomerForErasureAsync(User user, string erasureKey, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(user.StripeCustomerId)) return StripeCustomerScrubResult.NoCustomer;
+        var customerId = user.StripeCustomerId;
+
+        var customers = new CustomerService();
+        Customer customer;
+        try
+        {
+            customer = await customers.GetAsync(customerId, cancellationToken: cancellationToken);
+        }
+        catch (StripeException ex) when (ex.StripeError?.Code == "resource_missing")
+        {
+            return StripeCustomerScrubResult.NoCustomer; // gone in Stripe: nothing left to scrub
+        }
+        if (customer.Deleted == true) return StripeCustomerScrubResult.NoCustomer;
+
+        await customers.UpdateAsync(customerId, StripeCustomerScrub.UpdateOptions(customer.Metadata?.Keys),
+            cancellationToken: cancellationToken);
+
+        var subscriptions = new SubscriptionService();
+        var canceled = 0;
+        var live = new List<string>();
+        await foreach (var sub in subscriptions.ListAutoPagingAsync(
+                           new SubscriptionListOptions { Customer = customerId, Status = "all", Limit = 100 },
+                           cancellationToken: cancellationToken))
+        {
+            if (StripeCustomerScrub.CanceledBy(sub.Status, sub.CancellationDetails?.Comment, erasureKey)) canceled++;
+            else if (StripeCustomerScrub.IsLive(sub.Status)) live.Add(sub.Id);
+        }
+        foreach (var id in live)
+        {
+            await subscriptions.CancelAsync(id, StripeCustomerScrub.CancelOptions(erasureKey),
+                new RequestOptions { IdempotencyKey = StripeCustomerScrub.CancelIdempotencyKey(erasureKey, id) },
+                cancellationToken);
+            canceled++;
+        }
+
+        _logger.LogInformation(
+            "Account erasure of user {UserId}: Stripe customer scrubbed (kept with its invoices), {Canceled} subscription(s) ended",
+            user.Id, canceled);
+        return new StripeCustomerScrubResult(true, canceled);
+    }
 }

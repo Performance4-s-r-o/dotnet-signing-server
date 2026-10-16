@@ -33,6 +33,18 @@ internal sealed class FakePaymentGateway : IPaymentGateway
 
     public Task<bool> HasSavedCardAsync(User user, CancellationToken cancellationToken = default) => Task.FromResult(CardLeft);
 
+    /// <summary>Stripe customers scrubbed (customer id, erasure key), in order.</summary>
+    public List<(string? CustomerId, string Key)> Scrubbed { get; } = new();
+    public bool FailScrub { get; set; }
+    public StripeCustomerScrubResult ScrubResult { get; set; } = new(true, 0);
+
+    public Task<StripeCustomerScrubResult> ScrubCustomerForErasureAsync(User user, string erasureKey, CancellationToken cancellationToken = default)
+    {
+        if (FailScrub) throw new HttpRequestException("stripe down");
+        Scrubbed.Add((user.StripeCustomerId, erasureKey));
+        return Task.FromResult(ScrubResult);
+    }
+
     public Task EnsureCustomerAsync(User user, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<string> StartCheckoutAsync(User user, CreditPack pack, string successUrl, string cancelUrl, IDictionary<string, string> metadata, bool saveCard, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<string> StartCardSetupAsync(User user, string successUrl, string cancelUrl, IDictionary<string, string> metadata, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -54,6 +66,7 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
     private readonly OutboxTestHost _host;
     private readonly FakePaymentGateway _payments = new();
     private readonly PortalTrustOptions _portal = new();
+    private readonly P4BackofficeProductOptions _backoffice = Backoffice(billingOn: false);
     private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "erasure-test-" + Guid.NewGuid().ToString("N"));
 
     public AccountErasureTests(OutboxPostgresFixture pg)
@@ -64,7 +77,7 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
         {
             services.AddSingleton<IPaymentGateway>(_payments);
             services.AddSingleton(_portal);
-            services.AddSingleton<IOptions<P4BackofficeProductOptions>>(Microsoft.Extensions.Options.Options.Create(Backoffice(billingOn: false)));
+            services.AddSingleton<IOptions<P4BackofficeProductOptions>>(Microsoft.Extensions.Options.Options.Create(_backoffice));
             services.AddScoped<AccountErasureService>();
             services.AddSingleton<IOutboxHandler, ErasureRequestOutboxHandler>();
             services.AddSingleton<IOutboxHandler, ErasureAckOutboxHandler>();
@@ -823,5 +836,122 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
         var failed = await AckItemAsync("failed");
         _host.Service.EnqueueProblem(HttpStatusCode.Conflict, ErasureAckOutboxHandler.TargetSettled);
         Assert.Equal(BackofficeOutboxStatus.Dead, (await _host.Processor.TryDispatchNowAsync(failed, TimeSpan.FromSeconds(5), CancellationToken.None)).Status);
+    }
+
+    // ── D-3: the Stripe customer on the direct Stripe path ───────────────────────────────
+
+    private static string Customer() => "cus_" + Guid.NewGuid().ToString("N")[..12];
+
+    [DockerFact]
+    public async Task On_the_direct_stripe_path_only_the_erased_users_customer_is_scrubbed_and_counted()
+    {
+        var a = await SeedAsync($"d3a{Guid.NewGuid():N}@example.com", stripeCustomer: Customer());
+        var b = await SeedAsync($"d3b{Guid.NewGuid():N}@example.com", stripeCustomer: Customer());
+        string customerA;
+        await using (var db = _pg.CreateContext()) customerA = (await db.Users.SingleAsync(u => u.Id == a.UserId)).StripeCustomerId!;
+        _payments.ScrubResult = new StripeCustomerScrubResult(true, 2);
+
+        var result = await DeleteAsync(a.UserId);
+
+        Assert.Equal(AccountErasureStatus.Erased, result.Status);
+        var call = Assert.Single(_payments.Scrubbed); // B's customer is never touched
+        Assert.Equal(customerA, call.CustomerId);
+        Assert.Equal(a.UserId.ToString("D"), call.Key);
+        Assert.Equal(1, result.Counts["stripe_customer_kept"]);
+        Assert.Equal(2, result.Counts["subscriptions_canceled"]);
+        Assert.Contains(AccountErasure.RetainedReasons.Accounting, result.RetainedReasons!);
+        Assert.Equal(1, _payments.Detached); // cards still go, after the scrub
+        await AssertUntouchedAsync(b);
+
+        // Idempotent: the tombstone has no customer and nothing is called again.
+        Assert.Equal(AccountErasureStatus.AlreadyErased, (await DeleteAsync(a.UserId)).Status);
+        Assert.Single(_payments.Scrubbed);
+    }
+
+    [DockerFact]
+    public async Task With_billing_through_the_service_stripe_is_not_called_and_the_customer_ref_is_sent()
+    {
+        _backoffice.Modules.Billing = "On";
+        var a = await SeedAsync($"d3on{Guid.NewGuid():N}@example.com", stripeCustomer: Customer());
+
+        var result = await DeleteAsync(a.UserId);
+
+        Assert.Equal(AccountErasureStatus.Erased, result.Status);
+        Assert.Empty(_payments.Scrubbed);
+        Assert.False(result.Counts.ContainsKey("stripe_customer_kept"));
+        Assert.Equal(1, _payments.Detached); // through the billing API
+        using var json = JsonDocument.Parse(Payload(Assert.Single(await ErasureItemsAsync(a.UserId))));
+        Assert.Equal("user:" + a.UserId.ToString("D"), json.RootElement.GetProperty("customer_ref").GetString());
+    }
+
+    [DockerFact]
+    public async Task A_stripe_failure_erases_nothing_and_a_retry_repeats_the_same_keys()
+    {
+        var a = await SeedAsync($"d3f{Guid.NewGuid():N}@example.com", stripeCustomer: Customer());
+
+        _payments.FailScrub = true;
+        Assert.Equal(AccountErasureStatus.BillingFailed, (await DeleteAsync(a.UserId)).Status);
+        await AssertUntouchedAsync(a);
+        Assert.Empty(await ErasureItemsAsync(a.UserId));
+
+        // Scrubbed, but the cards then fail: still nothing erased locally.
+        _payments.FailScrub = false;
+        _payments.FailDetach = true;
+        Assert.Equal(AccountErasureStatus.BillingFailed, (await DeleteAsync(a.UserId)).Status);
+        await AssertUntouchedAsync(a);
+
+        _payments.FailDetach = false;
+        Assert.Equal(AccountErasureStatus.Erased, (await DeleteAsync(a.UserId)).Status);
+        Assert.Equal(2, _payments.Scrubbed.Count);
+        Assert.All(_payments.Scrubbed, c => Assert.Equal(a.UserId.ToString("D"), c.Key)); // same Stripe idempotency keys
+    }
+
+    [DockerFact]
+    public async Task A_subject_request_acks_the_kept_customer_and_fails_when_stripe_fails()
+    {
+        var a = await SeedAsync($"d3w{Guid.NewGuid():N}@example.com", stripeCustomer: Customer());
+        var erasureId = Guid.NewGuid();
+
+        _payments.FailScrub = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => HandleAsync(RequestedEvent(erasureId, AccountErasure.SubjectRef(a.UserId))));
+        await AssertUntouchedAsync(a);
+        var failed = Assert.Single(await ErasureItemsAsync(a.UserId));
+        Assert.Contains("\"status\":\"failed\"", Payload(failed));
+
+        _payments.FailScrub = false;
+        _payments.ScrubResult = new StripeCustomerScrubResult(true, 1);
+        await HandleAsync(RequestedEvent(erasureId, AccountErasure.SubjectRef(a.UserId), attempt: 2));
+
+        Assert.Equal(erasureId.ToString("D"), Assert.Single(_payments.Scrubbed).Key);
+        var ack = (await ErasureItemsAsync(a.UserId)).Last();
+        using var json = JsonDocument.Parse(Payload(ack));
+        Assert.Equal("retained", json.RootElement.GetProperty("status").GetString());
+        Assert.Equal("accounting_10y", json.RootElement.GetProperty("retained_reason").GetString());
+        Assert.Equal(1, json.RootElement.GetProperty("counts").GetProperty("stripe_customer_kept").GetInt32());
+        Assert.Equal(1, json.RootElement.GetProperty("counts").GetProperty("subscriptions_canceled").GetInt32());
+    }
+
+    [Fact]
+    public void The_customer_update_unsets_every_personal_field_and_every_metadata_key()
+    {
+        var options = StripeCustomerScrub.UpdateOptions(["app_user_id", "p4_customer_ref"]);
+        Assert.Equal("", options.Email);
+        Assert.Equal("", options.Name);
+        Assert.Equal("", options.Phone);
+        Assert.Equal("", options.Description);
+        Assert.Equal(new Dictionary<string, string> { ["app_user_id"] = "", ["p4_customer_ref"] = "" }, options.Metadata);
+        Assert.Equal("", options.ExtraParams["address"]);
+        Assert.Equal("", options.ExtraParams["shipping"]);
+
+        var cancel = StripeCustomerScrub.CancelOptions("e1");
+        Assert.False(cancel.InvoiceNow);
+        Assert.False(cancel.Prorate);
+        Assert.Equal("p4_erasure:e1", cancel.CancellationDetails.Comment);
+        Assert.Equal("erasure:e1:subscription:sub_1:cancel", StripeCustomerScrub.CancelIdempotencyKey("e1", "sub_1"));
+        Assert.True(StripeCustomerScrub.IsLive("active"));
+        Assert.True(StripeCustomerScrub.IsLive("past_due"));
+        Assert.False(StripeCustomerScrub.IsLive("canceled"));
+        Assert.True(StripeCustomerScrub.CanceledBy("canceled", "p4_erasure:e1", "e1"));
+        Assert.False(StripeCustomerScrub.CanceledBy("canceled", null, "e1")); // ended by the customer: not ours to count
     }
 }
