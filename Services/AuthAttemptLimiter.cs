@@ -45,20 +45,22 @@ public class AuthAttemptLimiter
         var now = DateTimeOffset.UtcNow;
         var cutoff = now - window;
 
+        // Only the table name is spliced in, and it comes from the EF model, never from input;
+        // every value goes as a parameter ({0}, {1}, {2}).
         // One statement: a new key starts at 1, an expired window restarts at 1, otherwise +1.
-        var count = await _db.Database.SqlQueryRaw<int>(
+        var upsert =
             $@"INSERT INTO {table} AS c (""Key"", ""Count"", ""WindowStart"") VALUES ({{0}}, 1, {{1}})
                ON CONFLICT (""Key"") DO UPDATE SET
                    ""Count"" = CASE WHEN c.""WindowStart"" < {{2}} THEN 1 ELSE c.""Count"" + 1 END,
                    ""WindowStart"" = CASE WHEN c.""WindowStart"" < {{2}} THEN {{1}} ELSE c.""WindowStart"" END
-               RETURNING c.""Count"" AS ""Value""",
-            key, now, cutoff).ToListAsync(cancellationToken);
+               RETURNING c.""Count"" AS ""Value""";
+        var count = await _db.Database.SqlQueryRaw<int>(upsert, key, now, cutoff).ToListAsync(cancellationToken);
 
         // Old windows are useless; clear them now and then instead of in a job.
         if (Random.Shared.Next(100) == 0)
         {
-            await _db.Database.ExecuteSqlRawAsync(
-                $@"DELETE FROM {table} WHERE ""WindowStart"" < {{0}}", new object[] { now.AddDays(-1) }, cancellationToken);
+            var purge = $@"DELETE FROM {table} WHERE ""WindowStart"" < {{0}}";
+            await _db.Database.ExecuteSqlRawAsync(purge, new object[] { now.AddDays(-1) }, cancellationToken);
         }
 
         return count.Single();
