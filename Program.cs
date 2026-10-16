@@ -312,8 +312,13 @@ builder.Services.AddCors(options =>
                       });
 });
 
+#if DEBUG
 bool useLocalDb = builder.Configuration.GetValue<bool?>("UseLocalDb")
                   ?? builder.Environment.IsDevelopment();
+#else
+// Release has no Testcontainers: the Development default does not apply, only an explicit UseLocalDb=true is refused (#84).
+bool useLocalDb = builder.Configuration.GetValue<bool?>("UseLocalDb") ?? false;
+#endif
 
 #if !DEBUG
 if (useLocalDb)

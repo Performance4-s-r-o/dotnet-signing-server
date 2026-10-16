@@ -40,6 +40,11 @@ jobs:
       - name: Restore
         run: dotnet restore --locked-mode
 
+      # Release is what the image ships (no Testcontainers) and has its own lock file. Restored
+      # before the build so that the Release build compiles against the Release package set.
+      - name: Restore (Release lock file)
+        run: dotnet restore dotnet-signing-server.csproj -p:Configuration=Release --locked-mode
+
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
@@ -49,18 +54,21 @@ jobs:
           --no-build --configuration Release --verbosity normal
           --logger "trx;LogFileName=test-results.trx"
 
-      # Release is what the image ships (no Testcontainers) and has its own lock file.
-      - name: Release lock file is up to date
-        run: dotnet restore dotnet-signing-server.csproj -p:Configuration=Release --locked-mode
-
       # Known vulnerable packages of what the image ships (the Release restore just above; the
       # Debug set holds dev-only Testcontainers with its own findings). Transitive ones too.
       # High and critical fail the build.
       - name: NuGet vulnerabilities
+        shell: bash
         run: |
+          set -o pipefail
           dotnet list dotnet-signing-server.csproj package --vulnerable --include-transitive --no-restore 2>&1 | tee nuget-audit.txt
           if grep -E '^\s*>.*\b(High|Critical)\b' nuget-audit.txt; then
             echo "::error::A NuGet package with a high or critical vulnerability"
+            exit 1
+          fi
+          # No finding is only trustworthy when the audit says it ran (a failed feed query prints nothing).
+          if ! grep -qE 'has no vulnerable packages|no vulnerable packages' nuget-audit.txt && ! grep -qE 'following vulnerable packages' nuget-audit.txt; then
+            echo "::error::The NuGet vulnerability audit did not complete"
             exit 1
           fi
 

@@ -21,8 +21,12 @@ namespace DotNetSigningServer.Data
                 .Build();
 
             var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
+#if DEBUG
             var useLocalDb = configuration.GetValue<bool?>("UseLocalDb")
                             ?? environment.Equals("Development", StringComparison.OrdinalIgnoreCase);
+#else
+            var useLocalDb = configuration.GetValue<bool?>("UseLocalDb") ?? false;
+#endif
 
 #if !DEBUG
             if (useLocalDb)

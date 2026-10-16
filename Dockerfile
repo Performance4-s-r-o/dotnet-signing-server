@@ -40,7 +40,8 @@ ENV DATA_PROTECTION_KEYS_PATH=/app/data-protection-keys
 ARG GS_VERSION=10.0.0~dfsg-11+deb12u8
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        "ghostscript=${GS_VERSION}" "libgs10=${GS_VERSION}" "libgs10-common=${GS_VERSION}" "libgs-common=${GS_VERSION}" curl && \
+        "ghostscript=${GS_VERSION}" "libgs10=${GS_VERSION}" "libgs10-common=${GS_VERSION}" "libgs-common=${GS_VERSION}" curl \
+    || { echo "GS_VERSION ${GS_VERSION} is no longer in the Debian archive: bump it (security-tracker.debian.org/tracker/source-package/ghostscript), see #84" >&2; exit 1; } && \
     rm -rf /var/lib/apt/lists/* && \
     gs --version
 
