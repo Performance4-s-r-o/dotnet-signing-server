@@ -32,6 +32,15 @@ services:
       # number here caps the whole platform: set it with that in mind.
       - Limits__MaxPendingPresignsPerUser=${MAX_PENDING_PRESIGNS_PER_USER:-0}
       - Limits__MaxTemplatesPerUser=${MAX_TEMPLATES_PER_USER:-0}
+      # Live API tokens per account (#80); 0 = no limit. The portal holds one token.
+      - Limits__MaxApiTokensPerUser=${MAX_API_TOKENS_PER_USER:-100}
+      # Browser origins allowed to call /api (comma-separated). Production no longer falls back
+      # to the origins of every user's browser tokens (#80): list the sites that use them.
+      - Cors__AllowedOrigins=${CORS_ALLOWED_ORIGINS:-}
+      # Step-up re-auth (#80): minutes since the last password/2FA confirmation before an API
+      # token can be created or billing changed; wrong 2FA codes before the code is void.
+      - Auth__ReauthMinutes=${AUTH_REAUTH_MINUTES:-15}
+      - Auth__OtpMaxFailedAttempts=${AUTH_OTP_MAX_FAILED_ATTEMPTS:-5}
       - FqdnServerName=${FQDN_SERVER:-localhost}
       # Pool and timeouts (#75): the database is shared with the portal's PostgREST and pool,
       # so this server must not take what its connection-limited role would refuse anyway.

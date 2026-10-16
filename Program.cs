@@ -441,6 +441,17 @@ if (!migrateOnly)
 
 var appLogger = app.Services.GetRequiredService<ILogger<Program>>();
 
+// #80: in Production the CORS list no longer falls back to the origins of every user's
+// browser tokens. Without Cors:AllowedOrigins only the server's own origin passes.
+if (!migrateOnly && app.Environment.IsProduction()
+    && app.Services.GetRequiredService<IAllowedOriginService>() is AllowedOriginService origins
+    && !origins.HasConfiguredCorsOrigins)
+{
+    appLogger.LogWarning(
+        "Cors:AllowedOrigins is empty: browser calls to /api are accepted only from this server's own origin. "
+        + "Set CORS_ALLOWED_ORIGINS (Cors__AllowedOrigins) to the sites that use browser tokens.");
+}
+
 if (postgresContainer != null)
 {
     app.Lifetime.ApplicationStopping.Register(async () =>

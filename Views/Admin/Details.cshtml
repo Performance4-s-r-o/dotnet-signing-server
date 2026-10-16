@@ -162,4 +162,38 @@
             }
         </div>
     </section>
+
+    <section class="billing-invoices">
+        <h2 class="billing-invoices-title">@L["AdminAuditTitle"]</h2>
+        <div class="table-wrapper">
+            @if (!Model.Audit.Any())
+            {
+                <p class="muted p-4">@L["AdminAuditEmpty"]</p>
+            }
+            else
+            {
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>@L["AdminAuditWhen"]</th>
+                            <th>@L["AdminAuditActor"]</th>
+                            <th>@L["AdminAuditAction"]</th>
+                            <th>@L["AdminAuditChange"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in Model.Audit)
+                        {
+                            <tr>
+                                <td>@a.CreatedAt.ToLocalTime().ToString("g")</td>
+                                <td>@a.ActorEmail</td>
+                                <td><code>@a.Action</code></td>
+                                <td><code>@a.Change</code></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </section>
 </main>

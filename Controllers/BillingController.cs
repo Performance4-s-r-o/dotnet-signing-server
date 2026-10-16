@@ -1,4 +1,5 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Filters;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
@@ -180,6 +181,7 @@ public class BillingController : Controller
 
     [HttpPost("/Billing/ManagePaymentMethod")]
     [ValidateAntiForgeryToken]
+    [RequireRecentAuth]
     public async Task<IActionResult> ManagePaymentMethod()
     {
         var userId = GetCurrentUserId();
@@ -213,6 +215,7 @@ public class BillingController : Controller
 
     [HttpPost("/Billing/Checkout")]
     [ValidateAntiForgeryToken]
+    [RequireRecentAuth]
     public async Task<IActionResult> Checkout(int documentsToBuy, bool autoRecharge = false, bool saveCard = false)
     {
         var userId = GetCurrentUserId();
@@ -281,6 +284,7 @@ public class BillingController : Controller
                 new Dictionary<string, string>
                 {
                     { "userId", user.Id.ToString() },
+                    { BillingCustomerRef.ProductMarkerKey, BillingCustomerRef.ProductMarker },
                     { "documents", documentsToBuy.ToString() },
                     { "autoRecharge", autoRecharge.ToString() }
                 },
@@ -462,6 +466,7 @@ public class BillingController : Controller
 
     [HttpPost("/Billing/AutoRecharge/Enable")]
     [ValidateAntiForgeryToken]
+    [RequireRecentAuth]
     public async Task<IActionResult> EnableAutoRecharge(int quantity)
     {
         var userId = GetCurrentUserId();
@@ -525,6 +530,7 @@ public class BillingController : Controller
                     new Dictionary<string, string>
                     {
                         { "userId", user.Id.ToString() },
+                    { BillingCustomerRef.ProductMarkerKey, BillingCustomerRef.ProductMarker },
                         { "autoRechargeQuantity", quantity.ToString() }
                     });
 
@@ -615,6 +621,7 @@ public class BillingController : Controller
 
     [HttpPost("/Billing/AutoRecharge/Disable")]
     [ValidateAntiForgeryToken]
+    [RequireRecentAuth]
     public async Task<IActionResult> DisableAutoRecharge()
     {
         var userId = GetCurrentUserId();

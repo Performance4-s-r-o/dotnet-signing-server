@@ -722,4 +722,30 @@
   <data name="ApiDocOperationsNote2" xml:space="preserve"><value>States: completed (done, charged once); failed (nothing irreversible happened, credits returned, a retry runs it again); failed_uncertain (a timestamp authority or model may have been reached, credits returned, a retry runs the work again and is still charged at most once); running (an attempt holds the operation). Unknown id: 404 OPERATION_NOT_FOUND.</value></data>
   <data name="ApiDocOperationsNote3" xml:space="preserve"><value>Credits are reserved before the work starts. Without enough credits nothing runs: 402 with code INSUFFICIENT_CREDITS.</value></data>
   <data name="ApiDocOperationsNote4" xml:space="preserve"><value>Time limits: 45 s for sign, sign-pfx, timestamp, visual-sign, seal and attachment; 60 s for fill-pdf and PDF/A; 75 s for find-codes, extend-signature and AI. On expiry the work is cancelled and the answer is 504 OPERATION_DEADLINE_EXCEEDED. A timestamp authority that keeps failing is skipped for a short time: 503 TSA_UNREACHABLE with Retry-After. TSA errors carry a code and a generic message, never the authority's own text.</value></data>
+  <data name="VerificationCodeVoided" xml:space="preserve"><value>Too many wrong codes. The code is no longer valid — please sign in again.</value></data>
+  <data name="ReauthPasswordInvalid" xml:space="preserve"><value>The password is not correct.</value></data>
+  <data name="ReauthConfirmed" xml:space="preserve"><value>Confirmed. You can continue.</value></data>
+  <data name="ReauthTitle" xml:space="preserve"><value>Confirm it's you</value></data>
+  <data name="ReauthHeading" xml:space="preserve"><value>Confirm it's you</value></data>
+  <data name="ReauthIntro" xml:space="preserve"><value>Creating API tokens and changing billing need a recent confirmation of your password or of a code sent by e-mail.</value></data>
+  <data name="ReauthRequiredIntro" xml:space="preserve"><value>For your security, confirm your password or an e-mailed code first. Then repeat the action.</value></data>
+  <data name="ReauthPasswordLabel" xml:space="preserve"><value>Password</value></data>
+  <data name="ReauthConfirmButton" xml:space="preserve"><value>Confirm</value></data>
+  <data name="ReauthCodeHeading" xml:space="preserve"><value>Or confirm with a code sent by e-mail</value></data>
+  <data name="ReauthSendCodeButton" xml:space="preserve"><value>Send me a code</value></data>
+  <data name="Error_REAUTH_REQUIRED" xml:space="preserve"><value>Confirm your password or an e-mailed code first, then repeat the action.</value></data>
+  <data name="Error_TOKEN_SCOPE" xml:space="preserve"><value>A browser token may only be used for presign, sign and the state of an operation. Use a server token for this endpoint.</value></data>
+  <data name="Error_TOKEN_CREDIT_LIMIT" xml:space="preserve"><value>This token has reached its credit limit.</value></data>
+  <data name="BrowserTokenScopeHint" xml:space="preserve"><value>A browser token can only presign, sign and read the state of its operations. The Origin check is extra protection only: any client can send any Origin, so treat a browser token as public and cap it with a credit limit.</value></data>
+  <data name="BrowserTokenCreditLimitLabel" xml:space="preserve"><value>Credit limit (optional)</value></data>
+  <data name="BrowserTokenCreditLimitHint" xml:space="preserve"><value>The most credits this token may ever spend. Empty = only your account balance limits it.</value></data>
+  <data name="BrowserTokenCreditsUsedFmt" xml:space="preserve"><value>Credits used: {0} / {1}</value></data>
+  <data name="TooManyApiTokens" xml:space="preserve"><value>You already have {0} active tokens. Revoke one you no longer use first.</value></data>
+  <data name="BrowserTokenCreditLimitInvalid" xml:space="preserve"><value>The credit limit must be a positive number.</value></data>
+  <data name="AdminAuditTitle" xml:space="preserve"><value>Admin actions</value></data>
+  <data name="AdminAuditEmpty" xml:space="preserve"><value>No admin action recorded for this account.</value></data>
+  <data name="AdminAuditWhen" xml:space="preserve"><value>When</value></data>
+  <data name="AdminAuditActor" xml:space="preserve"><value>Administrator</value></data>
+  <data name="AdminAuditAction" xml:space="preserve"><value>Action</value></data>
+  <data name="AdminAuditChange" xml:space="preserve"><value>Change</value></data>
 </root>

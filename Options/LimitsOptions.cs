@@ -75,6 +75,12 @@ public class LimitsOptions
     /// <summary>Presigns waiting for /api/sign, per account. Each holds a PDF of up to 20 MB in /tmp.</summary>
     public int MaxPendingPresignsPerUser { get; set; }
 
+    /// <summary>
+    /// Live (not revoked, not expired) API tokens per account (#80). Unlike the caps above it has a
+    /// default: the portal holds one token, not one per tenant. 0 = no limit.
+    /// </summary>
+    public int MaxApiTokensPerUser { get; set; } = 100;
+
     /// <summary>Stored templates (up to 27 MB each), per account.</summary>
     public int MaxTemplatesPerUser { get; set; }
 }

@@ -722,4 +722,30 @@
   <data name="ApiDocOperationsNote2" xml:space="preserve"><value>Stavy: completed (hotovo, účtováno jednou); failed (nic nevratného se nestalo, kredity vráceny, opakování práci provede znovu); failed_uncertain (autorita časových razítek nebo model mohly být osloveny, kredity vráceny, opakování práci provede znovu a účtuje se nejvýše jednou); running (operaci drží běžící pokus). Neznámé id: 404 OPERATION_NOT_FOUND.</value></data>
   <data name="ApiDocOperationsNote3" xml:space="preserve"><value>Kredity se rezervují před začátkem práce. Bez dostatku kreditů se nic nespustí: 402 s kódem INSUFFICIENT_CREDITS.</value></data>
   <data name="ApiDocOperationsNote4" xml:space="preserve"><value>Časové limity: 45 s pro sign, sign-pfx, timestamp, visual-sign, seal a attachment; 60 s pro fill-pdf a PDF/A; 75 s pro find-codes, extend-signature a AI. Po vypršení se práce zruší a odpověď je 504 OPERATION_DEADLINE_EXCEEDED. Autorita časových razítek, která opakovaně selhává, se na krátkou dobu přeskočí: 503 TSA_UNREACHABLE s Retry-After. Chyby TSA nesou kód a obecnou zprávu, nikdy text samotné autority.</value></data>
+  <data name="VerificationCodeVoided" xml:space="preserve"><value>Příliš mnoho chybných kódů. Kód už neplatí – přihlaste se prosím znovu.</value></data>
+  <data name="ReauthPasswordInvalid" xml:space="preserve"><value>Heslo není správné.</value></data>
+  <data name="ReauthConfirmed" xml:space="preserve"><value>Potvrzeno. Můžete pokračovat.</value></data>
+  <data name="ReauthTitle" xml:space="preserve"><value>Potvrzení totožnosti</value></data>
+  <data name="ReauthHeading" xml:space="preserve"><value>Potvrďte, že jste to vy</value></data>
+  <data name="ReauthIntro" xml:space="preserve"><value>Vytvoření API tokenu a změny fakturace vyžadují nedávné potvrzení heslem nebo kódem z e-mailu.</value></data>
+  <data name="ReauthRequiredIntro" xml:space="preserve"><value>Kvůli bezpečnosti nejdřív potvrďte heslo nebo kód z e-mailu. Potom akci zopakujte.</value></data>
+  <data name="ReauthPasswordLabel" xml:space="preserve"><value>Heslo</value></data>
+  <data name="ReauthConfirmButton" xml:space="preserve"><value>Potvrdit</value></data>
+  <data name="ReauthCodeHeading" xml:space="preserve"><value>Nebo potvrďte kódem z e-mailu</value></data>
+  <data name="ReauthSendCodeButton" xml:space="preserve"><value>Poslat kód</value></data>
+  <data name="Error_REAUTH_REQUIRED" xml:space="preserve"><value>Nejdřív potvrďte heslo nebo kód z e-mailu a pak akci zopakujte.</value></data>
+  <data name="Error_TOKEN_SCOPE" xml:space="preserve"><value>Prohlížečový token smí jen presign, sign a stav operace. Pro tento endpoint použijte serverový token.</value></data>
+  <data name="Error_TOKEN_CREDIT_LIMIT" xml:space="preserve"><value>Tento token vyčerpal svůj limit kreditů.</value></data>
+  <data name="BrowserTokenScopeHint" xml:space="preserve"><value>Prohlížečový token umí jen presign, sign a čtení stavu svých operací. Kontrola Origin je jen doplňková ochrana: jakýkoli klient může poslat libovolný Origin, proto token berte jako veřejný a omezte ho limitem kreditů.</value></data>
+  <data name="BrowserTokenCreditLimitLabel" xml:space="preserve"><value>Limit kreditů (nepovinné)</value></data>
+  <data name="BrowserTokenCreditLimitHint" xml:space="preserve"><value>Nejvýše kolik kreditů smí token celkem utratit. Prázdné = omezuje ho jen zůstatek účtu.</value></data>
+  <data name="BrowserTokenCreditsUsedFmt" xml:space="preserve"><value>Utraceno kreditů: {0} / {1}</value></data>
+  <data name="TooManyApiTokens" xml:space="preserve"><value>Už máte {0} aktivních tokenů. Nejdřív odvolejte některý, který nepoužíváte.</value></data>
+  <data name="BrowserTokenCreditLimitInvalid" xml:space="preserve"><value>Limit kreditů musí být kladné číslo.</value></data>
+  <data name="AdminAuditTitle" xml:space="preserve"><value>Akce administrátorů</value></data>
+  <data name="AdminAuditEmpty" xml:space="preserve"><value>U tohoto účtu není zaznamenaná žádná akce administrátora.</value></data>
+  <data name="AdminAuditWhen" xml:space="preserve"><value>Kdy</value></data>
+  <data name="AdminAuditActor" xml:space="preserve"><value>Administrátor</value></data>
+  <data name="AdminAuditAction" xml:space="preserve"><value>Akce</value></data>
+  <data name="AdminAuditChange" xml:space="preserve"><value>Změna</value></data>
 </root>
