@@ -69,7 +69,7 @@ namespace dotnetsigningserver.Migrations
                 SELECT gen_random_uuid(),
                        w."EventId",
                        NULL,
-                       substring(w."PayloadJson" from '"userId":"([0-9a-fA-F-]{36})"')::uuid,
+                       substring(w."PayloadJson" from '"userId":"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"')::uuid,
                        COALESCE(substring(w."PayloadJson" from '"documents":([0-9]{1,9})')::integer, 0),
                        'legacy',
                        COALESCE(w."ProcessedAt", w."ReceivedAt")

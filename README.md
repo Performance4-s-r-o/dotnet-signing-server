@@ -526,7 +526,7 @@ Only its own setting switches it: `P4Backoffice__Mode=On` leaves payments Off.
   such a charge stops auto-recharge and is logged as an error for an admin. Credits are granted by the confirm page or by
   `billing.checkout.completed` / `billing.payment.succeeded`, whichever comes
   first (same keys as the Stripe webhook). The product's Stripe webhook answers
-  `404` in `On` and grants nothing: its Stripe account is no longer the one
+  `200` (ignored) in `On` and grants nothing: its Stripe account is no longer the one
   taking the payments. `Stripe__*` stays configured for `Off`/`Shadow` and the
   rollback.
   `billing.payment_method.detached` switches auto-recharge off when no card is

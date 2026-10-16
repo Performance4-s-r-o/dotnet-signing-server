@@ -61,7 +61,8 @@ public class StripeWebhookController : ControllerBase
     /// resent from the Stripe dashboard.
     ///
     /// With <c>Modules:Billing</c> On, payments go through the billing service and its
-    /// <c>billing.*</c> events grant credits; the endpoint then answers 404 and does nothing.
+    /// <c>billing.*</c> events grant credits; the endpoint then answers 200 and does nothing
+    /// (a 4xx run makes Stripe disable the endpoint).
     /// </summary>
     [HttpPost("/api/webhooks/stripe")]
     public async Task<IActionResult> HandleWebhook()
@@ -69,7 +70,7 @@ public class StripeWebhookController : ControllerBase
         if (BillingModeIsOn)
         {
             _logger.LogWarning("Stripe webhook refused: P4Backoffice:Modules:Billing is On, credits come from billing.* events");
-            return NotFound();
+            return Ok(new { ignored = true });
         }
 
         // Defence in depth behind the startup guard in Program.cs: an empty secret

@@ -185,16 +185,16 @@ public sealed class ConsentReconciliationService : BackgroundService
                         item.SubjectRef, string.Join("; ", differences));
                 }
             }
+            catch (OperationCanceledException) when (stop.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                // The run was stopped because the service is down.
+            }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
             {
                 lastError = ex;
                 Interlocked.Increment(ref failed);
                 _logger.LogWarning(ex, "[consents] check of {SubjectRef} failed", item.SubjectRef);
                 if (Interlocked.Increment(ref failuresInARow) >= StopAfterConsecutiveFailures) stop.Cancel();
-            }
-            catch (OperationCanceledException) when (stop.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-            {
-                // The run was stopped because the service is down.
             }
             finally { slots.Release(); }
         }));

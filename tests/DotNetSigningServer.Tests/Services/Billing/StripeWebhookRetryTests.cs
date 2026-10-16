@@ -182,7 +182,7 @@ public class StripeWebhookRetryTests
     {
         var userId = await NewUserAsync();
 
-        Assert.Equal(StatusCodes.Status404NotFound, await DeliverAsync(CheckoutCompleted("evt_on", userId, "cs_on"), billingMode: "On"));
+        Assert.Equal(StatusCodes.Status200OK, await DeliverAsync(CheckoutCompleted("evt_on", userId, "cs_on"), billingMode: "On"));
 
         Assert.Equal(0, await CreditsAsync(userId));
         await using var db = Db();
