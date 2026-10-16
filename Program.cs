@@ -252,7 +252,21 @@ builder.Services.AddOptions<StripeOptions>()
         + "Set the Stripe__WebhookSecret environment variable.")
     .ValidateOnStart();
 builder.Services.Configure<TokenOptions>(builder.Configuration.GetSection("Token"));
-builder.Services.Configure<SessionSecurityOptions>(builder.Configuration.GetSection(SessionSecurityOptions.SectionName));
+builder.Services.AddOptions<SessionSecurityOptions>()
+    .Bind(builder.Configuration.GetSection(SessionSecurityOptions.SectionName))
+    .PostConfigure(options =>
+    {
+        // docker-compose passes the raw names (#80); see EnvValues for why not Auth__*.
+        options.ReauthMinutes = EnvValues.Int(builder.Configuration, "AUTH_REAUTH_MINUTES") ?? options.ReauthMinutes;
+        options.OtpMaxFailedAttempts = EnvValues.Int(builder.Configuration, "AUTH_OTP_MAX_FAILED_ATTEMPTS") ?? options.OtpMaxFailedAttempts;
+        options.AccountMaxAttempts = EnvValues.Int(builder.Configuration, "AUTH_ACCOUNT_MAX_ATTEMPTS") ?? options.AccountMaxAttempts;
+        options.AccountWindowMinutes = EnvValues.Int(builder.Configuration, "AUTH_ACCOUNT_WINDOW_MINUTES") ?? options.AccountWindowMinutes;
+    })
+    .ValidateOnStart();
+builder.Services.AddOptions<LimitsOptions>()
+    .PostConfigure(options =>
+        options.MaxApiTokensPerUser = EnvValues.Int(builder.Configuration, "MAX_API_TOKENS_PER_USER") ?? options.MaxApiTokensPerUser)
+    .ValidateOnStart();
 builder.Services.AddScoped<AuthAttemptLimiter>();
 builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection("Resend"));
 builder.Services.Configure<LokiOptions>(builder.Configuration.GetSection("Loki"));
@@ -411,7 +425,9 @@ builder.Services.AddOptions<BillingOptions>()
     .PostConfigure(options =>
     {
         options.AttachmentDebitBypassKey = builder.Configuration["ATTACHMENT_DEBIT_BYPASS_KEY"] ?? options.AttachmentDebitBypassKey;
-    });
+        options.ProductTagGraceUntil = EnvValues.Instant(builder.Configuration, "BILLING_PRODUCT_TAG_GRACE_UNTIL") ?? options.ProductTagGraceUntil;
+    })
+    .ValidateOnStart();
 
 
 var app = builder.Build();

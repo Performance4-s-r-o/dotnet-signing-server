@@ -32,15 +32,23 @@ services:
       # number here caps the whole platform: set it with that in mind.
       - Limits__MaxPendingPresignsPerUser=${MAX_PENDING_PRESIGNS_PER_USER:-0}
       - Limits__MaxTemplatesPerUser=${MAX_TEMPLATES_PER_USER:-0}
-      # Live API tokens per account (#80); 0 = no limit. The portal holds one token.
-      - Limits__MaxApiTokensPerUser=${MAX_API_TOKENS_PER_USER:-100}
+      # #80. Each falls back to a Coolify project-shared variable (DOTNET_*); an unset one
+      # arrives empty or as the placeholder and the code default applies (Options/EnvValues.cs).
+      # Live API tokens per account; 0 = no limit (default 100). The portal holds one token.
+      - MAX_API_TOKENS_PER_USER=${MAX_API_TOKENS_PER_USER:-{{project.DOTNET_MAX_API_TOKENS_PER_USER}}}
       # Browser origins allowed to call /api (comma-separated). Production no longer falls back
-      # to the origins of every user's browser tokens (#80): list the sites that use them.
-      - Cors__AllowedOrigins=${CORS_ALLOWED_ORIGINS:-}
-      # Step-up re-auth (#80): minutes since the last password/2FA confirmation before an API
-      # token can be created or billing changed; wrong 2FA codes before the code is void.
-      - Auth__ReauthMinutes=${AUTH_REAUTH_MINUTES:-15}
-      - Auth__OtpMaxFailedAttempts=${AUTH_OTP_MAX_FAILED_ATTEMPTS:-5}
+      # to the origins of every user's browser tokens: list the sites that use them.
+      - Cors__AllowedOrigins=${CORS_ALLOWED_ORIGINS:-{{project.DOTNET_CORS_ALLOWED_ORIGINS}}}
+      # Step-up re-auth: minutes since the last password/2FA confirmation before an API token
+      # can be created or billing changed (default 15); wrong 2FA codes before a code is void (5).
+      - AUTH_REAUTH_MINUTES=${AUTH_REAUTH_MINUTES:-{{project.DOTNET_AUTH_REAUTH_MINUTES}}}
+      - AUTH_OTP_MAX_FAILED_ATTEMPTS=${AUTH_OTP_MAX_FAILED_ATTEMPTS:-{{project.DOTNET_AUTH_OTP_MAX_FAILED_ATTEMPTS}}}
+      # Sign-in and 2FA attempts per account whatever the IP (default 30 per 15 min).
+      - AUTH_ACCOUNT_MAX_ATTEMPTS=${AUTH_ACCOUNT_MAX_ATTEMPTS:-{{project.DOTNET_AUTH_ACCOUNT_MAX_ATTEMPTS}}}
+      - AUTH_ACCOUNT_WINDOW_MINUTES=${AUTH_ACCOUNT_WINDOW_MINUTES:-{{project.DOTNET_AUTH_ACCOUNT_WINDOW_MINUTES}}}
+      # Checkout sessions created before this UTC instant are accepted without the product
+      # marker (those open at the deploy). Empty = strict. Remove a day after the deploy.
+      - BILLING_PRODUCT_TAG_GRACE_UNTIL=${BILLING_PRODUCT_TAG_GRACE_UNTIL:-{{project.DOTNET_BILLING_PRODUCT_TAG_GRACE_UNTIL}}}
       - FqdnServerName=${FQDN_SERVER:-localhost}
       # Pool and timeouts (#75): the database is shared with the portal's PostgREST and pool,
       # so this server must not take what its connection-limited role would refuse anyway.

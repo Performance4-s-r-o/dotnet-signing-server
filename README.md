@@ -144,10 +144,12 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `Token__Secret` | yes | Signing key for issued API tokens |
 | `FqdnServerName` | yes | Public hostname, used in generated links |
 | `AllowedHosts` | recommended | Host filtering, `*` by default |
-| `Cors__AllowedOrigins` / `CORS_ALLOWED_ORIGINS` | in production, when browser tokens are used | Comma-separated browser origins allowed on `/api`. In Production an empty list means only the server's own origin (it no longer falls back to the origins of every user's browser tokens) and startup logs a warning |
-| `Auth__ReauthMinutes` / `AUTH_REAUTH_MINUTES` | no (15) | Step-up re-authentication: creating an API token and changing billing need a password or e-mailed code confirmed within this many minutes; otherwise `403 REAUTH_REQUIRED` and a confirmation form (`/Account/Reauth`) |
-| `Auth__OtpMaxFailedAttempts` / `AUTH_OTP_MAX_FAILED_ATTEMPTS` | no (5) | Wrong 2FA codes after which the code is void |
-| `Limits__MaxApiTokensPerUser` / `MAX_API_TOKENS_PER_USER` | no (100) | Live API tokens per account; 0 = no limit |
+| `CORS_ALLOWED_ORIGINS` (`Cors__AllowedOrigins`) | in production, when browser tokens are used | Comma-separated browser origins allowed on `/api`. In Production an empty list means only the server's own origin (it no longer falls back to the origins of every user's browser tokens) and startup logs a warning |
+| `AUTH_REAUTH_MINUTES` | no (15) | Step-up re-authentication: creating an API token and changing billing need a password or e-mailed code confirmed within this many minutes; otherwise `403 REAUTH_REQUIRED` and a confirmation form (`/Account/Reauth`) |
+| `AUTH_OTP_MAX_FAILED_ATTEMPTS` | no (5) | Wrong 2FA codes after which the code is void. The count is cleared only by a successful code or a password reset, not by signing in again |
+| `AUTH_ACCOUNT_MAX_ATTEMPTS` / `AUTH_ACCOUNT_WINDOW_MINUTES` | no (30 / 15) | Sign-in and 2FA attempts per account whatever the IP (on top of the per-IP+address limit), counted in PostgreSQL |
+| `MAX_API_TOKENS_PER_USER` | no (100) | Live API tokens per account; 0 = no limit |
+| `BILLING_PRODUCT_TAG_GRACE_UNTIL` | no (empty = strict) | UTC instant; checkout sessions created before it are accepted without the `product` metadata marker (sessions already open at the deploy). Every other ownership check still applies. Remove it a day after the deploy |
 | `Seal__Enabled` | | Server-side sealing; needs `Seal__PfxBase64` + `Seal__PfxPassword` |
 | `Stripe__ApiKey` / `Stripe__WebhookSecret` | for billing | Payments; the webhook secret must start with `whsec_` in production |
 | `Resend__ApiKey` / `Resend__From` | for email | Transactional email |
@@ -164,6 +166,11 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `P4Backoffice__Polling__Interval` | | How often `/v1/events` is polled (default `00:15:00`, `00:02:00` without a webhook secret) |
 | `P4Backoffice__DocumentsTtl` | | How long a legal document from the service is shown before it is revalidated (default `00:05:00`) |
 | `P4Backoffice__Consents__Documents__0…` / `…__Acknowledged__0…` | | Documents consented to at sign-up (default `terms`, `dpa`) and documents only acknowledged (default `privacy`) |
+
+The `#80` variables (`CORS_ALLOWED_ORIGINS`, `AUTH_*`, `MAX_API_TOKENS_PER_USER`,
+`BILLING_PRODUCT_TAG_GRACE_UNTIL`) fall back to Coolify project variables (`DOTNET_*`) in
+`docker-compose.yml`. An empty value or an unresolved `{{project.…}}` placeholder means the
+default; any other value that does not parse stops the server at startup.
 
 Every integration degrades gracefully: leave a section empty and the feature
 switches itself off rather than failing at startup.
