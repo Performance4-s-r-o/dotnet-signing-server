@@ -99,7 +99,7 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
         Event(BackofficeEventTypes.BillingCheckoutCompleted, $$$"""
             {"customer_ref":"{{{BillingCustomerRef.For(userId)}}}","kind":"payment","payment_status":"paid","stripe_session_id":"{{{sessionId}}}",
              "amount_total":1500,"currency":"eur","stripe_payment_intent_id":"pi_{{{sessionId}}}","stripe_customer_id":"cus_1",
-             "metadata":{"userId":"{{{userId}}}","documents":"300","autoRecharge":"{{{autoRecharge}}}"}}
+             "metadata":{"product":"dotnet-signing-server","userId":"{{{userId}}}","documents":"300","autoRecharge":"{{{autoRecharge}}}"}}
             """);
 
     private static BackofficeEvent AutoRechargePaid(Guid userId, string paymentIntent, string attemptKey) =>

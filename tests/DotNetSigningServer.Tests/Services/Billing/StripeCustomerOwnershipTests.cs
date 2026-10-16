@@ -98,7 +98,7 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
         {"id":"{{{id ?? Unique("cs")}}}","object":"checkout.session","mode":"payment","status":"complete","payment_status":"paid",
          "customer":{{{(customerId is null ? "null" : $"\"{customerId}\"")}}},"amount_total":1500,"currency":"eur",
          "payment_intent":"{{{Unique("pi")}}}",
-         "metadata":{"userId":"{{{userId}}}","documents":"300","autoRecharge":"{{{autoRecharge}}}"}}
+         "metadata":{"product":"dotnet-signing-server","userId":"{{{userId}}}","documents":"300","autoRecharge":"{{{autoRecharge}}}"}}
         """;
 
     private static string AutoRechargeIntent(Guid userId, string customerId, string? id = null) => $$$"""
@@ -151,7 +151,7 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
         var stub = new StubServiceHandler();
         stub.Enqueue(System.Net.HttpStatusCode.OK, $$$"""
             {"id":"{{{sessionId}}}","customer_ref":"{{{BillingCustomerRef.For(user.Id)}}}","status":"complete","payment_status":"paid",
-             "mode":"payment","metadata":{"userId":"{{{user.Id}}}","documents":"300"}}
+             "mode":"payment","metadata":{"product":"dotnet-signing-server","userId":"{{{user.Id}}}","documents":"300"}}
             """);
         var services = new ServiceCollection()
             .AddSingleton(new BackofficeBillingClient(new Factory(stub), NullLogger<BackofficeBillingClient>.Instance, _ => TimeSpan.Zero))
@@ -172,7 +172,7 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
         var stub = new StubServiceHandler();
         stub.Enqueue(System.Net.HttpStatusCode.OK, $$$"""
             {"id":"{{{sessionId}}}","customer_ref":"user:00000000-0000-0000-0000-000000000001","status":"complete","payment_status":"paid",
-             "mode":"payment","metadata":{"userId":"{{{user.Id}}}","documents":"300"}}
+             "mode":"payment","metadata":{"product":"dotnet-signing-server","userId":"{{{user.Id}}}","documents":"300"}}
             """);
         var services = new ServiceCollection()
             .AddSingleton(new BackofficeBillingClient(new Factory(stub), NullLogger<BackofficeBillingClient>.Instance, _ => TimeSpan.Zero))
@@ -266,7 +266,7 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
         Mode = "setup",
         Status = "complete",
         CustomerId = customerId,
-        Metadata = new Dictionary<string, string> { ["userId"] = userId.ToString(), ["autoRechargeQuantity"] = "300" },
+        Metadata = new Dictionary<string, string> { ["userId"] = userId.ToString(), [BillingCustomerRef.ProductMarkerKey] = BillingCustomerRef.ProductMarker, ["autoRechargeQuantity"] = "300" },
     };
 
     private static Stripe.Checkout.Session PaidSession(Guid userId, string? customerId) => new()
@@ -276,7 +276,7 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
         Status = "complete",
         PaymentStatus = "paid",
         CustomerId = customerId,
-        Metadata = new Dictionary<string, string> { ["userId"] = userId.ToString(), ["documents"] = "300" },
+        Metadata = new Dictionary<string, string> { ["userId"] = userId.ToString(), [BillingCustomerRef.ProductMarkerKey] = BillingCustomerRef.ProductMarker, ["documents"] = "300" },
     };
 
     [Fact]

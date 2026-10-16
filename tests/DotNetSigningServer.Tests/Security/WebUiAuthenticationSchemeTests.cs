@@ -21,6 +21,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
 
 namespace DotNetSigningServer.Tests.Security;
 
@@ -174,13 +175,29 @@ public sealed class WebUiAuthFixture : IAsyncLifetime
     }
 
     /// <summary>A session cookie for the seeded user, minted with the app's own ticket format.</summary>
-    public string SessionCookieHeader()
+    public string SessionCookieHeader() => CookieHeaderFor(UserId);
+
+    /// <summary>
+    /// A session cookie for any user, as sign-in would issue it: the current stamp (#80 rejects a
+    /// cookie without one), the Admin role when <paramref name="admin"/>, and <c>auth_time</c>
+    /// when given (step-up re-auth).
+    /// </summary>
+    public string CookieHeaderFor(Guid userId, bool admin = false, DateTimeOffset? authTime = null, bool withStamp = true)
     {
+        using var db = Postgres.CreateContext();
+        var user = db.Users.AsNoTracking().Single(u => u.Id == userId);
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, userId.ToString()),
+            new(ClaimTypes.Name, user.Email),
+        };
+        if (withStamp) claims.Add(new Claim(SessionClaims.SecurityStamp, user.UpdatedAt.Ticks.ToString()));
+        if (admin) claims.Add(new Claim(ClaimTypes.Role, SessionClaims.AdminRole));
+        if (authTime is { } at) claims.Add(new Claim(SessionClaims.AuthTime, at.ToUnixTimeSeconds().ToString()));
+
         var options = App.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
             .Get(CookieAuthenticationDefaults.AuthenticationScheme);
-        var identity = new ClaimsIdentity(
-            new[] { new Claim(ClaimTypes.NameIdentifier, UserId.ToString()) },
-            CookieAuthenticationDefaults.AuthenticationScheme);
+        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), new AuthenticationProperties(),
             CookieAuthenticationDefaults.AuthenticationScheme);
         var name = options.Cookie.Name ?? CookieAuthenticationDefaults.CookiePrefix + CookieAuthenticationDefaults.AuthenticationScheme;

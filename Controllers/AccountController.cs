@@ -653,7 +653,7 @@ public class AccountController : Controller
             .ToListAsync();
         foreach (var token in revoked) token.RevokedAt = now2;
         await _dbContext.SaveChangesAsync();
-        var apiAuth = HttpContext.RequestServices.GetService<IApiAuthService>();
+        var apiAuth = HttpContext.RequestServices?.GetService<IApiAuthService>();
         foreach (var token in revoked) apiAuth?.InvalidateTokenCache(token.Id);
 
         TempData["Info"] = _localizer["PasswordResetSuccess"].Value;

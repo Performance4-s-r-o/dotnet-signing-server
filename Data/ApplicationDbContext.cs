@@ -253,11 +253,14 @@ namespace DotNetSigningServer.Data
                 if (entry.State != EntityState.Modified) continue;
                 if (entry.Property(u => u.IsActive).IsModified || entry.Property(u => u.IsAdmin).IsModified)
                 {
-                    var stamp = DateTimeOffset.UtcNow;
-                    // Two writes inside one clock tick must still give a new stamp.
-                    if (stamp <= entry.Property(u => u.UpdatedAt).OriginalValue)
+                    // Whole microseconds (what PostgreSQL keeps), and strictly later than before: two
+                    // writes within one microsecond must still give a new stamp.
+                    var now = DateTimeOffset.UtcNow;
+                    var stamp = now.AddTicks(-(now.Ticks % 10));
+                    var original = entry.Property(u => u.UpdatedAt).OriginalValue;
+                    if (stamp <= original)
                     {
-                        stamp = entry.Property(u => u.UpdatedAt).OriginalValue.AddTicks(1);
+                        stamp = original.AddTicks(10 - (original.Ticks % 10));
                     }
                     entry.Entity.UpdatedAt = stamp;
                 }

@@ -56,7 +56,9 @@ public static class CookieSessionValidator
     public static Decision Decide(string stamp, bool claimsAdmin, DateTimeOffset? updatedAt, bool? isActive, bool? isAdmin)
     {
         if (updatedAt is null || isActive != true) return Decision.Reject;
-        if (updatedAt.Value.Ticks.ToString() != stamp) return Decision.Reject;
+        // Compared at microsecond precision: PostgreSQL keeps microseconds, while the stamp in a
+        // cookie issued straight after a save carries the in-memory value (100 ns ticks).
+        if (!long.TryParse(stamp, out var stampTicks) || stampTicks / 10 != updatedAt.Value.Ticks / 10) return Decision.Reject;
         return claimsAdmin == (isAdmin == true) ? Decision.Accept : Decision.RefreshRoles;
     }
 

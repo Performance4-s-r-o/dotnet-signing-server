@@ -137,7 +137,7 @@ public class BackofficeBillingClientTests
     {
         _service.Enqueue(HttpStatusCode.OK, """
             {"id":"cs_test_1","customer_ref":"user:6f9619ff-8b86-d011-b42d-00c04fc964ff","status":"complete","payment_status":"paid",
-             "mode":"payment","metadata":{"userId":"6f9619ff-8b86-d011-b42d-00c04fc964ff","documents":"300"},
+             "mode":"payment","metadata":{"product":"dotnet-signing-server","userId":"6f9619ff-8b86-d011-b42d-00c04fc964ff","documents":"300"},
              "subscription_id":null,"payment_id":"pi_1","setup_intent_id":null,"expires_at":"2026-10-09T12:00:00Z"}
             """);
         _service.EnqueueProblem(HttpStatusCode.NotFound, "checkout_not_found");
