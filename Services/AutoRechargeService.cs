@@ -351,7 +351,7 @@ public class AutoRechargeService : IAutoRechargeService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send auto-recharge success email to {Email}", user.Email);
+            _logger.LogError(ex, "Failed to send auto-recharge success email to {Email}", LogRedaction.Email(user.Email));
         }
     }
 
@@ -373,7 +373,7 @@ public class AutoRechargeService : IAutoRechargeService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send auto-recharge failure email to {Email}", user.Email);
+            _logger.LogError(ex, "Failed to send auto-recharge failure email to {Email}", LogRedaction.Email(user.Email));
         }
     }
 }

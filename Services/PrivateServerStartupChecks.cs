@@ -121,6 +121,6 @@ public static class PrivateServerStartupChecks
         });
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        logger.LogInformation("[private-server] created the first administrator ({Email})", email);
+        logger.LogInformation("[private-server] created the first administrator ({Email})", LogRedaction.Email(email));
     }
 }
