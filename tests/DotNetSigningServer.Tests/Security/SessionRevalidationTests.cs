@@ -190,6 +190,36 @@ public class SessionRevalidationTests : IClassFixture<WebUiAuthFixture>
         Assert.Equal(2, (await db.ApiTokens.AsNoTracking().SingleAsync(t => t.Id == token.Id)).CreditsUsed);
     }
 
+    [DockerFact]
+    public async Task BrowserToken_Budget_IsReturned_WhenTheOperationThrowsOrIsAborted_AndKeptWhenCommitted()
+    {
+        var id = await NewUserAsync();
+        await using var db = _fx.Postgres.CreateContext();
+        var token = new ApiToken { UserId = id, Label = "web", TokenHash = new byte[] { 7 }, IsBrowserToken = true, CreditLimit = 5 };
+        db.ApiTokens.Add(token);
+        await db.SaveChangesAsync();
+        async Task<int> Used() => (await db.ApiTokens.AsNoTracking().SingleAsync(t => t.Id == token.Id)).CreditsUsed;
+
+        // Completing the operation throws (CompleteOperationAsync, a lost lease, …).
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await using var budget = await BrowserTokenBudget.TryReserveAsync(db, token.Id, 2);
+            Assert.NotNull(budget);
+            Assert.Equal(2, await Used());
+            throw new InvalidOperationException("completion failed");
+        });
+        Assert.Equal(0, await Used());
+
+        // An aborted request leaves without committing.
+        await using (var aborted = await BrowserTokenBudget.TryReserveAsync(db, token.Id, 3)) { }
+        Assert.Equal(0, await Used());
+
+        // Completed: the credits stay spent.
+        await using (var done = await BrowserTokenBudget.TryReserveAsync(db, token.Id, 4)) { done!.Commit(); }
+        Assert.Equal(4, await Used());
+        Assert.Null(await BrowserTokenBudget.TryReserveAsync(db, token.Id, 2)); // 4 + 2 > 5
+    }
+
     private static string AntiforgeryToken(string html) =>
         Regex.Match(html, "name=\"__RequestVerificationToken\" type=\"hidden\" value=\"([^\"]+)\"").Groups[1].Value;
 

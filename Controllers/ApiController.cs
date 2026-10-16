@@ -322,34 +322,30 @@ namespace DotNetSigningServer.Controllers
 
             var attempt = begin.Attempt;
 
-            // A browser token spends from its own budget too (#80), reserved like the credits and
-            // given back on every path that does not complete.
-            Guid? budgetToken = SessionClaims.IsBrowserToken(User) ? SessionClaims.TokenIdOf(User) : null;
-            var budgetCredits = budgetToken is null ? 0 : baseCost * tier;
-            if (budgetToken is Guid budgetId
-                && !await BrowserTokenScope.TryReserveAsync(DbContext, budgetId, budgetCredits, HttpContext.RequestAborted))
+            // A browser token spends from its own budget too (#80). The reservation is given back
+            // when this method is left any way other than through a completed operation.
+            BrowserTokenBudget? budget = null;
+            if (SessionClaims.IsBrowserToken(User) && SessionClaims.TokenIdOf(User) is Guid budgetId)
             {
-                await Operations.FailAsync(op, attempt, uncertain: false, BrowserTokenScope.CreditLimitErrorCode);
-                Response.Headers[OperationStateHeader] = ApiOperationState.Failed;
-                return StatusCode(StatusCodes.Status402PaymentRequired, new
+                budget = await BrowserTokenBudget.TryReserveAsync(DbContext, budgetId, baseCost * tier, Logger);
+                if (budget == null)
                 {
-                    code = BrowserTokenScope.CreditLimitErrorCode,
-                    message = Localizer["Error_TOKEN_CREDIT_LIMIT"].Value,
-                });
+                    await Operations.FailAsync(op, attempt, uncertain: false, BrowserTokenScope.CreditLimitErrorCode);
+                    Response.Headers[OperationStateHeader] = ApiOperationState.Failed;
+                    return StatusCode(StatusCodes.Status402PaymentRequired, new
+                    {
+                        code = BrowserTokenScope.CreditLimitErrorCode,
+                        message = Localizer["Error_TOKEN_CREDIT_LIMIT"].Value,
+                    });
+                }
             }
-            async Task ReleaseBudgetAsync()
-            {
-                if (budgetToken is not Guid id) return;
-                try { await BrowserTokenScope.ReleaseAsync(DbContext, id, budgetCredits); }
-                catch (Exception ex) { Logger.LogWarning(ex, "Could not release the budget of token {TokenId}", id); }
-            }
+            await using var budgetGuard = budget;
 
             // Whether anybody can come back for the result: the caller's key, or the presign.
             var retrievable = op.ClientKey || presignId != null;
             if (HttpContext.RequestAborted.IsCancellationRequested)
             {
                 await Operations.FailAsync(op, attempt, uncertain: false, "CLIENT_ABORTED");
-                await ReleaseBudgetAsync();
                 return StatusCode(499);
             }
 
@@ -370,7 +366,6 @@ namespace DotNetSigningServer.Controllers
             catch (Exception ex)
             {
                 await heartbeat.DisposeAsync();
-                await ReleaseBudgetAsync();
                 var uncertain = ex is OperationDeadlineExceededException late
                     ? late.ExternalCallStarted
                     : IsUncertainFailure(ex);
@@ -412,7 +407,6 @@ namespace DotNetSigningServer.Controllers
             {
                 // Nobody is listening and nobody can ask again: do not charge for it.
                 await Operations.FailAsync(op, attempt, uncertain: false, "CLIENT_ABORTED");
-                await ReleaseBudgetAsync();
                 return StatusCode(499);
             }
 
@@ -443,9 +437,9 @@ namespace DotNetSigningServer.Controllers
             if (!completed)
             {
                 // The lease ran out and the credits went back: this result is not ours to hand out.
-                await ReleaseBudgetAsync();
                 throw new InvalidOperationException($"Operation {op.OperationId} lost its lease before completion.");
             }
+            budget?.Commit();
 
             Response.Headers[OperationStateHeader] = ApiOperationState.Completed;
             // Clean-up (the presign) only once the result is safely kept: otherwise a retry

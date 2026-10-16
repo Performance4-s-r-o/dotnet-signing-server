@@ -64,3 +64,51 @@ public static class BrowserTokenScope
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.CreditsUsed, t => t.CreditsUsed >= credits ? t.CreditsUsed - credits : 0));
     }
 }
+
+/// <summary>
+/// A browser token's budget reservation for one operation (#80). Disposed without
+/// <see cref="Commit"/> it gives the credits back — whatever ended the operation: a failure, an
+/// abort, a lost lease or an exception from completing it. Reserved and released with
+/// <see cref="CancellationToken.None"/>: an aborted request must neither skip the reservation
+/// halfway nor keep credits it never used.
+/// </summary>
+public sealed class BrowserTokenBudget : IAsyncDisposable
+{
+    private readonly ApplicationDbContext _db;
+    private readonly ILogger? _logger;
+    private bool _settled;
+
+    public Guid TokenId { get; }
+    public int Credits { get; }
+
+    private BrowserTokenBudget(ApplicationDbContext db, Guid tokenId, int credits, ILogger? logger)
+    {
+        _db = db;
+        TokenId = tokenId;
+        Credits = credits;
+        _logger = logger;
+    }
+
+    /// <summary>The reservation, or null when the token's limit does not allow it.</summary>
+    public static async Task<BrowserTokenBudget?> TryReserveAsync(ApplicationDbContext db, Guid tokenId, int credits, ILogger? logger = null) =>
+        await BrowserTokenScope.TryReserveAsync(db, tokenId, credits, CancellationToken.None)
+            ? new BrowserTokenBudget(db, tokenId, credits, logger)
+            : null;
+
+    /// <summary>The operation completed: the credits stay spent.</summary>
+    public void Commit() => _settled = true;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_settled) return;
+        _settled = true;
+        try
+        {
+            await BrowserTokenScope.ReleaseAsync(_db, TokenId, Credits);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Could not release the budget of token {TokenId}", TokenId);
+        }
+    }
+}
