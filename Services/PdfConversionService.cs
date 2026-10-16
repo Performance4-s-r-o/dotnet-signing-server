@@ -30,6 +30,12 @@ namespace DotNetSigningServer.Services
                 throw new InvalidOperationException("PdfContent is not valid base64.", ex);
             }
 
+            return ConvertToPdfA(input, originalPdf);
+        }
+
+        /// <summary>Konverze nad bajty, které už prošly vstupní kontrolou (#74); <c>input.PdfContent</c> se nečte.</summary>
+        public virtual string ConvertToPdfA(ConvertToPdfAInput input, byte[] originalPdf)
+        {
             if (!File.Exists(_iccProfilePath))
             {
                 throw new FileNotFoundException("ICC profile required for PDF/A conversion was not found.", _iccProfilePath);

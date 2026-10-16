@@ -21,9 +21,12 @@ namespace DotNetSigningServer.Services
 {
     public class PdfVisualSigningService
     {
-        public string ApplyVisualSign(VisualSignInput input)
+        public string ApplyVisualSign(VisualSignInput input) =>
+            ApplyVisualSign(input, Convert.FromBase64String(input.PdfContent));
+
+        /// <summary>Vizuální podpis nad bajty, které už prošly vstupní kontrolou; <c>input.PdfContent</c> se nečte.</summary>
+        public string ApplyVisualSign(VisualSignInput input, byte[] pdfBytes)
         {
-            byte[] pdfBytes = Convert.FromBase64String(input.PdfContent);
 
             using var msIn = new MemoryStream(pdfBytes);
             using var msOut = new MemoryStream();

@@ -56,15 +56,52 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
+            return await ConvertToPdfACoreAsync(user, input, null, ApiOperationService.Fingerprint("pdfa", input));
+        }
+
+        /// <summary>
+        /// <c>/api/convert/pdfa</c> v interním binárním kanálu (#74): <c>multipart/form-data</c>
+        /// s částmi <c>metadata</c> (<c>conformance</c>) a <c>pdf</c>. Stejné kontroly, účtování
+        /// i odpověď jako JSON varianta; <c>Request.Form</c> se tu číst nesmí.
+        /// </summary>
+        [HttpPost("/api/convert/pdfa")]
+        [Consumes(BinaryPdfChannel.ContentType)]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> ConvertToPdfABinary()
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            var (input, pdf, refused) = await ReadBinaryPdfAsync<ConvertToPdfAInput>("PDF/A conversion", i => i.PdfContent);
+            if (refused != null) return refused;
+            if (pdf!.Length == 0)
+            {
+                return BadRequest(new { message = Localizer["PdfContentRequired"].Value });
+            }
             try
             {
-                var pageCount = CountPagesFromBase64(input.PdfContent);
+                SafetyGuard.EnsureSafePdf(pdf, "PDF/A conversion");
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
+            }
+
+            return await ConvertToPdfACoreAsync(user, input!, pdf, BinaryFingerprint("pdfa", input!, pdf));
+        }
+
+        /// <summary>pdfa po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
+        private async Task<IActionResult> ConvertToPdfACoreAsync(User user, ConvertToPdfAInput input, byte[]? pdf, string fingerprint)
+        {
+            try
+            {
+                var pageCount = pdf == null ? CountPagesFromBase64(input.PdfContent) : CountPages(pdf);
                 var requiredCredits = CalculateCreditsForPages(pageCount);
 
                 // Reserved before the conversion; 402 here means it never ran.
-                return await RunOperationAsync(user, "pdfa", ApiOperationService.Fingerprint("pdfa", input), requiredCredits, _ =>
+                return await RunOperationAsync(user, "pdfa", fingerprint, requiredCredits, _ =>
                 {
-                    var pdfaResult = _pdfConversionService.ConvertToPdfA(input);
+                    var pdfaResult = pdf == null ? _pdfConversionService.ConvertToPdfA(input) : _pdfConversionService.ConvertToPdfA(input, pdf);
                     var conformance = PdfConversionService.FormatConformance(input.Conformance);
                     return Task.FromResult(new PaidResult(
                         new { result = pdfaResult, conformance },
@@ -224,8 +261,7 @@ namespace DotNetSigningServer.Controllers
             // Otisk z metadat a hashe dokumentu: base64 tu není, ze kterého by šel spočítat ten
             // JSON. Klíč je proto vázaný na kanál — tentýž Idempotency-Key poslaný jednou
             // binárně a podruhé jako JSON skončí 422 IDEMPOTENCY_KEY_REUSED.
-            var fingerprint = ApiOperationService.Fingerprint(
-                "find-codes", input, "pdf-sha256", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(pdfBytes)));
+            var fingerprint = BinaryFingerprint("find-codes", input!, pdfBytes);
             return await FindCodesCoreAsync(user, input!, pdfBytes, fingerprint);
         }
 

@@ -374,4 +374,120 @@ public class LoadProfileTests
             ?? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "p4-load-binary-channel.md");
         File.WriteAllText(path, sb.ToString());
     }
+
+    /// <summary>
+    /// Timestamp a pečeť nad ~18 MB PDF: JSON (base64 → dvě dekódování, jako dnes) proti multipartu
+    /// (bajty rovnou). Jen s <c>P4_LOAD_PROFILE=1</c>; výsledek jde do <c>P4_LOAD_BINARY2_OUT</c>.
+    /// Jediný assert: multipart alokuje méně než JSON (čísla závisejí na stroji, práh není).
+    /// </summary>
+    [Fact]
+    public async Task BinaryChannelProfile_TimestampAndSeal()
+    {
+        if (!Enabled) return;
+        var limits = new LimitsOptions();
+        var guard = new PdfSafetyGuard(TestHelpers.WrapOptions(limits));
+        var limitGuard = new ContentLimitGuard(TestHelpers.WrapOptions(limits));
+        var json = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+        var (_, pfx, password) = TestHelpers.CreateTestCertificate();
+        var sealOptions = new SealOptions { Enabled = true, PfxBase64 = pfx, PfxPassword = password, Reason = "profil", Location = "l" };
+        var signing = new PdfSigningService(TestHelpers.WrapOptions(sealOptions), null, new PdfVisualSigningService());
+        var sealing = new PdfSealingService(TestHelpers.WrapOptions(sealOptions), signing, new PdfVisualSigningService());
+        var rect = new Models.SignRect { X = 50, Y = 50, Width = 200, Height = 60 };
+
+        var rng = new Random(74);
+        var pdf = Pdf(19, 595, 842, (_, p, _) =>
+        {
+            var data = new byte[1_000_000];
+            rng.NextBytes(data);
+            var image = new PdfStream(data);
+            image.Put(PdfName.Type, PdfName.XObject);
+            image.Put(PdfName.Subtype, PdfName.Image);
+            image.Put(PdfName.Width, new PdfNumber(1000));
+            image.Put(PdfName.Height, new PdfNumber(1000));
+            image.Put(PdfName.ColorSpace, PdfName.DeviceGray);
+            image.Put(PdfName.BitsPerComponent, new PdfNumber(8));
+            p.GetPdfObject().Put(new PdfName("Scan"), image);
+        });
+        Assert.True(pdf.LongLength <= limits.PdfMaxBytes);
+        var base64 = Convert.ToBase64String(pdf);
+
+        byte[] Body(object meta) => System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(meta, meta.GetType(), json);
+        byte[] Multipart(object meta, string boundary)
+        {
+            using var content = new MultipartFormDataContent(boundary);
+            content.Add(new StringContent(System.Text.Json.JsonSerializer.Serialize(meta, meta.GetType(), json), Encoding.UTF8, "application/json"), BinaryPdfChannel.MetadataPart);
+            var part = new ByteArrayContent(pdf);
+            part.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+            content.Add(part, BinaryPdfChannel.PdfPart, "document.pdf");
+            return content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+        }
+
+        const string boundary = "p4-load-profile-boundary";
+        var contentType = $"multipart/form-data; boundary={boundary}";
+        var tsa = new LocalTsaClient();
+        var tsJson = Body(new Models.DocumentTimestampInput { PdfContent = base64, SignRect = rect, Visible = false });
+        var tsMulti = Multipart(new Models.DocumentTimestampInput { SignRect = rect, Visible = false }, boundary);
+        var sealJson = Body(new Models.SealInput { PdfContent = base64, SignRect = rect, Reason = "profil", Location = "l" });
+        var sealMulti = Multipart(new Models.SealInput { SignRect = rect, Reason = "profil", Location = "l" }, boundary);
+        base64 = null!;
+
+        async Task TsJson()
+        {
+            var input = await System.Text.Json.JsonSerializer.DeserializeAsync<Models.DocumentTimestampInput>(new MemoryStream(tsJson), json);
+            limitGuard.EnsurePdfWithinLimit(input!.PdfContent, "p");
+            guard.EnsureSafePdf(input.PdfContent, "p");
+            GC.KeepAlive(signing.ApplyDocumentTimestamp(input, tsa));
+        }
+        async Task TsBinary()
+        {
+            var (input, bytes) = await BinaryPdfChannel.ReadAsync<Models.DocumentTimestampInput>(
+                contentType, new MemoryStream(tsMulti), tsMulti.LongLength, json, limits.PdfMaxBytes, 8 * 1024 * 1024, CancellationToken.None);
+            guard.EnsureSafePdf(bytes, "p");
+            GC.KeepAlive(signing.ApplyDocumentTimestamp(input, tsa, bytes));
+        }
+        async Task SealJson()
+        {
+            var input = await System.Text.Json.JsonSerializer.DeserializeAsync<Models.SealInput>(new MemoryStream(sealJson), json);
+            limitGuard.EnsurePdfWithinLimit(input!.PdfContent, "p");
+            guard.EnsureSafePdf(input.PdfContent, "p");
+            GC.KeepAlive(sealing.ApplySeal(input));
+        }
+        async Task SealBinary()
+        {
+            var (input, bytes) = await BinaryPdfChannel.ReadAsync<Models.SealInput>(
+                contentType, new MemoryStream(sealMulti), sealMulti.LongLength, json, limits.PdfMaxBytes, 8 * 1024 * 1024, CancellationToken.None);
+            guard.EnsureSafePdf(bytes, "p");
+            GC.KeepAlive(sealing.ApplySeal(input, bytes));
+        }
+
+        var scenarios = new (string Name, Func<Task> Work)[]
+        {
+            ("timestamp: JSON base64", TsJson),
+            ("timestamp: multipart", TsBinary),
+            ("seal: JSON base64", SealJson),
+            ("seal: multipart", SealBinary),
+        };
+        var rows = new List<MemoryRow>();
+        foreach (var (name, work) in scenarios)
+        {
+            await work();
+            var samples = new List<MemoryRow>();
+            for (var i = 0; i < 3; i++) samples.Add(await MeasureMemory(name, work));
+            rows.Add(samples.OrderBy(x => x.AllocatedMb).ElementAt(1));
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"Stroj: {Environment.ProcessorCount} jader, .NET {Environment.Version}, {DateTime.UtcNow:u}");
+        sb.AppendLine($"PDF {pdf.Length / 1048576.0:0.0} MB");
+        sb.AppendLine();
+        sb.AppendLine("| scénář | čas [s] | alokováno [MB] | špička haldy [MB] | špička procesu [MB] |");
+        sb.AppendLine("|---|---|---|---|---|");
+        foreach (var r in rows) sb.AppendLine($"| {r.Name} | {r.Seconds:0.00} | {r.AllocatedMb:0} | {r.PeakHeapMb:0} | {r.PeakProcessMb:0} |");
+        var path = Environment.GetEnvironmentVariable("P4_LOAD_BINARY2_OUT")
+            ?? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "p4-load-binary-channel-2.md");
+        File.WriteAllText(path, sb.ToString());
+
+        Assert.True(rows[1].AllocatedMb < rows[0].AllocatedMb, "timestamp: multipart should allocate less than JSON");
+        Assert.True(rows[3].AllocatedMb < rows[2].AllocatedMb, "seal: multipart should allocate less than JSON");
+    }
 }

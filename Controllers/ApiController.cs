@@ -135,8 +135,26 @@ namespace DotNetSigningServer.Controllers
         /// </summary>
         protected long MetadataMaxBytes => LimitGuard.Limits.ImageMaxBytes * 4 / 3 * 4 + 1024 * 1024;
 
+        /// <summary>
+        /// Otisk binárního požadavku pro idempotenci: metadata (s prázdným <c>PdfContent</c>) plus
+        /// SHA-256 dokumentu. Stejná operace nad stejným dokumentem dá stejný otisk, jiný dokument
+        /// jiný — prázdné pole <c>PdfContent</c> otisk nikdy samo neurčuje. Klíč je tím vázaný na
+        /// kanál (JSON kanál hashuje base64 tělo), viz <c>docs/binary-channel.md</c>.
+        /// </summary>
+        /// <param name="extra">Další části otisku, které JSON větev dává za vstup (např. příznak obejití).</param>
+        internal static string BinaryFingerprint(string operation, object input, byte[] pdf, params object?[] extra)
+        {
+            var parts = new List<object?> { operation, input };
+            parts.AddRange(extra);
+            parts.Add("pdf-sha256");
+            parts.Add(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(pdf)));
+            return ApiOperationService.Fingerprint(parts.ToArray());
+        }
+
+        /// <param name="extraMetadataBytes">Navíc k <see cref="MetadataMaxBytes"/>: u přílohy
+        /// (<c>attachmentContent</c> v base64 v metadatech) strop přílohy.</param>
         protected async Task<(T? Metadata, byte[]? Pdf, IActionResult? Error)> ReadBinaryPdfAsync<T>(
-            string context, Func<T, string?> inlinePdf) where T : class
+            string context, Func<T, string?> inlinePdf, long extraMetadataBytes = 0) where T : class
         {
             var json = HttpContext.RequestServices
                 .GetRequiredService<IOptions<Microsoft.AspNetCore.Mvc.JsonOptions>>().Value.JsonSerializerOptions;
@@ -144,7 +162,7 @@ namespace DotNetSigningServer.Controllers
             {
                 var (metadata, pdf) = await BinaryPdfChannel.ReadAsync<T>(
                     Request.ContentType, Request.Body, Request.ContentLength, json,
-                    LimitGuard.Limits.PdfMaxBytes, MetadataMaxBytes, HttpContext.RequestAborted,
+                    LimitGuard.Limits.PdfMaxBytes, MetadataMaxBytes + extraMetadataBytes, HttpContext.RequestAborted,
                     maxBodyBytes: LimitGuard.Limits.RequestBodyLimitBytes);
                 if (!string.IsNullOrEmpty(inlinePdf(metadata)))
                 {
@@ -271,7 +289,7 @@ namespace DotNetSigningServer.Controllers
         /// result later: a keyed operation runs to the end even if the caller gave up, so the
         /// retry finds it.</param>
         /// <param name="afterCompleted">Best-effort clean-up once the result is stored (presign files).</param>
-        protected async Task<IActionResult> RunOperationAsync(
+        protected virtual async Task<IActionResult> RunOperationAsync(
             User user,
             string operation,
             string fingerprint,
@@ -788,9 +806,12 @@ namespace DotNetSigningServer.Controllers
             return (int)Math.Ceiling(pageCount / 3.0);
         }
 
-        protected static int CountPagesFromBase64(string pdfBase64)
+        protected static int CountPagesFromBase64(string pdfBase64) =>
+            CountPages(Convert.FromBase64String(pdfBase64));
+
+        protected static int CountPages(byte[] pdfBytes)
         {
-            using var ms = new MemoryStream(Convert.FromBase64String(pdfBase64));
+            using var ms = new MemoryStream(pdfBytes);
             using var reader = new PdfReader(ms);
             using var pdf = new PdfDocument(reader);
             return pdf.GetNumberOfPages();
