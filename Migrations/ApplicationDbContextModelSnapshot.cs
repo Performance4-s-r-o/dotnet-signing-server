@@ -294,6 +294,9 @@ namespace dotnetsigningserver.Migrations
 
                     b.HasIndex("CreatedAt");
 
+                    b.HasIndex("SubjectRef")
+                        .HasFilter("\"SubjectRef\" IS NOT NULL");
+
                     b.HasIndex("Status", "NextAttemptAt");
 
                     b.ToTable("BackofficeOutboxItems", "dotnet_signing");
@@ -930,6 +933,10 @@ namespace dotnetsigningserver.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<DateTimeOffset?>("EnterpriseEnabledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ErasedAt")
+                        .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsActive")

@@ -26,6 +26,9 @@ public sealed class OutboxProcessor
 {
     public const string HttpClientName = "P4Backoffice.Outbox";
 
+    /// <summary>Start of the error logged for an item past its kind's <see cref="IOutboxHandler.AlertAfter"/>.</summary>
+    public const string AlertPrefix = "Backoffice outbox alert:";
+
     /// <summary>Per-attempt limit; also the named client's timeout.</summary>
     public static readonly TimeSpan AttemptTimeout = TimeSpan.FromSeconds(10);
 
@@ -162,11 +165,22 @@ public sealed class OutboxProcessor
         }
     }
 
-    /// <summary>The configured give-up time, or the longer one of a kind the service deduplicates itself.</summary>
-    internal TimeSpan GiveUpAfterFor(string kind) =>
-        _handlers.TryGetValue(kind, out var handler) && handler.ServiceDeduplicates
-            ? RetryPolicy.DeduplicatedGiveUpAfter
-            : _giveUpAfter;
+    /// <summary>
+    /// The kind's own give-up time, else the longer one of a kind the service deduplicates
+    /// itself, else the configured one.
+    /// </summary>
+    internal TimeSpan GiveUpAfterFor(string kind)
+    {
+        if (!_handlers.TryGetValue(kind, out var handler)) return _giveUpAfter;
+        if (handler.GiveUpAfter is { } own) return own;
+        return handler.ServiceDeduplicates ? RetryPolicy.DeduplicatedGiveUpAfter : _giveUpAfter;
+    }
+
+    /// <summary>Whether a failed attempt on <paramref name="item"/> is an alert (its kind's <see cref="IOutboxHandler.AlertAfter"/>).</summary>
+    internal bool IsOverdue(BackofficeOutboxItem item, DateTimeOffset now) =>
+        _handlers.TryGetValue(item.Kind, out var handler)
+        && handler.AlertAfter is { } after
+        && now - item.CreatedAt >= after;
 
     /// <summary>One attempt on a claimed, tracked item; records the outcome on it (not saved).</summary>
     private async Task AttemptAsync(BackofficeOutboxItem item, TimeSpan timeout, CancellationToken cancellationToken)
@@ -186,6 +200,12 @@ public sealed class OutboxProcessor
                 _logger.LogInformation(
                     "Backoffice outbox {ItemId} ({Kind}) sent after {Attempts} attempt(s)", item.Id, item.Kind, item.Attempts);
                 break;
+            case OutboxOutcome.Retry when IsOverdue(item, _time.GetUtcNow()):
+                _logger.LogError(
+                    AlertPrefix + " {ItemId} ({Kind}, {SubjectRef}) still not accepted since {CreatedAt:o}; attempt {Attempts} failed: {Error}; "
+                    + "next attempt at {NextAttemptAt:o}",
+                    item.Id, item.Kind, item.SubjectRef, item.CreatedAt, item.Attempts, item.LastError, item.NextAttemptAt);
+                break;
             case OutboxOutcome.Retry:
                 _logger.LogWarning(
                     "Backoffice outbox {ItemId} ({Kind}) attempt {Attempts} failed: {Error}; next attempt at {NextAttemptAt:o}",
@@ -199,6 +219,12 @@ public sealed class OutboxProcessor
             case OutboxOutcome.Suppressed:
                 _logger.LogInformation(
                     "Backoffice outbox {ItemId} ({Kind}) not sent: recipient is suppressed", item.Id, item.Kind);
+                break;
+            case OutboxOutcome.Dead when _handlers.TryGetValue(item.Kind, out var watched) && watched.AlertAfter != null:
+                // A kind that must never end quietly (an erasure, #217): left for a person to settle.
+                _logger.LogError(
+                    AlertPrefix + " {ItemId} ({Kind}, {SubjectRef}) is dead and needs a person: {Error}",
+                    item.Id, item.Kind, item.SubjectRef, item.LastError);
                 break;
             case OutboxOutcome.Dead:
                 _logger.LogError(

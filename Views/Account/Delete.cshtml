@@ -1,0 +1,45 @@
+@model DotNetSigningServer.Models.User
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
+@inject Microsoft.Extensions.Options.IOptions<DotNetSigningServer.Options.P4BackofficeProductOptions> Backoffice
+@{
+    // Only true when the erasure request is actually sent on (#217).
+    var erasedElsewhere = Backoffice.Value.AnyEnabled;
+    ViewData["Title"] = L["AccountDeleteTitle"].Value;
+    var basePath = Context.Request.PathBase.Value ?? string.Empty;
+}
+<h1 class="content-box-title">@L["AccountDeleteTitle"]</h1>
+
+@if (TempData["Error"] != null)
+{
+    <div class="flash error">@TempData["Error"]</div>
+}
+@if (TempData["Info"] != null)
+{
+    <div class="flash info">@TempData["Info"]</div>
+}
+
+<div class="tokens-form" style="margin-bottom:1.5rem">
+    <p>@L["AccountDeleteIntro"]</p>
+    <ul>
+        <li>@L["AccountDeleteWhatGoes"]</li>
+        <li>@L["AccountDeleteCredits", Model.CreditsRemaining]</li>
+        <li>@L["AccountDeleteBilling"]</li>
+        <li>@L["AccountDeleteWhatStays"]</li>
+    </ul>
+    @if (erasedElsewhere)
+    {
+        <p class="muted">@L["AccountDeleteElsewhere"]</p>
+    }
+
+    <form method="post" action="@basePath/Account/Delete">
+        @Html.AntiForgeryToken()
+        <div class="form-group">
+            <label class="form-check">
+                <input type="checkbox" name="confirm" value="true" required />
+                @L["AccountDeleteConfirmLabel"]
+            </label>
+        </div>
+        <button type="submit" class="btn btn-danger">@L["AccountDeleteButton"]</button>
+        <a href="@basePath/Account/Settings" class="btn">@L["Cancel"]</a>
+    </form>
+</div>

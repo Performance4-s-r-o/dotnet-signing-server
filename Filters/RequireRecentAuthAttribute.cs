@@ -26,13 +26,24 @@ public sealed class RequireRecentAuthAttribute : Attribute, IAsyncActionFilter
     public const string ErrorCode = "REAUTH_REQUIRED";
     public const string ReauthPath = "/Account/Reauth";
 
+    /// <summary>
+    /// A stricter limit for this action, in minutes (deleting the account: 10, #217). The
+    /// shorter of this and <see cref="SessionSecurityOptions.ReauthMinutes"/> applies; 0 = the
+    /// configured window only.
+    /// </summary>
+    public int MaxMinutes { get; set; }
+
+    /// <summary>The window for an action with <paramref name="maxMinutes"/>: never longer than the configured one.</summary>
+    public static TimeSpan WindowFor(TimeSpan configured, int maxMinutes) =>
+        maxMinutes > 0 && TimeSpan.FromMinutes(maxMinutes) < configured ? TimeSpan.FromMinutes(maxMinutes) : configured;
+
     public Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         var services = context.HttpContext.RequestServices;
         var options = services.GetRequiredService<IOptions<SessionSecurityOptions>>().Value;
         var now = services.GetService<TimeProvider>()?.GetUtcNow() ?? DateTimeOffset.UtcNow;
 
-        if (IsFresh(SessionClaims.AuthTimeOf(context.HttpContext.User), now, options.ReauthWindow))
+        if (IsFresh(SessionClaims.AuthTimeOf(context.HttpContext.User), now, WindowFor(options.ReauthWindow, MaxMinutes)))
         {
             return next();
         }

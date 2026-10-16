@@ -753,4 +753,23 @@
   <data name="AdminAuditActor" xml:space="preserve"><value>Administrator</value></data>
   <data name="AdminAuditAction" xml:space="preserve"><value>Action</value></data>
   <data name="AdminAuditChange" xml:space="preserve"><value>Change</value></data>
+  <data name="AccountDeleteTitle" xml:space="preserve"><value>Delete account</value></data>
+  <data name="AccountDeleteSettingsHint" xml:space="preserve"><value>Deletes your account and the data we hold about you. You will be asked to confirm your password first.</value></data>
+  <data name="AccountDeleteOpenButton" xml:space="preserve"><value>Delete account…</value></data>
+  <data name="AccountDeleteIntro" xml:space="preserve"><value>Deleting your account cannot be undone. Here is what happens:</value></data>
+  <data name="AccountDeleteWhatGoes" xml:space="preserve"><value>Your e-mail address, password, API tokens, stored templates, pending documents and signing data are deleted, and you are signed out everywhere.</value></data>
+  <data name="AccountDeleteCredits" xml:space="preserve"><value>Your remaining credits ({0}) expire. They are not refunded.</value></data>
+  <data name="AccountDeleteBilling" xml:space="preserve"><value>Saved cards are removed, so auto-recharge stops at once.</value></data>
+  <data name="AccountDeleteWhatStays" xml:space="preserve"><value>Invoices and payments are kept for 10 years, as accounting law requires, without your e-mail address. Records of your consents are kept in pseudonymised form as proof.</value></data>
+  <data name="AccountDeleteElsewhere" xml:space="preserve"><value>Your data is also erased from the systems that send our e-mails and keep your consents and support requests.</value></data>
+  <data name="AccountDeleteConfirmLabel" xml:space="preserve"><value>I understand that my account will be deleted permanently.</value></data>
+  <data name="AccountDeleteButton" xml:space="preserve"><value>Delete my account</value></data>
+  <data name="AccountDeleteConfirmRequired" xml:space="preserve"><value>Tick the confirmation to delete your account.</value></data>
+  <data name="AccountDeleteFailed" xml:space="preserve"><value>Your account could not be deleted. Auto-recharge may already be switched off and saved cards removed; your data is still there. Please try again later.</value></data>
+  <data name="AccountDeleteBillingFailed" xml:space="preserve"><value>Your saved cards could not all be removed at the payment provider, so your account was not deleted. Auto-recharge has been switched off and some cards may already be removed. Please try again later or contact support.</value></data>
+  <data name="AccountDeleted" xml:space="preserve"><value>Your account has been deleted.</value></data>
+  <data name="AccountDeletePortalAccount" xml:space="preserve"><value>This account is the portal's service account and cannot be deleted here. Contact the administrator.</value></data>
+  <data name="AccountDeleteLastAdmin" xml:space="preserve"><value>You are the only administrator. Make another account an administrator before deleting yours.</value></data>
+  <data name="AccountDeleteRechargeInProgress" xml:space="preserve"><value>An automatic top-up is being processed right now. Please try again in a few minutes.</value></data>
+  <data name="AccountDeleteRechargeInProgressStopped" xml:space="preserve"><value>An automatic top-up was being processed, so your account was not deleted. Auto-recharge has been switched off. Please try again in a few minutes.</value></data>
 </root>

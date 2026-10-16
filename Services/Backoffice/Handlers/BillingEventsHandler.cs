@@ -74,6 +74,14 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
             _logger.LogWarning("[billing] {EventId}: user {UserId} not found", evt.Id, purchase.UserId);
             return;
         }
+        if (user.ErasedAt != null)
+        {
+            // Paid after the account was erased (#217): nothing is granted to a tombstone.
+            await BillingRefusals.RecordAsync(_db, BillingRefusals.CheckoutRefused, purchase.SessionId, user.Id,
+                purchase.StripeCustomerId, null, purchase.AmountTotal, purchase.Currency,
+                "account erased", "backoffice", _logger, cancellationToken);
+            return;
+        }
 
         // Credits, the payment record and the auto-recharge opt-in in one transaction.
         var grantedNow = await CreditGrants.TryGrantAsync(_db, purchase.SessionId, CreditGrants.CheckoutConfirmType, user.Id,
@@ -117,7 +125,14 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
             return;
         }
 
-        if (succeeded
+        if (succeeded && await _db.Users.AnyAsync(u => u.Id == payment.UserId && u.ErasedAt != null, cancellationToken))
+        {
+            // Charged after the account was erased (#217): nothing is granted to a tombstone.
+            await BillingRefusals.RecordAsync(_db, BillingRefusals.PaymentRefused, payment.PaymentIntentId, payment.UserId,
+                null, null, payment.Amount, payment.Currency, "account erased", "backoffice", _logger, cancellationToken);
+            succeeded = false;
+        }
+        else if (succeeded
             && await CreditGrants.TryGrantAsync(_db, key, CreditGrants.AutoRechargeType, payment.UserId, payment.Documents, "backoffice",
                 () =>
                 {

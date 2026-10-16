@@ -761,6 +761,106 @@ public class AccountController : Controller
         return RedirectToAction(nameof(Settings));
     }
 
+    // ── Account deletion (GDPR art. 17, #217) ─────────────────────────────────────────
+    // Needs a password or e-mailed code confirmed within the last 10 minutes (stricter than
+    // Auth:ReauthMinutes), the antiforgery token and a ticked confirmation. The work is
+    // AccountErasureService's; a failure is shown as an error, never as a deleted account.
+
+    /// <summary>Re-auth for deleting the account is at most this old (#217).</summary>
+    public const int DeleteAccountReauthMinutes = 10;
+
+    public const string DeleteAccountPath = "/Account/Delete";
+
+    [CookieAuthorize]
+    [HttpGet(DeleteAccountPath)]
+    [Filters.RequireRecentAuth(MaxMinutes = DeleteAccountReauthMinutes)]
+    public async Task<IActionResult> DeleteAccount()
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction(nameof(SignIn));
+        var user = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null || !user.IsActive) return RedirectToAction(nameof(SignIn));
+        return View("Delete", user);
+    }
+
+    [CookieAuthorize]
+    [HttpPost(DeleteAccountPath)]
+    [ValidateAntiForgeryToken]
+    [Filters.RequireRecentAuth(MaxMinutes = DeleteAccountReauthMinutes)]
+    public async Task<IActionResult> DeleteAccount(
+        bool confirm,
+        [FromServices] DotNetSigningServer.Services.Erasure.AccountErasureService erasure,
+        [FromServices] ILogger<AccountController> logger)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction(nameof(SignIn));
+        var user = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null || !user.IsActive) return RedirectToAction(nameof(SignIn));
+
+        if (!confirm)
+        {
+            return DeleteAccountRefused(StatusCodes.Status400BadRequest, "ACCOUNT_DELETE_NOT_CONFIRMED", "AccountDeleteConfirmRequired");
+        }
+        if (await IsRateLimitedAsync($"delete-account:{user.Id}"))
+        {
+            return DeleteAccountRefused(StatusCodes.Status429TooManyRequests, "RATE_LIMITED", "TooManySignInAttempts");
+        }
+
+        Services.Erasure.AccountErasureResult result;
+        try
+        {
+            // Not RequestAborted: a closed tab must not stop the erasure between the cards and the commit.
+            result = await erasure.DeleteAccountAsync(user.Id, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The transaction is rolled back (account still there, nothing sent); auto-recharge may
+            // already be off and saved cards removed, so the message promises no more than that.
+            logger.LogError(ex, "Account deletion of user {UserId} failed", user.Id);
+            return DeleteAccountRefused(StatusCodes.Status500InternalServerError, "ACCOUNT_DELETE_FAILED", "AccountDeleteFailed");
+        }
+
+        if (result.Status == Services.Erasure.AccountErasureStatus.Refused)
+        {
+            return result.Refusal switch
+            {
+                Services.Erasure.AccountErasureRefusal.PortalAccount =>
+                    DeleteAccountRefused(StatusCodes.Status409Conflict, "ACCOUNT_DELETE_PORTAL_ACCOUNT", "AccountDeletePortalAccount"),
+                Services.Erasure.AccountErasureRefusal.LastAdmin =>
+                    DeleteAccountRefused(StatusCodes.Status409Conflict, "ACCOUNT_DELETE_LAST_ADMIN", "AccountDeleteLastAdmin"),
+                _ => DeleteAccountRefused(StatusCodes.Status409Conflict, "ACCOUNT_DELETE_RECHARGE_IN_PROGRESS",
+                    result.ChargesStopped ? "AccountDeleteRechargeInProgressStopped" : "AccountDeleteRechargeInProgress"),
+            };
+        }
+        if (result.Status == Services.Erasure.AccountErasureStatus.BillingFailed)
+        {
+            return DeleteAccountRefused(StatusCodes.Status502BadGateway, "ACCOUNT_DELETE_BILLING_FAILED", "AccountDeleteBillingFailed");
+        }
+
+        await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        if (WantsJson())
+        {
+            return Ok(new { status = "deleted" });
+        }
+        TempData["Info"] = _localizer["AccountDeleted"].Value;
+        return RedirectToAction("Index", "Home");
+    }
+
+    private IActionResult DeleteAccountRefused(int status, string code, string messageKey)
+    {
+        var message = _localizer[messageKey].Value;
+        if (WantsJson())
+        {
+            return StatusCode(status, new { code, message });
+        }
+        TempData["Error"] = message;
+        return RedirectToAction(nameof(DeleteAccount));
+    }
+
+    private bool WantsJson() =>
+        Request.Headers.Accept.ToString().Contains("application/json", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(Request.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
+
     [CookieAuthorize]
     [HttpGet("/Account/ChangePassword")]
     public async Task<IActionResult> ChangePassword()

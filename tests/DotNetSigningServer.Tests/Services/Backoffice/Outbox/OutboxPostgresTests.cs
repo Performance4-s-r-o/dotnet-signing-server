@@ -99,7 +99,7 @@ public class OutboxPostgresTests : IClassFixture<OutboxPostgresFixture>
             while (await reader.ReadAsync()) indexes.Add(reader.GetString(0));
 
         Assert.Equal(
-            new[] { "IX_BackofficeOutboxItems_CreatedAt", "IX_BackofficeOutboxItems_Status_NextAttemptAt", "PK_BackofficeOutboxItems" },
+            new[] { "IX_BackofficeOutboxItems_CreatedAt", "IX_BackofficeOutboxItems_Status_NextAttemptAt", "IX_BackofficeOutboxItems_SubjectRef", "PK_BackofficeOutboxItems" },
             indexes);
     }
 

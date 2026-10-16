@@ -753,4 +753,23 @@
   <data name="AdminAuditActor" xml:space="preserve"><value>Administrátor</value></data>
   <data name="AdminAuditAction" xml:space="preserve"><value>Akce</value></data>
   <data name="AdminAuditChange" xml:space="preserve"><value>Změna</value></data>
+  <data name="AccountDeleteTitle" xml:space="preserve"><value>Smazat účet</value></data>
+  <data name="AccountDeleteSettingsHint" xml:space="preserve"><value>Smaže váš účet a údaje, které o vás vedeme. Nejdřív budete požádáni o potvrzení heslem.</value></data>
+  <data name="AccountDeleteOpenButton" xml:space="preserve"><value>Smazat účet…</value></data>
+  <data name="AccountDeleteIntro" xml:space="preserve"><value>Smazání účtu nejde vrátit. Stane se toto:</value></data>
+  <data name="AccountDeleteWhatGoes" xml:space="preserve"><value>Smaže se vaše e-mailová adresa, heslo, API tokeny, uložené šablony, rozpracované dokumenty a podpisová data a budete odhlášeni na všech zařízeních.</value></data>
+  <data name="AccountDeleteCredits" xml:space="preserve"><value>Zbývající kredity ({0}) propadnou. Nevracejí se.</value></data>
+  <data name="AccountDeleteBilling" xml:space="preserve"><value>Uložené karty se odeberou, takže automatické dobíjení okamžitě skončí.</value></data>
+  <data name="AccountDeleteWhatStays" xml:space="preserve"><value>Faktury a platby zůstanou 10 let, jak vyžaduje zákon o účetnictví, ale bez vaší e-mailové adresy. Záznamy o vašich souhlasech zůstanou v pseudonymizované podobě jako doklad.</value></data>
+  <data name="AccountDeleteElsewhere" xml:space="preserve"><value>Vaše údaje se smažou i ze systémů, které rozesílají naše e-maily a vedou vaše souhlasy a požadavky na podporu.</value></data>
+  <data name="AccountDeleteConfirmLabel" xml:space="preserve"><value>Beru na vědomí, že účet bude nenávratně smazán.</value></data>
+  <data name="AccountDeleteButton" xml:space="preserve"><value>Smazat můj účet</value></data>
+  <data name="AccountDeleteConfirmRequired" xml:space="preserve"><value>Pro smazání účtu zaškrtněte potvrzení.</value></data>
+  <data name="AccountDeleteFailed" xml:space="preserve"><value>Účet se nepodařilo smazat. Automatické dobíjení už může být vypnuté a uložené karty odebrané, vaše údaje ale zůstaly. Zkuste to prosím později.</value></data>
+  <data name="AccountDeleteBillingFailed" xml:space="preserve"><value>Uložené karty se u platební brány nepodařilo odebrat všechny, proto účet smazán nebyl. Automatické dobíjení jsme vypnuli a některé karty už mohou být odebrané. Zkuste to prosím později nebo kontaktujte podporu.</value></data>
+  <data name="AccountDeleted" xml:space="preserve"><value>Váš účet byl smazán.</value></data>
+  <data name="AccountDeletePortalAccount" xml:space="preserve"><value>Tento účet je servisní účet portálu a tady ho smazat nejde. Obraťte se na správce.</value></data>
+  <data name="AccountDeleteLastAdmin" xml:space="preserve"><value>Jste jediný správce. Než svůj účet smažete, udělejte správcem jiný účet.</value></data>
+  <data name="AccountDeleteRechargeInProgress" xml:space="preserve"><value>Právě probíhá automatické dobití kreditů. Zkuste to prosím za pár minut.</value></data>
+  <data name="AccountDeleteRechargeInProgressStopped" xml:space="preserve"><value>Právě probíhalo automatické dobití kreditů, proto účet smazán nebyl. Automatické dobíjení jsme vypnuli. Zkuste to prosím za pár minut.</value></data>
 </root>
