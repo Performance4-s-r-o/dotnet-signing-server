@@ -71,13 +71,14 @@ public static class CreditGrants
             nameof(CreditGrant.Id), nameof(CreditGrant.GrantKey), nameof(CreditGrant.PaymentIntentId), nameof(CreditGrant.UserId),
             nameof(CreditGrant.Credits), nameof(CreditGrant.Source), nameof(CreditGrant.GrantedAt),
         }.Select(c => t[c]));
-        // Identifiers from the EF model; every value is a parameter.
-        var insert = $"INSERT INTO {t.Table} ({columns}) VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, {{6}}) ON CONFLICT DO NOTHING";
-        var claimed = await db.Database.ExecuteSqlRawAsync(
-            insert,
-            [Guid.NewGuid(), grant.Key, (object?)grant.PaymentIntentId ?? DBNull.Value, grant.UserId, grant.Documents,
-                Truncate(grant.Source, 32), DateTimeOffset.UtcNow],
-            cancellationToken);
+        // Identifiers from the EF model; every value is a parameter. An unknown payment intent is
+        // the literal NULL, not an untyped DBNull parameter (Npgsql cannot type a bare DBNull).
+        var paymentIntent = grant.PaymentIntentId is null ? "NULL" : "{6}";
+        var insert = $"INSERT INTO {t.Table} ({columns}) VALUES ({{0}}, {{1}}, {paymentIntent}, {{2}}, {{3}}, {{4}}, {{5}}) ON CONFLICT DO NOTHING";
+        object[] values = grant.PaymentIntentId is null
+            ? [Guid.NewGuid(), grant.Key, grant.UserId, grant.Documents, Truncate(grant.Source, 32), DateTimeOffset.UtcNow]
+            : [Guid.NewGuid(), grant.Key, grant.UserId, grant.Documents, Truncate(grant.Source, 32), DateTimeOffset.UtcNow, grant.PaymentIntentId];
+        var claimed = await db.Database.ExecuteSqlRawAsync(insert, values, cancellationToken);
         if (claimed == 0) return false;
 
         db.WebhookEvents.Add(Marker(grant));

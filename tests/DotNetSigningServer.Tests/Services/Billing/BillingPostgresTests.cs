@@ -126,8 +126,10 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
 
         await using (var db = _pg.CreateContext())
         {
-            await Assert.ThrowsAsync<TimeoutException>(() => CreditGrants.TryGrantAsync(db, "cs_fail", CreditGrants.CheckoutConfirmType,
-                user.Id, 300, "test", () => throw new TimeoutException("db"), default, "pi_fail"));
+            // Not a TimeoutException: NpgsqlExecutionStrategy wraps what it considers transient
+            // (TimeoutException included) in an InvalidOperationException.
+            await Assert.ThrowsAsync<FormatException>(() => CreditGrants.TryGrantAsync(db, "cs_fail", CreditGrants.CheckoutConfirmType,
+                user.Id, 300, "test", () => throw new FormatException("bad payload"), default, "pi_fail"));
         }
         Assert.Equal(0, await CreditsAsync(user.Id));
 
@@ -143,6 +145,26 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
                 user.Id, 300, "test", () => Task.CompletedTask, default, "pi_fail"));
         }
         Assert.Equal(300, await CreditsAsync(user.Id));
+    }
+
+    [DockerFact]
+    public async Task Grant_WithoutAPaymentIntent_IsGrantedOnce()
+    {
+        var user = await NewUserAsync();
+
+        await using (var db = _pg.CreateContext())
+        {
+            Assert.True(await CreditGrants.TryGrantAsync(db, "cs_no_pi", CreditGrants.CheckoutConfirmType,
+                user.Id, 300, "confirm-page", () => Task.CompletedTask, default));
+        }
+        await using (var db = _pg.CreateContext())
+        {
+            Assert.False(await CreditGrants.TryGrantAsync(db, "cs_no_pi", CreditGrants.CheckoutConfirmType,
+                user.Id, 300, "confirm-page", () => Task.CompletedTask, default));
+        }
+        Assert.Equal(300, await CreditsAsync(user.Id));
+        await using var check = _pg.CreateContext();
+        Assert.Null((await check.CreditGrants.AsNoTracking().SingleAsync(g => g.GrantKey == "cs_no_pi")).PaymentIntentId);
     }
 
     [DockerFact]
