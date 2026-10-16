@@ -102,10 +102,16 @@ namespace DotNetSigningServer.Services
             return Convert.ToBase64String(fullySignedPdf);
         }
 
-        public virtual string SignWithPfx(PfxSignInput input)
+        public virtual string SignWithPfx(PfxSignInput input) =>
+            SignWithPfx(input, Convert.FromBase64String(input.PdfContent));
+
+        /// <summary>
+        /// PFX podpis nad bajty, které už prošly vstupní kontrolou; <c>input.PdfContent</c> se nečte.
+        /// Oba kanály (JSON i binární, #74) končí tady.
+        /// </summary>
+        public virtual string SignWithPfx(PfxSignInput input, byte[] originalPdf)
         {
             var (chain, privateKey) = PdfCryptoHelper.LoadFromPfx(input.PfxContent, input.PfxPassword);
-            byte[] originalPdf = Convert.FromBase64String(input.PdfContent);
             byte[] fullySignedPdf = SignPdfWithKeyPair(
                 originalPdf,
                 chain,
@@ -133,7 +139,14 @@ namespace DotNetSigningServer.Services
             return Convert.ToBase64String(fullySignedPdf);
         }
 
-        public virtual string ApplyDocumentTimestamp(DocumentTimestampInput input)
+        public virtual string ApplyDocumentTimestamp(DocumentTimestampInput input) =>
+            ApplyDocumentTimestamp(input, Convert.FromBase64String(input.PdfContent));
+
+        /// <summary>
+        /// Časové razítko nad bajty, které už prošly vstupní kontrolou (#74, binární kanál);
+        /// <c>input.PdfContent</c> se nečte. Stejné chyby ve stejném pořadí jako verze s base64.
+        /// </summary>
+        public virtual string ApplyDocumentTimestamp(DocumentTimestampInput input, byte[] pdf)
         {
             ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(
                 input.TsaUrl, input.TsaUsername, input.TsaPassword,
@@ -143,7 +156,7 @@ namespace DotNetSigningServer.Services
                 throw new ApiValidationException("TSA_NOT_CONFIGURED");
             }
 
-            return ApplyDocumentTimestamp(input, tsaClient);
+            return ApplyDocumentTimestamp(input, tsaClient, pdf);
         }
 
         /// <summary>
@@ -151,10 +164,13 @@ namespace DotNetSigningServer.Services
         /// can drive the real path against an in-process TSA instead of the
         /// network.
         /// </summary>
-        internal string ApplyDocumentTimestamp(DocumentTimestampInput input, ITSAClient tsaClient)
+        internal string ApplyDocumentTimestamp(DocumentTimestampInput input, ITSAClient tsaClient) =>
+            ApplyDocumentTimestamp(input, tsaClient, Convert.FromBase64String(input.PdfContent));
+
+        internal string ApplyDocumentTimestamp(DocumentTimestampInput input, ITSAClient tsaClient, byte[] pdf)
         {
             string fieldName = PdfCryptoHelper.EnsureFieldName(input.FieldName, $"Timestamp_{Guid.NewGuid():N}");
-            using var msIn = new MemoryStream(Convert.FromBase64String(input.PdfContent));
+            using var msIn = new MemoryStream(pdf);
             using var msOut = new MemoryStream();
             var reader = new PdfReader(msIn);
             var signer = new PdfSigner(reader, msOut, new StampingProperties().UseAppendMode());
@@ -257,14 +273,27 @@ namespace DotNetSigningServer.Services
             return _visualSigningService.ApplyVisualSign(input);
         }
 
-        public virtual string AddAttachment(AddAttachmentInput input)
+        /// <summary>Vizuální podpis nad bajty (#74, binární kanál); <c>input.PdfContent</c> se nečte.</summary>
+        public virtual string ApplyVisualSign(VisualSignInput input, byte[] pdf)
+        {
+            return _visualSigningService.ApplyVisualSign(input, pdf);
+        }
+
+        public virtual string AddAttachment(AddAttachmentInput input) =>
+            AddAttachment(input, null);
+
+        /// <summary>
+        /// Příloha nad bajty PDF (#74, binární kanál); <c>input.PdfContent</c> se nečte.
+        /// <c>null</c> = PDF je v <c>input.PdfContent</c> (base64).
+        /// </summary>
+        public virtual string AddAttachment(AddAttachmentInput input, byte[]? pdf)
         {
             if (string.IsNullOrWhiteSpace(input.FileName))
             {
                 throw new ArgumentException("A filename is required to attach a file to the PDF.", nameof(input.FileName));
             }
 
-            byte[] pdfBytes = Convert.FromBase64String(input.PdfContent);
+            byte[] pdfBytes = pdf ?? Convert.FromBase64String(input.PdfContent);
             byte[] attachmentBytes = Convert.FromBase64String(input.AttachmentContent);
             string attachmentFileName = input.FileName;
             string? attachmentMimeType = input.MimeType;

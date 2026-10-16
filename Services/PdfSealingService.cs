@@ -33,29 +33,39 @@ namespace DotNetSigningServer.Services
                 throw new InvalidOperationException("Server-side sealing is not enabled.");
             }
 
-            string pdfContent = input.PdfContent;
+            return ApplySeal(input, Convert.FromBase64String(input.PdfContent));
+        }
+
+        /// <summary>
+        /// Pečeť nad bajty, které už prošly vstupní kontrolou (#74, binární kanál);
+        /// <c>input.PdfContent</c> se nečte. Oba kanály končí tady.
+        /// </summary>
+        public virtual string ApplySeal(SealInput input, byte[] pdf)
+        {
+            if (!_sealOptions.Enabled)
+            {
+                throw new InvalidOperationException("Server-side sealing is not enabled.");
+            }
+
+            byte[] originalPdf = pdf;
 
             // Add verification metadata/QR page before sealing
             if (!string.IsNullOrWhiteSpace(input.VerificationUrl) && input.VerificationMode != "disabled")
             {
-                byte[] pdfBytes = Convert.FromBase64String(pdfContent);
-                pdfBytes = PdfVerificationService.AddVerification(
-                    pdfBytes, input.VerificationUrl, input.VerificationMode ?? "disabled", input.SignerName);
-                pdfContent = Convert.ToBase64String(pdfBytes);
+                originalPdf = PdfVerificationService.AddVerification(
+                    originalPdf, input.VerificationUrl, input.VerificationMode ?? "disabled", input.SignerName);
             }
 
             // Stamp custom fillable field values before sealing so they are covered by the seal signature.
             if (input.Fields is { Count: > 0 })
             {
-                byte[] withFields = PdfTemplateService.StampTextFields(Convert.FromBase64String(pdfContent), input.Fields);
-                pdfContent = Convert.ToBase64String(withFields);
+                originalPdf = PdfTemplateService.StampTextFields(originalPdf, input.Fields);
             }
 
             if (ShouldApplyVisibleOverlay(input))
             {
-                pdfContent = _visualSigningService.ApplyVisualSign(new VisualSignInput
+                originalPdf = Convert.FromBase64String(_visualSigningService.ApplyVisualSign(new VisualSignInput
                 {
-                    PdfContent = pdfContent,
                     Location = input.Location,
                     Reason = input.Reason,
                     SignRect = input.SignRect,
@@ -70,11 +80,10 @@ namespace DotNetSigningServer.Services
                     DesignWidth = input.DesignWidth,
                     DesignHeight = input.DesignHeight,
                     AutoHeight = input.AutoHeight,
-                });
+                }, originalPdf));
             }
 
             var (chain, privateKey) = LoadSealCredentials();
-            byte[] originalPdf = Convert.FromBase64String(pdfContent);
             byte[] fullySignedPdf = _pdfSigningService.SignPdfWithKeyPair(
                 originalPdf,
                 chain,

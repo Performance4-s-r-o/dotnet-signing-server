@@ -304,14 +304,7 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Sign with PFX");
-                try
-                {
-                    PfxGuard.EnsureSafe(Convert.FromBase64String(input.PfxContent));
-                }
-                catch (FormatException)
-                {
-                    // Not base64: the signing service answers that with its own message.
-                }
+                EnsurePfxSafe(input.PfxContent);
                 SafetyGuard.EnsureSafePdf(input.PdfContent, "Sign with PFX");
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }
@@ -320,9 +313,56 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
+            return await SignWithPfxCoreAsync(user, input, null, ApiOperationService.Fingerprint("sign-pfx", input));
+        }
+
+        /// <summary>
+        /// <c>/api/sign-pfx</c> v interním binárním kanálu (#74): <c>multipart/form-data</c> s částmi
+        /// <c>metadata</c> (PFX a heslo zůstávají v metadatech) a <c>pdf</c>. Stejné kontroly,
+        /// účtování i odpověď jako JSON varianta; <c>Request.Form</c> se tu číst nesmí.
+        /// </summary>
+        [HttpPost("/api/sign-pfx")]
+        [Consumes(BinaryPdfChannel.ContentType)]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> SignWithPfxBinary()
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            var (input, pdf, refused) = await ReadBinaryPdfAsync<PfxSignInput>("Sign with PFX", i => i.PdfContent);
+            if (refused != null) return refused;
             try
             {
-                return await RunOperationAsync(user, "sign-pfx", ApiOperationService.Fingerprint("sign-pfx", input), baseCost: 1, async _ =>
+                EnsurePfxSafe(input!.PfxContent);
+                SafetyGuard.EnsureSafePdf(pdf!, "Sign with PFX");
+                LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
+            }
+
+            return await SignWithPfxCoreAsync(user, input, pdf, BinaryFingerprint("sign-pfx", input, pdf!));
+        }
+
+        private static void EnsurePfxSafe(string pfxContent)
+        {
+            try
+            {
+                PfxGuard.EnsureSafe(Convert.FromBase64String(pfxContent));
+            }
+            catch (FormatException)
+            {
+                // Not base64: the signing service answers that with its own message.
+            }
+        }
+
+        /// <summary>sign-pfx po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
+        private async Task<IActionResult> SignWithPfxCoreAsync(User user, PfxSignInput input, byte[]? pdf, string fingerprint)
+        {
+            try
+            {
+                return await RunOperationAsync(user, "sign-pfx", fingerprint, baseCost: 1, async _ =>
                 {
                     if (input.TemplateId.HasValue)
                     {
@@ -333,7 +373,7 @@ namespace DotNetSigningServer.Controllers
                             ? input.FieldName
                             : signatureField.FieldName;
                     }
-                    var result = _signingService.SignWithPfx(input);
+                    var result = pdf == null ? _signingService.SignWithPfx(input) : _signingService.SignWithPfx(input, pdf);
                     return new PaidResult(new { result }, result);
                 });
             }
@@ -361,9 +401,39 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
+            return await TimestampCoreAsync(user, input, null, ApiOperationService.Fingerprint("timestamp", input));
+        }
+
+        /// <summary><c>/api/timestamp</c> v interním binárním kanálu (#74), viz <see cref="SignWithPfxBinary"/>.</summary>
+        [HttpPost("/api/timestamp")]
+        [Consumes(BinaryPdfChannel.ContentType)]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> ApplyTimestampBinary()
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            var (input, pdf, refused) = await ReadBinaryPdfAsync<DocumentTimestampInput>("Timestamp", i => i.PdfContent);
+            if (refused != null) return refused;
             try
             {
-                return await RunOperationAsync(user, "timestamp", ApiOperationService.Fingerprint("timestamp", input), baseCost: 1, async _ =>
+                SafetyGuard.EnsureSafePdf(pdf!, "Timestamp");
+                LimitGuard.EnsureImageWithinLimit(input!.SignImageContent, "Signature image");
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
+            }
+
+            return await TimestampCoreAsync(user, input, pdf, BinaryFingerprint("timestamp", input, pdf!));
+        }
+
+        /// <summary>timestamp po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
+        private async Task<IActionResult> TimestampCoreAsync(User user, DocumentTimestampInput input, byte[]? pdf, string fingerprint)
+        {
+            try
+            {
+                return await RunOperationAsync(user, "timestamp", fingerprint, baseCost: 1, async _ =>
                 {
                     if (input.TemplateId.HasValue)
                     {
@@ -374,7 +444,7 @@ namespace DotNetSigningServer.Controllers
                             ? input.FieldName
                             : signatureField.FieldName;
                     }
-                    var result = _signingService.ApplyDocumentTimestamp(input);
+                    var result = pdf == null ? _signingService.ApplyDocumentTimestamp(input) : _signingService.ApplyDocumentTimestamp(input, pdf);
                     return new PaidResult(new { result }, result);
                 });
             }
@@ -411,6 +481,35 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
+            return await ExtendSignatureCoreAsync(user, input, null, ApiOperationService.Fingerprint("extend-signature", input));
+        }
+
+        /// <summary><c>/api/extend-signature</c> v interním binárním kanálu (#74), viz <see cref="SignWithPfxBinary"/>.</summary>
+        [HttpPost("/api/extend-signature")]
+        [Consumes(BinaryPdfChannel.ContentType)]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> ExtendSignatureBinary()
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            var (input, pdf, refused) = await ReadBinaryPdfAsync<ExtendSignatureInput>("Extend signature", i => i.PdfContent);
+            if (refused != null) return refused;
+            try
+            {
+                SafetyGuard.EnsureSafePdf(pdf!, "Extend signature");
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
+            }
+
+            return await ExtendSignatureCoreAsync(user, input!, pdf, BinaryFingerprint("extend-signature", input!, pdf!));
+        }
+
+        /// <summary>extend-signature po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
+        private async Task<IActionResult> ExtendSignatureCoreAsync(User user, ExtendSignatureInput input, byte[]? pdf, string fingerprint)
+        {
             iText.Signatures.ITSAClient? tsaClient;
             try
             {
@@ -438,9 +537,9 @@ namespace DotNetSigningServer.Controllers
 
             try
             {
-                return await RunOperationAsync(user, "extend-signature", ApiOperationService.Fingerprint("extend-signature", input), baseCost: 1, _ =>
+                return await RunOperationAsync(user, "extend-signature", fingerprint, baseCost: 1, _ =>
                 {
-                    var pdfBytes = Convert.FromBase64String(input.PdfContent);
+                    var pdfBytes = pdf ?? Convert.FromBase64String(input.PdfContent);
                     var extended = Convert.ToBase64String(_ltvService.Extend(pdfBytes, tsaClient, input.AddArchiveTimestamp));
                     return Task.FromResult(new PaidResult(new { result = extended }, extended));
                 });
@@ -524,6 +623,38 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { message = Localizer["InvalidBase64"].Value });
             }
 
+            return InspectSignaturesCore(pdfBytes);
+        }
+
+        /// <summary><c>/api/inspect-signatures</c> v interním binárním kanálu (#74), viz <see cref="SignWithPfxBinary"/>.</summary>
+        [HttpPost("/api/inspect-signatures")]
+        [Consumes(BinaryPdfChannel.ContentType)]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> InspectSignaturesBinary()
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            var (_, pdf, refused) = await ReadBinaryPdfAsync<InspectSignaturesInput>("Signature inspection", i => i.PdfContent);
+            if (refused != null) return refused;
+            if (pdf!.Length == 0)
+            {
+                return BadRequest(new { message = Localizer["PdfContentRequired"].Value });
+            }
+            try
+            {
+                SafetyGuard.EnsureSafePdf(pdf, "Signature inspection", checkActiveContent: false);
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
+            }
+
+            return InspectSignaturesCore(pdf);
+        }
+
+        private IActionResult InspectSignaturesCore(byte[] pdfBytes)
+        {
             try
             {
                 return Ok(PdfSignatureInspector.Inspect(pdfBytes));
@@ -590,9 +721,39 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
+            return await VisualSignCoreAsync(user, input, null, ApiOperationService.Fingerprint("visual-sign", input));
+        }
+
+        /// <summary><c>/api/visual-sign</c> v interním binárním kanálu (#74), viz <see cref="SignWithPfxBinary"/>.</summary>
+        [HttpPost("/api/visual-sign")]
+        [Consumes(BinaryPdfChannel.ContentType)]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> ApplyVisualSignBinary()
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            var (input, pdf, refused) = await ReadBinaryPdfAsync<VisualSignInput>("Visual sign", i => i.PdfContent);
+            if (refused != null) return refused;
             try
             {
-                return await RunOperationAsync(user, "visual-sign", ApiOperationService.Fingerprint("visual-sign", input), baseCost: 1, async _ =>
+                SafetyGuard.EnsureSafePdf(pdf!, "Visual sign");
+                LimitGuard.EnsureImageWithinLimit(input!.SignImageContent, "Signature image");
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
+            }
+
+            return await VisualSignCoreAsync(user, input, pdf, BinaryFingerprint("visual-sign", input, pdf!));
+        }
+
+        /// <summary>visual-sign po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
+        private async Task<IActionResult> VisualSignCoreAsync(User user, VisualSignInput input, byte[]? pdf, string fingerprint)
+        {
+            try
+            {
+                return await RunOperationAsync(user, "visual-sign", fingerprint, baseCost: 1, async _ =>
                 {
                     if (input.TemplateId.HasValue)
                     {
@@ -604,7 +765,7 @@ namespace DotNetSigningServer.Controllers
                             input.SignRect?.X, input.SignRect?.Y, input.SignRect?.Width, input.SignRect?.Height, input.SignPageNumber);
                     }
                     Logger.LogInformation("[visual-sign] Applying visual signature...");
-                    var result = _signingService.ApplyVisualSign(input);
+                    var result = pdf == null ? _signingService.ApplyVisualSign(input) : _signingService.ApplyVisualSign(input, pdf);
                     Logger.LogInformation("[visual-sign] Success, result length={Len}", result?.Length ?? 0);
                     return new PaidResult(new { result }, result);
                 });
@@ -630,13 +791,7 @@ namespace DotNetSigningServer.Controllers
 
             if (!user.SealAllowed)
             {
-                Logger.LogWarning(
-                    Logging.LoggingEvents.AuthFailed,
-                    "Seal refused for user {UserId} — SealAllowed is not granted",
-                    user.Id);
-                return StatusCode(
-                    StatusCodes.Status403Forbidden,
-                    new { code = "SEAL_NOT_PERMITTED", message = Localizer["SealNotPermitted"].Value });
+                return SealNotPermitted(user);
             }
 
             try
@@ -653,9 +808,61 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
+            return await SealCoreAsync(user, input, null, ApiOperationService.Fingerprint("seal", input));
+        }
+
+        /// <summary>
+        /// <c>/api/seal</c> v interním binárním kanálu (#74), viz <see cref="SignWithPfxBinary"/>.
+        /// Oprávnění k pečeti (<see cref="User.SealAllowed"/>) se ověřuje dřív, než se přečte tělo.
+        /// </summary>
+        [HttpPost("/api/seal")]
+        [Consumes(BinaryPdfChannel.ContentType)]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> ApplySealBinary()
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            if (!user.SealAllowed)
+            {
+                return SealNotPermitted(user);
+            }
+
+            var (input, pdf, refused) = await ReadBinaryPdfAsync<SealInput>("Seal", i => i.PdfContent);
+            if (refused != null) return refused;
             try
             {
-                return await RunOperationAsync(user, "seal", ApiOperationService.Fingerprint("seal", input), baseCost: 1, async _ =>
+                SafetyGuard.EnsureSafePdf(pdf!, "Seal");
+                LimitGuard.EnsureImageWithinLimit(input!.SignImageContent, "Signature");
+                LimitGuard.EnsureImageWithinLimit(input.StampImageContent, "Stamp");
+                LimitGuard.EnsureImageWithinLimit(input.CompanyLogoContent, "Company logo");
+                LimitGuard.EnsureImageWithinLimit(input.BackgroundImageContent, "Background");
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
+            }
+
+            return await SealCoreAsync(user, input, pdf, BinaryFingerprint("seal", input, pdf!));
+        }
+
+        private IActionResult SealNotPermitted(User user)
+        {
+            Logger.LogWarning(
+                Logging.LoggingEvents.AuthFailed,
+                "Seal refused for user {UserId} — SealAllowed is not granted",
+                user.Id);
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { code = "SEAL_NOT_PERMITTED", message = Localizer["SealNotPermitted"].Value });
+        }
+
+        /// <summary>seal po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
+        private async Task<IActionResult> SealCoreAsync(User user, SealInput input, byte[]? pdf, string fingerprint)
+        {
+            try
+            {
+                return await RunOperationAsync(user, "seal", fingerprint, baseCost: 1, async _ =>
                 {
                     if (input.TemplateId.HasValue)
                     {
@@ -664,7 +871,7 @@ namespace DotNetSigningServer.Controllers
                         input.SignPageNumber = signatureField.Page <= 0 ? 1 : signatureField.Page;
                     }
 
-                    var result = _sealingService.ApplySeal(input);
+                    var result = pdf == null ? _sealingService.ApplySeal(input) : _sealingService.ApplySeal(input, pdf);
                     return new PaidResult(new { result }, result);
                 });
             }
@@ -681,19 +888,9 @@ namespace DotNetSigningServer.Controllers
             var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
 
-            var bypassDebitRequested = Request.Headers.ContainsKey(AttachmentDebitBypassHeader)
-                                       || Request.Headers.ContainsKey(LegacyAttachmentDebitBypassHeader);
-            // Never log any part of the bypass key — not the caller's, not the
-            // configured one. head+tail+length+hash-prefix of a shared secret, emitted
-            // on every request and shipped to Loki, narrows brute-force considerably.
-            Logger.LogInformation(
-                "[attachment] user={UserId} bypassHeaderPresent={HeaderPresent} bypassKeyConfigured={KeyConfigured}",
-                user.Id,
-                bypassDebitRequested,
-                !string.IsNullOrWhiteSpace(BillingOptions.AttachmentDebitBypassKey));
-            if (bypassDebitRequested && !IsAttachmentDebitBypassAuthorized(HttpContext, BillingOptions.AttachmentDebitBypassKey))
+            var bypassDebitRequested = BypassDebitRequested();
+            if (!AttachmentBypassAllowed(user, bypassDebitRequested))
             {
-                Logger.LogWarning("Attachment billing bypass rejected for user {UserId}", user.Id);
                 return Forbid();
             }
 
@@ -708,16 +905,81 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
+            return await AttachmentCoreAsync(user, input, null, bypassDebitRequested,
+                ApiOperationService.Fingerprint("attachment", input, bypassDebitRequested));
+        }
+
+        /// <summary>
+        /// <c>/api/attachment</c> v interním binárním kanálu (#74), viz <see cref="SignWithPfxBinary"/>.
+        /// Příloha (<c>attachmentContent</c>) zůstává v metadatech v base64; strop metadat o ni roste
+        /// o <c>Limits:AttachmentMaxBytes</c>.
+        /// </summary>
+        [HttpPost("/api/attachment")]
+        [Consumes(BinaryPdfChannel.ContentType)]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> AddAttachmentBinary()
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            var bypassDebitRequested = BypassDebitRequested();
+            if (!AttachmentBypassAllowed(user, bypassDebitRequested))
+            {
+                return Forbid();
+            }
+
+            var (input, pdf, refused) = await ReadBinaryPdfAsync<AddAttachmentInput>(
+                "Attachment PDF", i => i.PdfContent, extraMetadataBytes: LimitGuard.Limits.AttachmentMaxBytes / 3 * 4 + 1024);
+            if (refused != null) return refused;
+            try
+            {
+                SafetyGuard.EnsureSafePdf(pdf!, "Attachment PDF");
+                LimitGuard.EnsureAttachmentWithinLimit(input!.AttachmentContent, "Attachment");
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
+            }
+
+            return await AttachmentCoreAsync(user, input, pdf, bypassDebitRequested,
+                BinaryFingerprint("attachment", input, pdf!, bypassDebitRequested));
+        }
+
+        private bool BypassDebitRequested() =>
+            Request.Headers.ContainsKey(AttachmentDebitBypassHeader)
+            || Request.Headers.ContainsKey(LegacyAttachmentDebitBypassHeader);
+
+        private bool AttachmentBypassAllowed(User user, bool bypassDebitRequested)
+        {
+            // Never log any part of the bypass key — not the caller's, not the
+            // configured one. head+tail+length+hash-prefix of a shared secret, emitted
+            // on every request and shipped to Loki, narrows brute-force considerably.
+            Logger.LogInformation(
+                "[attachment] user={UserId} bypassHeaderPresent={HeaderPresent} bypassKeyConfigured={KeyConfigured}",
+                user.Id,
+                bypassDebitRequested,
+                !string.IsNullOrWhiteSpace(BillingOptions.AttachmentDebitBypassKey));
+            if (bypassDebitRequested && !IsAttachmentDebitBypassAuthorized(HttpContext, BillingOptions.AttachmentDebitBypassKey))
+            {
+                Logger.LogWarning("Attachment billing bypass rejected for user {UserId}", user.Id);
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>attachment po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
+        private async Task<IActionResult> AttachmentCoreAsync(User user, AddAttachmentInput input, byte[]? pdf, bool bypassDebitRequested, string fingerprint)
+        {
             try
             {
                 return await RunOperationAsync(
                     user,
                     "attachment",
-                    ApiOperationService.Fingerprint("attachment", input, bypassDebitRequested),
+                    fingerprint,
                     baseCost: bypassDebitRequested ? 0 : 1,
                     _ =>
                     {
-                        var result = _signingService.AddAttachment(input);
+                        var result = pdf == null ? _signingService.AddAttachment(input) : _signingService.AddAttachment(input, pdf);
                         return Task.FromResult(new PaidResult(new { result }, result));
                     });
             }

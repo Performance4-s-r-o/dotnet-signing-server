@@ -608,7 +608,7 @@ public class BinaryChannelTests : IClassFixture<BinaryChannelFixture>
     {
         var (userId, client) = await _fx.NewAccountAsync(credits: 5);
 
-        var response = await client.PostAsync("/api/timestamp", Multipart(new { tsaUrl = "https://tsa.example.com" }, Pdf()));
+        var response = await client.PostAsync("/api/sign", Multipart(new { id = "x" }, Pdf()));
 
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
         Assert.Equal(5, await _fx.BalanceAsync(userId));
