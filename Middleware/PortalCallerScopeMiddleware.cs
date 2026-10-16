@@ -32,10 +32,10 @@ public class PortalCallerScopeMiddleware
         }
 
         using (_logger.BeginScope(new Dictionary<string, object?>
-               {
-                   [TenantScopeKey] = caller.TenantId,
-                   [RequestIdScopeKey] = caller.RequestId,
-               }))
+        {
+            [TenantScopeKey] = caller.TenantId,
+            [RequestIdScopeKey] = caller.RequestId,
+        }))
         {
             _logger.LogInformation("Portal call {Method} {Path} tenant={TenantId} requestId={RequestId}",
                 context.Request.Method, context.Request.Path, caller.TenantId, caller.RequestId);

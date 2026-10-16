@@ -220,10 +220,10 @@ public class PortalTrustTests : IDisposable
     {
         var scopes = new LoggerExternalScopeProvider();
         using (scopes.Push(new Dictionary<string, object?>
-               {
-                   [PortalCallerScopeMiddleware.TenantScopeKey] = "tenant-a",
-                   [PortalCallerScopeMiddleware.RequestIdScopeKey] = "req-1",
-               }))
+        {
+            [PortalCallerScopeMiddleware.TenantScopeKey] = "tenant-a",
+            [PortalCallerScopeMiddleware.RequestIdScopeKey] = "req-1",
+        }))
         {
             Assert.Equal(" [tenant=tenant-a requestId=req-1]", DotNetSigningServer.Logging.LokiLogger.PortalScopeSuffix(scopes));
         }
@@ -344,8 +344,13 @@ public class PortalTrustTests : IDisposable
         // A completed signature: the presign is gone, the operation remembers the tenant.
         var op = new ApiOperation
         {
-            UserId = PortalUserId, OperationId = "op-1", ClientKey = true, Operation = "sign",
-            PresignId = Guid.NewGuid().ToString(), State = ApiOperationState.Completed, TenantId = tenant,
+            UserId = PortalUserId,
+            OperationId = "op-1",
+            ClientKey = true,
+            Operation = "sign",
+            PresignId = Guid.NewGuid().ToString(),
+            State = ApiOperationState.Completed,
+            TenantId = tenant,
         };
         _db.ApiOperations.Add(op);
         await _db.SaveChangesAsync();
