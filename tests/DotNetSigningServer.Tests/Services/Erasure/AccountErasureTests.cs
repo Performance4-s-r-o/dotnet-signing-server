@@ -53,6 +53,7 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
     private readonly OutboxPostgresFixture _pg;
     private readonly OutboxTestHost _host;
     private readonly FakePaymentGateway _payments = new();
+    private readonly PortalTrustOptions _portal = new();
     private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "erasure-test-" + Guid.NewGuid().ToString("N"));
 
     public AccountErasureTests(OutboxPostgresFixture pg)
@@ -62,6 +63,7 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
         _host = new OutboxTestHost(pg.Configure, services =>
         {
             services.AddSingleton<IPaymentGateway>(_payments);
+            services.AddSingleton(_portal);
             services.AddSingleton<IOptions<P4BackofficeProductOptions>>(Microsoft.Extensions.Options.Options.Create(Backoffice(billingOn: false)));
             services.AddScoped<AccountErasureService>();
             services.AddSingleton<IOutboxHandler, ErasureRequestOutboxHandler>();
@@ -93,7 +95,7 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
     }
 
     /// <summary>The same shape of data for every account, so a sloppy filter would hit the other one.</summary>
-    private sealed record Seeded(Guid UserId, string Email, string File, Guid PendingEmailItem, Guid PendingConsentItem);
+    private sealed record Seeded(Guid UserId, string Email, string File, Guid PendingEmailItem, Guid PendingConsentItem, Guid PendingSupportItem);
 
     private async Task<Seeded> SeedAsync(string email, string? stripeCustomer = null)
     {
@@ -158,7 +160,7 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
             {
                 EventId = "evt_" + id.ToString("N"),
                 EventType = "invoice.paid",
-                PayloadJson = $$"""{"customer":"{{stripeCustomer}}"}""",
+                PayloadJson = "{\"data\":{\"object\":{\"customer\":\"" + stripeCustomer + "\",\"receipt_email\":\"" + email + "\"}}}",
                 ProcessedAt = DateTimeOffset.UtcNow,
             });
         }
@@ -170,8 +172,9 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
         var outbox = scope.ServiceProvider.GetRequiredService<IBackofficeOutbox>();
         var mail = outbox.Enqueue("email.raw", new { to = email, subject = "s", html = "h" }, subjectRef: "user:" + id.ToString("D"));
         var consent = outbox.Enqueue("consent", new { events = Array.Empty<object>() }, subjectRef: AccountErasure.SubjectRef(id));
+        var support = outbox.Enqueue("support.ticket", new { message = "help" }, subjectRef: AccountErasure.SubjectRef(id) + "/support/k1");
         await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().SaveChangesAsync();
-        return new Seeded(id, email, file, mail, consent);
+        return new Seeded(id, email, file, mail, consent, support);
     }
 
     private async Task AssertUntouchedAsync(Seeded s)
@@ -181,7 +184,6 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
         Assert.Equal(s.Email, u.Email);
         Assert.True(u.IsActive);
         Assert.Null(u.ErasedAt);
-        Assert.True(u.AutoRechargeEnabled);
         Assert.Equal("otp-hash", u.EmailOtpCode);
         Assert.Equal(1, await db.Documents.CountAsync(d => d.UserId == s.UserId));
         Assert.Equal(1, await db.UsageRecords.CountAsync(r => r.UserId == s.UserId && r.DocumentId != null));
@@ -193,7 +195,7 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
         Assert.True(await db.BackofficeWebhookInboxItems.AnyAsync(i => i.WebhookId == "evt-email-" + s.UserId.ToString("N")));
         Assert.True(await db.BackofficeWebhookInboxItems.AnyAsync(i => i.WebhookId == "evt-ref-" + s.UserId.ToString("N")));
         Assert.True(await db.AuthAttemptCounters.AnyAsync(c => c.Key == "signin-account:" + s.Email.ToLowerInvariant()));
-        foreach (var itemId in new[] { s.PendingEmailItem, s.PendingConsentItem })
+        foreach (var itemId in new[] { s.PendingEmailItem, s.PendingConsentItem, s.PendingSupportItem })
         {
             var item = await db.BackofficeOutboxItems.AsNoTracking().SingleAsync(i => i.Id == itemId);
             Assert.Equal(BackofficeOutboxStatus.Pending, item.Status);
@@ -237,7 +239,8 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
             Assert.Equal(0, await db.ApiTokens.CountAsync(t => t.UserId == a.UserId));
             Assert.False(await db.BackofficeWebhookInboxItems.AnyAsync(i => i.WebhookId == "evt-email-" + a.UserId.ToString("N")));
             Assert.False(await db.BackofficeWebhookInboxItems.AnyAsync(i => i.WebhookId == "evt-ref-" + a.UserId.ToString("N")));
-            Assert.False(await db.WebhookEvents.AnyAsync(w => w.EventId == "evt_" + a.UserId.ToString("N")));
+            // The Stripe event keeps its id (dedup) but not its payload.
+            Assert.Equal("{}", (await db.WebhookEvents.SingleAsync(w => w.EventId == "evt_" + a.UserId.ToString("N"))).PayloadJson);
             Assert.False(await db.AuthAttemptCounters.AnyAsync(c => c.Key.EndsWith(a.Email.ToLowerInvariant()) && !c.Key.EndsWith(b.Email.ToLowerInvariant())));
             Assert.False(await db.AuthAttemptCounters.AnyAsync(c => c.Key == "reauth:" + a.UserId.ToString("D")));
 
@@ -251,7 +254,7 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
             Assert.Equal(AccountErasure.SubjectRef(a.UserId), consent.SubjectRef);
 
             // A's unsent messages are cancelled without payload.
-            foreach (var itemId in new[] { a.PendingEmailItem, a.PendingConsentItem })
+            foreach (var itemId in new[] { a.PendingEmailItem, a.PendingConsentItem, a.PendingSupportItem })
             {
                 var item = await db.BackofficeOutboxItems.AsNoTracking().SingleAsync(i => i.Id == itemId);
                 Assert.Equal(BackofficeOutboxStatus.Cancelled, item.Status);
@@ -268,7 +271,7 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
         await AssertUntouchedAsync(b);
         await using (var db = _pg.CreateContext())
         {
-            Assert.True(await db.WebhookEvents.AnyAsync(w => w.EventId == "evt_" + b.UserId.ToString("N")));
+            Assert.NotEqual("{}", (await db.WebhookEvents.SingleAsync(w => w.EventId == "evt_" + b.UserId.ToString("N"))).PayloadJson);
             Assert.Equal("cus_" + tag + "B", (await db.Users.SingleAsync(u => u.Id == b.UserId)).StripeCustomerId);
         }
     }
@@ -351,10 +354,14 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
         Assert.Equal(AccountErasureStatus.BillingFailed, (await DeleteAsync(a.UserId)).Status);
         _payments.FailDetach = false;
         _payments.CardLeft = true;
-        Assert.Equal(AccountErasureStatus.BillingFailed, (await DeleteAsync(a.UserId)).Status);
+        var second = await DeleteAsync(a.UserId);
+        Assert.Equal(AccountErasureStatus.BillingFailed, second.Status);
+        Assert.True(second.ChargesStopped);
 
         await AssertUntouchedAsync(a);
         Assert.Empty(await ErasureItemsAsync(a.UserId));
+        await using var db = _pg.CreateContext();
+        Assert.False((await db.Users.SingleAsync(u => u.Id == a.UserId)).AutoRechargeEnabled); // switched off before the cards
     }
 
     [DockerFact]
@@ -478,7 +485,7 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
         Assert.DoesNotContain("erasure_id", body);
         Assert.DoesNotContain("@", body);
 
-        _host.Service.EnqueueProblem(HttpStatusCode.Conflict, ErasureAckOutboxHandler.TargetSettled);
+        SettledAs("retained"); // closed by the first ack with the same status
         var repeat = await _host.Processor.TryDispatchNowAsync(items[1].Id, TimeSpan.FromSeconds(5), CancellationToken.None);
         Assert.Equal(BackofficeOutboxStatus.Sent, repeat.Status);
     }
@@ -549,5 +556,272 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
         Assert.False(AccountErasure.TryParseSubjectRef(null, out _));
         Assert.False(AccountErasure.IsValidProductSlug("../x"));
         Assert.True(AccountErasure.IsValidProductSlug("dotnet-signing-server"));
+    }
+
+    // ── Review fixes ──────────────────────────────────────────────────────────────────
+
+    [DockerFact]
+    public async Task A_ref_that_only_starts_with_the_subjects_ref_is_not_cancelled()
+    {
+        var a = await SeedAsync($"pfx{Guid.NewGuid():N}@example.com");
+        Guid lookalike;
+        using (var scope = _host.Services.CreateScope())
+        {
+            lookalike = scope.ServiceProvider.GetRequiredService<IBackofficeOutbox>()
+                .Enqueue("support.ticket", new { message = "x" }, subjectRef: AccountErasure.SubjectRef(a.UserId) + "2");
+            await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().SaveChangesAsync();
+        }
+        await DeleteAsync(a.UserId);
+        var item = await _host.ItemAsync(lookalike);
+        Assert.Equal(BackofficeOutboxStatus.Pending, item.Status);
+        Assert.NotNull(item.PayloadProtected);
+        Assert.Equal(BackofficeOutboxStatus.Cancelled, (await _host.ItemAsync(a.PendingSupportItem)).Status);
+    }
+
+    [DockerFact]
+    public async Task The_portal_service_account_is_never_erased_and_a_request_for_it_acks_failed()
+    {
+        var a = await SeedAsync($"portal{Guid.NewGuid():N}@example.com");
+        _portal.PortalUserIds.Add(a.UserId);
+
+        var result = await DeleteAsync(a.UserId);
+        Assert.Equal(AccountErasureStatus.Refused, result.Status);
+        Assert.Equal(AccountErasureRefusal.PortalAccount, result.Refusal);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => HandleAsync(RequestedEvent(Guid.NewGuid(), AccountErasure.SubjectRef(a.UserId))));
+        await AssertUntouchedAsync(a);
+        await using var db = _pg.CreateContext();
+        Assert.True((await db.Users.SingleAsync(u => u.Id == a.UserId)).AutoRechargeEnabled); // refused before anything changed
+        var ack = Assert.Single(await ErasureItemsAsync(a.UserId));
+        Assert.Contains("\"status\":\"failed\"", Payload(ack));
+    }
+
+    private async Task DemoteOtherAdminsAsync(params Guid[] keep)
+    {
+        await using var db = _pg.CreateContext();
+        await db.Users.Where(u => u.IsAdmin && !keep.Contains(u.Id)).ExecuteUpdateAsync(s => s.SetProperty(u => u.IsAdmin, false));
+    }
+
+    private async Task MakeAdminAsync(Guid id)
+    {
+        await using var db = _pg.CreateContext();
+        await db.Users.Where(u => u.Id == id).ExecuteUpdateAsync(s => s.SetProperty(u => u.IsAdmin, true));
+    }
+
+    [DockerFact]
+    public async Task The_last_administrator_is_not_erased_until_there_is_another_one()
+    {
+        var a = await SeedAsync($"admin{Guid.NewGuid():N}@example.com");
+        await MakeAdminAsync(a.UserId);
+        await DemoteOtherAdminsAsync(a.UserId);
+
+        var refused = await DeleteAsync(a.UserId);
+        Assert.Equal(AccountErasureRefusal.LastAdmin, refused.Refusal);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => HandleAsync(RequestedEvent(Guid.NewGuid(), AccountErasure.SubjectRef(a.UserId))));
+        await AssertUntouchedAsync(a);
+
+        var b = await SeedAsync($"admin2{Guid.NewGuid():N}@example.com");
+        await MakeAdminAsync(b.UserId);
+        Assert.Equal(AccountErasureStatus.Erased, (await DeleteAsync(a.UserId)).Status);
+        // Now B is the last one.
+        Assert.Equal(AccountErasureRefusal.LastAdmin, (await DeleteAsync(b.UserId)).Refusal);
+    }
+
+    [DockerFact]
+    public async Task An_administrator_with_audit_rows_is_erased_but_acks_retained_legal_claims()
+    {
+        var a = await SeedAsync($"auditor{Guid.NewGuid():N}@example.com");
+        var other = await SeedAsync($"admin3{Guid.NewGuid():N}@example.com");
+        await MakeAdminAsync(a.UserId);
+        await MakeAdminAsync(other.UserId);
+        await using (var db = _pg.CreateContext())
+        {
+            db.AdminAuditEntries.Add(new AdminAuditEntry
+            {
+                CreatedAt = DateTimeOffset.UtcNow,
+                ActorUserId = a.UserId,
+                ActorEmail = a.Email,
+                TargetUserId = other.UserId,
+                Action = "user.enterprise",
+                Change = "{}",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await HandleAsync(RequestedEvent(Guid.NewGuid(), AccountErasure.SubjectRef(a.UserId)));
+
+        var ack = Assert.Single(await ErasureItemsAsync(a.UserId));
+        using var json = JsonDocument.Parse(Payload(ack));
+        Assert.Equal("retained", json.RootElement.GetProperty("status").GetString());
+        Assert.Equal("legal_claims", json.RootElement.GetProperty("retained_reason").GetString());
+        Assert.Equal(1, json.RootElement.GetProperty("counts").GetProperty("audit_rows_kept").GetInt32());
+
+        var again = await DeleteAsync(a.UserId); // the local result names every reason
+        Assert.Equal(["legal_claims", "accounting_10y", "consent_evidence"], again.RetainedReasons!);
+    }
+
+    [DockerFact]
+    public async Task A_running_recharge_postpones_the_erasure()
+    {
+        var a = await SeedAsync($"recharge{Guid.NewGuid():N}@example.com");
+        await using (var db = _pg.CreateContext())
+        {
+            db.WebhookEvents.Add(new WebhookEvent
+            {
+                EventId = AutoRechargeClaim.EventIdFor(a.UserId),
+                EventType = AutoRechargeClaim.EventType,
+                PayloadJson = "{\"key\":\"k\"}",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await DeleteAsync(a.UserId);
+        Assert.Equal(AccountErasureRefusal.RechargeInProgress, result.Refusal);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => HandleAsync(RequestedEvent(Guid.NewGuid(), AccountErasure.SubjectRef(a.UserId))));
+        await AssertUntouchedAsync(a);
+
+        await using (var db = _pg.CreateContext())
+        {
+            await db.WebhookEvents.Where(w => w.EventId == AutoRechargeClaim.EventIdFor(a.UserId)).ExecuteDeleteAsync();
+        }
+        Assert.Equal(AccountErasureStatus.Erased, (await DeleteAsync(a.UserId)).Status);
+    }
+
+    [DockerFact]
+    public async Task Auto_recharge_never_charges_a_tombstone()
+    {
+        var a = await SeedAsync($"tomb{Guid.NewGuid():N}@example.com");
+        await DeleteAsync(a.UserId);
+        var customer = "cus_tomb" + a.UserId.ToString("N")[..6];
+        await using (var db = _pg.CreateContext())
+        {
+            // Even with the flags forced back (past the context's guard), the erased row is refused first.
+            await db.Users.Where(u => u.Id == a.UserId).ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.AutoRechargeEnabled, true).SetProperty(u => u.AutoRechargeQuantity, 100)
+                .SetProperty(u => u.StripeCustomerId, customer).SetProperty(u => u.CreditsRemaining, 0));
+        }
+        await using var ctx = _pg.CreateContext();
+        var service = new DotNetSigningServer.Services.AutoRechargeService(ctx, null!,
+            Microsoft.Extensions.Options.Options.Create(new BillingOptions()), null!, NullLoggers.For<DotNetSigningServer.Services.AutoRechargeService>(),
+            Microsoft.Extensions.Options.Options.Create(new AppOptions()), null!);
+        var outcome = await service.TryAutoRechargeAsync(a.UserId);
+        Assert.False(outcome.Success);
+        Assert.Equal("Account not active", outcome.Error);
+    }
+
+    [DockerFact]
+    public async Task Stripe_events_of_others_sharing_the_receipt_address_and_the_billing_rows_are_kept()
+    {
+        var tag = Guid.NewGuid().ToString("N")[..8];
+        var a = await SeedAsync($"r{tag}@example.com", stripeCustomer: "cus_r" + tag);
+        var b = await SeedAsync($"s{tag}@example.com", stripeCustomer: "cus_s" + tag);
+        await using (var db = _pg.CreateContext())
+        {
+            // B's charge whose receipt went to A's address, and a refusal row naming A.
+            db.WebhookEvents.Add(new WebhookEvent
+            {
+                EventId = "evt_b2_" + tag,
+                EventType = "charge.succeeded",
+                ProcessedAt = DateTimeOffset.UtcNow,
+                PayloadJson = "{\"data\":{\"object\":{\"customer\":\"cus_s" + tag + "\",\"receipt_email\":\"" + a.Email + "\"}}}",
+            });
+            db.WebhookEvents.Add(new WebhookEvent
+            {
+                EventId = "payment.refused:pi_" + tag,
+                EventType = "payment.refused",
+                PayloadJson = $$"""{"userId":"{{a.UserId:D}}","customer":"cus_r{{tag}}"}""",
+            });
+            // A truncated payload of A's still counts as A's.
+            db.WebhookEvents.Add(new WebhookEvent
+            {
+                EventId = "evt_a2_" + tag,
+                EventType = "invoice.paid",
+                ProcessedAt = DateTimeOffset.UtcNow,
+                PayloadJson = $$"""{"data":{"object":{"customer":"cus_r{{tag}}","lines":{"data":[{"desc""",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await DeleteAsync(a.UserId);
+
+        await using (var db = _pg.CreateContext())
+        {
+            Assert.Contains(a.Email, (await db.WebhookEvents.SingleAsync(w => w.EventId == "evt_b2_" + tag)).PayloadJson);
+            Assert.NotEqual("{}", (await db.WebhookEvents.SingleAsync(w => w.EventId == "payment.refused:pi_" + tag)).PayloadJson);
+            Assert.Equal("{}", (await db.WebhookEvents.SingleAsync(w => w.EventId == "evt_a2_" + tag)).PayloadJson);
+        }
+        await AssertUntouchedAsync(b);
+    }
+
+    [Fact]
+    public void Only_a_field_names_the_account_in_a_stripe_payload()
+    {
+        var id = Guid.NewGuid().ToString("D");
+        Assert.True(AccountErasureService.NamesAccount("""{"customer":"cus_1"}""", id, "cus_1"));
+        Assert.False(AccountErasureService.NamesAccount("""{"customer":"cus_12"}""", id, "cus_1"));
+        Assert.False(AccountErasureService.NamesAccount("""{"description":"cus_1"}""", id, "cus_1"));
+        Assert.True(AccountErasureService.NamesAccount($$$"""{"metadata":{"userId":"{{{id}}}"}}""", id, null));
+        Assert.False(AccountErasureService.NamesAccount($$"""{"note":"{{id}}"}""", id, null));
+        Assert.True(AccountErasureService.NamesAccount("""{"a":1,"customer":"cus_1","b":{"c""", id, "cus_1"));
+    }
+
+    [DockerFact]
+    public async Task A_save_of_an_account_loaded_before_the_erasure_fails_instead_of_writing_over_the_tombstone()
+    {
+        var a = await SeedAsync($"stale{Guid.NewGuid():N}@example.com");
+        await using var stale = _pg.CreateContext();
+        var loaded = await stale.Users.SingleAsync(u => u.Id == a.UserId);
+
+        await DeleteAsync(a.UserId);
+
+        loaded.Email = a.Email + ".changed";
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => stale.SaveChangesAsync());
+
+        await using var fresh = _pg.CreateContext();
+        var tombstone = await fresh.Users.SingleAsync(u => u.Id == a.UserId);
+        Assert.Equal(AccountErasure.TombstoneEmail(a.UserId), tombstone.Email);
+        tombstone.Email = a.Email;
+        Assert.Throws<InvalidOperationException>(() => fresh.SaveChanges());
+        fresh.Entry(tombstone).Property(u => u.Email).CurrentValue = AccountErasure.TombstoneEmail(a.UserId);
+        fresh.Entry(tombstone).Property(u => u.Email).IsModified = false;
+        tombstone.CreditsRemaining = 5; // a column that names nobody may still change
+        await fresh.SaveChangesAsync();
+    }
+
+    private async Task<Guid> AckItemAsync(string status)
+    {
+        using var scope = _host.Services.CreateScope();
+        var id = scope.ServiceProvider.GetRequiredService<IBackofficeOutbox>().Enqueue(AccountErasure.AckOutboxKind, new ErasureAckPayload
+        {
+            ErasureId = Guid.NewGuid(),
+            Product = "dotnet-signing-server",
+            Status = status,
+        }, subjectRef: "dotnet:user:" + Guid.NewGuid().ToString("D"));
+        await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().SaveChangesAsync();
+        return id;
+    }
+
+    private void SettledAs(string status)
+    {
+        _host.Service.EnqueueProblem(HttpStatusCode.Conflict, ErasureAckOutboxHandler.TargetSettled);
+        _host.Service.Enqueue(HttpStatusCode.OK,
+            $$"""{"id":"x","status":"completed","targets":[{"target":"product:dotnet-signing-server","status":"{{status}}"}]}""");
+    }
+
+    [DockerFact]
+    public async Task A_settled_target_is_sent_only_for_the_same_status_and_never_for_failed()
+    {
+        var same = await AckItemAsync("retained");
+        SettledAs("retained");
+        Assert.Equal(BackofficeOutboxStatus.Sent, (await _host.Processor.TryDispatchNowAsync(same, TimeSpan.FromSeconds(5), CancellationToken.None)).Status);
+        Assert.Equal(HttpMethod.Get, _host.Service.Requests.Last().Request.Method);
+
+        var differs = await AckItemAsync("done");
+        SettledAs("retained");
+        Assert.Equal(BackofficeOutboxStatus.Dead, (await _host.Processor.TryDispatchNowAsync(differs, TimeSpan.FromSeconds(5), CancellationToken.None)).Status);
+
+        var failed = await AckItemAsync("failed");
+        _host.Service.EnqueueProblem(HttpStatusCode.Conflict, ErasureAckOutboxHandler.TargetSettled);
+        Assert.Equal(BackofficeOutboxStatus.Dead, (await _host.Processor.TryDispatchNowAsync(failed, TimeSpan.FromSeconds(5), CancellationToken.None)).Status);
     }
 }

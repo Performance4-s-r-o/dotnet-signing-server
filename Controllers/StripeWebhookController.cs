@@ -258,6 +258,15 @@ public class StripeWebhookController : ControllerBase
             return;
         }
 
+        if (user.ErasedAt != null)
+        {
+            // Paid after the account was erased (#217): nothing is granted or linked to a tombstone.
+            await BillingRefusals.RecordAsync(_dbContext, BillingRefusals.CheckoutRefused, session.Id, userId,
+                session.CustomerId, null, session.AmountTotal, session.Currency,
+                "account erased", "stripe-webhook", _logger);
+            return;
+        }
+
         // metadata.userId alone is not enough (#82): the session's customer must be the user's,
         // or one no other user holds when the user has none yet. Otherwise nothing is granted.
         var sessionInfo = new CheckoutSessionInfo(

@@ -809,15 +809,29 @@ public class AccountController : Controller
         Services.Erasure.AccountErasureResult result;
         try
         {
-            result = await erasure.DeleteAccountAsync(user.Id, HttpContext.RequestAborted);
+            // Not RequestAborted: a closed tab must not stop the erasure between the cards and the commit.
+            result = await erasure.DeleteAccountAsync(user.Id, CancellationToken.None);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // Rolled back as a whole: the account is still there and nothing was sent.
+            // The transaction is rolled back (account still there, nothing sent); auto-recharge may
+            // already be off and saved cards removed, so the message promises no more than that.
             logger.LogError(ex, "Account deletion of user {UserId} failed", user.Id);
             return DeleteAccountRefused(StatusCodes.Status500InternalServerError, "ACCOUNT_DELETE_FAILED", "AccountDeleteFailed");
         }
 
+        if (result.Status == Services.Erasure.AccountErasureStatus.Refused)
+        {
+            return result.Refusal switch
+            {
+                Services.Erasure.AccountErasureRefusal.PortalAccount =>
+                    DeleteAccountRefused(StatusCodes.Status409Conflict, "ACCOUNT_DELETE_PORTAL_ACCOUNT", "AccountDeletePortalAccount"),
+                Services.Erasure.AccountErasureRefusal.LastAdmin =>
+                    DeleteAccountRefused(StatusCodes.Status409Conflict, "ACCOUNT_DELETE_LAST_ADMIN", "AccountDeleteLastAdmin"),
+                _ => DeleteAccountRefused(StatusCodes.Status409Conflict, "ACCOUNT_DELETE_RECHARGE_IN_PROGRESS",
+                    result.ChargesStopped ? "AccountDeleteRechargeInProgressStopped" : "AccountDeleteRechargeInProgress"),
+            };
+        }
         if (result.Status == Services.Erasure.AccountErasureStatus.BillingFailed)
         {
             return DeleteAccountRefused(StatusCodes.Status502BadGateway, "ACCOUNT_DELETE_BILLING_FAILED", "AccountDeleteBillingFailed");

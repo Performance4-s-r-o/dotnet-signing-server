@@ -35,9 +35,11 @@ public sealed class ErasureRequestOutboxHandler : JsonPostOutboxHandler, IOutbox
 /// <summary>
 /// Sends outbox items <c>subject.erasure.ack</c> to
 /// <c>POST /v1/erasures/{id}/targets/{product}/ack</c> (#217) with the item id as
-/// <c>Idempotency-Key</c>. The ack is idempotent at the service; <c>409 erasure_target_settled</c>
-/// (the target is already <c>done</c> or <c>retained</c> — an earlier ack, or an operator) is what
-/// a repeat wants, so it counts as Sent. Same retry window and alerting as
+/// <c>Idempotency-Key</c>. <c>409 erasure_target_settled</c> means the target is already closed:
+/// Sent only when it was closed with this very status (a repeat of our own ack — the service then
+/// usually answers 200 anyway). A <c>failed</c> ack, or one that differs from how the target was
+/// closed, is Dead and an alert: the service's record and ours disagree, and a person decides.
+/// The closed status is read with <c>GET /v1/erasures/{id}</c>. Same retry window and alerting as
 /// <see cref="ErasureRequestOutboxHandler"/>.
 /// </summary>
 public sealed class ErasureAckOutboxHandler : IOutboxHandler
@@ -84,12 +86,58 @@ public sealed class ErasureAckOutboxHandler : IOutboxHandler
 
         if (result.StatusCode == 409 && result.ProblemCode == TargetSettled)
         {
-            _logger.LogInformation(
-                "Erasure {ErasureId}: target product:{Product} is already settled; ack {Status} not needed",
-                ack.ErasureId, ack.Product, ack.Status);
-            return OutboxAttemptResult.Response(200, remoteId: ack.ErasureId.ToString("D"));
+            if (ack.Status == AccountErasure.AckStatuses.Failed)
+            {
+                return result; // Dead + alert: a failure reported for a target someone closed
+            }
+            var settled = await SettledStatusAsync(request, ack, cancellationToken);
+            if (settled.Error is not null) return settled.Error;
+            if (settled.Status == ack.Status)
+            {
+                _logger.LogInformation(
+                    "Erasure {ErasureId}: target product:{Product} is already {Status}; ack not needed",
+                    ack.ErasureId, ack.Product, ack.Status);
+                return OutboxAttemptResult.Response(200, remoteId: ack.ErasureId.ToString("D"));
+            }
+            _logger.LogError(
+                "Erasure {ErasureId}: target product:{Product} was closed as {Settled}, our ack says {Status}; a person has to reconcile",
+                ack.ErasureId, ack.Product, settled.Status ?? "unknown", ack.Status);
+            return result;
         }
         return result.StatusCode is >= 200 and < 300 ? result with { RemoteId = ack.ErasureId.ToString("D") } : result;
+    }
+
+    /// <summary>How the service closed our target; an attempt result when it could not be read (retried or dead).</summary>
+    private static async Task<(string? Status, OutboxAttemptResult? Error)> SettledStatusAsync(
+        OutboxRequest request, ErasureAckPayload ack, CancellationToken cancellationToken)
+    {
+        using var get = new HttpRequestMessage(HttpMethod.Get, $"v1/erasures/{ack.ErasureId:D}");
+        using var response = await request.Http.SendAsync(get, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return (null, await JsonPostOutboxHandler.ReadResultAsync(response, cancellationToken));
+        }
+        var target = AccountErasure.ProductTargetPrefix + ack.Product;
+        try
+        {
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+            if (doc.RootElement.TryGetProperty("targets", out var targets) && targets.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var t in targets.EnumerateArray())
+                {
+                    if (t.TryGetProperty("target", out var name) && name.ValueKind == JsonValueKind.String && name.GetString() == target
+                        && t.TryGetProperty("status", out var status) && status.ValueKind == JsonValueKind.String)
+                    {
+                        return (status.GetString(), null);
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Unreadable: treated as a status that differs.
+        }
+        return (null, null);
     }
 
     private sealed class AckBody

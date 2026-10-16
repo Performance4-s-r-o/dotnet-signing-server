@@ -764,7 +764,11 @@
   <data name="AccountDeleteConfirmLabel" xml:space="preserve"><value>I understand that my account will be deleted permanently.</value></data>
   <data name="AccountDeleteButton" xml:space="preserve"><value>Delete my account</value></data>
   <data name="AccountDeleteConfirmRequired" xml:space="preserve"><value>Tick the confirmation to delete your account.</value></data>
-  <data name="AccountDeleteFailed" xml:space="preserve"><value>Your account could not be deleted. Nothing was changed; please try again later.</value></data>
-  <data name="AccountDeleteBillingFailed" xml:space="preserve"><value>Your saved cards could not be removed at the payment provider, so your account was not deleted. Please try again later or contact support.</value></data>
+  <data name="AccountDeleteFailed" xml:space="preserve"><value>Your account could not be deleted. Auto-recharge may already be switched off and saved cards removed; your data is still there. Please try again later.</value></data>
+  <data name="AccountDeleteBillingFailed" xml:space="preserve"><value>Your saved cards could not all be removed at the payment provider, so your account was not deleted. Auto-recharge has been switched off and some cards may already be removed. Please try again later or contact support.</value></data>
   <data name="AccountDeleted" xml:space="preserve"><value>Your account has been deleted.</value></data>
+  <data name="AccountDeletePortalAccount" xml:space="preserve"><value>This account is the portal's service account and cannot be deleted here. Contact the administrator.</value></data>
+  <data name="AccountDeleteLastAdmin" xml:space="preserve"><value>You are the only administrator. Make another account an administrator before deleting yours.</value></data>
+  <data name="AccountDeleteRechargeInProgress" xml:space="preserve"><value>An automatic top-up is being processed right now. Please try again in a few minutes.</value></data>
+  <data name="AccountDeleteRechargeInProgressStopped" xml:space="preserve"><value>An automatic top-up was being processed, so your account was not deleted. Auto-recharge has been switched off. Please try again in a few minutes.</value></data>
 </root>

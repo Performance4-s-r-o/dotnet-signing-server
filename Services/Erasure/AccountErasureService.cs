@@ -27,16 +27,47 @@ public enum AccountErasureStatus
     /// nothing was sent. The caller reports an error (the account page) or retries (webhook).
     /// </summary>
     BillingFailed,
+
+    /// <summary>
+    /// Not erased on purpose (<see cref="AccountErasureResult.Refusal"/>): nothing was erased and
+    /// nothing sent. The account page shows why; a request through the service acks
+    /// <c>failed</c>, logs an error and is retried.
+    /// </summary>
+    Refused,
+}
+
+/// <summary>Why an account is not erased.</summary>
+public enum AccountErasureRefusal
+{
+    None,
+
+    /// <summary>The portal's service account (<c>PORTAL_USER_IDS</c>): every tenant's signing runs on it.</summary>
+    PortalAccount,
+
+    /// <summary>The only active administrator: nobody could manage the installation afterwards.</summary>
+    LastAdmin,
+
+    /// <summary>An auto-recharge charge of the account is running or settling; try again later.</summary>
+    RechargeInProgress,
 }
 
 /// <param name="Counts">What happened, for logs and the ack: no personal data.</param>
-/// <param name="RetainedReason">Why something stays (<see cref="AccountErasure.RetainedReasons"/>); null = nothing.</param>
+/// <param name="RetainedReason">The reason the ack carries (<see cref="AccountErasure.RetainedReasons"/>); null = nothing kept.</param>
+/// <param name="RetainedReasons">Every reason that applies, most specific first (the ack carries only one).</param>
+/// <param name="Refusal">Why the account was not erased (<see cref="AccountErasureStatus.Refused"/>).</param>
+/// <param name="ChargesStopped">Auto-recharge was switched off and saved cards removed before the step that failed.</param>
 public sealed record AccountErasureResult(
     AccountErasureStatus Status,
     IReadOnlyDictionary<string, int> Counts,
-    string? RetainedReason)
+    string? RetainedReason,
+    IReadOnlyList<string>? RetainedReasons = null,
+    AccountErasureRefusal Refusal = AccountErasureRefusal.None,
+    bool ChargesStopped = false)
 {
     public bool Succeeded => Status is AccountErasureStatus.Erased or AccountErasureStatus.AlreadyErased or AccountErasureStatus.NotFound;
+
+    internal static AccountErasureResult Refused(AccountErasureRefusal refusal, bool chargesStopped = false) =>
+        new(AccountErasureStatus.Refused, new Dictionary<string, int>(), null, null, refusal, chargesStopped);
 }
 
 /// <summary>An erasure asked for by the service (<c>subject.erasure.requested</c>): ack its product target.</summary>
@@ -47,16 +78,19 @@ public sealed record ErasureAckTarget(Guid ErasureId, string ProductSlug);
 /// a request the service received (<c>subject_request</c>).
 ///
 /// <list type="number">
-/// <item>Saved cards are removed at the payment provider first (this product has no Stripe
-/// subscription; auto-recharge on a saved card is its only recurring charge). Failure =
-/// <see cref="AccountErasureStatus.BillingFailed"/>: nothing is erased, nothing sent.</item>
+/// <item>Refused (<see cref="AccountErasureStatus.Refused"/>) for the portal's service account,
+/// the last active administrator, and while an auto-recharge charge runs or settles.</item>
+/// <item>Auto-recharge is switched off (own commit), then saved cards are removed at the payment
+/// provider (this product has no Stripe subscription; auto-recharge on a saved card is its only
+/// recurring charge). Failure = <see cref="AccountErasureStatus.BillingFailed"/>: nothing is
+/// erased, nothing sent — but auto-recharge stays off and some cards may be gone.</item>
 /// <item>One transaction, the user row locked (<c>FOR UPDATE</c>), so two erasures of the same
 /// account run one after the other and the second finds a tombstone:
 /// presigns, API operations, stored templates, API tokens and documents are deleted; usage
 /// records stay (on the tombstone, billing history); consent records lose the user agent
 /// (append-only otherwise, proof of consent); the subject's unsent outbox items are cancelled
-/// and their payloads dropped; processed inbox and Stripe webhook rows naming the account are
-/// deleted; sign-in attempt counters go; the user row becomes a tombstone without personal data
+/// and their payloads dropped; processed inbox rows naming the account are deleted and the
+/// account's Stripe events lose their payload (the row stays, its id deduplicates); sign-in attempt counters go; the user row becomes a tombstone without personal data
 /// (invoices and payments point at it and are kept 10 years); an audit row without personal
 /// data is written; and the message for the service — <c>POST /v1/erasures</c> or the ack — is
 /// queued in the same commit (transactional outbox).</item>
@@ -128,15 +162,35 @@ public sealed class AccountErasureService
             return new AccountErasureResult(AccountErasureStatus.NotFound, new Dictionary<string, int>(), null);
         }
 
-        if (existing.ErasedAt == null && !await StopRecurringChargesAsync(services, existing, cancellationToken))
+        var chargesStopped = false;
+        if (existing.ErasedAt == null)
         {
-            return new AccountErasureResult(AccountErasureStatus.BillingFailed, new Dictionary<string, int>(), null);
+            var refusal = await RefusalAsync(services, db, existing, cancellationToken);
+            if (refusal != AccountErasureRefusal.None)
+            {
+                LogRefusal(origin, userId, refusal);
+                return AccountErasureResult.Refused(refusal);
+            }
+
+            // Own commit, before the cards: a charge starting from now on finds it off.
+            await db.Users.Where(u => u.Id == userId && u.AutoRechargeEnabled)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.AutoRechargeEnabled, false), cancellationToken);
+            chargesStopped = true;
+            if (!await StopRecurringChargesAsync(services, existing, cancellationToken))
+            {
+                return new AccountErasureResult(AccountErasureStatus.BillingFailed, new Dictionary<string, int>(), null, ChargesStopped: true);
+            }
         }
 
         var backoffice = services.GetRequiredService<IOptions<P4BackofficeProductOptions>>().Value;
         var strategy = db.Database.CreateExecutionStrategy();
         var (result, files, tokenIds) = await strategy.ExecuteAsync(
             ct => EraseLocallyAsync(services, db, userId, origin, ack, backoffice, ct), cancellationToken);
+        if (result.Status == AccountErasureStatus.Refused)
+        {
+            LogRefusal(origin, userId, result.Refusal);
+            return result with { ChargesStopped = chargesStopped };
+        }
 
         foreach (var path in files) DeleteFile(path, userId);
         var apiAuth = services.GetService<IApiAuthService>();
@@ -146,6 +200,44 @@ public sealed class AccountErasureService
             "Account erasure ({Origin}) of user {UserId}: {Status}, {Counts}, retained {RetainedReason}",
             origin, userId, result.Status, string.Join(", ", result.Counts.Select(c => $"{c.Key}={c.Value}")), result.RetainedReason ?? "nothing");
         return result;
+    }
+
+    /// <summary>
+    /// Why the account must not be erased now; checked before anything changes and again under
+    /// the lock inside the transaction.
+    /// </summary>
+    private static async Task<AccountErasureRefusal> RefusalAsync(
+        IServiceProvider services, ApplicationDbContext db, User user, CancellationToken cancellationToken)
+    {
+        var portal = services.GetService<PortalTrustOptions>();
+        if (portal?.PortalUserIds.Contains(user.Id) == true) return AccountErasureRefusal.PortalAccount;
+
+        if (user.IsAdmin && !await db.Users.AnyAsync(
+                u => u.Id != user.Id && u.IsAdmin && u.IsActive && u.ErasedAt == null, cancellationToken))
+        {
+            return AccountErasureRefusal.LastAdmin;
+        }
+
+        // In this process (direct Stripe path) or in the shared claim (billing API path, every replica).
+        var claimId = AutoRechargeClaim.EventIdFor(user.Id);
+        if (AutoRechargeService.IsInFlight(user.Id)
+            || await db.WebhookEvents.AnyAsync(w => w.EventId == claimId, cancellationToken))
+        {
+            return AccountErasureRefusal.RechargeInProgress;
+        }
+        return AccountErasureRefusal.None;
+    }
+
+    private void LogRefusal(string origin, Guid userId, AccountErasureRefusal refusal)
+    {
+        if (refusal == AccountErasureRefusal.RechargeInProgress)
+        {
+            _logger.LogWarning("Account erasure ({Origin}) of user {UserId} postponed: an auto-recharge charge is running", origin, userId);
+        }
+        else
+        {
+            _logger.LogError("Account erasure ({Origin}) of user {UserId} refused: {Refusal}; a person has to decide", origin, userId, refusal);
+        }
     }
 
     /// <summary>
@@ -196,8 +288,11 @@ public sealed class AccountErasureService
         if (npgsql)
         {
             var users = SqlNames.Of<User>(db);
-            // Serialises erasures of one account; the loser re-reads a tombstone below.
-            var lockSql = $"SELECT 1 FROM {users.Table} WHERE {users[nameof(User.Id)]} = {{0}} FOR UPDATE"; // names from the model
+            // Serialises erasures of one account; the loser re-reads a tombstone below. The
+            // administrators are locked too (in id order, so two admins erasing at once wait for
+            // each other instead of deadlocking): the "last admin" check below must see the truth.
+            var lockSql = $"SELECT 1 FROM {users.Table} WHERE {users[nameof(User.Id)]} = {{0}} OR {users[nameof(User.IsAdmin)]} "
+                          + $"ORDER BY {users[nameof(User.Id)]} FOR UPDATE"; // names from the model
             await db.Database.ExecuteSqlRawAsync(lockSql, [userId], ct);
             // Lets the ConsentRecords trigger accept clearing UserAgent, in this transaction only.
             await db.Database.ExecuteSqlRawAsync("SET LOCAL dotnet_signing.erasure = 'on'", ct);
@@ -205,11 +300,23 @@ public sealed class AccountErasureService
 
         var user = await db.Users.FirstAsync(u => u.Id == userId, ct);
         var firstTime = user.ErasedAt == null;
+        if (firstTime)
+        {
+            var refusal = await RefusalAsync(services, db, user, ct);
+            if (refusal != AccountErasureRefusal.None)
+            {
+                return (AccountErasureResult.Refused(refusal), [], []); // rolled back
+            }
+        }
         var email = firstTime ? UserEmails.Trim(user.Email) : null;
         var stripeCustomerId = string.IsNullOrWhiteSpace(user.StripeCustomerId) ? null : user.StripeCustomerId;
         var userIdText = userId.ToString("D");
         var subjectRef = AccountErasure.SubjectRef(userId);
         var emailItemRef = "user:" + userIdText; // e-mail outbox items (TemplatedEmailSender)
+        // Refs below the subject (support tickets: dotnet:user:{id}/support/{key}). The "/" keeps
+        // another id that merely starts with this one out.
+        var subjectRefChild = subjectRef + "/";
+        var emailItemRefChild = emailItemRef + "/";
         var now = _time.GetUtcNow();
         var counts = new SortedDictionary<string, int>(StringComparer.Ordinal);
 
@@ -239,7 +346,8 @@ public sealed class AccountErasureService
         // Unsent messages about this account: never sent now, and their payloads (addresses,
         // ticket texts) dropped. The erasure's own items are left alone.
         counts["outbox_cancelled"] = await db.BackofficeOutboxItems
-            .Where(i => (i.SubjectRef == subjectRef || i.SubjectRef == emailItemRef)
+            .Where(i => (i.SubjectRef == subjectRef || i.SubjectRef!.StartsWith(subjectRefChild)
+                         || i.SubjectRef == emailItemRef || i.SubjectRef.StartsWith(emailItemRefChild))
                         && !i.Kind.StartsWith(AccountErasure.KindPrefix)
                         && i.Status != BackofficeOutboxStatus.Sent
                         && i.Status != BackofficeOutboxStatus.FallbackSent
@@ -251,7 +359,8 @@ public sealed class AccountErasureService
                 .SetProperty(i => i.LastError, "Cancelled: account erased (#217)"), ct);
         // Finished items keep no payload, but their ref still names the account.
         await db.BackofficeOutboxItems
-            .Where(i => (i.SubjectRef == subjectRef || i.SubjectRef == emailItemRef)
+            .Where(i => (i.SubjectRef == subjectRef || i.SubjectRef!.StartsWith(subjectRefChild)
+                         || i.SubjectRef == emailItemRef || i.SubjectRef.StartsWith(emailItemRefChild))
                         && !i.Kind.StartsWith(AccountErasure.KindPrefix)
                         && i.PayloadProtected != null
                         && (i.Status == BackofficeOutboxStatus.Sent || i.Status == BackofficeOutboxStatus.FallbackSent))
@@ -266,13 +375,7 @@ public sealed class AccountErasureService
                             || (quotedEmail != null && i.PayloadJson.ToLower().Contains(quotedEmail))))
             .ExecuteDeleteAsync(ct);
 
-        var quotedCustomer = stripeCustomerId is null ? null : "\"" + stripeCustomerId + "\"";
-        counts["stripe_events_deleted"] = await db.WebhookEvents
-            .Where(w => w.ProcessedAt != null
-                        && (w.PayloadJson.Contains(userIdText)
-                            || (quotedCustomer != null && w.PayloadJson.Contains(quotedCustomer))
-                            || (quotedEmail != null && w.PayloadJson.ToLower().Contains(quotedEmail))))
-            .ExecuteDeleteAsync(ct);
+        counts["stripe_events_scrubbed"] = await ScrubStripeEventsAsync(db, userIdText, stripeCustomerId, ct);
 
         // Sign-in, reset and re-auth attempt counters keyed by the address or the id.
         var emailKey = email is null ? null : ":" + UserEmails.Key(email);
@@ -288,6 +391,11 @@ public sealed class AccountErasureService
         counts["usage_records_kept"] = await db.UsageRecords.CountAsync(r => r.UserId == userId, ct);
         counts["consents_kept"] = consentsKept;
         counts["accounts_erased"] = firstTime ? 1 : 0;
+        // What this account did as an administrator stays (its trail must not be tidied away by
+        // the people it records); those rows carry the address it had then.
+        var auditRowsKept = await db.AdminAuditEntries.CountAsync(
+            a => a.ActorUserId == userId && a.Action != AuditAction && a.ActorEmail != "", ct);
+        counts["audit_rows_kept"] = auditRowsKept;
 
         if (firstTime)
         {
@@ -304,9 +412,11 @@ public sealed class AccountErasureService
             });
         }
 
-        var retainedReason = invoicesKept + paymentsKept > 0
-            ? AccountErasure.RetainedReasons.Accounting
-            : consentsKept > 0 ? AccountErasure.RetainedReasons.ConsentEvidence : null;
+        var retainedReasons = new List<string>();
+        if (auditRowsKept > 0) retainedReasons.Add(AccountErasure.RetainedReasons.LegalClaims);
+        if (invoicesKept + paymentsKept > 0) retainedReasons.Add(AccountErasure.RetainedReasons.Accounting);
+        if (consentsKept > 0) retainedReasons.Add(AccountErasure.RetainedReasons.ConsentEvidence);
+        var retainedReason = retainedReasons.FirstOrDefault();
 
         if (ack != null)
         {
@@ -337,7 +447,63 @@ public sealed class AccountErasureService
         await tx.CommitAsync(ct);
 
         var status = firstTime ? AccountErasureStatus.Erased : AccountErasureStatus.AlreadyErased;
-        return (new AccountErasureResult(status, counts, retainedReason), files, tokenIds);
+        return (new AccountErasureResult(status, counts, retainedReason, retainedReasons), files, tokenIds);
+    }
+
+    /// <summary>
+    /// The account's Stripe events (<c>evt_…</c>) keep their row — the id deduplicates Stripe's
+    /// redeliveries — but lose the payload. An event is the account's only when a JSON field says
+    /// so: <c>customer</c> is its Stripe customer, or <c>userId</c> / <c>app_user_id</c> its id.
+    /// A receipt address or any other text that happens to match decides nothing. The JSON is read
+    /// token by token, so a payload cut at 4000 characters is still read up to the cut. Claims of
+    /// auto-recharge, refusals and grant markers have other ids and are never touched.
+    /// </summary>
+    private static async Task<int> ScrubStripeEventsAsync(ApplicationDbContext db, string userIdText, string? stripeCustomerId, CancellationToken ct)
+    {
+        // Narrowed in SQL, decided by the parser.
+        var candidates = await db.WebhookEvents
+            .Where(w => w.EventId.StartsWith("evt_") && w.PayloadJson != "{}"
+                        && (w.PayloadJson.Contains(userIdText) || (stripeCustomerId != null && w.PayloadJson.Contains(stripeCustomerId))))
+            .ToListAsync(ct);
+        var scrubbed = 0;
+        foreach (var row in candidates)
+        {
+            if (!NamesAccount(row.PayloadJson, userIdText, stripeCustomerId)) continue;
+            row.PayloadJson = "{}";
+            scrubbed++;
+        }
+        return scrubbed;
+    }
+
+    /// <summary>Whether a Stripe payload's <c>customer</c>, <c>userId</c> or <c>app_user_id</c> names the account. Pure.</summary>
+    internal static bool NamesAccount(string json, string userIdText, string? stripeCustomerId)
+    {
+        var reader = new System.Text.Json.Utf8JsonReader(System.Text.Encoding.UTF8.GetBytes(json), isFinalBlock: false, state: default);
+        string? property = null;
+        try
+        {
+            while (reader.Read())
+            {
+                switch (reader.TokenType)
+                {
+                    case System.Text.Json.JsonTokenType.PropertyName:
+                        property = reader.GetString();
+                        continue;
+                    case System.Text.Json.JsonTokenType.String when property is not null:
+                        var value = reader.GetString();
+                        if (stripeCustomerId != null && property == "customer" && value == stripeCustomerId) return true;
+                        if (property is "userId" or "app_user_id"
+                            && string.Equals(value, userIdText, StringComparison.OrdinalIgnoreCase)) return true;
+                        break;
+                }
+                property = null;
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // Cut short or not JSON: what was read decides.
+        }
+        return false;
     }
 
     /// <summary>Everything that identifies the person goes; the row stays for the invoices pointing at it.</summary>

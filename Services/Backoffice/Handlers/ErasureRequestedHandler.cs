@@ -14,8 +14,10 @@ namespace DotNetSigningServer.Services.Backoffice.Handlers;
 ///
 /// Skipped, and marked processed: a ref of another product (not ours to erase), a request
 /// without a <c>product:</c> target (nothing to ack — other origins never carry one), and one
-/// that waits for the subject's confirmation or was cancelled. A failure queues a <c>failed</c>
-/// ack once and throws, so the inbox retries; the next success acks again. A duplicate
+/// that waits for the subject's confirmation or was cancelled. A failure — or a refusal (the
+/// portal's service account, the last administrator, a recharge running) — queues a <c>failed</c>
+/// ack once and throws, so the inbox retries and finally dead-letters it with an alert; the next
+/// success acks again. A duplicate
 /// delivery runs the erasure again, which finds a tombstone, and acks the same result.
 /// </summary>
 public sealed class ErasureRequestedHandler : IBackofficeEventHandler
@@ -77,6 +79,13 @@ public sealed class ErasureRequestedHandler : IBackofficeEventHandler
             throw new InvalidOperationException($"Erasure {erasureId} ({evt.Id}): local erasure failed ({ex.GetType().Name})", ex);
         }
 
+        if (result.Status == AccountErasureStatus.Refused)
+        {
+            // Logged as an error by the service (portal account, last admin) or a warning (a
+            // recharge running): never a quiet done. The inbox retries; a person may have to decide.
+            await TryQueueFailedAckAsync(evt, userId, ack, cancellationToken);
+            throw new InvalidOperationException($"Erasure {erasureId} ({evt.Id}): refused locally ({result.Refusal}); retried");
+        }
         if (result.Status == AccountErasureStatus.BillingFailed)
         {
             await TryQueueFailedAckAsync(evt, userId, ack, cancellationToken);

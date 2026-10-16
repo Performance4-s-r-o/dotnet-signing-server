@@ -52,6 +52,9 @@ public class AutoRechargeService : IAutoRechargeService
         _appOptions = appOptions.Value;
     }
 
+    /// <summary>Whether a recharge of the user is running in this process (the account erasure waits for it, #217).</summary>
+    public static bool IsInFlight(Guid userId) => _inFlight.ContainsKey(userId);
+
     public async Task<AutoRechargeResult> TryAutoRechargeAsync(Guid userId)
     {
         // Only one recharge per user may run at a time (see _inFlight).
@@ -65,6 +68,13 @@ public class AutoRechargeService : IAutoRechargeService
             if (user == null)
             {
                 return new AutoRechargeResult { Success = false, Error = "User not found" };
+            }
+
+            // An erased (or deactivated) account is never charged (#217); checked once the
+            // in-flight slot is ours, so an erasure that started first is seen here.
+            if (user.ErasedAt != null || !user.IsActive)
+            {
+                return new AutoRechargeResult { Success = false, Error = "Account not active" };
             }
 
             if (!user.AutoRechargeEnabled || user.AutoRechargeQuantity <= 0)

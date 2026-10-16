@@ -73,6 +73,13 @@ namespace DotNetSigningServer.Data
                 .HasIndex(u => u.Email)
                 .IsUnique();
 
+            // An erasure (#217) that commits while another request holds the account loaded must
+            // win: that request's UPDATE carries "ErasedAt IS NULL" and fails instead of writing
+            // over the tombstone. ErasedAt changes once in a row's life, so nothing else conflicts.
+            modelBuilder.Entity<User>()
+                .Property(u => u.ErasedAt)
+                .IsConcurrencyToken();
+
             // One user per Stripe customer (#82): the customer drives the billing portal,
             // invoices and the auto-recharge charge. Blank values are not a customer.
             modelBuilder.Entity<User>()
@@ -266,8 +273,19 @@ namespace DotNetSigningServer.Data
         /// (<c>UpdatedAt</c>), whoever makes it — the user, an admin, a background job. The cookie
         /// check also reads both flags directly, so even a change made in SQL takes effect.</item>
         /// <item>Admin audit rows are append-only.</item>
+        /// <item>An erased account (#217) never gets an address, a credential, a payer or its
+        /// activity back.</item>
         /// </list>
         /// </summary>
+        /// <summary>Columns an erased account (a tombstone) never gets back.</summary>
+        private static readonly string[] ErasedReadOnly =
+        [
+            nameof(User.Email), nameof(User.PasswordHash), nameof(User.PasswordSalt), nameof(User.StripeCustomerId),
+            nameof(User.Locale), nameof(User.EmailVerificationToken), nameof(User.EmailOtpCode), nameof(User.LoginChallengeHash),
+            nameof(User.PasswordResetToken), nameof(User.AutoRechargeCancelToken), nameof(User.IsActive), nameof(User.IsAdmin),
+            nameof(User.AutoRechargeEnabled), nameof(User.ErasedAt),
+        ];
+
         private void ApplySecurityRules()
         {
             foreach (var entry in ChangeTracker.Entries<User>())
@@ -285,6 +303,17 @@ namespace DotNetSigningServer.Data
                         stamp = original.AddTicks(10 - (original.Ticks % 10));
                     }
                     entry.Entity.UpdatedAt = stamp;
+                }
+            }
+
+            foreach (var entry in ChangeTracker.Entries<User>())
+            {
+                if (entry.State != EntityState.Modified || entry.Property(u => u.ErasedAt).OriginalValue == null) continue;
+                var touched = ErasedReadOnly.Where(p => entry.Property(p).IsModified).ToList();
+                if (touched.Count > 0)
+                {
+                    throw new InvalidOperationException(
+                        $"User {entry.Entity.Id} is erased (#217); {string.Join(", ", touched)} cannot be changed.");
                 }
             }
 

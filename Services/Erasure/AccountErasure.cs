@@ -52,6 +52,9 @@ public static class AccountErasure
         /// <summary>Invoices and payments: Act on accounting § 31–32, 10 years.</summary>
         public const string Accounting = "accounting_10y";
 
+        /// <summary>The account's own administrator actions in the audit trail (art. 17(3)(e)).</summary>
+        public const string LegalClaims = "legal_claims";
+
         /// <summary>Pseudonymised consent records: proof of consent, art. 7(1).</summary>
         public const string ConsentEvidence = "consent_evidence";
     }

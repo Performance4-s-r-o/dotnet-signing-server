@@ -116,6 +116,24 @@ public class AccountDeletionTests : IClassFixture<WebUiAuthFixture>
     }
 
     [DockerFact]
+    public async Task The_only_administrator_is_told_to_name_another_one_first()
+    {
+        var id = await NewUserAsync();
+        await using (var db = _fx.Postgres.CreateContext())
+        {
+            await db.Users.Where(u => u.IsAdmin && u.Id != id).ExecuteUpdateAsync(s => s.SetProperty(u => u.IsAdmin, false));
+            await db.Users.Where(u => u.Id == id).ExecuteUpdateAsync(s => s.SetProperty(u => u.IsAdmin, true));
+        }
+
+        var (_, post) = await DeleteAsync(id, DateTimeOffset.UtcNow.AddMinutes(-2), confirm: true);
+        Assert.Equal(HttpStatusCode.Conflict, post.StatusCode);
+        Assert.Contains("ACCOUNT_DELETE_LAST_ADMIN", await post.Content.ReadAsStringAsync());
+        var user = await UserAsync(id);
+        Assert.Null(user.ErasedAt);
+        Assert.True(user.IsActive);
+    }
+
+    [DockerFact]
     public async Task Without_the_antiforgery_token_the_post_is_refused()
     {
         var id = await NewUserAsync();
@@ -136,6 +154,7 @@ public class AccountDeletionTests : IClassFixture<WebUiAuthFixture>
         "AccountDeleteWhatGoes", "AccountDeleteCredits", "AccountDeleteBilling", "AccountDeleteWhatStays",
         "AccountDeleteElsewhere", "AccountDeleteConfirmLabel", "AccountDeleteButton", "AccountDeleteConfirmRequired",
         "AccountDeleteFailed", "AccountDeleteBillingFailed", "AccountDeleted",
+        "AccountDeletePortalAccount", "AccountDeleteLastAdmin", "AccountDeleteRechargeInProgress", "AccountDeleteRechargeInProgressStopped",
     };
 
     [DockerTheory]

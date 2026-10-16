@@ -765,7 +765,11 @@
   <data name="AccountDeleteConfirmLabel" xml:space="preserve"><value>Beru na vědomí, že účet bude nenávratně smazán.</value></data>
   <data name="AccountDeleteButton" xml:space="preserve"><value>Smazat můj účet</value></data>
   <data name="AccountDeleteConfirmRequired" xml:space="preserve"><value>Pro smazání účtu zaškrtněte potvrzení.</value></data>
-  <data name="AccountDeleteFailed" xml:space="preserve"><value>Účet se nepodařilo smazat. Nic se nezměnilo, zkuste to prosím později.</value></data>
-  <data name="AccountDeleteBillingFailed" xml:space="preserve"><value>Uložené karty se u platební brány nepodařilo odebrat, proto účet smazán nebyl. Zkuste to prosím později nebo kontaktujte podporu.</value></data>
+  <data name="AccountDeleteFailed" xml:space="preserve"><value>Účet se nepodařilo smazat. Automatické dobíjení už může být vypnuté a uložené karty odebrané, vaše údaje ale zůstaly. Zkuste to prosím později.</value></data>
+  <data name="AccountDeleteBillingFailed" xml:space="preserve"><value>Uložené karty se u platební brány nepodařilo odebrat všechny, proto účet smazán nebyl. Automatické dobíjení jsme vypnuli a některé karty už mohou být odebrané. Zkuste to prosím později nebo kontaktujte podporu.</value></data>
   <data name="AccountDeleted" xml:space="preserve"><value>Váš účet byl smazán.</value></data>
+  <data name="AccountDeletePortalAccount" xml:space="preserve"><value>Tento účet je servisní účet portálu a tady ho smazat nejde. Obraťte se na správce.</value></data>
+  <data name="AccountDeleteLastAdmin" xml:space="preserve"><value>Jste jediný správce. Než svůj účet smažete, udělejte správcem jiný účet.</value></data>
+  <data name="AccountDeleteRechargeInProgress" xml:space="preserve"><value>Právě probíhá automatické dobití kreditů. Zkuste to prosím za pár minut.</value></data>
+  <data name="AccountDeleteRechargeInProgressStopped" xml:space="preserve"><value>Právě probíhalo automatické dobití kreditů, proto účet smazán nebyl. Automatické dobíjení jsme vypnuli. Zkuste to prosím za pár minut.</value></data>
 </root>
