@@ -141,32 +141,26 @@ public class AutoRechargeService : IAutoRechargeService
                     return new AutoRechargeResult { Success = false, Error = $"Payment status: {paymentIntent.Status}" };
                 }
 
-                // Grant credits atomically
-                await _dbContext.Database.ExecuteSqlRawAsync(
-                    "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" + {0} WHERE \"Id\" = {1}",
-                    user.AutoRechargeQuantity, user.Id);
-
-                // Record the payment
-                _dbContext.Payments.Add(new Payment
+                // Credits, the payment record and the grant key in one transaction (#79): the
+                // payment_intent.succeeded webhook claims the same key, so whichever is second grants nothing.
+                var granted = await CreditGrants.TryGrantAsync(_dbContext, CreditGrants.AutoRechargeKey(paymentIntent.Id),
+                    CreditGrants.AutoRechargeType, user.Id, user.AutoRechargeQuantity, "auto-recharge", () =>
+                    {
+                        _dbContext.Payments.Add(new Payment
+                        {
+                            UserId = user.Id,
+                            StripePaymentIntentId = paymentIntent.Id,
+                            AmountCents = (int)amountCents,
+                            Currency = currency,
+                            Status = "succeeded"
+                        });
+                        return Task.CompletedTask;
+                    }, CancellationToken.None, paymentIntent.Id);
+                if (!granted)
                 {
-                    UserId = user.Id,
-                    StripePaymentIntentId = paymentIntent.Id,
-                    AmountCents = (int)amountCents,
-                    Currency = currency,
-                    Status = "succeeded"
-                });
-
-                // Idempotency record
-                _dbContext.WebhookEvents.Add(new WebhookEvent
-                {
-                    EventId = $"auto_recharge_{paymentIntent.Id}",
-                    EventType = "auto_recharge",
-                    PayloadJson = $"{{\"documents\":{user.AutoRechargeQuantity},\"userId\":\"{userId}\"}}",
-                    ReceivedAt = DateTimeOffset.UtcNow,
-                    ProcessedAt = DateTimeOffset.UtcNow
-                });
-
-                await _dbContext.SaveChangesAsync();
+                    _logger.LogInformation("Auto-recharge {PaymentIntentId} for user {UserId} was already granted by the webhook",
+                        paymentIntent.Id, userId);
+                }
 
                 // Clear cooldown on success
                 _failedAttempts.TryRemove(userId, out _);

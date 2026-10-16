@@ -102,7 +102,7 @@ public sealed class BackofficeAutoRecharge
                     Status = "succeeded",
                 });
                 return Task.CompletedTask;
-            }, cancellationToken);
+            }, cancellationToken, charge.PaymentIntentId);
         return granted || await CreditGrants.IsGrantedAsync(_db, key, cancellationToken);
     }
 

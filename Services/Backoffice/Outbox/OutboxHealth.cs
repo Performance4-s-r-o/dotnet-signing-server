@@ -76,6 +76,7 @@ public static class OutboxHealth
         {
             item.Status = BackofficeOutboxStatus.Pending;
             item.Attempts = 0;
+            item.FirstAttemptAt = null;
             item.NextAttemptAt = now;
             item.LockedUntil = null;
         }

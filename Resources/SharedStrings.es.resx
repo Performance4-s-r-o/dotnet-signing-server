@@ -669,6 +669,10 @@
   <data name="AdminOutboxBlockedHint" xml:space="preserve"><value>Los elementos bloqueados fueron rechazados por falta de autorización. Corrija primero la clave de API o sus permisos y después vuelva a ponerlos en la cola.</value></data>
   <data name="AdminOutboxRequeueBlocked" xml:space="preserve"><value>Volver a encolar los bloqueados</value></data>
   <data name="AdminOutboxRequeued" xml:space="preserve"><value>{0} elemento(s) bloqueado(s) devueltos a la cola.</value></data>
+  <data name="AdminInboxTitle" xml:space="preserve"><value>Eventos del backoffice</value></data>
+  <data name="AdminInboxDeadHint" xml:space="preserve"><value>Estos eventos fallaron en todos los intentos y ya no se procesarán solos. Un pago sin procesar significa créditos no abonados. Corrija la causa (vea el registro «Backoffice inbox alert») y vuelva a procesarlos: los créditos se abonan una sola vez.</value></data>
+  <data name="AdminInboxReplayDead" xml:space="preserve"><value>Volver a procesar los eventos muertos</value></data>
+  <data name="AdminInboxReplayed" xml:space="preserve"><value>{0} evento(s) muerto(s) devueltos a la cola.</value></data>
   <data name="SignUpAcceptTermsDpa" xml:space="preserve"><value>I agree to the {0}.</value></data>
   <data name="SignUpPrivacyNotice" xml:space="preserve"><value>How we process your personal data is described in the {0}.</value></data>
   <data name="SignUpAcceptTermsRequired" xml:space="preserve"><value>Please agree to the terms to continue.</value></data>

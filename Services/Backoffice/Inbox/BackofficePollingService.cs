@@ -24,11 +24,12 @@ public sealed record BackofficePollResult(int Pages, int Events, int Added, bool
 /// (<see cref="BackofficeStateKeys.EventsCursor"/>) is saved after every page, empty ones
 /// included, so it survives a restart.
 ///
-/// Several app instances may run this service against one database. On PostgreSQL a run
-/// holds a session advisory lock (<see cref="AdvisoryLockKey"/>, taken with
-/// <c>pg_try_advisory_lock</c>) for its whole duration, so only one instance reads and moves
-/// the cursor at a time and a slower instance can never write back an older cursor; the
-/// others skip that run. Other providers (InMemory in tests) run without the lock.
+/// Several app instances may run this service against one database. A run holds the lease
+/// <see cref="LeaseName"/> (<see cref="BackofficeLease"/>, a row in <c>BackofficeStates</c>), so
+/// only one instance reads and moves the cursor at a time; the others skip that run. The lease
+/// is renewed before every cursor write, so a run that lost it (stalled past
+/// <see cref="LeaseDuration"/>) stops instead of writing back an older cursor. Unlike the
+/// session advisory lock used before (#79), it works through a transaction pooler.
 ///
 /// Registered only when a backoffice module is Shadow or On (never on a PrivateServer).
 /// </summary>
@@ -42,11 +43,14 @@ public sealed class BackofficePollingService : BackgroundService
 
     public static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
+    /// <summary>Lease that makes one poll run exclusive across instances (<c>lease:events-poll</c>).</summary>
+    public const string LeaseName = "events-poll";
+
     /// <summary>
-    /// Key of the PostgreSQL advisory lock that makes one poll run exclusive across instances
-    /// ("P4BOEVTS" as ASCII, so it does not clash with arbitrary small numbers).
+    /// A lease not renewed for this long is free again. Renewed before every page's cursor write
+    /// and every third of it in the background; one page takes at most <see cref="RequestTimeout"/>.
     /// </summary>
-    public const long AdvisoryLockKey = 0x5034_424F_4556_5453;
+    public static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(2);
 
     /// <summary>
     /// Where the very first run starts: recent enough to skip the history an import created,
@@ -123,45 +127,29 @@ public sealed class BackofficePollingService : BackgroundService
     /// <summary>Reads pages until <c>has_more</c> is false (at most <see cref="MaxPagesPerRun"/>).</summary>
     public async Task<BackofficePollResult> PollOnceAsync(CancellationToken cancellationToken)
     {
-        using var scope = _scopes.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        if (!db.Database.IsNpgsql())
+        await using var lease = await BackofficeLease.TryAcquireAsync(_scopes, LeaseName, LeaseDuration, _time, _logger, cancellationToken);
+        if (lease == null)
         {
-            return await PollLockedAsync(scope, db, cancellationToken);
+            _logger.LogDebug("Backoffice event polling skipped: another instance is polling");
+            return BackofficePollResult.SkippedRun;
         }
 
-        // A session lock needs one connection for the whole run: keep it open until the end.
-        await db.Database.OpenConnectionAsync(cancellationToken);
+        using var scope = _scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        using var run = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lease.Lost);
         try
         {
-            if (!await TryLockAsync(db, cancellationToken))
-            {
-                _logger.LogDebug("Backoffice event polling skipped: another instance is polling");
-                return BackofficePollResult.SkippedRun;
-            }
-            try
-            {
-                return await PollLockedAsync(scope, db, cancellationToken);
-            }
-            finally
-            {
-                // Not cancellable: the lock must go even when the run was cancelled.
-                await db.Database.SqlQuery<bool>($"SELECT pg_advisory_unlock({AdvisoryLockKey}) AS \"Value\"")
-                    .SingleAsync(CancellationToken.None);
-            }
+            return await PollLockedAsync(scope, db, lease, run.Token);
         }
-        finally
+        catch (OperationCanceledException) when (lease.Lost.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
-            await db.Database.CloseConnectionAsync();
+            _logger.LogWarning("Backoffice event polling stopped: the lease was lost");
+            return new BackofficePollResult(0, 0, 0, false, Completed: false);
         }
     }
 
-    private static Task<bool> TryLockAsync(ApplicationDbContext db, CancellationToken cancellationToken) =>
-        db.Database.SqlQuery<bool>($"SELECT pg_try_advisory_lock({AdvisoryLockKey}) AS \"Value\"")
-            .SingleAsync(cancellationToken);
-
-    /// <summary>The run itself; on PostgreSQL the caller holds the advisory lock.</summary>
-    private async Task<BackofficePollResult> PollLockedAsync(IServiceScope scope, ApplicationDbContext db, CancellationToken cancellationToken)
+    /// <summary>The run itself; the caller holds <paramref name="lease"/>.</summary>
+    private async Task<BackofficePollResult> PollLockedAsync(IServiceScope scope, ApplicationDbContext db, BackofficeLease lease, CancellationToken cancellationToken)
     {
         var inbox = scope.ServiceProvider.GetRequiredService<BackofficeInbox>();
         var http = _httpClients.CreateClient(HttpClientName);
@@ -218,6 +206,13 @@ public sealed class BackofficePollingService : BackgroundService
 
                 if (!string.IsNullOrWhiteSpace(page.NextCursor))
                 {
+                    // Another instance may have taken over meanwhile: never write back an older cursor.
+                    if (!await lease.EnsureHeldAsync(cancellationToken))
+                    {
+                        _logger.LogWarning("Backoffice event polling stopped before writing the cursor: the lease is not held");
+                        completed = false;
+                        break;
+                    }
                     since = page.NextCursor;
                     await BackofficeStateStore.SetAsync(db, BackofficeStateKeys.EventsCursor, since, _time.GetUtcNow(), cancellationToken);
                 }

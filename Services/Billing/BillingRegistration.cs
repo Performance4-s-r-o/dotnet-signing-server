@@ -16,8 +16,8 @@ namespace DotNetSigningServer.Services.Billing;
 /// <item>Shadow — the same, and <c>billing.*</c> events are only logged and compared.</item>
 /// <item>On — <see cref="BackofficePaymentGateway"/> and <see cref="BackofficeAutoRecharge"/>
 /// call <c>/v1/billing/*</c>; <c>billing.*</c> events grant credits
-/// (<see cref="BillingEventsHandler"/>). The Stripe webhook endpoint stays as a safety net:
-/// both paths claim the same keys, so nothing is granted twice.</item>
+/// (<see cref="BillingEventsHandler"/>). The product's Stripe webhook endpoint answers 404
+/// (#79): the product's Stripe account no longer takes the payments.</item>
 /// </list>
 /// </summary>
 public static class BillingRegistration

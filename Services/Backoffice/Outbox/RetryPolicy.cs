@@ -25,10 +25,16 @@ public enum OutboxOutcome
 /// Classification of attempt results and the retry schedule. Pure — no clock, no I/O.
 ///
 /// Schedule after the 1st, 2nd, … failed attempt: 5 s, 30 s, 2 min, 10 min, 30 min, 1 h,
-/// then every 6 h. An item is given up (Dead) once the schedule has run for 72 h, i.e.
-/// when the next attempt would fall more than 72 h after the first one of its round.
-/// Counting by attempts rather than by <c>CreatedAt</c> lets a requeued item (attempts
-/// reset to 0) start a fresh round.
+/// then every 6 h. An item is given up (Dead) when its next attempt would fall more than the
+/// give-up time after the first attempt of its round — by the schedule, or by the clock
+/// (<see cref="BackofficeOutboxItem.FirstAttemptAt"/>; a Retry-After or a paused dispatcher
+/// stretch the real time). A requeued item (attempts and first attempt reset) starts a fresh round.
+///
+/// The give-up time is <see cref="GiveUpAfter"/> (20 h, <c>P4Backoffice:Outbox:GiveUpAfter</c>)
+/// for kinds the service deduplicates only by <c>Idempotency-Key</c>: it keeps a key 24 h, and a
+/// retry after that would create the e-mail, ticket or consent batch a second time (#79). Kinds
+/// whose payload carries their own once-only key (<see cref="IOutboxHandler.ServiceDeduplicates"/>)
+/// may keep trying for <see cref="DeduplicatedGiveUpAfter"/>.
 /// </summary>
 public static class RetryPolicy
 {
@@ -44,7 +50,14 @@ public static class RetryPolicy
 
     public static readonly TimeSpan SteadyDelay = TimeSpan.FromHours(6);
 
-    public static readonly TimeSpan GiveUpAfter = TimeSpan.FromHours(72);
+    /// <summary>Default give-up time; under the service's 24 h idempotency window.</summary>
+    public static readonly TimeSpan GiveUpAfter = TimeSpan.FromHours(20);
+
+    /// <summary>How long the service keeps an <c>Idempotency-Key</c>; a give-up time must stay below it.</summary>
+    public static readonly TimeSpan IdempotencyWindow = TimeSpan.FromHours(24);
+
+    /// <summary>Give-up time of kinds the service deduplicates by content, not only by key.</summary>
+    public static readonly TimeSpan DeduplicatedGiveUpAfter = TimeSpan.FromHours(72);
 
     public const string SuppressedRecipient = "suppressed_recipient";
 
@@ -100,11 +113,17 @@ public static class RetryPolicy
     /// Records an attempt on the item: increments <c>Attempts</c>, releases the claim and sets
     /// the status, next attempt, error and — on success — the remote id, clearing the payload.
     /// </summary>
-    public static OutboxOutcome Apply(BackofficeOutboxItem item, OutboxAttemptResult result, DateTimeOffset now)
+    public static OutboxOutcome Apply(BackofficeOutboxItem item, OutboxAttemptResult result, DateTimeOffset now) =>
+        Apply(item, result, now, GiveUpAfter);
+
+    /// <inheritdoc cref="Apply(BackofficeOutboxItem, OutboxAttemptResult, DateTimeOffset)"/>
+    /// <param name="giveUpAfter">No attempt is scheduled later than this after the round's first attempt.</param>
+    public static OutboxOutcome Apply(BackofficeOutboxItem item, OutboxAttemptResult result, DateTimeOffset now, TimeSpan giveUpAfter)
     {
         var outcome = Classify(result);
         item.Attempts++;
         item.LockedUntil = null;
+        item.FirstAttemptAt ??= now;
 
         switch (outcome)
         {
@@ -117,18 +136,17 @@ public static class RetryPolicy
                 break;
 
             case OutboxOutcome.Retry:
-                var elapsed = ElapsedBefore(item.Attempts);
-                if (elapsed > GiveUpAfter)
+                var delay = DelayAfter(item.Attempts);
+                if (result.RetryAfter is { } retryAfter && retryAfter > delay)
+                {
+                    delay = retryAfter < SteadyDelay ? retryAfter : SteadyDelay;
+                }
+                if (ElapsedBefore(item.Attempts) > giveUpAfter || now + delay - item.FirstAttemptAt.Value > giveUpAfter)
                 {
                     item.Status = BackofficeOutboxStatus.Dead;
                     item.LastError = Truncate($"Gave up after {item.Attempts} attempts: {result.Error}", MaxErrorLength);
                     outcome = OutboxOutcome.Dead;
                     break;
-                }
-                var delay = DelayAfter(item.Attempts);
-                if (result.RetryAfter is { } retryAfter && retryAfter > delay)
-                {
-                    delay = retryAfter < SteadyDelay ? retryAfter : SteadyDelay;
                 }
                 item.NextAttemptAt = now + delay;
                 item.LastError = Truncate(result.Error, MaxErrorLength);

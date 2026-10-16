@@ -41,8 +41,17 @@ public class BackofficeWebhookInboxItem
     /// <summary>Handler runs so far, successful or not.</summary>
     public int Attempts { get; set; }
 
-    /// <summary>When to try (again); null = given up after too many failures.</summary>
+    /// <summary>When to try (again); null once processed or dead.</summary>
     public DateTimeOffset? NextAttemptAt { get; set; }
+
+    /// <summary>
+    /// Set when the item ran out of attempts (dead letter): it is not retried until an admin
+    /// replays it, and it is never deleted by the cleanup.
+    /// </summary>
+    public DateTimeOffset? DeadAt { get; set; }
+
+    /// <summary>Ran out of attempts and waits for a replay.</summary>
+    public bool IsDead => DeadAt != null && ProcessedAt == null;
 
     /// <summary>Last handler failure.</summary>
     [MaxLength(512)]

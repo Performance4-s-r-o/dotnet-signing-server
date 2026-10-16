@@ -334,9 +334,7 @@ public class BillingController : Controller
         try
         {
             // Idempotency check: prevent replay of the same session_id
-            var alreadyProcessed = await _dbContext.WebhookEvents.AnyAsync(
-                w => w.EventId == sessionId && w.EventType == "checkout.confirm");
-            if (alreadyProcessed)
+            if (await CreditGrants.IsGrantedAsync(_dbContext, sessionId, HttpContext.RequestAborted))
             {
                 TempData["Info"] = _localizer["PaymentAlreadyProcessed"].Value;
                 return RedirectToAction(nameof(Index));
@@ -383,47 +381,30 @@ public class BillingController : Controller
                 return RedirectToAction(nameof(Index));
             }
 
-            // Record this session as processed — save immediately to claim the
-            // idempotency key before granting credits.  If a concurrent webhook
-            // tries to process the same session_id, the unique constraint will
-            // reject it and prevent double-granting.
-            _dbContext.WebhookEvents.Add(new WebhookEvent
-            {
-                EventId = sessionId,
-                EventType = "checkout.confirm",
-                PayloadJson = $"{{\"documents\":{documents},\"userId\":\"{userId.Value}\"}}",
-                ReceivedAt = DateTimeOffset.UtcNow,
-                ProcessedAt = DateTimeOffset.UtcNow
-            });
+            // Credits, the customer link and the auto-recharge opt-in in one transaction under the
+            // permanent grant key the Stripe webhook and the billing events share (#79): whichever
+            // comes second grants nothing, and a failure here leaves the payment for them to grant.
+            var granted = await CreditGrants.TryGrantAsync(_dbContext, sessionId, CreditGrants.CheckoutConfirmType, user.Id,
+                documents, "confirm-page", async () =>
+                {
+                    await StripeCustomerBinding.TryBindAsync(_dbContext, user, session.StripeCustomerId, _logger);
 
-            try
-            {
-                await _dbContext.SaveChangesAsync();
-            }
-            catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+                    // Enable auto-recharge if the user opted in during checkout
+                    if (session.Metadata.TryGetValue("autoRecharge", out var autoRechargeValue)
+                        && bool.TryParse(autoRechargeValue, out var autoRecharge)
+                        && autoRecharge)
+                    {
+                        await _autoRechargeService.EnableAsync(user, documents, _pricing.PricePer100);
+                    }
+                }, HttpContext.RequestAborted);
+            if (!granted)
             {
                 // Another handler (webhook) already processed this session
                 TempData["Info"] = _localizer["PaymentAlreadyProcessed"].Value;
                 return RedirectToAction(nameof(Index));
             }
-
-            // Now safe to grant credits — we own the idempotency key
-            await _dbContext.Database.ExecuteSqlRawAsync(
-                "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" + {0} WHERE \"Id\" = {1}",
-                documents, user.Id);
             await _dbContext.Entry(user).ReloadAsync();
 
-            await StripeCustomerBinding.TryBindAsync(_dbContext, user, session.StripeCustomerId, _logger);
-
-            // Enable auto-recharge if the user opted in during checkout
-            if (session.Metadata.TryGetValue("autoRecharge", out var autoRechargeValue)
-                && bool.TryParse(autoRechargeValue, out var autoRecharge)
-                && autoRecharge)
-            {
-                await _autoRechargeService.EnableAsync(user, documents, _pricing.PricePer100);
-            }
-
-            await _dbContext.SaveChangesAsync();
             TempData["Info"] = _localizer["CreditsAdded", documents].Value;
         }
         catch (Exception ex)
@@ -678,12 +659,5 @@ public class BillingController : Controller
     {
         var id = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return Guid.TryParse(id, out var guid) ? guid : null;
-    }
-
-    private static bool IsUniqueViolation(DbUpdateException ex)
-    {
-        // PostgreSQL unique violation = 23505
-        return ex.InnerException?.Message.Contains("23505") == true
-            || ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) == true;
     }
 }

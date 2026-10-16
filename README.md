@@ -211,7 +211,10 @@ Writes to the service never happen inside a request. They are stored in the
 belong to (payload encrypted with the Data Protection key ring) and sent by a
 background dispatcher, which runs only while a module is `Shadow` or `On`.
 Each attempt sends `Idempotency-Key` = item id; failures are retried from 5 s
-up to every 6 h and given up after 72 h. Items refused with 401/403 stay
+up to every 6 h and given up 20 h after the first attempt
+(`P4Backoffice__Outbox__GiveUpAfter`, must stay under 24 h: the service keeps
+an idempotency key 24 h, and a later retry would create the e-mail, ticket or
+consent batch twice). Items refused with 401/403 stay
 `Blocked` until the key is fixed and they are requeued from `/Admin`, where the
 outbox card also shows counts per status, the oldest pending item and the last
 error. Finished items are deleted after 30 days.
@@ -230,8 +233,13 @@ signing secret in `P4Backoffice__Webhook__Secret` and check it with the admin's
 The endpoint only verifies the signature (5-minute timestamp tolerance), stores
 the event in `BackofficeWebhookInboxItems` (one row per `webhook-id`,
 redeliveries are ignored) and answers `200`; handlers run in a background
-processor, retried from 30 s up to hourly and given up after 20 attempts
-(handlers must keep event data out of exception messages; e-mail addresses are
+processor, retried from 30 s up to hourly. After 20 failed attempts an event
+is dead (`DeadAt`): it is logged as an error starting with `Backoffice inbox
+alert:`, kept by the cleanup, counted on `/Admin` and put back in the queue
+with "Replay dead events" there (an unprocessed `billing.checkout.completed`
+means credits not granted — replaying grants them once). Several instances
+claim due events with `FOR UPDATE SKIP LOCKED`, so each runs once (handlers
+must keep event data out of exception messages; e-mail addresses are
 masked in the stored error). It
 answers `404` while every module is `Off` or no secret is set, and does not
 exist on a private server.
@@ -240,8 +248,11 @@ As a backup — and as the only channel when no secret is set — the same event
 are polled from `GET /v1/events` (every 15 min, or 2 min without a secret). The
 cursor is kept in `BackofficeStates` (`events:cursor`), so a restart continues
 where it stopped; the first run starts one day back. With several instances on
-one database only one polls at a time (a PostgreSQL advisory lock per run; the
-others skip that run). If the cursor has fallen
+one database only one polls at a time: a lease row in `BackofficeStates`
+(`lease:events-poll`), taken and renewed with single statements, so it works
+through a transaction pooler (Supabase `:6543`) where a session advisory lock
+does not; the others skip that run, and a crashed holder's lease expires after
+2 minutes. The daily consent reconciliation uses the same kind of lease. If the cursor has fallen
 out of the service's 30-day window, the modules resynchronise from the source
 APIs. Processed events are deleted after 45 days.
 
@@ -514,7 +525,10 @@ Only its own setting switches it: `P4Backoffice__Mode=On` leaves payments Off.
   with the same key — never after 23 hours (the service keeps answers for 24):
   such a charge stops auto-recharge and is logged as an error for an admin. Credits are granted by the confirm page or by
   `billing.checkout.completed` / `billing.payment.succeeded`, whichever comes
-  first (same keys as the Stripe webhook, which stays as a safety net).
+  first (same keys as the Stripe webhook). The product's Stripe webhook answers
+  `200` (ignored) in `On` and grants nothing: its Stripe account is no longer the one
+  taking the payments. `Stripe__*` stays configured for `Off`/`Shadow` and the
+  rollback.
   `billing.payment_method.detached` switches auto-recharge off when no card is
   left. Success and failure e-mails are still sent by this app.
   Existing Stripe customers must be linked in the service before `On`;
@@ -537,9 +551,19 @@ everything, production must opt in explicitly.
 | `payment_method.detached` | Disables auto-recharge when the user's last saved card is removed |
 
 Every delivery is recorded in the `WebhookEvents` table (schema
-`dotnet_signing`) keyed on the Stripe event id, so redeliveries are skipped.
-`checkout.session.completed` writes a second idempotency row keyed on the
-session id to avoid double-granting against the confirm redirect.
+`dotnet_signing`) keyed on the Stripe event id. Only an event that was handled
+(`ProcessedAt` set) is skipped as a redelivery. An event whose handling failed
+is kept with `ProcessedAt` empty and the error, and answered `500`, so Stripe
+delivers it again (for up to three days; it can also be resent from the
+Stripe Dashboard) and the next delivery handles it anew.
+
+Credits are granted once per payment by a `CreditGrants` row — unique key =
+checkout session id (or `auto_recharge_<payment intent>`), unique payment
+intent — inserted with `ON CONFLICT DO NOTHING` in the same transaction as the
+credits and never deleted. The confirm redirect, this webhook and the
+`billing.*` events share it, so a late, repeated or concurrent delivery grants
+nothing more, and a failed one leaves nothing behind for the retry to trip on.
+With `P4Backoffice__Modules__Billing=On` the endpoint answers `404`.
 
 The platform sells usage credits rather than subscriptions, so invoice and
 charge events are deliberately ignored. Revisit that if subscriptions are added.

@@ -253,6 +253,9 @@ namespace dotnetsigningserver.Migrations
                     b.Property<bool>("Critical")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTimeOffset?>("FirstAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -322,6 +325,9 @@ namespace dotnetsigningserver.Migrations
 
                     b.Property<int>("Attempts")
                         .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("DeadAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Error")
                         .HasMaxLength(512)
@@ -437,6 +443,47 @@ namespace dotnetsigningserver.Migrations
                     b.HasIndex("UserId", "Document", "OccurredAt");
 
                     b.ToTable("ConsentRecords", "dotnet_signing");
+                });
+
+            modelBuilder.Entity("DotNetSigningServer.Models.CreditGrant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Credits")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("GrantKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("GrantedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentIntentId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GrantKey")
+                        .IsUnique();
+
+                    b.HasIndex("PaymentIntentId")
+                        .IsUnique()
+                        .HasFilter("\"PaymentIntentId\" IS NOT NULL");
+
+                    b.ToTable("CreditGrants", "dotnet_signing");
                 });
 
             modelBuilder.Entity("DotNetSigningServer.Models.Document", b =>

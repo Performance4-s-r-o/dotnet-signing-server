@@ -18,8 +18,9 @@ public sealed record RemoteDocumentConsent(string Document, string? LastAction, 
 /// <c>GET /v1/subjects/{ref}/consent-status</c> and logs differences as warnings. It only
 /// reports — the gate always reads the local records — and it never runs in a request.
 /// Users whose consent batch is still in the outbox are skipped; records never queued (made while
-/// Off and not yet backfilled) show up as missing in the service. On PostgreSQL one instance
-/// runs it at a time (session advisory lock); the last run is kept in <c>BackofficeStates</c>.
+/// Off and not yet backfilled) show up as missing in the service. One instance runs it at a time
+/// (lease <see cref="LeaseName"/> in <c>BackofficeStates</c>, which works through a transaction
+/// pooler, unlike the session advisory lock used before #79); the last run is kept there too.
 /// </summary>
 public sealed class ConsentReconciliationService : BackgroundService
 {
@@ -35,8 +36,11 @@ public sealed class ConsentReconciliationService : BackgroundService
     /// <summary>Safety stop for one run.</summary>
     public const int MaxSubjectsPerRun = 2000;
 
-    /// <summary>"P4BOCREC" as ASCII.</summary>
-    public const long AdvisoryLockKey = 0x5034_424F_4352_4543;
+    /// <summary>Lease that makes one run exclusive across instances (<c>lease:consents-reconcile</c>).</summary>
+    public const string LeaseName = "consents-reconcile";
+
+    /// <summary>A lease not renewed for this long is free again; renewed every third of it while the run lasts.</summary>
+    public static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(5);
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -95,33 +99,13 @@ public sealed class ConsentReconciliationService : BackgroundService
     /// <summary>Runs when the last run is older than <see cref="Interval"/>; returns the number of subjects with differences, or null when skipped.</summary>
     public async Task<int?> RunIfDueAsync(CancellationToken cancellationToken)
     {
+        await using var lease = await BackofficeLease.TryAcquireAsync(_scopes, LeaseName, LeaseDuration, _time, _logger, cancellationToken);
+        if (lease == null) return null;
+
         using var scope = _scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        if (!db.Database.IsNpgsql())
-        {
-            return await RunLockedAsync(db, cancellationToken);
-        }
-
-        await db.Database.OpenConnectionAsync(cancellationToken);
-        try
-        {
-            var locked = await db.Database.SqlQuery<bool>($"SELECT pg_try_advisory_lock({AdvisoryLockKey}) AS \"Value\"")
-                .SingleAsync(cancellationToken);
-            if (!locked) return null;
-            try
-            {
-                return await RunLockedAsync(db, cancellationToken);
-            }
-            finally
-            {
-                await db.Database.SqlQuery<bool>($"SELECT pg_advisory_unlock({AdvisoryLockKey}) AS \"Value\"")
-                    .SingleAsync(CancellationToken.None);
-            }
-        }
-        finally
-        {
-            await db.Database.CloseConnectionAsync();
-        }
+        using var run = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lease.Lost);
+        return await RunLockedAsync(db, run.Token);
     }
 
     private async Task<int?> RunLockedAsync(ApplicationDbContext db, CancellationToken cancellationToken)
@@ -139,7 +123,17 @@ public sealed class ConsentReconciliationService : BackgroundService
         return differing;
     }
 
-    /// <summary>One pass over the recent subjects; returns how many differ. Throws when the service fails.</summary>
+    /// <summary>Requests of one run that go to the service at the same time.</summary>
+    public const int Parallelism = 4;
+
+    /// <summary>This many failures in a row (no success between) mean the service is down: the run stops.</summary>
+    public const int StopAfterConsecutiveFailures = 5;
+
+    /// <summary>
+    /// One pass over the recent subjects, newest first; returns how many differ. A subject whose
+    /// check fails is logged and skipped. Throws only when the service answered nothing at all
+    /// (every check failed), so a partial run still counts as a run.
+    /// </summary>
     internal async Task<int> ReconcileAsync(ApplicationDbContext db, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var since = now - Lookback;
@@ -147,14 +141,14 @@ public sealed class ConsentReconciliationService : BackgroundService
             // Not filtered by OutboxItemId: records sent by ConsentBackfill keep it null (append-only
             // table), and those users are the ones most likely to differ. Unsent batches are skipped below.
             .Where(c => c.OccurredAt >= since)
-            .Select(c => c.UserId)
-            .Distinct()
+            .GroupBy(c => c.UserId)
+            .OrderByDescending(g => g.Max(c => c.OccurredAt))
+            .Select(g => g.Key)
             .Take(MaxSubjectsPerRun)
             .ToListAsync(cancellationToken);
 
         var requirements = ConsentRequirements.From(_options.Value.Consents);
-        var http = _httpClients.CreateClient(HttpClientName);
-        var differing = 0;
+        var work = new List<(string SubjectRef, IReadOnlyList<LatestConsent> Local)>();
         foreach (var userId in userIds)
         {
             var subjectRef = ConsentRequirements.SubjectRef(userId);
@@ -163,19 +157,55 @@ public sealed class ConsentReconciliationService : BackgroundService
                                && i.SubjectRef == subjectRef
                                && i.Status != BackofficeOutboxStatus.Sent, cancellationToken);
             if (pending) continue;
-
-            var local = await ConsentStatusProvider.LatestAsync(db, userId, cancellationToken);
-            var remote = await FetchAsync(http, subjectRef, cancellationToken);
-            var differences = Compare(requirements, local, remote);
-            if (differences.Count > 0)
-            {
-                differing++;
-                _logger.LogWarning("[consents] {SubjectRef} differs from the service: {Differences}",
-                    subjectRef, string.Join("; ", differences));
-            }
+            work.Add((subjectRef, await ConsentStatusProvider.LatestAsync(db, userId, cancellationToken)));
         }
 
-        _logger.LogInformation("[consents] reconciliation: {Subjects} subjects checked, {Differing} differ", userIds.Count, differing);
+        var http = _httpClients.CreateClient(HttpClientName);
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var slots = new SemaphoreSlim(Parallelism);
+        var differing = 0;
+        var succeeded = 0;
+        var failed = 0;
+        var failuresInARow = 0;
+        Exception? lastError = null;
+        await Task.WhenAll(work.Select(async item =>
+        {
+            try { await slots.WaitAsync(stop.Token); }
+            catch (OperationCanceledException) { return; }
+            try
+            {
+                var remote = await FetchAsync(http, item.SubjectRef, stop.Token);
+                var differences = Compare(requirements, item.Local, remote);
+                Interlocked.Increment(ref succeeded);
+                Interlocked.Exchange(ref failuresInARow, 0);
+                if (differences.Count > 0)
+                {
+                    Interlocked.Increment(ref differing);
+                    _logger.LogWarning("[consents] {SubjectRef} differs from the service: {Differences}",
+                        item.SubjectRef, string.Join("; ", differences));
+                }
+            }
+            catch (OperationCanceledException) when (stop.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                // The run was stopped because the service is down.
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+            {
+                lastError = ex;
+                Interlocked.Increment(ref failed);
+                _logger.LogWarning(ex, "[consents] check of {SubjectRef} failed", item.SubjectRef);
+                if (Interlocked.Increment(ref failuresInARow) >= StopAfterConsecutiveFailures) stop.Cancel();
+            }
+            finally { slots.Release(); }
+        }));
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (succeeded == 0 && failed > 0)
+        {
+            throw new HttpRequestException("Consent reconciliation: every check failed", lastError);
+        }
+        _logger.LogInformation("[consents] reconciliation: {Subjects} subjects checked, {Differing} differ, {Failed} failed",
+            succeeded, differing, failed);
         return differing;
     }
 
