@@ -21,7 +21,6 @@
 
     <form method="post" action="/Account/TwoFactor" class="auth-form">
         @Html.AntiForgeryToken()
-        <input type="hidden" name="email" value="@email" />
         <input type="hidden" name="rememberMe" value="@rememberMe" />
         <div class="form-group">
             <label for="code" class="form-label">@L["SixDigitCodeLabel"]</label>

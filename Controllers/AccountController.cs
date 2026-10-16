@@ -29,23 +29,32 @@ public class AccountController : Controller
     private readonly AppOptions _appOptions;
     private readonly IStringLocalizer<SharedStrings> _localizer;
 
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int Count, DateTime WindowStart)> _loginAttempts = new();
-    private const int MaxAttemptsPerWindow = 5;
-    private static readonly TimeSpan RateLimitWindow = TimeSpan.FromMinutes(1);
-    private static DateTime _lastCleanup = DateTime.UtcNow;
+    private readonly AuthAttemptLimiter _limiter;
+    private readonly SessionSecurityOptions _security;
+
+    /// <summary>
+    /// HttpOnly cookie with the sign-in challenge (#80): the 2FA step is bound to the browser that
+    /// passed the password step, not to an address in the form.
+    /// </summary>
+    public const string LoginChallengeCookie = "p4pdf.2fa";
+    private static readonly TimeSpan OtpLifetime = TimeSpan.FromMinutes(10);
 
     public AccountController(
         ApplicationDbContext dbContext,
         IAuthService authService,
         ITemplatedEmailSender email,
         IOptions<AppOptions> appOptions,
-        IStringLocalizer<SharedStrings> localizer)
+        IStringLocalizer<SharedStrings> localizer,
+        AuthAttemptLimiter limiter,
+        IOptions<SessionSecurityOptions> security)
     {
         _dbContext = dbContext;
         _authService = authService;
         _email = email;
         _appOptions = appOptions.Value;
         _localizer = localizer;
+        _limiter = limiter;
+        _security = security.Value;
     }
 
     private string CurrentLocale => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
@@ -60,37 +69,13 @@ public class AccountController : Controller
         }
     }
 
-    private bool IsRateLimited(string key)
-    {
-        var now = DateTime.UtcNow;
+    /// <summary>
+    /// Shared across instances (#80). Keys that start from an address also carry the client IP:
+    /// keyed by the address alone, anybody who knew it could keep its owner locked out.
+    /// </summary>
+    private Task<bool> IsRateLimitedAsync(string key) => _limiter.IsLimitedAsync(key, cancellationToken: HttpContext.RequestAborted);
 
-        // Periodic cleanup of stale entries to prevent memory leak
-        if (now - _lastCleanup > TimeSpan.FromMinutes(5))
-        {
-            _lastCleanup = now;
-            var staleKeys = _loginAttempts
-                .Where(kv => now - kv.Value.WindowStart > TimeSpan.FromMinutes(10))
-                .Select(kv => kv.Key)
-                .ToList();
-            foreach (var staleKey in staleKeys)
-            {
-                _loginAttempts.TryRemove(staleKey, out _);
-            }
-        }
-
-        var entry = _loginAttempts.AddOrUpdate(
-            key,
-            _ => (1, now),
-            (_, existing) =>
-            {
-                if (now - existing.WindowStart > RateLimitWindow)
-                {
-                    return (1, now);
-                }
-                return (existing.Count + 1, existing.WindowStart);
-            });
-        return entry.Count > MaxAttemptsPerWindow;
-    }
+    private string RequestIp() => DotNetSigningServer.Middleware.ClientIp.Of(HttpContext);
 
     [CookieAuthorize]
     [HttpGet("/Account")]
@@ -269,8 +254,8 @@ public class AccountController : Controller
         }
         if (!ModelState.IsValid) return View(model);
 
-        var rateLimitKey = $"signin:{UserEmails.Key(model.Email)}";
-        if (IsRateLimited(rateLimitKey))
+        var rateLimitKey = $"signin:{RequestIp()}:{UserEmails.Key(model.Email)}";
+        if (await IsRateLimitedAsync(rateLimitKey))
         {
             ModelState.AddModelError(string.Empty, _localizer["TooManySignInAttempts"]);
             return View(model);
@@ -316,7 +301,12 @@ public class AccountController : Controller
         // Stored hashed, like every other single-use secret here: reading the
         // database must not be enough to walk through someone's second factor.
         user.EmailOtpCode = SecureTokens.Hash(otp);
-        user.EmailOtpExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
+        user.EmailOtpExpiresAt = DateTimeOffset.UtcNow.Add(OtpLifetime);
+        user.EmailOtpFailedAttempts = 0;
+        // The code belongs to this sign-in only (#80): the browser gets the challenge, the
+        // database its hash. A new sign-in replaces both.
+        var challenge = SecureTokens.Generate();
+        user.LoginChallengeHash = SecureTokens.Hash(challenge);
         // E-mails sent later (auto-recharge, payments) follow the language of the last sign-in.
         user.Locale = StoredLocale;
 
@@ -345,6 +335,15 @@ public class AccountController : Controller
             }
         }
 
+        Response.Cookies.Append(LoginChallengeCookie, challenge, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Path = "/",
+            MaxAge = OtpLifetime,
+            IsEssential = true,
+        });
         TempData["ReturnUrl"] = returnUrl;
         TempData["2FA_Email"] = user.Email;
         TempData["2FA_RememberMe"] = model.RememberMe.ToString();
@@ -436,48 +435,64 @@ public class AccountController : Controller
 
     [HttpPost("/Account/TwoFactor")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> TwoFactorPost(string email, string code, bool rememberMe = false)
+    public async Task<IActionResult> TwoFactorPost(string code, bool rememberMe = false)
     {
         if (User?.Identity?.IsAuthenticated == true)
         {
             return RedirectToAction("Index", "Home");
         }
-        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(code))
+
+        // The account comes from the challenge cookie of the password step, never from the
+        // form (#80): a code is worth nothing to a browser that did not pass the password.
+        var challenge = Request.Cookies[LoginChallengeCookie];
+        if (string.IsNullOrWhiteSpace(challenge) || string.IsNullOrWhiteSpace(code))
         {
-            TempData["Error"] = _localizer["EmailAndCodeRequired"].Value;
+            TempData["Error"] = _localizer[string.IsNullOrWhiteSpace(challenge) ? "VerificationCodeInvalid" : "EmailAndCodeRequired"].Value;
             return RedirectToAction(nameof(SignIn));
         }
 
-        var rateLimitKey = $"2fa:{UserEmails.Key(email)}";
-        if (IsRateLimited(rateLimitKey))
+        var challengeHash = SecureTokens.Hash(challenge);
+        if (await IsRateLimitedAsync($"2fa:{challengeHash}"))
         {
             TempData["Error"] = _localizer["TooManyVerificationAttempts"].Value;
             return RedirectToAction(nameof(SignIn));
         }
 
-        var user = await _dbContext.Users.FindByEmailAsync(email);
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.LoginChallengeHash == challengeHash);
         if (user == null || user.EmailOtpCode == null || user.EmailOtpExpiresAt == null)
         {
+            Response.Cookies.Delete(LoginChallengeCookie);
             TempData["Error"] = _localizer["VerificationCodeInvalid"].Value;
             return RedirectToAction(nameof(SignIn));
         }
 
         if (!user.IsActive)
         {
+            ClearOtp(user);
+            await _dbContext.SaveChangesAsync();
+            Response.Cookies.Delete(LoginChallengeCookie);
             TempData["Error"] = _localizer["AccountDeactivated"].Value;
             return RedirectToAction(nameof(SignIn));
         }
 
-        if (user.EmailOtpExpiresAt < DateTimeOffset.UtcNow || !SecureTokens.MatchesHash(code, user.EmailOtpCode))
+        if (!await CheckOtpAsync(user, code))
         {
+            if (user.EmailOtpCode == null)
+            {
+                // Void after too many wrong codes: the next try starts at the password again.
+                Response.Cookies.Delete(LoginChallengeCookie);
+                TempData["Error"] = _localizer["VerificationCodeVoided"].Value;
+                return RedirectToAction(nameof(SignIn));
+            }
             TempData["Error"] = _localizer["VerificationCodeInvalid"].Value;
-            return RedirectToAction(nameof(SignIn));
+            TempData["2FA_Email"] = user.Email;
+            TempData["2FA_RememberMe"] = rememberMe.ToString();
+            return RedirectToAction(nameof(TwoFactor));
         }
 
-        // Clear OTP and sign in
-        user.EmailOtpCode = null;
-        user.EmailOtpExpiresAt = null;
+        ClearOtp(user);
         await _dbContext.SaveChangesAsync();
+        Response.Cookies.Delete(LoginChallengeCookie);
 
         await SignInUser(user, rememberMe);
         var returnUrl = TempData["ReturnUrl"]?.ToString();
@@ -487,6 +502,37 @@ public class AccountController : Controller
         }
 
         return RedirectToAction("Index", "Home");
+    }
+
+    /// <summary>
+    /// Checks an e-mailed code against the user's current one. A wrong code is counted and at
+    /// <see cref="SessionSecurityOptions.OtpMaxFailedAttempts"/> the code is void (#80) —
+    /// saved here, so the count survives whatever the caller does next.
+    /// </summary>
+    private async Task<bool> CheckOtpAsync(User user, string code)
+    {
+        if (user.EmailOtpCode == null || user.EmailOtpExpiresAt == null) return false;
+        if (user.EmailOtpExpiresAt >= DateTimeOffset.UtcNow && SecureTokens.MatchesHash(code.Trim(), user.EmailOtpCode))
+        {
+            return true;
+        }
+
+        user.EmailOtpFailedAttempts++;
+        if (user.EmailOtpFailedAttempts >= Math.Max(1, _security.OtpMaxFailedAttempts)
+            || user.EmailOtpExpiresAt < DateTimeOffset.UtcNow)
+        {
+            ClearOtp(user);
+        }
+        await _dbContext.SaveChangesAsync();
+        return false;
+    }
+
+    private static void ClearOtp(User user)
+    {
+        user.EmailOtpCode = null;
+        user.EmailOtpExpiresAt = null;
+        user.EmailOtpFailedAttempts = 0;
+        user.LoginChallengeHash = null;
     }
 
     [HttpGet("/Account/ForgotPassword")]
@@ -509,8 +555,8 @@ public class AccountController : Controller
         }
         if (!ModelState.IsValid) return View(model);
 
-        var rateLimitKey = $"forgot:{UserEmails.Key(model.Email)}";
-        if (IsRateLimited(rateLimitKey))
+        var rateLimitKey = $"forgot:{RequestIp()}:{UserEmails.Key(model.Email)}";
+        if (await IsRateLimitedAsync(rateLimitKey))
         {
             // Always show success to prevent email enumeration
             TempData["Info"] = _localizer["PasswordResetEmailSent"].Value;
@@ -523,7 +569,9 @@ public class AccountController : Controller
             var token = SecureTokens.Generate();
             user.PasswordResetToken = SecureTokens.Hash(token);
             user.PasswordResetExpiresAt = DateTimeOffset.UtcNow.AddHours(1);
-            user.UpdatedAt = DateTimeOffset.UtcNow;
+            // UpdatedAt stays (#80): it is the session stamp, and asking for a reset link — which
+            // anybody who knows the address can do — must not sign the owner out. The completed
+            // reset moves it.
 
             var resetLink = BuildAbsoluteUrl($"/Account/ResetPassword?token={Uri.EscapeDataString(token)}");
             var variables = EmailTemplateVariables.PasswordReset(resetLink, expiryMinutes: 60);
@@ -595,7 +643,18 @@ public class AccountController : Controller
         user.PasswordResetToken = null;
         user.PasswordResetExpiresAt = null;
         user.UpdatedAt = DateTimeOffset.UtcNow;
+        // A reset is what someone does when the account may be in other hands (#80): a waiting
+        // code goes, and so do browser tokens, which live in web pages. Server tokens stay — the
+        // integrations behind them (the portal's among them) would stop with no one to notice.
+        ClearOtp(user);
+        var now2 = DateTimeOffset.UtcNow;
+        var revoked = await _dbContext.ApiTokens
+            .Where(t => t.UserId == user.Id && t.IsBrowserToken && t.RevokedAt == null)
+            .ToListAsync();
+        foreach (var token in revoked) token.RevokedAt = now2;
         await _dbContext.SaveChangesAsync();
+        var apiAuth = HttpContext.RequestServices.GetService<IApiAuthService>();
+        foreach (var token in revoked) apiAuth?.InvalidateTokenCache(token.Id);
 
         TempData["Info"] = _localizer["PasswordResetSuccess"].Value;
         return RedirectToAction(nameof(SignIn));
@@ -718,7 +777,7 @@ public class AccountController : Controller
         }
 
         var rateLimitKey = $"changepw:{user.Id}";
-        if (IsRateLimited(rateLimitKey))
+        if (await IsRateLimitedAsync(rateLimitKey))
         {
             ModelState.AddModelError(string.Empty, _localizer["TooManySignInAttempts"]);
             return View(model);
@@ -752,28 +811,129 @@ public class AccountController : Controller
 
     private async Task SignInUser(User user, bool rememberMe)
     {
-        var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Name, user.Email),
-            new Claim("SecurityStamp", user.UpdatedAt.Ticks.ToString())
-        };
-        if (user.IsAdmin)
-        {
-            claims.Add(new Claim(ClaimTypes.Role, "Admin"));
-        }
-
-        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-        var principal = new ClaimsPrincipal(identity);
-
+        // auth_time = now: signing in is a fresh confirmation for step-up actions (#80).
         await HttpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
-            principal,
+            SessionClaims.CookiePrincipal(user, DateTimeOffset.UtcNow),
             new AuthenticationProperties
             {
                 IsPersistent = rememberMe,
                 AllowRefresh = true
             });
+    }
+
+    // ── Step-up re-authentication (#80) ─────────────────────────────────────────────
+    // Creating an API token and changing billing need a password or e-mailed code confirmed
+    // within Auth:ReauthMinutes (RequireRecentAuthAttribute). These pages renew it.
+
+    [CookieAuthorize]
+    [HttpGet(Filters.RequireRecentAuthAttribute.ReauthPath)]
+    public IActionResult Reauth(string? returnUrl = null, bool codeSent = false) =>
+        View(new ReauthViewModel { ReturnUrl = SafeReturnUrl(returnUrl), CodeSent = codeSent });
+
+    [CookieAuthorize]
+    [HttpPost(Filters.RequireRecentAuthAttribute.ReauthPath)]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Reauth(ReauthViewModel model)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction(nameof(SignIn));
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null || !user.IsActive) return RedirectToAction(nameof(SignIn));
+
+        model.ReturnUrl = SafeReturnUrl(model.ReturnUrl);
+        if (await IsRateLimitedAsync($"reauth:{user.Id}"))
+        {
+            ModelState.AddModelError(string.Empty, _localizer["TooManySignInAttempts"].Value);
+            return View(model);
+        }
+
+        bool confirmed;
+        if (!string.IsNullOrWhiteSpace(model.Code))
+        {
+            // Only a code sent for re-auth: a sign-in code carries a challenge of its own.
+            confirmed = user.LoginChallengeHash == null && await CheckOtpAsync(user, model.Code);
+            if (confirmed)
+            {
+                ClearOtp(user);
+                await _dbContext.SaveChangesAsync();
+            }
+            else if (user.EmailOtpCode == null)
+            {
+                model.CodeSent = false;
+            }
+        }
+        else
+        {
+            confirmed = !string.IsNullOrEmpty(model.Password)
+                && _authService.VerifyPassword(model.Password, user.PasswordHash, user.PasswordSalt, user.PasswordIterations);
+        }
+
+        if (!confirmed)
+        {
+            ModelState.AddModelError(string.Empty, _localizer[string.IsNullOrWhiteSpace(model.Code) ? "ReauthPasswordInvalid" : "VerificationCodeInvalid"].Value);
+            model.Password = null;
+            model.Code = null;
+            return View(model);
+        }
+
+        // Same session, new auth_time; persistence as it was.
+        var current = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        await HttpContext.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            SessionClaims.CookiePrincipal(user, DateTimeOffset.UtcNow),
+            new AuthenticationProperties
+            {
+                IsPersistent = current.Properties?.IsPersistent ?? false,
+                AllowRefresh = true,
+            });
+
+        TempData["Info"] = _localizer["ReauthConfirmed"].Value;
+        return LocalRedirect(model.ReturnUrl!);
+    }
+
+    [CookieAuthorize]
+    [HttpPost(Filters.RequireRecentAuthAttribute.ReauthPath + "/SendCode")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReauthSendCode(string? returnUrl)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return RedirectToAction(nameof(SignIn));
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+        if (user == null || !user.IsActive) return RedirectToAction(nameof(SignIn));
+        returnUrl = SafeReturnUrl(returnUrl);
+
+        if (await IsRateLimitedAsync($"reauth-code:{user.Id}"))
+        {
+            TempData["Error"] = _localizer["TooManyVerificationAttempts"].Value;
+            return RedirectToAction(nameof(Reauth), new { returnUrl });
+        }
+
+        var otp = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+        user.EmailOtpCode = SecureTokens.Hash(otp);
+        user.EmailOtpExpiresAt = DateTimeOffset.UtcNow.Add(OtpLifetime);
+        user.EmailOtpFailedAttempts = 0;
+        user.LoginChallengeHash = null;
+
+        var variables = EmailTemplateVariables.TwoFactorCode(otp, expiryMinutes: (int)OtpLifetime.TotalMinutes);
+        var emailOptions = new EmailSendOptions(EmailTemplateId.TwoFactorCode, user.Locale, user.Id);
+        var queued = _email.TryEnqueue(EmailTemplateId.TwoFactorCode, user.Email, CurrentLocale, variables, emailOptions);
+        await _dbContext.SaveChangesAsync();
+        if (!queued)
+        {
+            try
+            {
+                await _email.SendAsync(EmailTemplateId.TwoFactorCode, user.Email, CurrentLocale, variables, emailOptions);
+            }
+            catch
+            {
+                TempData["Error"] = _localizer["TwoFactorCodeFailed"].Value;
+                return RedirectToAction(nameof(Reauth), new { returnUrl });
+            }
+        }
+
+        TempData["Info"] = _localizer["TwoFactorCodeSent"].Value;
+        return RedirectToAction(nameof(Reauth), new { returnUrl, codeSent = true });
     }
 
     /// <summary>Documents and hidden version fields of the sign-up form.</summary>
