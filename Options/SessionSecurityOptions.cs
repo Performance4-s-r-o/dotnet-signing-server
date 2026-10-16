@@ -14,5 +14,16 @@ public class SessionSecurityOptions
     /// <summary>Wrong codes after which an e-mailed code is void and has to be requested again.</summary>
     public int OtpMaxFailedAttempts { get; set; } = 5;
 
+    /// <summary>
+    /// Sign-in and 2FA attempts per account, whatever IP they come from (#80 review), within
+    /// <see cref="AccountWindowMinutes"/>. Env <c>Auth__AccountMaxAttempts</c>.
+    /// </summary>
+    public int AccountMaxAttempts { get; set; } = 30;
+
+    /// <summary>Window of <see cref="AccountMaxAttempts"/>. Env <c>Auth__AccountWindowMinutes</c>.</summary>
+    public int AccountWindowMinutes { get; set; } = 15;
+
+    public TimeSpan AccountWindow => TimeSpan.FromMinutes(AccountWindowMinutes > 0 ? AccountWindowMinutes : 15);
+
     public TimeSpan ReauthWindow => TimeSpan.FromMinutes(ReauthMinutes > 0 ? ReauthMinutes : 15);
 }

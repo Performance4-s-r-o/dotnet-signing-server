@@ -75,6 +75,14 @@ public class AccountController : Controller
     /// </summary>
     private Task<bool> IsRateLimitedAsync(string key) => _limiter.IsLimitedAsync(key, cancellationToken: HttpContext.RequestAborted);
 
+    /// <summary>
+    /// Second limit, by account alone (#80 review): the IP in the first key comes from a header
+    /// (<c>ClientIp.Of</c>), and a fresh IP must not mean a fresh supply of password or code
+    /// guesses. Wider than the per-IP window so the owner is not locked out by a few typos.
+    /// </summary>
+    private Task<bool> IsAccountRateLimitedAsync(string key) => _limiter.IsLimitedAsync(
+        key, _security.AccountMaxAttempts, _security.AccountWindow, HttpContext.RequestAborted);
+
     private string RequestIp() => DotNetSigningServer.Middleware.ClientIp.Of(HttpContext);
 
     [CookieAuthorize]
@@ -255,7 +263,8 @@ public class AccountController : Controller
         if (!ModelState.IsValid) return View(model);
 
         var rateLimitKey = $"signin:{RequestIp()}:{UserEmails.Key(model.Email)}";
-        if (await IsRateLimitedAsync(rateLimitKey))
+        if (await IsRateLimitedAsync(rateLimitKey)
+            | await IsAccountRateLimitedAsync($"signin-account:{UserEmails.Key(model.Email)}"))
         {
             ModelState.AddModelError(string.Empty, _localizer["TooManySignInAttempts"]);
             return View(model);
@@ -302,7 +311,8 @@ public class AccountController : Controller
         // database must not be enough to walk through someone's second factor.
         user.EmailOtpCode = SecureTokens.Hash(otp);
         user.EmailOtpExpiresAt = DateTimeOffset.UtcNow.Add(OtpLifetime);
-        user.EmailOtpFailedAttempts = 0;
+        // EmailOtpFailedAttempts is NOT reset here (#80 review): with the password, a new sign-in
+        // would otherwise hand out a fresh set of guesses. Only success or a reset clears it.
         // The code belongs to this sign-in only (#80): the browser gets the challenge, the
         // database its hash. A new sign-in replaces both.
         var challenge = SecureTokens.Generate();
@@ -466,6 +476,13 @@ public class AccountController : Controller
             return RedirectToAction(nameof(SignIn));
         }
 
+        // Per account, across every challenge a password holder can start (#80 review).
+        if (await IsAccountRateLimitedAsync($"2fa-account:{user.Id}"))
+        {
+            TempData["Error"] = _localizer["TooManyVerificationAttempts"].Value;
+            return RedirectToAction(nameof(SignIn));
+        }
+
         if (!user.IsActive)
         {
             ClearOtp(user);
@@ -521,17 +538,19 @@ public class AccountController : Controller
         if (user.EmailOtpFailedAttempts >= Math.Max(1, _security.OtpMaxFailedAttempts)
             || user.EmailOtpExpiresAt < DateTimeOffset.UtcNow)
         {
-            ClearOtp(user);
+            // Void, but the count stays: the next code starts where this one ended.
+            ClearOtp(user, resetFailures: false);
         }
         await _dbContext.SaveChangesAsync();
         return false;
     }
 
-    private static void ClearOtp(User user)
+    /// <summary>Drops the waiting code. The failure count is cleared only by success or a password reset.</summary>
+    private static void ClearOtp(User user, bool resetFailures = true)
     {
         user.EmailOtpCode = null;
         user.EmailOtpExpiresAt = null;
-        user.EmailOtpFailedAttempts = 0;
+        if (resetFailures) user.EmailOtpFailedAttempts = 0;
         user.LoginChallengeHash = null;
     }
 
@@ -912,7 +931,7 @@ public class AccountController : Controller
         var otp = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
         user.EmailOtpCode = SecureTokens.Hash(otp);
         user.EmailOtpExpiresAt = DateTimeOffset.UtcNow.Add(OtpLifetime);
-        user.EmailOtpFailedAttempts = 0;
+        // Failure count kept, as for a sign-in code.
         user.LoginChallengeHash = null;
 
         var variables = EmailTemplateVariables.TwoFactorCode(otp, expiryMinutes: (int)OtpLifetime.TotalMinutes);

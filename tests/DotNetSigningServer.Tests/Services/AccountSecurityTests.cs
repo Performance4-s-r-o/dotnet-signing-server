@@ -98,6 +98,63 @@ public class AccountSecurityTests
     }
 
     [Fact]
+    public async Task SignIn_DoesNotResetTheCountOfWrongCodes()
+    {
+        var db = TestHelpers.CreateInMemoryDbContext();
+        var auth = new AuthService();
+        var (hash, salt, iterations) = auth.HashPassword("Corr3ct-horse!");
+        var user = new User
+        {
+            Email = $"{Guid.NewGuid():N}@example.cz", EmailVerified = true, IsActive = true,
+            PasswordHash = hash, PasswordSalt = salt, PasswordIterations = iterations,
+            EmailOtpFailedAttempts = 4,
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        // A password holder signing in again gets a new code, not a new set of guesses.
+        var c = SignInRateLimitTests.Controller(db, ip: "203.0.113.50");
+        await c.SignIn(new SignInViewModel { Email = user.Email, Password = "Corr3ct-horse!" });
+
+        await db.Entry(user).ReloadAsync();
+        Assert.NotNull(user.EmailOtpCode);
+        Assert.Equal(4, user.EmailOtpFailedAttempts);
+
+        // One more wrong code voids it at once (limit 5).
+        var challenge = Guid.NewGuid().ToString("N");
+        user.LoginChallengeHash = SecureTokens.Hash(challenge);
+        await db.SaveChangesAsync();
+        var wrong = WithChallenge(db, challenge);
+        await wrong.TwoFactorPost("000000");
+        Assert.Equal("VerificationCodeVoided", wrong.TempData["Error"]);
+        await db.Entry(user).ReloadAsync();
+        Assert.Null(user.EmailOtpCode);
+        Assert.Equal(5, user.EmailOtpFailedAttempts); // voiding keeps the count too
+    }
+
+    [Fact]
+    public async Task TwoFactor_NewChallenges_HitTheLimitPerAccount()
+    {
+        var (db, user) = await SeedAsync("123456", null);
+        var security = new DotNetSigningServer.Options.SessionSecurityOptions { AccountMaxAttempts = 3, OtpMaxFailedAttempts = 100 };
+
+        for (var i = 0; i < 4; i++)
+        {
+            // Every round a fresh sign-in: new challenge, new code.
+            var challenge = Guid.NewGuid().ToString("N");
+            user.LoginChallengeHash = SecureTokens.Hash(challenge);
+            user.EmailOtpCode = SecureTokens.Hash("123456");
+            user.EmailOtpExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
+            await db.SaveChangesAsync();
+
+            var c = SignInRateLimitTests.Controller(db, security: security);
+            c.HttpContext.Request.Headers.Cookie = $"{AccountController.LoginChallengeCookie}={challenge}";
+            await c.TwoFactorPost("000000");
+            Assert.Equal(i < 3 ? "VerificationCodeInvalid" : "TooManyVerificationAttempts", c.TempData["Error"]);
+        }
+    }
+
+    [Fact]
     public async Task ForgotPassword_DoesNotMoveTheSessionStamp()
     {
         var (db, user) = await SeedAsync("123456", null);

@@ -22,17 +22,17 @@ namespace DotNetSigningServer.Tests.Services;
 /// </summary>
 public class SignInRateLimitTests
 {
-    internal static AccountController Controller(DotNetSigningServer.Data.ApplicationDbContext? db = null, string? ip = null, AppOptions? app = null)
+    internal static AccountController Controller(DotNetSigningServer.Data.ApplicationDbContext? db = null, string? ip = null, AppOptions? app = null, SessionSecurityOptions? security = null, ITemplatedEmailSender? email = null)
     {
         db ??= TestHelpers.CreateInMemoryDbContext();
         var controller = new AccountController(
             db,
             new AuthService(),
-            Mock.Of<ITemplatedEmailSender>(),
+            email ?? Mock.Of<ITemplatedEmailSender>(),
             TestHelpers.WrapOptions(app ?? new AppOptions()),
             new StringLocalizer<SharedStrings>(new KeyEchoLocalizerFactory()),
             new AuthAttemptLimiter(db),
-            TestHelpers.WrapOptions(new SessionSecurityOptions()));
+            TestHelpers.WrapOptions(security ?? new SessionSecurityOptions()));
         var http = new DefaultHttpContext();
         if (ip != null) http.Connection.RemoteIpAddress = System.Net.IPAddress.Parse(ip);
         controller.ControllerContext = new ControllerContext { HttpContext = http };
@@ -65,6 +65,24 @@ public class SignInRateLimitTests
         var owner = Controller(ip: "198.51.100.20");
         await owner.SignIn(new SignInViewModel { Email = address, Password = "wrong" });
         Assert.DoesNotContain(owner.ModelState[string.Empty]!.Errors, e => e.ErrorMessage == "TooManySignInAttempts");
+    }
+
+    [Fact]
+    public async Task SignIn_ManyIps_HitTheLimitPerAccount()
+    {
+        // A spoofed or rotating IP is a new per-IP key; the account key still counts (#80 review).
+        var address = $"{Guid.NewGuid():N}@example.cz";
+        var security = new SessionSecurityOptions { AccountMaxAttempts = 3 };
+        for (var i = 0; i < 3; i++)
+        {
+            var c = Controller(ip: $"203.0.113.{i + 1}", security: security);
+            await c.SignIn(new SignInViewModel { Email = address, Password = "wrong" });
+            Assert.DoesNotContain(c.ModelState[string.Empty]!.Errors, e => e.ErrorMessage == "TooManySignInAttempts");
+        }
+
+        var fourth = Controller(ip: "198.51.100.99", security: security);
+        await fourth.SignIn(new SignInViewModel { Email = address, Password = "wrong" });
+        Assert.Contains(fourth.ModelState[string.Empty]!.Errors, e => e.ErrorMessage == "TooManySignInAttempts");
     }
 
     [Fact]
