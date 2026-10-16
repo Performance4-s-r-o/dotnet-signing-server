@@ -476,7 +476,7 @@ public class StripeWebhookController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send payment failure email to {Email}", user.Email);
+            _logger.LogError(ex, "Failed to send payment failure email to {Email}", LogRedaction.Email(user.Email));
         }
     }
 

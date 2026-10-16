@@ -112,11 +112,11 @@ public class PriceChangeMonitorService : BackgroundService
                 await email.SendAsync(EmailTemplateId.PriceChangeNotice, user.Email, locale, variables, emailOptions);
 
                 user.PriceChangeNotifiedAt = DateTimeOffset.UtcNow;
-                _logger.LogInformation("Price change notification sent to user {UserId} ({Email})", user.Id, user.Email);
+                _logger.LogInformation("Price change notification sent to user {UserId} ({Email})", user.Id, LogRedaction.Email(user.Email));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to send price change notification to {Email}", user.Email);
+                _logger.LogError(ex, "Failed to send price change notification to {Email}", LogRedaction.Email(user.Email));
             }
         }
 

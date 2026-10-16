@@ -169,13 +169,13 @@ public class SupportController : Controller
                 var errorBody = await response.Content.ReadAsStringAsync();
                 _logger.LogError(
                     "osTicket rejected ticket for {Email}: {Status} {Body}",
-                    userEmail, (int)response.StatusCode, errorBody);
+                    LogRedaction.Email(userEmail), (int)response.StatusCode, LogRedaction.Text(errorBody));
                 TempData["Error"] = _localizer["SupportSubmitFailed"].Value;
                 return RedirectToAction(nameof(Index));
             }
 
             var ticketId = (await response.Content.ReadAsStringAsync()).Trim();
-            _logger.LogInformation("osTicket ticket {TicketId} created for {Email}", ticketId, userEmail);
+            _logger.LogInformation("osTicket ticket {TicketId} created for {Email}", ticketId, LogRedaction.Email(userEmail));
 
             TempData["Info"] = string.IsNullOrWhiteSpace(ticketId)
                 ? _localizer["SupportTicketCreated"].Value
@@ -184,7 +184,7 @@ public class SupportController : Controller
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to reach osTicket for {Email}", userEmail);
+            _logger.LogError(ex, "Failed to reach osTicket for {Email}", LogRedaction.Email(userEmail));
             TempData["Error"] = _localizer["SupportUnavailable"].Value;
             return RedirectToAction(nameof(Index));
         }

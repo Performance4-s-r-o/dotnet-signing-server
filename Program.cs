@@ -157,6 +157,9 @@ builder.Services.AddSingleton<ContentLimitGuard>();
 builder.Services.AddSingleton<PdfSafetyGuard>();
 builder.Services.AddScoped<IAutoRechargeService, AutoRechargeService>();
 builder.Services.AddHostedService<PresignCleanupService>();
+// Retention of Stripe webhook payloads and document metadata (#217).
+Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton(builder.Services, TimeProvider.System);
+builder.Services.AddHostedService<DataRetentionService>();
 // Paid API operations: state, reservation, idempotent retries (#77, #82).
 builder.Services.AddApiOperations(builder.Configuration);
 // TSA deadline per authority (#77); the shared TSA client reads it per request.
