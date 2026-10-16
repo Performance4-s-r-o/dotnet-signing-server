@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
+#if DEBUG
 using Testcontainers.PostgreSql;
+#endif
 
 namespace DotNetSigningServer.Data
 {
@@ -19,9 +21,19 @@ namespace DotNetSigningServer.Data
                 .Build();
 
             var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
+#if DEBUG
             var useLocalDb = configuration.GetValue<bool?>("UseLocalDb")
                             ?? environment.Equals("Development", StringComparison.OrdinalIgnoreCase);
+#else
+            var useLocalDb = configuration.GetValue<bool?>("UseLocalDb") ?? false;
+#endif
 
+#if !DEBUG
+            if (useLocalDb)
+            {
+                throw new InvalidOperationException("UseLocalDb needs a Debug build (Testcontainers).");
+            }
+#else
             if (useLocalDb)
             {
                 var currentDirectory = Directory.GetCurrentDirectory();
@@ -42,6 +54,7 @@ namespace DotNetSigningServer.Data
                 optionsBuilder.UseNpgsql(postgresContainer.GetConnectionString());
             }
             else
+#endif
             {
                 var connectionString = configuration.GetConnectionString("DefaultConnection")
                                      ?? BuildConnectionStringFromConfiguration(configuration);

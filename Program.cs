@@ -8,7 +8,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Authentication;
+#if DEBUG
 using Testcontainers.PostgreSql;
+#endif
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -294,7 +296,10 @@ builder.Services.AddAuthorization(options =>
 // Health checks
 builder.Services.AddHealthChecks();
 
+#if DEBUG
+// Dev only: Testcontainers is not part of the Release build, so it is not in the production image (#84).
 PostgreSqlContainer? postgresContainer = null;
+#endif
 
 var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
 builder.Services.AddCors(options =>
@@ -307,9 +312,20 @@ builder.Services.AddCors(options =>
                       });
 });
 
+#if DEBUG
 bool useLocalDb = builder.Configuration.GetValue<bool?>("UseLocalDb")
                   ?? builder.Environment.IsDevelopment();
+#else
+// Release has no Testcontainers: the Development default does not apply, only an explicit UseLocalDb=true is refused (#84).
+bool useLocalDb = builder.Configuration.GetValue<bool?>("UseLocalDb") ?? false;
+#endif
 
+#if !DEBUG
+if (useLocalDb)
+{
+    throw new InvalidOperationException("UseLocalDb needs a Debug build (it starts a Testcontainers PostgreSQL). Set ConnectionStrings__DefaultConnection or the DB_* variables.");
+}
+#else
 if (useLocalDb)
 {
     var currentDirectory = Directory.GetCurrentDirectory();
@@ -336,6 +352,7 @@ if (useLocalDb)
         }));
 }
 else
+#endif
 {
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
                          ?? BuildConnectionStringFromConfiguration(builder.Configuration);
@@ -448,6 +465,7 @@ if (!migrateOnly && app.Environment.IsProduction() && clientIpTrust.Cloudflare.I
         + "Set it to the address / CIDR of cloudflared, or to 'none' when no tunnel is in front.");
 }
 
+#if DEBUG
 if (postgresContainer != null)
 {
     app.Lifetime.ApplicationStopping.Register(async () =>
@@ -456,6 +474,7 @@ if (postgresContainer != null)
         await postgresContainer.DisposeAsync();
     });
 }
+#endif
 
 if (app.Environment.IsDevelopment())
 {

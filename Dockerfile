@@ -1,10 +1,11 @@
 # Stage 1: Build the application
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:8.0@sha256:f7e28a0a3f6f9235929ec19274fd0ddf8534e9159f99fac602ac73304f1ce99f AS build
 WORKDIR /src
 
 # Copy csproj and restore as distinct layers to leverage Docker cache
-COPY ["dotnet-signing-server.csproj", "nuget.config", "./"]
-RUN dotnet restore "./dotnet-signing-server.csproj"
+# The Release lock file pins every package (#84): a restore that would change one fails the build.
+COPY ["dotnet-signing-server.csproj", "nuget.config", "packages.release.lock.json", "./"]
+RUN dotnet restore "./dotnet-signing-server.csproj" -p:Configuration=Release --locked-mode
 
 # Copy the rest of the application source code
 COPY . .
@@ -22,19 +23,27 @@ RUN if [ -n "$SENTRY_RELEASE_SHA" ]; then \
     fi
 
 # Build and publish the application
-RUN dotnet build "dotnet-signing-server.csproj" -c Release -o /app/build
-RUN dotnet publish "dotnet-signing-server.csproj" -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet build "dotnet-signing-server.csproj" -c Release --no-restore -o /app/build
+RUN dotnet publish "dotnet-signing-server.csproj" -c Release --no-restore -o /app/publish /p:UseAppHost=false
 
 # Stage 2: Create the final, smaller runtime image
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:8.0@sha256:1601380775673021a23ea5985669f1daf03719faaa684f839da1752fb48cfc7f AS final
 WORKDIR /app
 
 ENV DOTNET_USE_POLLING_FILE_WATCHER=1
 ENV DATA_PROTECTION_KEYS_PATH=/app/data-protection-keys
 
+# Ghostscript is pinned (#84): it renders attacker-supplied PDF/PS and has a history of critical CVEs,
+# so which version runs must be a decision, not whatever apt has today. When Debian ships a newer
+# build the old one disappears from the archive and this build fails on purpose: bump the version
+# (check https://security-tracker.debian.org/tracker/source-package/ghostscript) in the same change.
+ARG GS_VERSION=10.0.0~dfsg-11+deb12u8
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ghostscript curl && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends \
+        "ghostscript=${GS_VERSION}" "libgs10=${GS_VERSION}" "libgs10-common=${GS_VERSION}" "libgs-common=${GS_VERSION}" curl \
+    || { echo "GS_VERSION ${GS_VERSION} is no longer in the Debian archive: bump it (security-tracker.debian.org/tracker/source-package/ghostscript), see #84" >&2; exit 1; } && \
+    rm -rf /var/lib/apt/lists/* && \
+    gs --version
 
 # Create non-root user
 RUN groupadd -r appuser && useradd -r -g appuser -d /app appuser

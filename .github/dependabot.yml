@@ -23,3 +23,11 @@ updates:
       interval: weekly
     commit-message:
       prefix: "chore(ci)"
+
+  # Base images are pinned by digest in the Dockerfile; Dependabot moves the digest.
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(docker)"
