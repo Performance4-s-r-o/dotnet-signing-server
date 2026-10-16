@@ -133,6 +133,13 @@ public class User
     /// </summary>
     public DateTimeOffset? EnterpriseEnabledAt { get; set; }
 
+    /// <summary>
+    /// When the account was erased (GDPR art. 17, #217). The row stays as a tombstone without
+    /// personal data, because invoices and payments (kept 10 years) and usage records point at
+    /// it; see <c>AccountErasureService</c>. NULL = a live account.
+    /// </summary>
+    public DateTimeOffset? ErasedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 

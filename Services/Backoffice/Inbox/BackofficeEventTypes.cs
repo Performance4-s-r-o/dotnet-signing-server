@@ -21,6 +21,9 @@ public static class BackofficeEventTypes
     public const string BillingPaymentFailed = "billing.payment.failed";
     public const string BillingPaymentMethodDetached = "billing.payment_method.detached";
 
+    /// <summary>The subject asked P4 to be erased (#217): erase locally and ack the product target.</summary>
+    public const string SubjectErasureRequested = "subject.erasure.requested";
+
     /// <summary>Sent by the "Test" button of the webhook endpoint; never listed by <c>/v1/events</c>.</summary>
     public const string WebhookTest = "webhook.test";
 
@@ -36,5 +39,6 @@ public static class BackofficeEventTypes
         EmailBounced, EmailComplained, EmailFailed,
         SupportTicketFailed,
         BillingCheckoutCompleted, BillingPaymentSucceeded, BillingPaymentFailed, BillingPaymentMethodDetached,
+        SubjectErasureRequested,
     ];
 }

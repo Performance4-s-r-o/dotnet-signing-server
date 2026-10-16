@@ -181,6 +181,11 @@ namespace DotNetSigningServer.Data
             modelBuilder.Entity<BackofficeOutboxItem>()
                 .HasIndex(i => i.CreatedAt);
 
+            // The account erasure (#217) cancels the subject's unsent items by their ref.
+            modelBuilder.Entity<BackofficeOutboxItem>()
+                .HasIndex(i => i.SubjectRef)
+                .HasFilter("\"SubjectRef\" IS NOT NULL");
+
             // Dedupe of webhook deliveries and polled events (INSERT … ON CONFLICT DO NOTHING).
             modelBuilder.Entity<BackofficeWebhookInboxItem>()
                 .HasIndex(i => i.WebhookId)

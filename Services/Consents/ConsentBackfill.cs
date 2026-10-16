@@ -73,6 +73,9 @@ public sealed class ConsentBackfill
 
         var records = await _db.ConsentRecords.AsNoTracking()
             .Where(c => c.OutboxItemId == null && c.OccurredAt > from && c.OccurredAt <= cutoff)
+            // Never send consents of an erased account (#217): the service would refuse them
+            // (subject_erased) and they would bring the erased subject back into its log.
+            .Where(c => !_db.Users.Any(u => u.Id == c.UserId && u.ErasedAt != null))
             .OrderBy(c => c.OccurredAt)
             .ToListAsync(cancellationToken);
 

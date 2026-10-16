@@ -97,13 +97,13 @@ public class UserEmailsPostgresTests : IClassFixture<OutboxPostgresFixture>
         // those columns just for the insert, and drop them again before migrating on.
         await db.Database.ExecuteSqlRawAsync(
             "ALTER TABLE \"Users\" ADD COLUMN \"EmailOtpFailedAttempts\" integer NOT NULL DEFAULT 0, " +
-            "ADD COLUMN \"LoginChallengeHash\" text");
+            "ADD COLUMN \"LoginChallengeHash\" text, ADD COLUMN \"ErasedAt\" timestamp with time zone");
         var local = Guid.NewGuid().ToString("N");
         var lower = TestHelpers.CreateTestUser($"{local}@example.cz");
         db.Users.AddRange(lower, TestHelpers.CreateTestUser($"{local.ToUpperInvariant()}@example.cz"));
         await db.SaveChangesAsync();
         await db.Database.ExecuteSqlRawAsync(
-            "ALTER TABLE \"Users\" DROP COLUMN \"EmailOtpFailedAttempts\", DROP COLUMN \"LoginChallengeHash\"");
+            "ALTER TABLE \"Users\" DROP COLUMN \"EmailOtpFailedAttempts\", DROP COLUMN \"LoginChallengeHash\", DROP COLUMN \"ErasedAt\"");
 
         var ex = await Assert.ThrowsAsync<Npgsql.PostgresException>(() => migrator.MigrateAsync());
         Assert.Contains("differing only by letter case", ex.MessageText);

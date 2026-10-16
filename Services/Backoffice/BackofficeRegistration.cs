@@ -60,6 +60,7 @@ public static class BackofficeRegistration
         AddPricing(services, snapshot);
         AddSupport(services, snapshot);
         BillingRegistration.AddBilling(services, snapshot);
+        AddErasure(services, snapshot);
 
         return services;
     }
@@ -356,6 +357,20 @@ public static class BackofficeRegistration
         services.AddScoped<IBackofficeEventHandler, SupportEventsHandler>();
     }
 
+    /// <summary>
+    /// Account erasure (#217): the service behind the account page is always there (the local
+    /// erasure does not need the backoffice). While any module is Shadow or On it also answers
+    /// <c>subject.erasure.requested</c>; the outbox kinds <c>subject.erase</c> and
+    /// <c>subject.erasure.ack</c> are sent by the dispatcher (<see cref="AddOutboxDispatcher"/>).
+    /// </summary>
+    internal static void AddErasure(IServiceCollection services, P4BackofficeProductOptions options)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddScoped<DotNetSigningServer.Services.Erasure.AccountErasureService>();
+        if (!options.AnyEnabled) return;
+        services.AddScoped<IBackofficeEventHandler, ErasureRequestedHandler>();
+    }
+
     /// <summary>A <c>price.*</c> handler that acts by the Pricing mode, also resolvable as itself.</summary>
     private static void AddPriceEventHandler<T>(IServiceCollection services, BackofficeMode mode)
         where T : class, IBackofficeEventHandler
@@ -398,6 +413,8 @@ public static class BackofficeRegistration
         // is switched Off again later.
         services.AddSingleton<IOutboxHandler, ConsentOutboxHandler>();
         services.AddSingleton<IOutboxHandler, SupportTicketOutboxHandler>();
+        services.AddSingleton<IOutboxHandler, ErasureRequestOutboxHandler>();
+        services.AddSingleton<IOutboxHandler, ErasureAckOutboxHandler>();
         services.AddHostedService<BackofficeOutboxDispatcher>();
     }
 

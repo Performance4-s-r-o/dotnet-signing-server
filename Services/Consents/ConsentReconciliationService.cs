@@ -141,6 +141,8 @@ public sealed class ConsentReconciliationService : BackgroundService
             // Not filtered by OutboxItemId: records sent by ConsentBackfill keep it null (append-only
             // table), and those users are the ones most likely to differ. Unsent batches are skipped below.
             .Where(c => c.OccurredAt >= since)
+            // An erased account (#217) is pseudonymised in the service: nothing left to compare.
+            .Where(c => !db.Users.Any(u => u.Id == c.UserId && u.ErasedAt != null))
             .GroupBy(c => c.UserId)
             .OrderByDescending(g => g.Max(c => c.OccurredAt))
             .Select(g => g.Key)

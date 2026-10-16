@@ -20,6 +20,20 @@ public interface IOutboxHandler
     /// </summary>
     bool ServiceDeduplicates => false;
 
+    /// <summary>
+    /// A give-up time of this kind's own, overriding the configured one and
+    /// <see cref="ServiceDeduplicates"/>; null = those apply. For kinds that must not end quietly
+    /// within a day — an erasure is retried for 30 days (#217) — and that the service accepts
+    /// any number of times (it recognises the subject, whatever the <c>Idempotency-Key</c>).
+    /// </summary>
+    TimeSpan? GiveUpAfter => null;
+
+    /// <summary>
+    /// From this age of the item on, every failed attempt is logged as an error starting with
+    /// <see cref="OutboxProcessor.AlertPrefix"/> instead of a warning; null = never.
+    /// </summary>
+    TimeSpan? AlertAfter => null;
+
     Task<OutboxAttemptResult> SendAsync(OutboxRequest request, CancellationToken cancellationToken);
 }
 
