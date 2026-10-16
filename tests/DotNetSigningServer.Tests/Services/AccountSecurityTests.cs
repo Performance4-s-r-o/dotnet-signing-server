@@ -105,8 +105,12 @@ public class AccountSecurityTests
         var (hash, salt, iterations) = auth.HashPassword("Corr3ct-horse!");
         var user = new User
         {
-            Email = $"{Guid.NewGuid():N}@example.cz", EmailVerified = true, IsActive = true,
-            PasswordHash = hash, PasswordSalt = salt, PasswordIterations = iterations,
+            Email = $"{Guid.NewGuid():N}@example.cz",
+            EmailVerified = true,
+            IsActive = true,
+            PasswordHash = hash,
+            PasswordSalt = salt,
+            PasswordIterations = iterations,
             EmailOtpFailedAttempts = 4,
         };
         db.Users.Add(user);

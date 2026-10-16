@@ -137,8 +137,12 @@ public class SessionRevalidationTests : IClassFixture<WebUiAuthFixture>
         var (plaintext, hash, _) = tokens.IssueToken(user, "web", null);
         db.ApiTokens.Add(new ApiToken
         {
-            UserId = id, Label = "web", TokenHash = hash, TokenPrefix = plaintext[..8],
-            IsBrowserToken = true, AllowedOrigins = origin,
+            UserId = id,
+            Label = "web",
+            TokenHash = hash,
+            TokenPrefix = plaintext[..8],
+            IsBrowserToken = true,
+            AllowedOrigins = origin,
         });
         await db.SaveChangesAsync();
         return plaintext;
