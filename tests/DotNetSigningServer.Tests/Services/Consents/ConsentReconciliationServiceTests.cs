@@ -197,4 +197,36 @@ public class ConsentReconciliationServiceTests
         Assert.Null(await on.WithDbAsync(db => DotNetSigningServer.Services.Backoffice.BackofficeStateStore.GetAsync(db,
             DotNetSigningServer.Services.Backoffice.BackofficeLease.KeyFor(ConsentReconciliationService.LeaseName))));
     }
+
+    [Fact]
+    public async Task Run_OneFailingCheckDoesNotStopTheRun_AndTheRunIsRecorded()
+    {
+        var dbName = "consents-rec-" + Guid.NewGuid();
+        var status = new StubServiceHandler();
+        using (var off = Host("Off", dbName, new StubServiceHandler()))
+        {
+            await ConsentTestHost.SignUpAsync(off, "a@example.com");
+            await ConsentTestHost.SignUpAsync(off, "b@example.com");
+        }
+
+        using var on = Host("On", dbName, status);
+        on.Time.Advance(TimeSpan.FromMinutes(5));
+        using (var scope = on.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<ConsentBackfill>().RunAsync();
+        }
+        await on.WithDbAsync(async db =>
+        {
+            foreach (var item in await db.BackofficeOutboxItems.ToListAsync()) item.Status = BackofficeOutboxStatus.Sent;
+            return await db.SaveChangesAsync();
+        });
+        status.Enqueue(HttpStatusCode.InternalServerError);
+        status.Enqueue(HttpStatusCode.OK, RemoteAllV1);
+
+        var differing = await on.Services.GetRequiredService<ConsentReconciliationService>().RunIfDueAsync(CancellationToken.None);
+
+        Assert.Equal(0, differing);
+        Assert.Equal(2, StatusRequests(status).Count());
+        Assert.NotNull(await on.WithDbAsync(db => DotNetSigningServer.Services.Backoffice.BackofficeStateStore.GetAsync(db, BackofficeStateKeys.ConsentsReconciledAt)));
+    }
 }

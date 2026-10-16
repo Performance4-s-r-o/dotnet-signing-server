@@ -32,6 +32,9 @@ public sealed class OutboxProcessor
     /// <summary>A batch is abandoned (remaining items released) after this, well inside <see cref="OutboxClaim.LockDuration"/>.</summary>
     public static readonly TimeSpan BatchBudget = TimeSpan.FromSeconds(90);
 
+    /// <summary>Attempts of one batch that run at the same time.</summary>
+    public const int Workers = 6;
+
     private readonly IServiceScopeFactory _scopes;
     private readonly IHttpClientFactory _httpClients;
     private readonly IReadOnlyDictionary<string, IOutboxHandler> _handlers;
@@ -76,16 +79,32 @@ public sealed class OutboxProcessor
         var started = Stopwatch.StartNew();
         try
         {
-            foreach (var item in items)
+            // The attempts (network) run side by side; only the bookkeeping on the shared
+            // DbContext is serialised, so one stuck request no longer holds up the whole batch.
+            using var slots = new SemaphoreSlim(Workers);
+            using var dbGate = new SemaphoreSlim(1);
+            await Task.WhenAll(items.Select(async item =>
             {
-                if (started.Elapsed > BatchBudget)
+                await slots.WaitAsync(cancellationToken);
+                try
                 {
-                    item.LockedUntil = null; // let the next pass (or another instance) take it
-                    continue;
+                    if (started.Elapsed > BatchBudget)
+                    {
+                        await dbGate.WaitAsync(cancellationToken);
+                        try { item.LockedUntil = null; } finally { dbGate.Release(); } // next pass (or another instance) takes it
+                        return;
+                    }
+                    var result = await SendAsync(item, AttemptTimeout, cancellationToken);
+                    await dbGate.WaitAsync(cancellationToken);
+                    try
+                    {
+                        Record(item, result);
+                        await db.SaveChangesAsync(cancellationToken);
+                    }
+                    finally { dbGate.Release(); }
                 }
-                await AttemptAsync(item, AttemptTimeout, cancellationToken);
-                await db.SaveChangesAsync(cancellationToken);
-            }
+                finally { slots.Release(); }
+            }));
             await db.SaveChangesAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -152,7 +171,12 @@ public sealed class OutboxProcessor
     /// <summary>One attempt on a claimed, tracked item; records the outcome on it (not saved).</summary>
     private async Task AttemptAsync(BackofficeOutboxItem item, TimeSpan timeout, CancellationToken cancellationToken)
     {
-        var result = await SendAsync(item, timeout, cancellationToken);
+        Record(item, await SendAsync(item, timeout, cancellationToken));
+    }
+
+    /// <summary>Stores the outcome of an attempt on the item (not saved) and logs it.</summary>
+    private void Record(BackofficeOutboxItem item, OutboxAttemptResult result)
+    {
         var outcome = RetryPolicy.Apply(item, result, _time.GetUtcNow(), GiveUpAfterFor(item.Kind));
         _breaker.Record(result);
 

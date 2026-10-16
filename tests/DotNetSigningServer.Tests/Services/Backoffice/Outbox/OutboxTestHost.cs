@@ -44,12 +44,13 @@ internal sealed class StubServiceHandler : HttpMessageHandler
     {
         var body = request.Content == null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
         lock (Requests) Requests.Add((request, body));
-        var next = Responses.Count > 0
-            ? Responses.Dequeue()
-            : _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Accepted)
+        Func<HttpRequestMessage, Task<HttpResponseMessage>>? queued = null;
+        lock (Requests) { if (Responses.Count > 0) queued = Responses.Dequeue(); }
+        var next = queued
+            ?? (_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Accepted)
             {
                 Content = new StringContent("""{"id":"res_1","status":"queued"}""", Encoding.UTF8, "application/json"),
-            });
+            }));
         return await next(request);
     }
 }
