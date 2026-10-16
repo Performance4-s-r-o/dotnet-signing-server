@@ -139,18 +139,8 @@ namespace DotNetSigningServer.Services
             return Convert.ToBase64String(fullySignedPdf);
         }
 
-        public virtual string ApplyDocumentTimestamp(DocumentTimestampInput input)
-        {
-            ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(
-                input.TsaUrl, input.TsaUsername, input.TsaPassword,
-                TsaEndpoint.From(input.TsaBackupUrl, input.TsaBackupUsername, input.TsaBackupPassword));
-            if (tsaClient == null)
-            {
-                throw new ApiValidationException("TSA_NOT_CONFIGURED");
-            }
-
-            return ApplyDocumentTimestamp(input, tsaClient);
-        }
+        public virtual string ApplyDocumentTimestamp(DocumentTimestampInput input) =>
+            ApplyDocumentTimestamp(input, Convert.FromBase64String(input.PdfContent));
 
         /// <summary>
         /// Časové razítko nad bajty, které už prošly vstupní kontrolou (#74, binární kanál);

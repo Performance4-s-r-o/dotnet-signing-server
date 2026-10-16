@@ -159,3 +159,11 @@ Uložený výsledek (`ApiOperationService`, `ResultProtected`) zůstává šifro
 čichání obsahu), protože staré řádky JSON nesou a replay je z něj skládá, včetně dalších polí těla
 (`conformance`). Řádek zapsaný novým kódem by navíc při návratu na starší verzi nešel přečíst.
 Bez migrace to bezpečně nejde, proto se nedělalo.
+
+## Idempotence a přepínání kanálů
+
+Otisk operace (`Idempotency-Key`) se v binárním kanálu počítá z metadat a SHA-256 dokumentu, v JSON kanálu z těla s base64.
+Stejná operace tedy dává v obou kanálech **různý otisk**. Volající, který opakuje operaci po chybě nebo timeoutu, musí
+opakovat **stejným kanálem** a se **stejným klíčem**; přepnutí kanálu s týmž klíčem skončí `422 IDEMPOTENCY_KEY_REUSED`
+a s novým klíčem by se účtovalo podruhé. Automatický „fallback na JSON" proto nesmí existovat.
+
