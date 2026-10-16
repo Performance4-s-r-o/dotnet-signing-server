@@ -223,6 +223,12 @@ namespace DotNetSigningServer.Data
 
             modelBuilder.Entity<AuthAttemptCounter>()
                 .HasIndex(c => c.WindowStart);
+
+            // The 2FA step finds its account by the challenge (#80); without this every
+            // submitted code scanned the whole table. Only rows with a sign-in waiting.
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.LoginChallengeHash)
+                .HasFilter("\"LoginChallengeHash\" IS NOT NULL");
         }
 
         public override int SaveChanges(bool acceptAllChangesOnSuccess)

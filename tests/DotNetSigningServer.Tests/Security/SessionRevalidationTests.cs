@@ -290,6 +290,17 @@ public class SessionRevalidationTests : IClassFixture<WebUiAuthFixture>
     }
 
     [DockerFact]
+    public async Task LoginChallenge_IsIndexed()
+    {
+        await using var db = _fx.Postgres.CreateContext();
+        var definitions = await db.Database.SqlQueryRaw<string>(
+            "SELECT indexdef AS \"Value\" FROM pg_indexes WHERE schemaname = 'dotnet_signing' AND indexname = 'IX_Users_LoginChallengeHash'")
+            .ToListAsync();
+        var definition = Assert.Single(definitions);
+        Assert.Contains("IS NOT NULL", definition);
+    }
+
+    [DockerFact]
     public async Task AttemptLimiter_IsShared_AcrossContexts()
     {
         var key = $"test:{Guid.NewGuid():N}";

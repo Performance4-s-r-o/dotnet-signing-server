@@ -75,6 +75,13 @@ namespace dotnetsigningserver.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_Users_LoginChallengeHash",
+                schema: "dotnet_signing",
+                table: "Users",
+                column: "LoginChallengeHash",
+                filter: "\"LoginChallengeHash\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AdminAuditEntries_TargetUserId_CreatedAt",
                 schema: "dotnet_signing",
                 table: "AdminAuditEntries",
@@ -88,7 +95,13 @@ namespace dotnetsigningserver.Migrations
 
             // Append-only in the database too (#80): the context refuses it, this refuses it for
             // any other client of the same role. Dropping the trigger needs DDL rights, which the
-            // runtime role does not have (#85).
+            // runtime role does not have when migrations run as a separate role (#85).
+            //
+            // Not a guarantee where one role does both — on-prem with RUN_MIGRATIONS_ON_START=true,
+            // or an empty MIGRATION_DB_USER: that role owns the table and can drop or disable the
+            // trigger. Also: ActorEmail is personal data that this table, by design, never deletes;
+            // an erasure request has to be answered with that in mind (legitimate interest of an
+            // audit trail, or a manual pseudonymisation with the trigger switched off by the owner).
             migrationBuilder.Sql(@"
 CREATE OR REPLACE FUNCTION dotnet_signing.admin_audit_append_only() RETURNS trigger
 LANGUAGE plpgsql AS $$
@@ -121,6 +134,11 @@ DROP FUNCTION IF EXISTS dotnet_signing.admin_audit_append_only();");
             migrationBuilder.DropTable(
                 name: "AuthAttemptCounters",
                 schema: "dotnet_signing");
+
+            migrationBuilder.DropIndex(
+                name: "IX_Users_LoginChallengeHash",
+                schema: "dotnet_signing",
+                table: "Users");
 
             migrationBuilder.DropColumn(
                 name: "EmailOtpFailedAttempts",

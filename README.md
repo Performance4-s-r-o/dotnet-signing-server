@@ -119,6 +119,21 @@ anything else answers `403 TOKEN_SCOPE`. A token can also carry a credit limit
 (`402 TOKEN_CREDIT_LIMIT` once spent). Server tokens are not affected. A completed password
 reset revokes the account's browser tokens (server tokens stay).
 
+### Admin audit
+
+Admin actions on accounts (enterprise mode, seal permission, queue timeout) and on the
+installation (outbox requeue, consent backfill) are recorded in `AdminAuditEntries` with the
+actor, the target and the change, and shown on the user's admin page. The table is
+append-only: the application refuses updates and deletes, and a database trigger refuses them
+for any other client. Two limits of that:
+
+- Where one database role both migrates and serves (on-prem with `RUN_MIGRATIONS_ON_START=true`,
+  or an empty `MIGRATION_DB_USER`), that role owns the table and can disable the trigger.
+  Append-only then holds against the application, not against the database role.
+- `ActorEmail` is personal data that the table never deletes. An erasure request from a former
+  administrator has to be weighed against the audit trail (and, if granted, done by the table
+  owner with the trigger disabled).
+
 ### Templates and utilities
 
 | Endpoint | Purpose |

@@ -924,6 +924,9 @@ namespace dotnetsigningserver.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
+                    b.HasIndex("LoginChallengeHash")
+                        .HasFilter("\"LoginChallengeHash\" IS NOT NULL");
+
                     b.HasIndex("StripeCustomerId")
                         .IsUnique()
                         .HasDatabaseName("IX_Users_StripeCustomerId")

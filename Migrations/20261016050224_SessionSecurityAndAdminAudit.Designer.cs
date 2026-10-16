@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace dotnetsigningserver.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20261015231721_SessionSecurityAndAdminAudit")]
+    [Migration("20261016050224_SessionSecurityAndAdminAudit")]
     partial class SessionSecurityAndAdminAudit
     {
         /// <inheritdoc />
@@ -926,6 +926,9 @@ namespace dotnetsigningserver.Migrations
 
                     b.HasIndex("Email")
                         .IsUnique();
+
+                    b.HasIndex("LoginChallengeHash")
+                        .HasFilter("\"LoginChallengeHash\" IS NOT NULL");
 
                     b.HasIndex("StripeCustomerId")
                         .IsUnique()
