@@ -198,11 +198,21 @@ namespace DotNetSigningServer.Controllers
                 return null;
             }
             Logger.LogDebug("Validating API token from Authorization header");
-            var tokenUser = await ApiAuthService.ValidateTokenAsync(Request.Headers["Authorization"].ToString(), originHeader, HttpContext.Connection.RemoteIpAddress);
-            if (tokenUser == null)
+            var validation = await ApiAuthService.ValidateTokenDetailedAsync(
+                Request.Headers["Authorization"].ToString(), originHeader, DotNetSigningServer.Middleware.ClientIp.AddressOf(HttpContext));
+            if (validation == null)
             {
                 return null;
             }
+            // Same rule as the authentication handler (#78): the portal's token only on the internal listener.
+            var portalTrust = HttpContext.RequestServices.GetService<DotNetSigningServer.Options.PortalTrustOptions>()
+                              ?? new DotNetSigningServer.Options.PortalTrustOptions();
+            if (PortalTrust.Classify(portalTrust, HttpContext.Connection.LocalPort, validation.User.Id, validation.IsBrowserToken)
+                == PortalCallKind.Refused)
+            {
+                return null;
+            }
+            var tokenUser = validation.User;
 
             var dbUser = await DbContext.Users.FirstOrDefaultAsync(u => u.Id == tokenUser.Id);
             if (dbUser != null && !dbUser.IsActive) return null;
@@ -541,7 +551,7 @@ namespace DotNetSigningServer.Controllers
             {
                 try
                 {
-                    var done = await Operations.CompleteAsync(op, attempt, stored);
+                    var done = await Operations.CompleteAsync(op, attempt, stored, PortalTrust.CallerOf(HttpContext));
                     return (done, done);
                 }
                 catch (Exception storeError)
@@ -554,7 +564,7 @@ namespace DotNetSigningServer.Controllers
             {
                 // After a failed store this is also how a commit that did go through is
                 // recognised: the row is already completed by this attempt.
-                return (await Operations.CompleteAsync(op, attempt, null), false);
+                return (await Operations.CompleteAsync(op, attempt, null, PortalTrust.CallerOf(HttpContext)), false);
             }
             catch
             {

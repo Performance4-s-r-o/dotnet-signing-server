@@ -57,5 +57,13 @@ public class UsageRecord
     /// <summary>Wall-clock duration of the request in milliseconds.</summary>
     public int? DurationMs { get; set; }
 
+    /// <summary>The portal's tenant (<c>X-P4-Tenant</c>, #78); null for every other caller.</summary>
+    [MaxLength(64)]
+    public string? TenantId { get; set; }
+
+    /// <summary>The portal's <c>X-Request-Id</c> (#78), to find the call in the portal's log.</summary>
+    [MaxLength(128)]
+    public string? RequestId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

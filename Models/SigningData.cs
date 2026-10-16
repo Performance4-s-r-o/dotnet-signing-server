@@ -18,6 +18,12 @@ namespace DotNetSigningServer.Models
         public string? TsaBackupUsername { get; set; }
         public string? TsaBackupPassword { get; set; }
         public Guid? UserId { get; set; }
+        /// <summary>The portal's tenant (<c>X-P4-Tenant</c>, #78); null for other callers and older presigns.</summary>
+        [MaxLength(64)]
+        public string? TenantId { get; set; }
+        /// <summary>The portal's <c>X-Request-Id</c> of the presign (#78).</summary>
+        [MaxLength(128)]
+        public string? RequestId { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

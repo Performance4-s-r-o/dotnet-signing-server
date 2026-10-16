@@ -12,10 +12,14 @@ namespace DotNetSigningServer.Logging;
 /// first log call is safe because <see cref="LokiClient"/> only depends on
 /// singletons (IHttpClientFactory, IOptions).
 /// </summary>
-public sealed class LokiLoggerProvider : ILoggerProvider
+public sealed class LokiLoggerProvider : ILoggerProvider, ISupportExternalScope
 {
     private readonly IServiceProvider _serviceProvider;
     private LokiClient? _client;
+    private IExternalScopeProvider? _scopes;
+
+    /// <summary>The logging framework hands over the scopes; only the portal caller's are read (#78).</summary>
+    public void SetScopeProvider(IExternalScopeProvider scopeProvider) => _scopes = scopeProvider;
 
     public LokiLoggerProvider(IServiceProvider serviceProvider)
     {
@@ -23,7 +27,7 @@ public sealed class LokiLoggerProvider : ILoggerProvider
     }
 
     public ILogger CreateLogger(string categoryName)
-        => new LokiLogger(categoryName, () => _client ??= _serviceProvider.GetRequiredService<LokiClient>());
+        => new LokiLogger(categoryName, () => _client ??= _serviceProvider.GetRequiredService<LokiClient>(), () => _scopes);
 
     public void Dispose()
     {
@@ -34,14 +38,36 @@ internal sealed class LokiLogger : ILogger
 {
     private readonly string _category;
     private readonly Func<LokiClient> _clientAccessor;
+    private readonly Func<IExternalScopeProvider?> _scopes;
 
-    public LokiLogger(string category, Func<LokiClient> clientAccessor)
+    public LokiLogger(string category, Func<LokiClient> clientAccessor, Func<IExternalScopeProvider?>? scopes = null)
     {
         _category = category;
         _clientAccessor = clientAccessor;
+        _scopes = scopes ?? (() => null);
     }
 
-    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => _scopes()?.Push(state);
+
+    /// <summary>
+    /// Tenant and request id of a portal call (#78), appended to the line rather than made labels:
+    /// a label per tenant would be a stream per tenant.
+    /// </summary>
+    internal static string? PortalScopeSuffix(IExternalScopeProvider? scopes)
+    {
+        if (scopes == null) return null;
+        string? tenant = null, request = null;
+        scopes.ForEachScope((scope, _) =>
+        {
+            if (scope is not IEnumerable<KeyValuePair<string, object?>> pairs) return;
+            foreach (var (key, value) in pairs)
+            {
+                if (key == DotNetSigningServer.Middleware.PortalCallerScopeMiddleware.TenantScopeKey) tenant = value?.ToString();
+                else if (key == DotNetSigningServer.Middleware.PortalCallerScopeMiddleware.RequestIdScopeKey) request = value?.ToString();
+            }
+        }, (object?)null);
+        return tenant == null && request == null ? null : $" [tenant={tenant} requestId={request}]";
+    }
 
     public bool IsEnabled(LogLevel logLevel)
     {
@@ -76,7 +102,7 @@ internal sealed class LokiLogger : ILogger
             return;
         }
 
-        var message = formatter(state, exception);
+        var message = formatter(state, exception) + PortalScopeSuffix(_scopes());
         if (exception != null)
         {
             message += "\n" + exception;

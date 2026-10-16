@@ -30,7 +30,9 @@ cp .env.example .env      # then fill in the values you need
 docker compose up --build
 ```
 
-The app listens on `http://localhost:8085` (override with `HTTP_PORT`).
+`docker-compose.yml` does not publish a port (#78): it only `expose`s 8085 (public API, behind
+the tunnel) and 8086 (the portal) to the Docker network. To reach it from the host locally, add a
+`docker-compose.override.yml` with `ports: ["${HTTP_PORT:-8085}:8085"]`.
 
 ### Local .NET
 
@@ -164,6 +166,9 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `AUTH_OTP_MAX_FAILED_ATTEMPTS` | no (5) | Wrong 2FA codes after which the code is void. The count is cleared only by a successful code or a password reset, not by signing in again |
 | `AUTH_ACCOUNT_MAX_ATTEMPTS` / `AUTH_ACCOUNT_WINDOW_MINUTES` | no (30 / 15) | Sign-in and 2FA attempts per account whatever the IP (on top of the per-IP+address limit), counted in PostgreSQL |
 | `MAX_API_TOKENS_PER_USER` | no (100) | Live API tokens per account; 0 = no limit |
+| `INTERNAL_API_PORT` | no (empty; `8086` in `docker-compose.yml`) | Second listener for the portal (#78), added next to `ASPNETCORE_URLS`. A token of a `PORTAL_USER_IDS` account is accepted on it only; on the public port it gets `401`. Empty = one listener, nothing changes |
+| `PORTAL_USER_IDS` | when `INTERNAL_API_PORT` is set (startup fails otherwise) | The portal's service account id(s), comma-separated. Only that account's server token, on the internal port, is a trusted caller: it alone may skip the attachment debit (`X-P4PDF-Attachment-Billing-Bypass`, the old `X-P4SPS-…` still read) and its `X-P4-Tenant` / `X-Request-Id` are logged and stored on presigns and usage records. `/api/sign` refuses a presign made for another tenant (`403 TENANT_MISMATCH`) |
+| `TRUSTED_PROXIES` | in production behind Cloudflare | Addresses / CIDRs of cloudflared and the reverse proxy (#106). `CF-Connecting-IP` is the client only when the TCP peer is one of them (an explicit `ForwardedHeaders__KnownProxies` / `__KnownNetworks` counts too); otherwise it is ignored. Unless `ForwardedHeaders__*` is set, the same list is what `X-Forwarded-For` is accepted from (instead of every private range). Empty in Production = startup fails (behind the tunnel every visitor would share one IP limit); `none` = no proxy in front, on purpose |
 | `BILLING_PRODUCT_TAG_GRACE_UNTIL` | no (empty = strict) | UTC instant; checkout sessions created before it are accepted without the `product` metadata marker (sessions already open at the deploy). Every other ownership check still applies. Remove it a day after the deploy |
 | `Seal__Enabled` | | Server-side sealing; needs `Seal__PfxBase64` + `Seal__PfxPassword` |
 | `Stripe__ApiKey` / `Stripe__WebhookSecret` | for billing | Payments; the webhook secret must start with `whsec_` in production |
@@ -183,7 +188,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `P4Backoffice__Consents__Documents__0…` / `…__Acknowledged__0…` | | Documents consented to at sign-up (default `terms`, `dpa`) and documents only acknowledged (default `privacy`) |
 
 The `#80` variables (`CORS_ALLOWED_ORIGINS`, `AUTH_*`, `MAX_API_TOKENS_PER_USER`,
-`BILLING_PRODUCT_TAG_GRACE_UNTIL`) fall back to Coolify project variables (`DOTNET_*`) in
+`BILLING_PRODUCT_TAG_GRACE_UNTIL`) and `PORTAL_USER_IDS` / `TRUSTED_PROXIES` fall back to Coolify project variables (`DOTNET_*`) in
 `docker-compose.yml`. An empty value or an unresolved `{{project.…}}` placeholder means the
 default; any other value that does not parse stops the server at startup.
 

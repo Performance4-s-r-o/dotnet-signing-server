@@ -254,9 +254,14 @@ public class ApiGateMiddlewareTests : IDisposable
         return provider.GetRequiredService<IOptions<RateLimiterOptions>>().Value.GlobalLimiter!;
     }
 
+    // cloudflared in the Docker network is a configured trusted proxy (#106).
+    private static readonly IServiceProvider TrustedTunnel = new ServiceCollection()
+        .AddSingleton(TrustedProxies.Parse("172.18.0.5"))
+        .BuildServiceProvider();
+
     private static HttpContext Request(string path, string ip, Guid? user = null, string method = "POST")
     {
-        var context = new DefaultHttpContext();
+        var context = new DefaultHttpContext { RequestServices = TrustedTunnel };
         context.Request.Path = path;
         context.Request.Method = method;
         context.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("172.18.0.5"); // cloudflared in the Docker network

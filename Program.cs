@@ -61,6 +61,14 @@ else if (builder.Environment.IsProduction())
         $"{dataProtectionPath}. Set DataProtection__CertificateBase64 (+ __CertificatePassword) " +
         "to encrypt it — the ring also protects stored TSA credentials.");
 }
+// #106: CF-Connecting-IP is believed only from these peers (cloudflared, the reverse proxy).
+// An explicit ForwardedHeaders list counts too; the private-range default below never does.
+var trustedProxies = TrustedProxies.Parse(
+    builder.Configuration[TrustedProxies.Variable],
+    builder.Configuration["ForwardedHeaders:KnownProxies"],
+    builder.Configuration["ForwardedHeaders:KnownNetworks"]);
+builder.Services.AddSingleton(trustedProxies);
+
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders =
@@ -106,6 +114,13 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
             }
         }
     }
+    else if (!trustedProxies.IsEmpty)
+    {
+        // #106: the same peers that may name the client in CF-Connecting-IP may in X-Forwarded-For.
+        // Trusting every private range would let any container in the network write either.
+        foreach (var address in trustedProxies.Addresses) options.KnownProxies.Add(address);
+        foreach (var network in trustedProxies.Networks) options.KnownNetworks.Add(network);
+    }
     else
     {
         // Default: Docker/Kubernetes private ranges + loopback. Covers every
@@ -119,6 +134,18 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
         options.KnownNetworks.Add(new IPNetwork(System.Net.IPAddress.Parse("fc00::"), 7));
     }
 });
+
+// #78: the portal's token only on the internal listener, its tenant headers only from there.
+// The migrate step serves nothing and may be given only the database variables.
+var portalTrust = migrateOnly ? new PortalTrustOptions() : PortalTrustOptions.From(builder.Configuration);
+builder.Services.AddSingleton(portalTrust);
+if (portalTrust.InternalPort is int internalPort)
+{
+    // A second listener next to whatever ASPNETCORE_URLS names (Kestrel's default otherwise).
+    // It is for the Docker network: docker-compose only `expose`s it, never publishes it.
+    builder.WebHost.UseUrls(PortalTrustOptions.WithInternalListener(
+        builder.Configuration[Microsoft.AspNetCore.Hosting.WebHostDefaults.ServerUrlsKey], internalPort));
+}
 
 static IEnumerable<string> SplitConfigList(string? raw) =>
     string.IsNullOrWhiteSpace(raw)
@@ -468,6 +495,17 @@ if (!migrateOnly && app.Environment.IsProduction()
         + "Set CORS_ALLOWED_ORIGINS (Cors__AllowedOrigins) to the sites that use browser tokens.");
 }
 
+// #106: without a trusted proxy CF-Connecting-IP is ignored, and behind the tunnel every
+// visitor then has the tunnel's address — one sign-in limit (20 per 10 min) for everybody.
+// That breaks sign-in rather than degrading it, so production refuses to start; a host with
+// no proxy in front says so with TRUSTED_PROXIES=none.
+if (!migrateOnly && app.Environment.IsProduction() && trustedProxies.IsEmpty && !trustedProxies.DeclaredNone)
+{
+    throw new InvalidOperationException(
+        "TRUSTED_PROXIES is empty: behind Cloudflare every client would share the tunnel's address and its rate limits. "
+        + "Set it to the addresses / CIDRs of cloudflared and the reverse proxy, or to 'none' when no proxy is in front.");
+}
+
 if (postgresContainer != null)
 {
     app.Lifetime.ApplicationStopping.Register(async () =>
@@ -482,6 +520,9 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
 }
 
+// The TCP peer before UseForwardedHeaders rewrites it: ClientIp trusts CF-Connecting-IP only
+// when that peer is a configured proxy (#106).
+app.Use(ClientIp.CaptureSocketPeer);
 app.UseForwardedHeaders();
 
 // Security headers
@@ -539,7 +580,8 @@ app.Use(async (context, next) =>
             }
             context.Response.Headers["Access-Control-Allow-Origin"] = origin;
             context.Response.Headers["Vary"] = "Origin";
-            context.Response.Headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type,X-P4PDF-Attachment-Billing-Bypass,Idempotency-Key";
+            // No billing-bypass header (#78): only the portal sends it, server to server, never a browser.
+            context.Response.Headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type,Idempotency-Key";
             context.Response.Headers["Access-Control-Expose-Headers"] = "X-Operation-Id,X-Operation-State,Idempotent-Replayed,Retry-After";
             context.Response.Headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS";
         }
@@ -610,6 +652,9 @@ app.UseAuthorization();
 // credentials, operator switches, and the block for keys that keep failing.
 app.UseRateLimiter();
 app.UseMiddleware<DotNetSigningServer.Middleware.ApiGateMiddleware>();
+
+// Tenant and request id of a portal call into the log scope (#78); ignored from anybody else.
+app.UseMiddleware<DotNetSigningServer.Middleware.PortalCallerScopeMiddleware>();
 
 // Concurrency limiting runs AFTER authentication so ClaimsPrincipal carries the user id.
 app.UseMiddleware<UserConcurrencyMiddleware>();

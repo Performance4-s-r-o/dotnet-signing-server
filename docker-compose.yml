@@ -22,10 +22,29 @@ services:
     # tmpfs is charged to the container's memory limit, so the cap is part of the budget.
     tmpfs:
       - /tmp:size=512m
-    ports:
-      - "${HTTP_PORT:-8085}:8085"
+    # Not published on the host (#78): a published port bypasses the host firewall (Docker writes
+    # its own iptables rules) and with it Cloudflare. The tunnel / reverse proxy reaches 8085 over
+    # the Docker network; 8086 is the portal's, and nothing outside the network reaches either.
+    # Local `docker compose up`: add a docker-compose.override.yml with `ports: ["8085:8085"]`.
+    expose:
+      - "8085"
+      - "8086"
     environment:
       - ASPNETCORE_URLS=http://+:8085
+      # Second listener for the portal only (#78), added next to ASPNETCORE_URLS. The portal's token
+      # (PORTAL_USER_IDS) is accepted on it and refused (401) on 8085; the portal's SIGN_API_BASE is
+      # then http://<this service>:8086/api/. Empty = one listener, as before. Fixed here rather than
+      # a Coolify variable: it has to match the `expose` list above.
+      - INTERNAL_API_PORT=${INTERNAL_API_PORT:-8086}
+      # The portal's service account id(s), comma-separated. Required while INTERNAL_API_PORT is set
+      # (startup fails without it). Only this account's token, on the internal port, may skip the
+      # attachment debit and have its X-P4-Tenant / X-Request-Id believed.
+      - PORTAL_USER_IDS=${PORTAL_USER_IDS:-{{project.DOTNET_PORTAL_USER_IDS}}}
+      # Addresses / CIDRs of cloudflared and the reverse proxy (#106). CF-Connecting-IP (and, unless
+      # ForwardedHeaders__* is set, X-Forwarded-For) is believed only from these peers. Production
+      # refuses to start while empty — behind the tunnel every visitor would share one IP limit;
+      # `none` = no proxy in front (on purpose).
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-{{project.DOTNET_TRUSTED_PROXIES}}}
       - AllowedHosts=${ALLOWED_HOSTS:-*}
       - UseLocalDb=false
       # Per-account caps (#74); 0 = no limit. The portal uses one account for every tenant, so a
