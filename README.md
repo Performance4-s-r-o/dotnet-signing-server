@@ -110,6 +110,15 @@ Details, limits and the behaviour changes for existing callers: [docs/operations
 Internal only (the portal, not the public API): `presign` and `find-codes` also take the
 PDF as raw bytes in `multipart/form-data` — see [docs/binary-channel.md](docs/binary-channel.md).
 
+### Browser tokens
+
+A browser token checks the `Origin` header, but that only binds a browser — any other
+client can send any `Origin`. Treat a browser token as public. It is therefore limited to
+`POST /api/presign`, `POST /api/sign`, `GET /api/operations/{id}` and `GET /api/capabilities`;
+anything else answers `403 TOKEN_SCOPE`. A token can also carry a credit limit
+(`402 TOKEN_CREDIT_LIMIT` once spent). Server tokens are not affected. A completed password
+reset revokes the account's browser tokens (server tokens stay).
+
 ### Templates and utilities
 
 | Endpoint | Purpose |
@@ -135,7 +144,10 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `Token__Secret` | yes | Signing key for issued API tokens |
 | `FqdnServerName` | yes | Public hostname, used in generated links |
 | `AllowedHosts` | recommended | Host filtering, `*` by default |
-| `Cors__AllowedOrigins` | recommended | Comma-separated browser origins |
+| `Cors__AllowedOrigins` / `CORS_ALLOWED_ORIGINS` | in production, when browser tokens are used | Comma-separated browser origins allowed on `/api`. In Production an empty list means only the server's own origin (it no longer falls back to the origins of every user's browser tokens) and startup logs a warning |
+| `Auth__ReauthMinutes` / `AUTH_REAUTH_MINUTES` | no (15) | Step-up re-authentication: creating an API token and changing billing need a password or e-mailed code confirmed within this many minutes; otherwise `403 REAUTH_REQUIRED` and a confirmation form (`/Account/Reauth`) |
+| `Auth__OtpMaxFailedAttempts` / `AUTH_OTP_MAX_FAILED_ATTEMPTS` | no (5) | Wrong 2FA codes after which the code is void |
+| `Limits__MaxApiTokensPerUser` / `MAX_API_TOKENS_PER_USER` | no (100) | Live API tokens per account; 0 = no limit |
 | `Seal__Enabled` | | Server-side sealing; needs `Seal__PfxBase64` + `Seal__PfxPassword` |
 | `Stripe__ApiKey` / `Stripe__WebhookSecret` | for billing | Payments; the webhook secret must start with `whsec_` in production |
 | `Resend__ApiKey` / `Resend__From` | for email | Transactional email |
