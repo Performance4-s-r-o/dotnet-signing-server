@@ -1,4 +1,7 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Filters;
+using DotNetSigningServer.Options;
+using Microsoft.Extensions.Options;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Resources;
 using DotNetSigningServer.Services;
@@ -51,7 +54,8 @@ public class ApiTokensController : Controller
 
     [HttpPost("/ApiTokens")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(string label, DateTimeOffset? expiresAt = null, string usageType = "server", string? allowedOrigins = null, string? allowedIps = null)
+    [RequireRecentAuth]
+    public async Task<IActionResult> Create(string label, DateTimeOffset? expiresAt = null, string usageType = "server", string? allowedOrigins = null, string? allowedIps = null, int? creditLimit = null)
     {
         var userId = GetCurrentUserId();
         if (userId == null)
@@ -87,7 +91,25 @@ public class ApiTokensController : Controller
             return RedirectToAction(nameof(Index));
         }
 
+        // Quota of live tokens per account (#80). Revoked and expired ones do not count.
+        var maxTokens = HttpContext.RequestServices.GetService<IOptions<LimitsOptions>>()?.Value.MaxApiTokensPerUser ?? 0;
+        if (maxTokens > 0)
+        {
+            var active = await _dbContext.ApiTokens.CountAsync(t =>
+                t.UserId == user.Id && t.RevokedAt == null && (t.ExpiresAt == null || t.ExpiresAt > nowUtc));
+            if (active >= maxTokens)
+            {
+                TempData["Error"] = string.Format(_localizer["TooManyApiTokens"].Value, maxTokens);
+                return RedirectToAction(nameof(Index));
+            }
+        }
+
         var isBrowser = string.Equals(usageType, "web", StringComparison.OrdinalIgnoreCase);
+        if (isBrowser && creditLimit is <= 0)
+        {
+            TempData["Error"] = _localizer["BrowserTokenCreditLimitInvalid"].Value;
+            return RedirectToAction(nameof(Index));
+        }
         var normalizedOrigins = NormalizeOrigins(allowedOrigins, includeLocalhost: true)
             .Where(o => o.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || o.StartsWith("http://localhost") || o.StartsWith("http://127.0.0.1") || o.StartsWith("https://localhost") || o.StartsWith("https://127.0.0.1"))
             .Take(10)
@@ -131,6 +153,7 @@ public class ApiTokensController : Controller
             IsBrowserToken = isBrowser,
             AllowedOrigins = isBrowser ? string.Join("\n", normalizedOrigins) : null,
             AllowedIps = storedIps,
+            CreditLimit = isBrowser ? creditLimit : null,
             CreatedAt = nowUtc
         };
 

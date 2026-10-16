@@ -23,6 +23,42 @@ namespace dotnetsigningserver.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("DotNetSigningServer.Models.AdminAuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ActorEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Change")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("TargetUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TargetUserId", "CreatedAt");
+
+                    b.ToTable("AdminAuditEntries", "dotnet_signing");
+                });
+
             modelBuilder.Entity("DotNetSigningServer.Models.ApiOperation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -137,6 +173,12 @@ namespace dotnetsigningserver.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int?>("CreditLimit")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CreditsUsed")
+                        .HasColumnType("integer");
+
                     b.Property<DateTimeOffset?>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -171,6 +213,25 @@ namespace dotnetsigningserver.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("ApiTokens", "dotnet_signing");
+                });
+
+            modelBuilder.Entity("DotNetSigningServer.Models.AuthAttemptCounter", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("WindowStart")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("WindowStart");
+
+                    b.ToTable("AuthAttemptCounters", "dotnet_signing");
                 });
 
             modelBuilder.Entity("DotNetSigningServer.Models.BackofficeOutboxItem", b =>
@@ -788,6 +849,9 @@ namespace dotnetsigningserver.Migrations
                     b.Property<DateTimeOffset?>("EmailOtpExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("EmailOtpFailedAttempts")
+                        .HasColumnType("integer");
+
                     b.Property<DateTimeOffset?>("EmailVerificationExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -813,6 +877,10 @@ namespace dotnetsigningserver.Migrations
                     b.Property<string>("Locale")
                         .HasMaxLength(8)
                         .HasColumnType("character varying(8)");
+
+                    b.Property<string>("LoginChallengeHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<int?>("MaxConcurrentOperations")
                         .HasColumnType("integer");
@@ -855,6 +923,9 @@ namespace dotnetsigningserver.Migrations
 
                     b.HasIndex("Email")
                         .IsUnique();
+
+                    b.HasIndex("LoginChallengeHash")
+                        .HasFilter("\"LoginChallengeHash\" IS NOT NULL");
 
                     b.HasIndex("StripeCustomerId")
                         .IsUnique()

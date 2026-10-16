@@ -14,21 +14,27 @@ using Moq;
 namespace DotNetSigningServer.Tests.Services;
 
 /// <summary>
-/// #82: the sign-in, 2FA and password-reset throttles key an address exactly as the account
+/// #82: the sign-in and password-reset throttles key an address exactly as the account
 /// lookup reads it, so spellings that reach one account (surrounding spaces, letter case)
-/// share one window instead of each getting five attempts of its own.
+/// share one window instead of each getting five attempts of its own. Since #80 the key also
+/// carries the client IP (another IP cannot lock the owner out), and the 2FA step is keyed by
+/// its sign-in challenge (see AccountSecurityTests).
 /// </summary>
 public class SignInRateLimitTests
 {
-    private static AccountController Controller()
+    internal static AccountController Controller(DotNetSigningServer.Data.ApplicationDbContext? db = null, string? ip = null, AppOptions? app = null, SessionSecurityOptions? security = null, ITemplatedEmailSender? email = null)
     {
+        db ??= TestHelpers.CreateInMemoryDbContext();
         var controller = new AccountController(
-            TestHelpers.CreateInMemoryDbContext(),
+            db,
             new AuthService(),
-            Mock.Of<ITemplatedEmailSender>(),
-            TestHelpers.WrapOptions(new AppOptions()),
-            new StringLocalizer<SharedStrings>(new KeyEchoLocalizerFactory()));
+            email ?? Mock.Of<ITemplatedEmailSender>(),
+            TestHelpers.WrapOptions(app ?? new AppOptions()),
+            new StringLocalizer<SharedStrings>(new KeyEchoLocalizerFactory()),
+            new AuthAttemptLimiter(db),
+            TestHelpers.WrapOptions(security ?? new SessionSecurityOptions()));
         var http = new DefaultHttpContext();
+        if (ip != null) http.Connection.RemoteIpAddress = System.Net.IPAddress.Parse(ip);
         controller.ControllerContext = new ControllerContext { HttpContext = http };
         controller.TempData = new TempDataDictionary(http, Mock.Of<ITempDataProvider>());
         return controller;
@@ -48,20 +54,35 @@ public class SignInRateLimitTests
     }
 
     [Fact]
-    public async Task TwoFactor_SpellingsOfOneAddress_ShareOneWindow()
+    public async Task SignIn_AttemptsFromAnotherIp_DoNotLockTheOwnerOut()
     {
         var address = $"{Guid.NewGuid():N}@example.cz";
-
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < 6; i++)
         {
-            var controller = Controller();
-            await controller.TwoFactorPost(Spelling(address, i), "000000");
-            Assert.Equal("VerificationCodeInvalid", controller.TempData["Error"]);
+            await Controller(ip: "203.0.113.7").SignIn(new SignInViewModel { Email = address, Password = "wrong" });
         }
 
-        var sixth = Controller();
-        await sixth.TwoFactorPost(Spelling(address, 5), "000000");
-        Assert.Equal("TooManyVerificationAttempts", sixth.TempData["Error"]);
+        var owner = Controller(ip: "198.51.100.20");
+        await owner.SignIn(new SignInViewModel { Email = address, Password = "wrong" });
+        Assert.DoesNotContain(owner.ModelState[string.Empty]!.Errors, e => e.ErrorMessage == "TooManySignInAttempts");
+    }
+
+    [Fact]
+    public async Task SignIn_ManyIps_HitTheLimitPerAccount()
+    {
+        // A spoofed or rotating IP is a new per-IP key; the account key still counts (#80 review).
+        var address = $"{Guid.NewGuid():N}@example.cz";
+        var security = new SessionSecurityOptions { AccountMaxAttempts = 3 };
+        for (var i = 0; i < 3; i++)
+        {
+            var c = Controller(ip: $"203.0.113.{i + 1}", security: security);
+            await c.SignIn(new SignInViewModel { Email = address, Password = "wrong" });
+            Assert.DoesNotContain(c.ModelState[string.Empty]!.Errors, e => e.ErrorMessage == "TooManySignInAttempts");
+        }
+
+        var fourth = Controller(ip: "198.51.100.99", security: security);
+        await fourth.SignIn(new SignInViewModel { Email = address, Password = "wrong" });
+        Assert.Contains(fourth.ModelState[string.Empty]!.Errors, e => e.ErrorMessage == "TooManySignInAttempts");
     }
 
     [Fact]

@@ -110,6 +110,30 @@ Details, limits and the behaviour changes for existing callers: [docs/operations
 Internal only (the portal, not the public API): `presign` and `find-codes` also take the
 PDF as raw bytes in `multipart/form-data` — see [docs/binary-channel.md](docs/binary-channel.md).
 
+### Browser tokens
+
+A browser token checks the `Origin` header, but that only binds a browser — any other
+client can send any `Origin`. Treat a browser token as public. It is therefore limited to
+`POST /api/presign`, `POST /api/sign`, `GET /api/operations/{id}` and `GET /api/capabilities`;
+anything else answers `403 TOKEN_SCOPE`. A token can also carry a credit limit
+(`402 TOKEN_CREDIT_LIMIT` once spent). Server tokens are not affected. A completed password
+reset revokes the account's browser tokens (server tokens stay).
+
+### Admin audit
+
+Admin actions on accounts (enterprise mode, seal permission, queue timeout) and on the
+installation (outbox requeue, consent backfill) are recorded in `AdminAuditEntries` with the
+actor, the target and the change, and shown on the user's admin page. The table is
+append-only: the application refuses updates and deletes, and a database trigger refuses them
+for any other client. Two limits of that:
+
+- Where one database role both migrates and serves (on-prem with `RUN_MIGRATIONS_ON_START=true`,
+  or an empty `MIGRATION_DB_USER`), that role owns the table and can disable the trigger.
+  Append-only then holds against the application, not against the database role.
+- `ActorEmail` is personal data that the table never deletes. An erasure request from a former
+  administrator has to be weighed against the audit trail (and, if granted, done by the table
+  owner with the trigger disabled).
+
 ### Templates and utilities
 
 | Endpoint | Purpose |
@@ -135,7 +159,12 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `Token__Secret` | yes | Signing key for issued API tokens |
 | `FqdnServerName` | yes | Public hostname, used in generated links |
 | `AllowedHosts` | recommended | Host filtering, `*` by default |
-| `Cors__AllowedOrigins` | recommended | Comma-separated browser origins |
+| `CORS_ALLOWED_ORIGINS` (`Cors__AllowedOrigins`) | in production, when browser tokens are used | Comma-separated browser origins allowed on `/api`. In Production an empty list means only the server's own origin (it no longer falls back to the origins of every user's browser tokens) and startup logs a warning |
+| `AUTH_REAUTH_MINUTES` | no (15) | Step-up re-authentication: creating an API token and changing billing need a password or e-mailed code confirmed within this many minutes; otherwise `403 REAUTH_REQUIRED` and a confirmation form (`/Account/Reauth`) |
+| `AUTH_OTP_MAX_FAILED_ATTEMPTS` | no (5) | Wrong 2FA codes after which the code is void. The count is cleared only by a successful code or a password reset, not by signing in again |
+| `AUTH_ACCOUNT_MAX_ATTEMPTS` / `AUTH_ACCOUNT_WINDOW_MINUTES` | no (30 / 15) | Sign-in and 2FA attempts per account whatever the IP (on top of the per-IP+address limit), counted in PostgreSQL |
+| `MAX_API_TOKENS_PER_USER` | no (100) | Live API tokens per account; 0 = no limit |
+| `BILLING_PRODUCT_TAG_GRACE_UNTIL` | no (empty = strict) | UTC instant; checkout sessions created before it are accepted without the `product` metadata marker (sessions already open at the deploy). Every other ownership check still applies. Remove it a day after the deploy |
 | `Seal__Enabled` | | Server-side sealing; needs `Seal__PfxBase64` + `Seal__PfxPassword` |
 | `Stripe__ApiKey` / `Stripe__WebhookSecret` | for billing | Payments; the webhook secret must start with `whsec_` in production |
 | `Resend__ApiKey` / `Resend__From` | for email | Transactional email |
@@ -152,6 +181,11 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `P4Backoffice__Polling__Interval` | | How often `/v1/events` is polled (default `00:15:00`, `00:02:00` without a webhook secret) |
 | `P4Backoffice__DocumentsTtl` | | How long a legal document from the service is shown before it is revalidated (default `00:05:00`) |
 | `P4Backoffice__Consents__Documents__0…` / `…__Acknowledged__0…` | | Documents consented to at sign-up (default `terms`, `dpa`) and documents only acknowledged (default `privacy`) |
+
+The `#80` variables (`CORS_ALLOWED_ORIGINS`, `AUTH_*`, `MAX_API_TOKENS_PER_USER`,
+`BILLING_PRODUCT_TAG_GRACE_UNTIL`) fall back to Coolify project variables (`DOTNET_*`) in
+`docker-compose.yml`. An empty value or an unresolved `{{project.…}}` placeholder means the
+default; any other value that does not parse stops the server at startup.
 
 Every integration degrades gracefully: leave a section empty and the feature
 switches itself off rather than failing at startup.

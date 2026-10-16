@@ -110,6 +110,8 @@ public class AdminController : Controller
     {
         var ids = await OutboxHealth.RequeueBlockedAsync(_dbContext, _time.GetUtcNow(), HttpContext.RequestAborted);
         foreach (var id in ids) _outboxSignal.Notify(id);
+        AdminAudit.Record(_dbContext, User, null, AdminAudit.Actions.OutboxRequeue, new { count = ids.Count }, _time.GetUtcNow());
+        await _dbContext.SaveChangesAsync();
 
         _logger.LogInformation("Admin requeued {Count} blocked backoffice outbox item(s)", ids.Count);
         TempData["Info"] = string.Format(_localizer["AdminOutboxRequeued"].Value, ids.Count);
@@ -131,6 +133,9 @@ public class AdminController : Controller
         }
 
         var result = await backfill.RunAsync(HttpContext.RequestAborted);
+        AdminAudit.Record(_dbContext, User, null, AdminAudit.Actions.ConsentsBackfill,
+            new { records = result.Records, batches = result.Batches }, _time.GetUtcNow());
+        await _dbContext.SaveChangesAsync();
         _logger.LogInformation("Admin queued {Records} consent record(s) in {Batches} batch(es)", result.Records, result.Batches);
         TempData["Info"] = string.Format(_localizer["AdminConsentsBackfilled"].Value, result.Records, result.Batches);
         return RedirectToAction(nameof(Index));
@@ -183,8 +188,15 @@ public class AdminController : Controller
             .OrderByDescending(o => o.TotalCredits)
             .ToListAsync();
 
+        var audit = await _dbContext.AdminAuditEntries.AsNoTracking()
+            .Where(a => a.TargetUserId == id)
+            .OrderByDescending(a => a.CreatedAt)
+            .Take(50)
+            .ToListAsync();
+
         var vm = new AdminUserDetailViewModel
         {
+            Audit = audit,
             User = user,
             UsageThisMonth = usageThisMonth,
             MonthlyBreakdown = monthlyBreakdown,
@@ -211,6 +223,7 @@ public class AdminController : Controller
             // 1. Disable auto-recharge
             // 2. Detach all saved payment methods from Stripe
             // 3. Set IsEnterprise flag
+            var wasAutoRecharge = user.AutoRechargeEnabled;
             if (user.AutoRechargeEnabled)
             {
                 await _autoRechargeService.DisableAsync(user);
@@ -231,6 +244,8 @@ public class AdminController : Controller
             user.IsEnterprise = true;
             user.EnterpriseEnabledAt = DateTimeOffset.UtcNow;
             user.UpdatedAt = DateTimeOffset.UtcNow;
+            AdminAudit.Record(_dbContext, User, user.Id, AdminAudit.Actions.Enterprise,
+                new { from = false, to = true, autoRechargeDisabled = wasAutoRecharge }, _time.GetUtcNow());
             await _dbContext.SaveChangesAsync();
             TempData["Info"] = _localizer["EnterpriseEnabled"].Value;
         }
@@ -239,10 +254,13 @@ public class AdminController : Controller
             // Disabling enterprise mode — user goes back to pay-as-you-go with zero credits.
             // The enterprise-tracked usage is billed separately (manual invoice), so any
             // credits that remain from pre-enterprise purchases are discarded at switch-off.
+            var discarded = user.CreditsRemaining;
             user.IsEnterprise = false;
             user.EnterpriseEnabledAt = null;
             user.CreditsRemaining = 0;
             user.UpdatedAt = DateTimeOffset.UtcNow;
+            AdminAudit.Record(_dbContext, User, user.Id, AdminAudit.Actions.Enterprise,
+                new { from = true, to = false, creditsDiscarded = discarded }, _time.GetUtcNow());
             await _dbContext.SaveChangesAsync();
             TempData["Info"] = _localizer["EnterpriseDisabled"].Value;
         }
@@ -268,10 +286,14 @@ public class AdminController : Controller
 
         user.SealAllowed = !user.SealAllowed;
         user.UpdatedAt = DateTimeOffset.UtcNow;
+        // The seal lends the operator's certificate: who granted it matters as much as to whom.
+        AdminAudit.Record(_dbContext, User, user.Id, AdminAudit.Actions.SealAllowed,
+            new { from = !user.SealAllowed, to = user.SealAllowed }, _time.GetUtcNow());
         await _dbContext.SaveChangesAsync();
 
         _logger.LogInformation(
-            "Seal permission for user {UserId} set to {SealAllowed}", user.Id, user.SealAllowed);
+            "Seal permission for user {UserId} set to {SealAllowed} by {ActorId}",
+            user.Id, user.SealAllowed, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
         TempData["Info"] = user.SealAllowed
             ? _localizer["SealAllowedEnabled"].Value
@@ -291,7 +313,10 @@ public class AdminController : Controller
             return RedirectToAction(nameof(Index));
         }
 
+        var before = user.ConcurrencyQueueTimeoutSeconds;
         user.ConcurrencyQueueTimeoutSeconds = queueTimeoutSeconds < 0 ? null : queueTimeoutSeconds;
+        AdminAudit.Record(_dbContext, User, user.Id, AdminAudit.Actions.ConcurrencyQueueTimeout,
+            new { from = before, to = user.ConcurrencyQueueTimeoutSeconds }, _time.GetUtcNow());
         await _dbContext.SaveChangesAsync();
 
         UserConcurrencyMiddleware.InvalidateLimitCache(id);
@@ -350,5 +375,6 @@ public class AdminController : Controller
         public int UsageThisMonth { get; set; }
         public List<MonthlyUsage> MonthlyBreakdown { get; set; } = new();
         public List<OperationBreakdown> ByOperation { get; set; } = new();
+        public List<AdminAuditEntry> Audit { get; set; } = new();
     }
 }

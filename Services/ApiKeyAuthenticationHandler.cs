@@ -39,16 +39,21 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
         var origin = Request.Headers["Origin"].ToString();
         var ip = Context.Connection.RemoteIpAddress;
 
-        var user = await _apiAuth.ValidateTokenAsync(authHeader, origin, ip);
-        if (user == null)
+        var validation = await _apiAuth.ValidateTokenDetailedAsync(authHeader, origin, ip);
+        if (validation == null)
         {
             return AuthenticateResult.NoResult();
         }
+        var user = validation.User;
 
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim("sub", user.Id.ToString()),
+            // Which token and what kind (#80): ApiGateMiddleware limits browser tokens to their
+            // scope, the operation runner to their credit budget.
+            new Claim(SessionClaims.TokenId, validation.TokenId.ToString()),
+            new Claim(SessionClaims.TokenKind, validation.IsBrowserToken ? SessionClaims.BrowserTokenKind : SessionClaims.ServerTokenKind),
         };
         var identity = new ClaimsIdentity(claims, SchemeName);
         var principal = new ClaimsPrincipal(identity);

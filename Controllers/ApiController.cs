@@ -321,6 +321,26 @@ namespace DotNetSigningServer.Controllers
             }
 
             var attempt = begin.Attempt;
+
+            // A browser token spends from its own budget too (#80). The reservation is given back
+            // when this method is left any way other than through a completed operation.
+            BrowserTokenBudget? budget = null;
+            if (SessionClaims.IsBrowserToken(User) && SessionClaims.TokenIdOf(User) is Guid budgetId)
+            {
+                budget = await BrowserTokenBudget.TryReserveAsync(DbContext, budgetId, baseCost * tier, Logger);
+                if (budget == null)
+                {
+                    await Operations.FailAsync(op, attempt, uncertain: false, BrowserTokenScope.CreditLimitErrorCode);
+                    Response.Headers[OperationStateHeader] = ApiOperationState.Failed;
+                    return StatusCode(StatusCodes.Status402PaymentRequired, new
+                    {
+                        code = BrowserTokenScope.CreditLimitErrorCode,
+                        message = Localizer["Error_TOKEN_CREDIT_LIMIT"].Value,
+                    });
+                }
+            }
+            await using var budgetGuard = budget;
+
             // Whether anybody can come back for the result: the caller's key, or the presign.
             var retrievable = op.ClientKey || presignId != null;
             if (HttpContext.RequestAborted.IsCancellationRequested)
@@ -419,6 +439,7 @@ namespace DotNetSigningServer.Controllers
                 // The lease ran out and the credits went back: this result is not ours to hand out.
                 throw new InvalidOperationException($"Operation {op.OperationId} lost its lease before completion.");
             }
+            budget?.Commit();
 
             Response.Headers[OperationStateHeader] = ApiOperationState.Completed;
             // Clean-up (the presign) only once the result is safely kept: otherwise a retry

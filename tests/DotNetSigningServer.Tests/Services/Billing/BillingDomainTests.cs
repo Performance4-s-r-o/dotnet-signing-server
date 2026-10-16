@@ -36,7 +36,7 @@ public class BillingDomainTests
     [InlineData("6f9619ff-8b86-d011-b42d-00c04fc964ff", "", false)] // a service session without a customer belongs to nobody
     public void Checkout_BelongsOnlyToItsUser(string? metaUserId, string? customerRef, bool expected)
     {
-        var metadata = metaUserId is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["userId"] = metaUserId };
+        var metadata = metaUserId is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["userId"] = metaUserId, [BillingCustomerRef.ProductMarkerKey] = BillingCustomerRef.ProductMarker };
         var session = new CheckoutSessionInfo("cs_1", "payment", "complete", "paid", metadata, null, customerRef);
 
         Assert.Equal(expected, BillingCustomerRef.CheckoutBelongsTo(session, UserId, userStripeCustomerId: null));
@@ -50,7 +50,7 @@ public class BillingDomainTests
     [InlineData(null, null, true)]
     public void Checkout_DirectPath_SessionCustomerMustBeTheUsers(string? userCustomer, string? sessionCustomer, bool expected)
     {
-        var metadata = new Dictionary<string, string> { ["userId"] = UserId.ToString() };
+        var metadata = new Dictionary<string, string> { ["userId"] = UserId.ToString(), [BillingCustomerRef.ProductMarkerKey] = BillingCustomerRef.ProductMarker };
         var session = new CheckoutSessionInfo("cs_1", "payment", "complete", "paid", metadata, sessionCustomer, CustomerRef: null);
 
         Assert.Equal(expected, BillingCustomerRef.CheckoutBelongsTo(session, UserId, userCustomer));
@@ -180,7 +180,7 @@ public class BillingDomainTests
     private static string CheckoutEvent(string customerRef, string paymentStatus = "paid", string kind = "payment", string documents = "300") => $$$"""
         {"stripe_event_id":"evt_1","customer_ref":"{{{customerRef}}}","kind":"{{{kind}}}","payment_status":"{{{paymentStatus}}}",
          "stripe_session_id":"cs_test_1","amount_total":1500,"currency":"eur","stripe_payment_intent_id":"pi_1",
-         "stripe_customer_id":"cus_1","metadata":{"userId":"6f9619ff-8b86-d011-b42d-00c04fc964ff","documents":"{{{documents}}}","autoRecharge":"True"}}
+         "stripe_customer_id":"cus_1","metadata":{"product":"dotnet-signing-server","userId":"6f9619ff-8b86-d011-b42d-00c04fc964ff","documents":"{{{documents}}}","autoRecharge":"True"}}
         """;
 
     [Fact]

@@ -41,6 +41,18 @@ public class User
     public string? EmailOtpCode { get; set; }
     public DateTimeOffset? EmailOtpExpiresAt { get; set; }
 
+    /// <summary>
+    /// SHA-256 hex of the sign-in challenge (#80): issued with the e-mailed code after the
+    /// password step and held by the browser in an HttpOnly cookie. The code is accepted only
+    /// together with it, so the 2FA step belongs to the sign-in that asked for it, never to an
+    /// address typed into the form. NULL while no sign-in is waiting (and for a re-auth code).
+    /// </summary>
+    [MaxLength(128)]
+    public string? LoginChallengeHash { get; set; }
+
+    /// <summary>Wrong codes against the current <see cref="EmailOtpCode"/>; at the limit the code is void.</summary>
+    public int EmailOtpFailedAttempts { get; set; }
+
     /// <summary>SHA-256 hex of the emailed reset token — never the token itself.</summary>
     [MaxLength(128)]
     public string? PasswordResetToken { get; set; }

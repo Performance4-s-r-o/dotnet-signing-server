@@ -68,7 +68,10 @@ public sealed record CheckoutSessionInfo(
     string? PaymentStatus,
     IReadOnlyDictionary<string, string> Metadata,
     string? StripeCustomerId,
-    string? CustomerRef);
+    string? CustomerRef,
+    // When the session was created; decides the transition for sessions without the product
+    // marker (Billing:ProductTagGraceUntil, #80). Null = unknown, never inside the grace.
+    DateTimeOffset? Created = null);
 
 /// <summary>One invoice row of the billing page.</summary>
 public sealed record InvoiceSummary(

@@ -8,6 +8,14 @@ public static class BillingCustomerRef
 {
     public const string Prefix = "user:";
 
+    /// <summary>
+    /// Metadata every checkout and card-setup session of this product carries (#80). On a Stripe
+    /// account shared with other products a session that merely names a matching <c>userId</c>
+    /// is not ours to confirm.
+    /// </summary>
+    public const string ProductMarkerKey = "product";
+    public const string ProductMarker = "dotnet-signing-server";
+
     public static string For(Guid userId) => Prefix + userId.ToString("D");
 
     /// <summary>The user id of a reference this product created; false for anything else.</summary>
@@ -21,16 +29,17 @@ public static class BillingCustomerRef
 
     /// <summary>
     /// Whether a checkout session may be confirmed by <paramref name="userId"/> (#82). Fails
-    /// closed: the <c>userId</c> metadata, which every session this product starts carries, is
-    /// required and must name the user. Through the billing API the customer reference must
+    /// closed: the <c>userId</c> metadata and the product marker (#80), which every session this
+    /// product starts carries, are required, and the former must name the user. Through the billing API the customer reference must
     /// name the user as well (the service owns the Stripe customer behind it). On the direct
     /// path the session's Stripe customer must be the user's own once the user has one;
     /// whether a user without one may take the session's customer is
     /// <see cref="StripeCustomerBinding"/>'s question, it needs the database.
     /// </summary>
-    public static bool CheckoutBelongsTo(CheckoutSessionInfo session, Guid userId, string? userStripeCustomerId)
+    public static bool CheckoutBelongsTo(
+        CheckoutSessionInfo session, Guid userId, string? userStripeCustomerId, DateTimeOffset? productTagGraceUntil = null)
     {
-        if (!NamesUser(session, userId))
+        if (!NamesUser(session, userId) || !(CarriesProductMarker(session) || InProductTagGrace(session, productTagGraceUntil)))
         {
             return false;
         }
@@ -40,6 +49,20 @@ public static class BillingCustomerRef
         }
         return StripeCustomerMatches(userStripeCustomerId, session.StripeCustomerId);
     }
+
+    /// <summary>
+    /// Transition for sessions started before the marker existed (#80): Stripe keeps a session
+    /// open for up to 24 h, so one paid after the deployment has none. It passes only when it
+    /// was created before <c>Billing:ProductTagGraceUntil</c>; every other check (userId,
+    /// customer) still applies. Unset = strict, and a session of unknown age never passes.
+    /// </summary>
+    public static bool InProductTagGrace(CheckoutSessionInfo session, DateTimeOffset? graceUntil) =>
+        graceUntil is { } until && session.Created is { } created && created < until;
+
+    /// <summary>Whether the session was started by this product (<see cref="ProductMarker"/>).</summary>
+    public static bool CarriesProductMarker(CheckoutSessionInfo session) =>
+        session.Metadata.TryGetValue(ProductMarkerKey, out var marker)
+        && string.Equals(marker, ProductMarker, StringComparison.Ordinal);
 
     /// <summary>Whether the session's <c>userId</c> metadata names <paramref name="userId"/>.</summary>
     public static bool NamesUser(CheckoutSessionInfo session, Guid userId) =>

@@ -23,9 +23,10 @@ public static class StripeCustomerBinding
     /// and a user without a customer may not take one that already belongs to another user.
     /// </summary>
     public static async Task<bool> CheckoutOwnedByAsync(
-        ApplicationDbContext db, CheckoutSessionInfo session, User user, CancellationToken cancellationToken = default)
+        ApplicationDbContext db, CheckoutSessionInfo session, User user,
+        DateTimeOffset? productTagGraceUntil = null, CancellationToken cancellationToken = default)
     {
-        if (!BillingCustomerRef.CheckoutBelongsTo(session, user.Id, user.StripeCustomerId))
+        if (!BillingCustomerRef.CheckoutBelongsTo(session, user.Id, user.StripeCustomerId, productTagGraceUntil))
         {
             return false;
         }

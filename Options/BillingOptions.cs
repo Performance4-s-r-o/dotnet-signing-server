@@ -10,6 +10,14 @@ public class BillingOptions
     public string? AttachmentDebitBypassKey { get; set; }
 
     /// <summary>
+    /// Checkout sessions created before this instant (UTC) are accepted without the
+    /// <c>product</c> metadata marker (#80) — the ones already open when the marker was
+    /// deployed. Empty = strict. Env <c>BILLING_PRODUCT_TAG_GRACE_UNTIL</c>
+    /// (<c>Billing__ProductTagGraceUntil</c>), e.g. <c>2026-10-20T12:00:00Z</c>; remove it a day later.
+    /// </summary>
+    public DateTimeOffset? ProductTagGraceUntil { get; set; }
+
+    /// <summary>
     /// Credits charged per AI call (/api/ai/detect-fields, /api/ai/extract-data).
     /// These invoke an LLM — a real cost — so they must not be free for direct
     /// API customers. Mirrors the portal's own AI_EXTRACTION_CREDITS (2). The

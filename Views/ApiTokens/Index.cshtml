@@ -70,6 +70,10 @@
                 <p class="muted" style="margin-bottom: 0.5rem;">Browser tokens require a matching <code>Origin</code>
                     header.
                     Localhost is always permitted for testing.</p>
+                <p class="muted" style="margin-bottom: 0.5rem;">@L["BrowserTokenScopeHint"]</p>
+                <label class="tokens-label" for="creditLimit">@L["BrowserTokenCreditLimitLabel"]</label>
+                <input id="creditLimit" name="creditLimit" type="number" min="1" max="1000000" class="tokens-input" />
+                <p class="muted" style="margin-bottom: 0.5rem;">@L["BrowserTokenCreditLimitHint"]</p>
             </div>
 
             <div id="ip-block" class="tokens-form-group">
@@ -116,7 +120,10 @@
                                 <td>@token.CreatedAt.ToLocalTime().ToString("g")</td>
                                 <td>@(token.ExpiresAt?.ToLocalTime().ToString("g") ?? "-")</td>
                                 <td>@(token.RevokedAt?.ToLocalTime().ToString("g") ?? "-")</td>
-                                <td>@(token.IsBrowserToken ? "Browser" : "Server")</td>
+                                <td>@(token.IsBrowserToken ? "Browser" : "Server")@if (token.IsBrowserToken)
+                                    {
+                                        <br /><span class="muted">@string.Format(L["BrowserTokenCreditsUsedFmt"].Value, token.CreditsUsed, token.CreditLimit?.ToString() ?? "∞")</span>
+                                    }</td>
                                 <td style="max-width:220px;white-space:pre-wrap;">@(token.AllowedOrigins ?? "-")</td>
                                 <td style="max-width:220px;white-space:pre-wrap;">@(token.AllowedIps ?? "-")</td>
                                 <td>

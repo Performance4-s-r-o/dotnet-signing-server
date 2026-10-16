@@ -93,10 +93,17 @@ public class UserEmailsPostgresTests : IClassFixture<OutboxPostgresFixture>
         await using var db = _pg.CreateContext();
         var migrator = db.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>();
         await migrator.MigrateAsync("AddApiOperations");
+        // The current model maps columns that later migrations add (#80); give the old schema
+        // those columns just for the insert, and drop them again before migrating on.
+        await db.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE \"Users\" ADD COLUMN \"EmailOtpFailedAttempts\" integer NOT NULL DEFAULT 0, " +
+            "ADD COLUMN \"LoginChallengeHash\" text");
         var local = Guid.NewGuid().ToString("N");
         var lower = TestHelpers.CreateTestUser($"{local}@example.cz");
         db.Users.AddRange(lower, TestHelpers.CreateTestUser($"{local.ToUpperInvariant()}@example.cz"));
         await db.SaveChangesAsync();
+        await db.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE \"Users\" DROP COLUMN \"EmailOtpFailedAttempts\", DROP COLUMN \"LoginChallengeHash\"");
 
         var ex = await Assert.ThrowsAsync<Npgsql.PostgresException>(() => migrator.MigrateAsync());
         Assert.Contains("differing only by letter case", ex.MessageText);

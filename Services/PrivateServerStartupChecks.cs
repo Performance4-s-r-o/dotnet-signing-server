@@ -115,6 +115,9 @@ public static class PrivateServerStartupChecks
             // installation has no outbound mail of its own, and this account was
             // put in by whoever installed the server.
             EmailVerified = true,
+            // It is the administrator (#80): without the flag /Admin stayed closed to the one
+            // account the installation was given.
+            IsAdmin = true,
         });
         await dbContext.SaveChangesAsync(cancellationToken);
 

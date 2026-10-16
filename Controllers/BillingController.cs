@@ -1,4 +1,5 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Filters;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
@@ -24,6 +25,10 @@ public class BillingController : Controller
     private readonly IAutoRechargeService _autoRechargeService;
     private readonly ILogger<BillingController> _logger;
     private readonly IStringLocalizer<SharedStrings> _localizer;
+
+    /// <summary>Billing:ProductTagGraceUntil (#80); read per request so the constructor stays as it is.</summary>
+    private DateTimeOffset? ProductTagGraceUntil =>
+        HttpContext?.RequestServices?.GetService<IOptions<BillingOptions>>()?.Value.ProductTagGraceUntil;
 
     public BillingController(
         ApplicationDbContext dbContext,
@@ -180,6 +185,7 @@ public class BillingController : Controller
 
     [HttpPost("/Billing/ManagePaymentMethod")]
     [ValidateAntiForgeryToken]
+    [RequireRecentAuth]
     public async Task<IActionResult> ManagePaymentMethod()
     {
         var userId = GetCurrentUserId();
@@ -213,6 +219,7 @@ public class BillingController : Controller
 
     [HttpPost("/Billing/Checkout")]
     [ValidateAntiForgeryToken]
+    [RequireRecentAuth]
     public async Task<IActionResult> Checkout(int documentsToBuy, bool autoRecharge = false, bool saveCard = false)
     {
         var userId = GetCurrentUserId();
@@ -281,6 +288,7 @@ public class BillingController : Controller
                 new Dictionary<string, string>
                 {
                     { "userId", user.Id.ToString() },
+                    { BillingCustomerRef.ProductMarkerKey, BillingCustomerRef.ProductMarker },
                     { "documents", documentsToBuy.ToString() },
                     { "autoRecharge", autoRecharge.ToString() }
                 },
@@ -349,7 +357,7 @@ public class BillingController : Controller
             }
 
             // The session must be this user's, and so must its Stripe customer (#82).
-            if (!await StripeCustomerBinding.CheckoutOwnedByAsync(_dbContext, session, user))
+            if (!await StripeCustomerBinding.CheckoutOwnedByAsync(_dbContext, session, user, ProductTagGraceUntil))
             {
                 // Paid, but not this user's: kept for a person to settle when the session does
                 // name the user (a foreign session is only logged — it is not their payment).
@@ -462,6 +470,7 @@ public class BillingController : Controller
 
     [HttpPost("/Billing/AutoRecharge/Enable")]
     [ValidateAntiForgeryToken]
+    [RequireRecentAuth]
     public async Task<IActionResult> EnableAutoRecharge(int quantity)
     {
         var userId = GetCurrentUserId();
@@ -525,6 +534,7 @@ public class BillingController : Controller
                     new Dictionary<string, string>
                     {
                         { "userId", user.Id.ToString() },
+                    { BillingCustomerRef.ProductMarkerKey, BillingCustomerRef.ProductMarker },
                         { "autoRechargeQuantity", quantity.ToString() }
                     });
 
@@ -575,7 +585,7 @@ public class BillingController : Controller
 
             // The card was saved on the session's customer: it must be this user's (#82),
             // otherwise auto-recharge would charge someone else's card.
-            if (!await StripeCustomerBinding.CheckoutOwnedByAsync(_dbContext, session, user))
+            if (!await StripeCustomerBinding.CheckoutOwnedByAsync(_dbContext, session, user, ProductTagGraceUntil))
             {
                 _logger.LogWarning("Auto-recharge setup {SessionId} refused for user {UserId}: not the user's session or customer",
                     sessionId, user.Id);
@@ -615,6 +625,7 @@ public class BillingController : Controller
 
     [HttpPost("/Billing/AutoRecharge/Disable")]
     [ValidateAntiForgeryToken]
+    [RequireRecentAuth]
     public async Task<IActionResult> DisableAutoRecharge()
     {
         var userId = GetCurrentUserId();

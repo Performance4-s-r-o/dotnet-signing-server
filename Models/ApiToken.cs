@@ -31,6 +31,15 @@ public class ApiToken
     [MaxLength(8)]
     public string? TokenPrefix { get; set; }
 
+    /// <summary>
+    /// Credits a browser token may spend in its lifetime (#80). NULL = no cap beyond the
+    /// account's own balance. Server tokens ignore it.
+    /// </summary>
+    public int? CreditLimit { get; set; }
+
+    /// <summary>Credits spent (or reserved for running work) through this token.</summary>
+    public int CreditsUsed { get; set; }
+
     public DateTimeOffset? ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

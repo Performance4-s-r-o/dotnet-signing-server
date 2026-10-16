@@ -252,6 +252,22 @@ builder.Services.AddOptions<StripeOptions>()
         + "Set the Stripe__WebhookSecret environment variable.")
     .ValidateOnStart();
 builder.Services.Configure<TokenOptions>(builder.Configuration.GetSection("Token"));
+builder.Services.AddOptions<SessionSecurityOptions>()
+    .Bind(builder.Configuration.GetSection(SessionSecurityOptions.SectionName))
+    .PostConfigure(options =>
+    {
+        // docker-compose passes the raw names (#80); see EnvValues for why not Auth__*.
+        options.ReauthMinutes = EnvValues.Int(builder.Configuration, "AUTH_REAUTH_MINUTES") ?? options.ReauthMinutes;
+        options.OtpMaxFailedAttempts = EnvValues.Int(builder.Configuration, "AUTH_OTP_MAX_FAILED_ATTEMPTS") ?? options.OtpMaxFailedAttempts;
+        options.AccountMaxAttempts = EnvValues.Int(builder.Configuration, "AUTH_ACCOUNT_MAX_ATTEMPTS") ?? options.AccountMaxAttempts;
+        options.AccountWindowMinutes = EnvValues.Int(builder.Configuration, "AUTH_ACCOUNT_WINDOW_MINUTES") ?? options.AccountWindowMinutes;
+    })
+    .ValidateOnStart();
+builder.Services.AddOptions<LimitsOptions>()
+    .PostConfigure(options =>
+        options.MaxApiTokensPerUser = EnvValues.Int(builder.Configuration, "MAX_API_TOKENS_PER_USER") ?? options.MaxApiTokensPerUser)
+    .ValidateOnStart();
+builder.Services.AddScoped<AuthAttemptLimiter>();
 builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection("Resend"));
 builder.Services.Configure<LokiOptions>(builder.Configuration.GetSection("Loki"));
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("AI"));
@@ -297,27 +313,9 @@ builder.Services.AddAuthentication(options =>
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.Cookie.HttpOnly = true;
-        // Invalidate sessions when password changes (UpdatedAt is used as a security stamp)
-        options.Events.OnValidatePrincipal = async context =>
-        {
-            var stamp = context.Principal?.FindFirst("SecurityStamp")?.Value;
-            var userId = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            if (stamp != null && Guid.TryParse(userId, out var uid))
-            {
-                var db = context.HttpContext.RequestServices
-                    .GetRequiredService<DotNetSigningServer.Data.ApplicationDbContext>();
-                var user = await db.Users.AsNoTracking()
-                    .Where(u => u.Id == uid)
-                    .Select(u => new { u.UpdatedAt })
-                    .FirstOrDefaultAsync();
-                if (user == null || user.UpdatedAt.Ticks.ToString() != stamp)
-                {
-                    context.RejectPrincipal();
-                    await context.HttpContext.SignOutAsync(
-                        Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
-                }
-            }
-        };
+        // Every request: user exists, is active, the stamp (UpdatedAt) matches, and the Admin
+        // role follows the database (#80). See CookieSessionValidator.
+        options.Events.OnValidatePrincipal = DotNetSigningServer.Services.CookieSessionValidator.ValidateAsync;
     });
 builder.Services.AddAuthorization(options =>
 {
@@ -427,7 +425,9 @@ builder.Services.AddOptions<BillingOptions>()
     .PostConfigure(options =>
     {
         options.AttachmentDebitBypassKey = builder.Configuration["ATTACHMENT_DEBIT_BYPASS_KEY"] ?? options.AttachmentDebitBypassKey;
-    });
+        options.ProductTagGraceUntil = EnvValues.Instant(builder.Configuration, "BILLING_PRODUCT_TAG_GRACE_UNTIL") ?? options.ProductTagGraceUntil;
+    })
+    .ValidateOnStart();
 
 
 var app = builder.Build();
@@ -456,6 +456,17 @@ if (!migrateOnly)
 }
 
 var appLogger = app.Services.GetRequiredService<ILogger<Program>>();
+
+// #80: in Production the CORS list no longer falls back to the origins of every user's
+// browser tokens. Without Cors:AllowedOrigins only the server's own origin passes.
+if (!migrateOnly && app.Environment.IsProduction()
+    && app.Services.GetRequiredService<IAllowedOriginService>() is AllowedOriginService origins
+    && !origins.HasConfiguredCorsOrigins)
+{
+    appLogger.LogWarning(
+        "Cors:AllowedOrigins is empty: browser calls to /api are accepted only from this server's own origin. "
+        + "Set CORS_ALLOWED_ORIGINS (Cors__AllowedOrigins) to the sites that use browser tokens.");
+}
 
 if (postgresContainer != null)
 {
@@ -498,8 +509,9 @@ app.UseMiddleware<BodySizeLimitMiddleware>();
 // same path regardless of language. Must stay ahead of UseRequestLocalization.
 app.UseMiddleware<DotNetSigningServer.Middleware.CulturePrefixMiddleware>();
 
-// Swagger only in non-production environments
-if (!app.Environment.IsProduction())
+// Swagger only in Development (#80): staging and test run a production build that is
+// reachable from the internet, and the public reference lives at /api/docs.
+if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI(options =>
@@ -612,8 +624,8 @@ app.MapControllers();
 app.MapHealthChecks("/health");
 app.MapHealthChecks("/healthz");
 
-// Loki test endpoint (non-production only)
-if (!app.Environment.IsProduction())
+// Loki test endpoint (Development only, #80: it is anonymous and writes to the log store)
+if (app.Environment.IsDevelopment())
 {
     app.MapGet("/api/test-loki", async (LokiClient loki) =>
     {

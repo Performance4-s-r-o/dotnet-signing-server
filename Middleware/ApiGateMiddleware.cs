@@ -78,6 +78,17 @@ public class ApiGateMiddleware
             return;
         }
 
+        // Browser tokens: the signing flow only (#80). Their Origin lock binds a browser, not curl.
+        if (authenticated && SessionClaims.IsBrowserToken(context.User)
+            && !BrowserTokenScope.IsAllowed(context.Request.Method, path))
+        {
+            context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger<ApiGateMiddleware>()
+                .LogWarning("Browser token {TokenId} refused outside its scope: {Method} {Path}",
+                    SessionClaims.TokenIdOf(context.User), context.Request.Method, path);
+            await WriteAsync(context, StatusCodes.Status403Forbidden, BrowserTokenScope.ScopeErrorCode);
+            return;
+        }
+
         var heavy = Heavy.FirstOrDefault(h => value.StartsWith(h.Path, StringComparison.OrdinalIgnoreCase));
 
         if (userId is Guid id)

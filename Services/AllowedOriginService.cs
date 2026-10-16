@@ -60,12 +60,20 @@ public class AllowedOriginService : IAllowedOriginService
     /// token's origins across all users — which means any registered user can widen
     /// the server-wide CORS list just by creating a token, so production should
     /// always set the explicit list.
+    ///
+    /// In Production that fallback is off (#80): without the list only the server's own origin
+    /// (and localhost) passes, and startup logs a warning. A browser token used from another
+    /// site then needs its origin in <c>Cors:AllowedOrigins</c>.
     /// </summary>
     private IEnumerable<string> LoadCorsOrigins()
     {
         var configured = LoadConfiguredCorsOrigins();
-        return configured.Count > 0 ? configured : LoadAllowedOrigins();
+        if (configured.Count > 0) return configured;
+        return _environment.IsProduction() ? Enumerable.Empty<string>() : LoadAllowedOrigins();
     }
+
+    /// <summary>Whether <c>Cors:AllowedOrigins</c> lists anything (startup warning in Production).</summary>
+    public bool HasConfiguredCorsOrigins => LoadConfiguredCorsOrigins().Count > 0;
 
     private HashSet<string> LoadConfiguredCorsOrigins()
     {

@@ -1,0 +1,55 @@
+@model DotNetSigningServer.Models.ReauthViewModel
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
+@{
+    ViewData["Title"] = L["ReauthTitle"].Value;
+    var basePath = Context.Request.PathBase.Value ?? string.Empty;
+}
+<h1 class="content-box-title">@L["ReauthHeading"]</h1>
+
+@if (TempData["Error"] != null)
+{
+    <div class="flash error">@TempData["Error"]</div>
+}
+@if (TempData["Info"] != null)
+{
+    <div class="flash info">@TempData["Info"]</div>
+}
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="flash error">@Html.ValidationSummary(excludePropertyErrors: false)</div>
+}
+
+<p class="muted">@(Model.Required ? L["ReauthRequiredIntro"] : L["ReauthIntro"])</p>
+
+<form method="post" action="@basePath/Account/Reauth" class="auth-form">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+    <div class="form-group">
+        <label for="reauth-password" class="form-label">@L["ReauthPasswordLabel"]</label>
+        <input id="reauth-password" name="Password" type="password" class="form-input" autocomplete="current-password" required />
+    </div>
+    <button type="submit" class="btn btn-primary">@L["ReauthConfirmButton"]</button>
+</form>
+
+<h2 class="mt-3">@L["ReauthCodeHeading"]</h2>
+@if (Model.CodeSent)
+{
+    <form method="post" action="@basePath/Account/Reauth" class="auth-form">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+        <input type="hidden" name="CodeSent" value="true" />
+        <div class="form-group">
+            <label for="reauth-code" class="form-label">@L["SixDigitCodeLabel"]</label>
+            <input id="reauth-code" name="Code" class="form-input" type="text" maxlength="6" minlength="6" pattern="\d{6}" autocomplete="one-time-code" required />
+        </div>
+        <button type="submit" class="btn btn-primary">@L["VerifyButton"]</button>
+    </form>
+}
+else
+{
+    <form method="post" action="@basePath/Account/Reauth/SendCode" class="auth-form">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+        <button type="submit" class="btn btn-secondary">@L["ReauthSendCodeButton"]</button>
+    </form>
+}

@@ -7,9 +7,15 @@ public interface IApiAuthService
 {
     Task<User?> ValidateTokenAsync(string authorizationHeader, string? originHeader = null, IPAddress? clientIp = null);
 
+    /// <summary>As <see cref="ValidateTokenAsync"/>, plus which token it was and of what kind (#80).</summary>
+    Task<ApiTokenValidation?> ValidateTokenDetailedAsync(string authorizationHeader, string? originHeader = null, IPAddress? clientIp = null);
+
     /// <summary>
     /// Invalidates all cached validation entries for the given API token.
     /// Call after revoke/delete so subsequent requests re-check the database.
     /// </summary>
     void InvalidateTokenCache(Guid tokenId);
 }
+
+/// <summary>A valid token: its owner, its id and whether it is a browser token.</summary>
+public sealed record ApiTokenValidation(User User, Guid TokenId, bool IsBrowserToken);
