@@ -64,7 +64,8 @@ public sealed class StripePaymentGateway : IPaymentGateway
             session.PaymentStatus,
             new Dictionary<string, string>(session.Metadata ?? new Dictionary<string, string>()),
             session.CustomerId,
-            CustomerRef: null);
+            CustomerRef: null,
+            Created: session.Created == default ? null : new DateTimeOffset(DateTime.SpecifyKind(session.Created, DateTimeKind.Utc)));
     }
 
     public async Task<IReadOnlyList<InvoiceSummary>> ListInvoicesAsync(User user, int limit, CancellationToken cancellationToken = default)

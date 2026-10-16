@@ -26,6 +26,10 @@ public class BillingController : Controller
     private readonly ILogger<BillingController> _logger;
     private readonly IStringLocalizer<SharedStrings> _localizer;
 
+    /// <summary>Billing:ProductTagGraceUntil (#80); read per request so the constructor stays as it is.</summary>
+    private DateTimeOffset? ProductTagGraceUntil =>
+        HttpContext?.RequestServices?.GetService<IOptions<BillingOptions>>()?.Value.ProductTagGraceUntil;
+
     public BillingController(
         ApplicationDbContext dbContext,
         IBillingService billingService,
@@ -353,7 +357,7 @@ public class BillingController : Controller
             }
 
             // The session must be this user's, and so must its Stripe customer (#82).
-            if (!await StripeCustomerBinding.CheckoutOwnedByAsync(_dbContext, session, user))
+            if (!await StripeCustomerBinding.CheckoutOwnedByAsync(_dbContext, session, user, ProductTagGraceUntil))
             {
                 // Paid, but not this user's: kept for a person to settle when the session does
                 // name the user (a foreign session is only logged — it is not their payment).
@@ -581,7 +585,7 @@ public class BillingController : Controller
 
             // The card was saved on the session's customer: it must be this user's (#82),
             // otherwise auto-recharge would charge someone else's card.
-            if (!await StripeCustomerBinding.CheckoutOwnedByAsync(_dbContext, session, user))
+            if (!await StripeCustomerBinding.CheckoutOwnedByAsync(_dbContext, session, user, ProductTagGraceUntil))
             {
                 _logger.LogWarning("Auto-recharge setup {SessionId} refused for user {UserId}: not the user's session or customer",
                     sessionId, user.Id);
