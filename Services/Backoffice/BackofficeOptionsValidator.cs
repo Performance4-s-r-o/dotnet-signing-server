@@ -48,6 +48,11 @@ public static class BackofficeOptionsValidator
         {
             problems.Add($"{Setting("DocumentsTtl")} must be positive.");
         }
+        if (options.Outbox.GiveUpAfter is { } giveUp
+            && (giveUp <= TimeSpan.Zero || giveUp >= DotNetSigningServer.Services.Backoffice.Outbox.RetryPolicy.IdempotencyWindow))
+        {
+            problems.Add($"{Setting("Outbox:GiveUpAfter")} must be positive and under 24 h (the service keeps an Idempotency-Key 24 h).");
+        }
         if (options.Polling.Interval is { } interval && interval <= TimeSpan.Zero)
         {
             problems.Add($"{Setting("Polling:Interval")} must be positive.");

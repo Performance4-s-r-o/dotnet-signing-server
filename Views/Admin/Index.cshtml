@@ -5,6 +5,7 @@
     var search = ViewBag.Search as string ?? "";
     var backoffice = ViewBag.Backoffice as DotNetSigningServer.Controllers.AdminController.BackofficeStatus;
     var outbox = ViewBag.Outbox as DotNetSigningServer.Services.Backoffice.Outbox.OutboxHealthSnapshot;
+    var inboxDead = ViewBag.InboxDead as int?;
 }
 
 @if (TempData["Error"] != null)
@@ -163,6 +164,18 @@
                     </form>
                 }
             </div>
+        </section>
+    }
+
+    @if (inboxDead is > 0)
+    {
+        <section class="tokens-existing" style="margin-top:1.5rem">
+            <h2 class="tokens-existing-title">@L["AdminInboxTitle"]</h2>
+            <form method="post" action="/Admin/Backoffice/Inbox/ReplayDead" class="p-4">
+                @Html.AntiForgeryToken()
+                <p class="muted" style="font-size:0.875rem;margin-bottom:0.75rem">@L["AdminInboxDeadHint"]</p>
+                <button type="submit" class="btn-small btn-secondary">@L["AdminInboxReplayDead"] (@inboxDead)</button>
+            </form>
         </section>
     }
 </main>

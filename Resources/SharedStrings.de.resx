@@ -669,6 +669,10 @@
   <data name="AdminOutboxBlockedHint" xml:space="preserve"><value>Blockierte Nachrichten wurden als nicht autorisiert abgelehnt. Korrigieren Sie zuerst den API-Schlüssel oder seine Berechtigungen und stellen Sie sie dann erneut ein.</value></data>
   <data name="AdminOutboxRequeueBlocked" xml:space="preserve"><value>Blockierte erneut einstellen</value></data>
   <data name="AdminOutboxRequeued" xml:space="preserve"><value>{0} blockierte Nachricht(en) erneut eingestellt.</value></data>
+  <data name="AdminInboxTitle" xml:space="preserve"><value>Backoffice-Ereignisse</value></data>
+  <data name="AdminInboxDeadHint" xml:space="preserve"><value>Diese Ereignisse sind bei jedem Versuch fehlgeschlagen und werden nicht mehr von selbst verarbeitet. Eine unverarbeitete Zahlung bedeutet nicht gutgeschriebene Credits. Beheben Sie die Ursache (siehe Log „Backoffice inbox alert“) und verarbeiten Sie sie erneut – Credits werden nur einmal gutgeschrieben.</value></data>
+  <data name="AdminInboxReplayDead" xml:space="preserve"><value>Tote Ereignisse erneut verarbeiten</value></data>
+  <data name="AdminInboxReplayed" xml:space="preserve"><value>{0} tote(s) Ereignis(se) erneut eingestellt.</value></data>
   <data name="SignUpAcceptTermsDpa" xml:space="preserve"><value>I agree to the {0}.</value></data>
   <data name="SignUpPrivacyNotice" xml:space="preserve"><value>How we process your personal data is described in the {0}.</value></data>
   <data name="SignUpAcceptTermsRequired" xml:space="preserve"><value>Please agree to the terms to continue.</value></data>

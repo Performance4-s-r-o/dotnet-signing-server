@@ -2,6 +2,7 @@ using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Services.Backoffice;
 using DotNetSigningServer.Services.Billing;
 using DotNetSigningServer.Services.Email;
 using Microsoft.AspNetCore.Authorization;
@@ -25,6 +26,7 @@ public class StripeWebhookController : ControllerBase
     private readonly ITemplatedEmailSender _email;
     private readonly AppOptions _appOptions;
     private readonly ILogger<StripeWebhookController> _logger;
+    private readonly IOptions<P4BackofficeProductOptions>? _backofficeOptions;
 
     public StripeWebhookController(
         ApplicationDbContext dbContext,
@@ -34,8 +36,10 @@ public class StripeWebhookController : ControllerBase
         ITemplatedEmailSender email,
         IOptions<AppOptions> appOptions,
         ILogger<StripeWebhookController> logger,
-        DotNetSigningServer.Services.Pricing.ICreditPricingProvider pricing)
+        DotNetSigningServer.Services.Pricing.ICreditPricingProvider pricing,
+        IOptions<P4BackofficeProductOptions>? backofficeOptions = null)
     {
+        _backofficeOptions = backofficeOptions;
         _pricing = pricing;
         _dbContext = dbContext;
         _stripeOptions = stripeOptions.Value;
@@ -46,9 +50,28 @@ public class StripeWebhookController : ControllerBase
         _logger = logger;
     }
 
+    /// <summary>
+    /// Stripe events of the product's own Stripe account (<c>Modules:Billing</c> Off or Shadow).
+    ///
+    /// An event is stored once, in <c>WebhookEvents</c> under its Stripe id: <c>ProcessedAt</c>
+    /// set when it was handled, null with <c>Error</c> when handling failed. Only a handled event
+    /// is a duplicate; a failed one answers 500, so Stripe delivers it again (for up to three
+    /// days) and the next delivery handles it anew — credits are granted once by
+    /// <see cref="CreditGrants"/> however often that happens (#79). A failed event can also be
+    /// resent from the Stripe dashboard.
+    ///
+    /// With <c>Modules:Billing</c> On, payments go through the billing service and its
+    /// <c>billing.*</c> events grant credits; the endpoint then answers 404 and does nothing.
+    /// </summary>
     [HttpPost("/api/webhooks/stripe")]
     public async Task<IActionResult> HandleWebhook()
     {
+        if (BillingModeIsOn)
+        {
+            _logger.LogWarning("Stripe webhook refused: P4Backoffice:Modules:Billing is On, credits come from billing.* events");
+            return NotFound();
+        }
+
         // Defence in depth behind the startup guard in Program.cs: an empty secret
         // would make ConstructEvent accept an attacker-computed signature.
         if (string.IsNullOrWhiteSpace(_stripeOptions.WebhookSecret))
@@ -74,60 +97,68 @@ public class StripeWebhookController : ControllerBase
             return BadRequest(new { error = "Invalid signature" });
         }
 
-        // Idempotency: skip if already processed
-        var alreadyProcessed = await _dbContext.WebhookEvents.AnyAsync(
-            w => w.EventId == stripeEvent.Id);
-        if (alreadyProcessed)
+        // Idempotency: only an event that was handled is a duplicate. One that failed is handled again.
+        var previous = await _dbContext.WebhookEvents.AsNoTracking()
+            .Where(w => w.EventId == stripeEvent.Id)
+            .Select(w => new { w.ProcessedAt })
+            .FirstOrDefaultAsync();
+        if (previous?.ProcessedAt != null)
         {
             _logger.LogDebug("Webhook event {EventId} already processed, skipping", stripeEvent.Id);
             return Ok();
         }
 
-        _logger.LogInformation("Processing Stripe webhook: {EventType} ({EventId})", stripeEvent.Type, stripeEvent.Id);
+        _logger.LogInformation("Processing Stripe webhook: {EventType} ({EventId}){Retry}",
+            stripeEvent.Type, stripeEvent.Id, previous != null ? " again after a failure" : "");
 
-        string? error = null;
         try
         {
-            switch (stripeEvent.Type)
-            {
-                case "checkout.session.completed":
-                    await HandleCheckoutSessionCompletedAsync(stripeEvent);
-                    break;
-
-                case "payment_intent.succeeded":
-                    await HandlePaymentIntentSucceededAsync(stripeEvent);
-                    break;
-
-                case "payment_intent.payment_failed":
-                    await HandlePaymentIntentFailedAsync(stripeEvent);
-                    break;
-
-                case "payment_method.detached":
-                    await HandlePaymentMethodDetachedAsync(stripeEvent);
-                    break;
-
-                default:
-                    _logger.LogDebug("Unhandled Stripe event type: {EventType}", stripeEvent.Type);
-                    break;
-            }
+            await DispatchAsync(stripeEvent);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing webhook event {EventId} ({EventType})",
+            _logger.LogError(ex, "Error processing webhook event {EventId} ({EventType}); answering 500 so Stripe retries",
                 stripeEvent.Id, stripeEvent.Type);
-            error = ex.Message.Length > 512 ? ex.Message[..512] : ex.Message;
+            await RecordFailureAsync(stripeEvent, json, ex);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Event processing failed" });
         }
 
-        // Record the event regardless of success/failure
-        _dbContext.WebhookEvents.Add(new WebhookEvent
+        await RecordProcessedAsync(stripeEvent, json);
+        return Ok();
+    }
+
+    private bool BillingModeIsOn =>
+        _backofficeOptions?.Value.ModeFor(BackofficeModule.Billing) == BackofficeMode.On;
+
+    private Task DispatchAsync(Event stripeEvent) => stripeEvent.Type switch
+    {
+        "checkout.session.completed" => HandleCheckoutSessionCompletedAsync(stripeEvent),
+        "payment_intent.succeeded" => HandlePaymentIntentSucceededAsync(stripeEvent),
+        "payment_intent.payment_failed" => HandlePaymentIntentFailedAsync(stripeEvent),
+        "payment_method.detached" => HandlePaymentMethodDetachedAsync(stripeEvent),
+        _ => LogUnhandled(stripeEvent),
+    };
+
+    private Task LogUnhandled(Event stripeEvent)
+    {
+        _logger.LogDebug("Unhandled Stripe event type: {EventType}", stripeEvent.Type);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Saves the event as handled, together with what its handler left to save (payment record, e-mail).</summary>
+    private async Task RecordProcessedAsync(Event stripeEvent, string json)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var row = await _dbContext.WebhookEvents.FirstOrDefaultAsync(w => w.EventId == stripeEvent.Id);
+        if (row == null)
         {
-            EventId = stripeEvent.Id,
-            EventType = stripeEvent.Type,
-            PayloadJson = json.Length > 4000 ? json[..4000] : json,
-            ReceivedAt = DateTimeOffset.UtcNow,
-            ProcessedAt = error == null ? DateTimeOffset.UtcNow : null,
-            Error = error
-        });
+            _dbContext.WebhookEvents.Add(NewRow(stripeEvent, json, now, processedAt: now, error: null));
+        }
+        else
+        {
+            row.ProcessedAt = now;
+            row.Error = null;
+        }
 
         try
         {
@@ -135,12 +166,48 @@ public class StripeWebhookController : ControllerBase
         }
         catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
-            // Another request processed the same event concurrently — that's fine
+            // Another delivery handled the same event concurrently — that's fine
             _logger.LogDebug("Concurrent webhook processing for {EventId}, ignoring duplicate", stripeEvent.Id);
         }
-
-        return Ok();
     }
+
+    /// <summary>
+    /// Keeps the failure (<c>ProcessedAt</c> null, the error) and nothing the failed handler left
+    /// in the context. Best effort: the 500 makes Stripe retry even when this cannot be saved.
+    /// </summary>
+    private async Task RecordFailureAsync(Event stripeEvent, string json, Exception failure)
+    {
+        var error = failure.Message.Length > 512 ? failure.Message[..512] : failure.Message;
+        try
+        {
+            _dbContext.ChangeTracker.Clear();
+            var row = await _dbContext.WebhookEvents.FirstOrDefaultAsync(w => w.EventId == stripeEvent.Id);
+            if (row == null)
+            {
+                _dbContext.WebhookEvents.Add(NewRow(stripeEvent, json, DateTimeOffset.UtcNow, processedAt: null, error));
+            }
+            else if (row.ProcessedAt == null)
+            {
+                row.Error = error;
+            }
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _dbContext.ChangeTracker.Clear();
+            _logger.LogWarning(ex, "Could not record the failure of webhook event {EventId}", stripeEvent.Id);
+        }
+    }
+
+    private static WebhookEvent NewRow(Event stripeEvent, string json, DateTimeOffset receivedAt, DateTimeOffset? processedAt, string? error) => new()
+    {
+        EventId = stripeEvent.Id,
+        EventType = stripeEvent.Type,
+        PayloadJson = json.Length > 4000 ? json[..4000] : json,
+        ReceivedAt = receivedAt,
+        ProcessedAt = processedAt,
+        Error = error,
+    };
 
     /// <summary>
     /// Safety net for checkout credit granting. The primary path is ConfirmCheckout (client redirect),
@@ -162,9 +229,7 @@ public class StripeWebhookController : ControllerBase
         }
 
         // Check if ConfirmCheckout already processed this session
-        var alreadyGranted = await _dbContext.WebhookEvents.AnyAsync(
-            w => w.EventId == session.Id && w.EventType == "checkout.confirm");
-        if (alreadyGranted)
+        if (await CreditGrants.IsGrantedAsync(_dbContext, session.Id, HttpContext?.RequestAborted ?? default))
         {
             _logger.LogDebug("checkout.session.completed: session {SessionId} already confirmed via redirect", session.Id);
             return;
@@ -217,56 +282,40 @@ public class StripeWebhookController : ControllerBase
             return;
         }
 
-        // Record the session as processed — save immediately to claim the
-        // idempotency key before granting credits (prevents double-grant race
-        // with ConfirmCheckout).
-        _dbContext.WebhookEvents.Add(new WebhookEvent
-        {
-            EventId = session.Id,
-            EventType = "checkout.confirm",
-            PayloadJson = $"{{\"documents\":{documents},\"userId\":\"{userId}\",\"source\":\"webhook\"}}",
-            ReceivedAt = DateTimeOffset.UtcNow,
-            ProcessedAt = DateTimeOffset.UtcNow
-        });
+        // Credits, the customer link, the auto-recharge opt-in and the payment record in one
+        // transaction under the permanent grant key shared with ConfirmCheckout and the billing
+        // events: a failure leaves nothing behind (the retry grants), a repeat grants nothing.
+        var granted = await CreditGrants.TryGrantAsync(_dbContext, session.Id, CreditGrants.CheckoutConfirmType, user.Id,
+            documents, "stripe-webhook", async () =>
+            {
+                if (!confirmedByService)
+                {
+                    await StripeCustomerBinding.TryBindAsync(_dbContext, user, session.CustomerId, _logger);
+                }
 
-        try
-        {
-            await _dbContext.SaveChangesAsync();
-        }
-        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+                // Enable auto-recharge if opted in during checkout
+                if (sessionInfo.Metadata.TryGetValue("autoRecharge", out var autoRechargeValue)
+                    && bool.TryParse(autoRechargeValue, out var autoRecharge)
+                    && autoRecharge)
+                {
+                    // Enrolled at the current price of 100 credits, as in BillingController.
+                    await _autoRechargeService.EnableAsync(user, documents, _pricing.PricePer100);
+                }
+
+                _dbContext.Payments.Add(new Payment
+                {
+                    UserId = userId,
+                    StripePaymentIntentId = session.PaymentIntentId,
+                    AmountCents = (int)(session.AmountTotal ?? 0),
+                    Currency = session.Currency ?? _billingOptions.Currency,
+                    Status = "succeeded"
+                });
+            }, HttpContext?.RequestAborted ?? default, session.PaymentIntentId);
+        if (!granted)
         {
             _logger.LogDebug("checkout.session.completed: already processed by ConfirmCheckout for {SessionId}", session.Id);
             return;
         }
-
-        // Now safe to grant credits — we own the idempotency key
-        await _dbContext.Database.ExecuteSqlRawAsync(
-            "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" + {0} WHERE \"Id\" = {1}",
-            documents, user.Id);
-
-        if (!confirmedByService)
-        {
-            await StripeCustomerBinding.TryBindAsync(_dbContext, user, session.CustomerId, _logger);
-        }
-
-        // Enable auto-recharge if opted in during checkout
-        if (sessionInfo.Metadata.TryGetValue("autoRecharge", out var autoRechargeValue)
-            && bool.TryParse(autoRechargeValue, out var autoRecharge)
-            && autoRecharge)
-        {
-            // Enrolled at the current price of 100 credits, as in BillingController.
-            await _autoRechargeService.EnableAsync(user, documents, _pricing.PricePer100);
-        }
-
-        // Record payment
-        _dbContext.Payments.Add(new Payment
-        {
-            UserId = userId,
-            StripePaymentIntentId = session.PaymentIntentId,
-            AmountCents = (int)(session.AmountTotal ?? 0),
-            Currency = session.Currency ?? _billingOptions.Currency,
-            Status = "succeeded"
-        });
 
         _logger.LogInformation("checkout.session.completed: granted {Credits} credits to user {UserId} via webhook",
             documents, userId);
@@ -293,10 +342,8 @@ public class StripeWebhookController : ControllerBase
         }
 
         // Check if AutoRechargeService already recorded this
-        var autoRechargeKey = $"auto_recharge_{paymentIntent.Id}";
-        var alreadyRecorded = await _dbContext.WebhookEvents.AnyAsync(
-            w => w.EventId == autoRechargeKey);
-        if (alreadyRecorded)
+        var autoRechargeKey = CreditGrants.AutoRechargeKey(paymentIntent.Id);
+        if (await CreditGrants.IsGrantedAsync(_dbContext, autoRechargeKey, HttpContext?.RequestAborted ?? default))
         {
             _logger.LogDebug("payment_intent.succeeded: auto-recharge {PaymentIntentId} already recorded", paymentIntent.Id);
             return;
@@ -333,40 +380,25 @@ public class StripeWebhookController : ControllerBase
             return;
         }
 
-        // Record idempotency key first — save immediately to prevent
-        // double-grant race with AutoRechargeService.
-        _dbContext.WebhookEvents.Add(new WebhookEvent
-        {
-            EventId = autoRechargeKey,
-            EventType = "auto_recharge",
-            PayloadJson = $"{{\"documents\":{documents},\"userId\":\"{userId}\",\"source\":\"webhook\"}}",
-            ReceivedAt = DateTimeOffset.UtcNow,
-            ProcessedAt = DateTimeOffset.UtcNow
-        });
-
-        try
-        {
-            await _dbContext.SaveChangesAsync();
-        }
-        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        // Credits and the payment record in one transaction under the key AutoRechargeService uses.
+        var granted = await CreditGrants.TryGrantAsync(_dbContext, autoRechargeKey, CreditGrants.AutoRechargeType, user.Id,
+            documents, "stripe-webhook", () =>
+            {
+                _dbContext.Payments.Add(new Payment
+                {
+                    UserId = userId,
+                    StripePaymentIntentId = paymentIntent.Id,
+                    AmountCents = (int)paymentIntent.Amount,
+                    Currency = paymentIntent.Currency ?? _billingOptions.Currency,
+                    Status = "succeeded"
+                });
+                return Task.CompletedTask;
+            }, HttpContext?.RequestAborted ?? default, paymentIntent.Id);
+        if (!granted)
         {
             _logger.LogDebug("payment_intent.succeeded: auto-recharge {PaymentIntentId} already recorded by service", paymentIntent.Id);
             return;
         }
-
-        // Now safe to grant credits
-        await _dbContext.Database.ExecuteSqlRawAsync(
-            "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" + {0} WHERE \"Id\" = {1}",
-            documents, user.Id);
-
-        _dbContext.Payments.Add(new Payment
-        {
-            UserId = userId,
-            StripePaymentIntentId = paymentIntent.Id,
-            AmountCents = (int)paymentIntent.Amount,
-            Currency = paymentIntent.Currency ?? _billingOptions.Currency,
-            Status = "succeeded"
-        });
 
         _logger.LogInformation("payment_intent.succeeded: granted {Credits} auto-recharge credits to user {UserId} via webhook",
             documents, userId);

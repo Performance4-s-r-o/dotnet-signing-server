@@ -2,7 +2,9 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
+using DotNetSigningServer.Options;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace DotNetSigningServer.Services.Backoffice.Outbox;
 
@@ -38,6 +40,7 @@ public sealed class OutboxProcessor
     private readonly TimeProvider _time;
     private readonly ILogger<OutboxProcessor> _logger;
     private readonly OutboxKindFilter _kinds;
+    private readonly TimeSpan _giveUpAfter;
 
     public OutboxProcessor(
         IServiceScopeFactory scopes,
@@ -47,8 +50,10 @@ public sealed class OutboxProcessor
         OutboxCircuitBreaker breaker,
         TimeProvider time,
         ILogger<OutboxProcessor> logger,
-        OutboxKindFilter? kinds = null)
+        OutboxKindFilter? kinds = null,
+        IOptions<P4BackofficeProductOptions>? options = null)
     {
+        _giveUpAfter = options?.Value.Outbox.EffectiveGiveUpAfter ?? RetryPolicy.GiveUpAfter;
         _kinds = kinds ?? OutboxKindFilter.None;
         _scopes = scopes;
         _httpClients = httpClients;
@@ -138,11 +143,17 @@ public sealed class OutboxProcessor
         }
     }
 
+    /// <summary>The configured give-up time, or the longer one of a kind the service deduplicates itself.</summary>
+    internal TimeSpan GiveUpAfterFor(string kind) =>
+        _handlers.TryGetValue(kind, out var handler) && handler.ServiceDeduplicates
+            ? RetryPolicy.DeduplicatedGiveUpAfter
+            : _giveUpAfter;
+
     /// <summary>One attempt on a claimed, tracked item; records the outcome on it (not saved).</summary>
     private async Task AttemptAsync(BackofficeOutboxItem item, TimeSpan timeout, CancellationToken cancellationToken)
     {
         var result = await SendAsync(item, timeout, cancellationToken);
-        var outcome = RetryPolicy.Apply(item, result, _time.GetUtcNow());
+        var outcome = RetryPolicy.Apply(item, result, _time.GetUtcNow(), GiveUpAfterFor(item.Kind));
         _breaker.Record(result);
 
         switch (outcome)

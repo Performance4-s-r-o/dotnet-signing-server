@@ -28,8 +28,8 @@ public class RetryPolicyTests
     [InlineData(408, null, 4, BackofficeOutboxStatus.Pending, 1800)]
     [InlineData(504, null, 5, BackofficeOutboxStatus.Pending, 3600)]
     [InlineData(503, null, 6, BackofficeOutboxStatus.Pending, 21600)]
-    [InlineData(503, null, 16, BackofficeOutboxStatus.Pending, 21600)]
-    [InlineData(503, null, 17, BackofficeOutboxStatus.Dead, -1)]
+    [InlineData(503, null, 8, BackofficeOutboxStatus.Pending, 21600)] // 10th attempt at 19 h 43 min
+    [InlineData(503, null, 9, BackofficeOutboxStatus.Dead, -1)] // an 11th would come after 20 h
     [InlineData(401, null, 0, BackofficeOutboxStatus.Blocked, -1)]
     [InlineData(403, "insufficient_scope", 2, BackofficeOutboxStatus.Blocked, -1)]
     [InlineData(400, "validation_failed", 0, BackofficeOutboxStatus.Dead, -1)]
@@ -121,11 +121,62 @@ public class RetryPolicyTests
     }
 
     [Fact]
-    public void Schedule_GivesUpOnceSeventyTwoHoursAreSpent()
+    public void Schedule_GivesUpWithinTwentyHours_InsideTheServicesIdempotencyWindow()
     {
-        Assert.True(RetryPolicy.ElapsedBefore(16) <= RetryPolicy.GiveUpAfter);
-        Assert.True(RetryPolicy.ElapsedBefore(17) <= RetryPolicy.GiveUpAfter);
-        Assert.True(RetryPolicy.ElapsedBefore(18) > RetryPolicy.GiveUpAfter);
+        Assert.Equal(TimeSpan.FromHours(20), RetryPolicy.GiveUpAfter);
+        Assert.True(RetryPolicy.ElapsedBefore(9) <= RetryPolicy.GiveUpAfter);
+        Assert.True(RetryPolicy.ElapsedBefore(10) > RetryPolicy.GiveUpAfter);
+        // The last attempt the schedule allows still falls inside the 24 h the service keeps the key.
+        Assert.True(RetryPolicy.ElapsedBefore(9) < RetryPolicy.IdempotencyWindow);
+    }
+
+    [Fact]
+    public void Schedule_KindsTheServiceDeduplicates_KeepTryingFor72Hours()
+    {
+        var item = Item(16);
+
+        RetryPolicy.Apply(item, OutboxAttemptResult.Response(503), Now, RetryPolicy.DeduplicatedGiveUpAfter);
+        Assert.Equal(BackofficeOutboxStatus.Pending, item.Status);
+
+        RetryPolicy.Apply(item, OutboxAttemptResult.Response(503), Now, RetryPolicy.DeduplicatedGiveUpAfter);
+        Assert.Equal(BackofficeOutboxStatus.Dead, item.Status);
+    }
+
+    [Fact]
+    public void FirstAttempt_StartsTheRound()
+    {
+        var item = Item();
+
+        RetryPolicy.Apply(item, OutboxAttemptResult.Response(503), Now);
+        Assert.Equal(Now, item.FirstAttemptAt);
+
+        RetryPolicy.Apply(item, OutboxAttemptResult.Response(503), Now.AddMinutes(1));
+        Assert.Equal(Now, item.FirstAttemptAt);
+    }
+
+    [Fact]
+    public void GivesUpByTheClock_WhenTheRoundTookLongerThanTheSchedule()
+    {
+        // Two failed attempts by the schedule, but the dispatcher was paused (or Retry-After
+        // stretched it): the next attempt would land 20 h 1 min after the first one.
+        var item = Item(2);
+        item.FirstAttemptAt = Now - TimeSpan.FromHours(20) + TimeSpan.FromMinutes(1);
+
+        var outcome = RetryPolicy.Apply(item, OutboxAttemptResult.Response(503), Now);
+
+        Assert.Equal(OutboxOutcome.Dead, outcome);
+        Assert.Equal(BackofficeOutboxStatus.Dead, item.Status);
+        Assert.StartsWith("Gave up after 3 attempts", item.LastError);
+    }
+
+    [Fact]
+    public void ByTheClock_AnAttemptInsideTheWindowIsStillScheduled()
+    {
+        var item = Item(2);
+        item.FirstAttemptAt = Now - TimeSpan.FromHours(19);
+
+        Assert.Equal(OutboxOutcome.Retry, RetryPolicy.Apply(item, OutboxAttemptResult.Response(503), Now));
+        Assert.Equal(Now.AddMinutes(2), item.NextAttemptAt);
     }
 
     [Fact]

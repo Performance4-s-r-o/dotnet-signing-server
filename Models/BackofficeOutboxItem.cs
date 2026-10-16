@@ -35,6 +35,12 @@ public class BackofficeOutboxItem
 
     public DateTimeOffset NextAttemptAt { get; set; }
 
+    /// <summary>
+    /// First attempt of the current retry round (the service's idempotency window starts with
+    /// the first request it sees); null until then, reset when an admin requeues the item.
+    /// </summary>
+    public DateTimeOffset? FirstAttemptAt { get; set; }
+
     /// <summary>Claimed by a dispatcher until then; null or past = free.</summary>
     public DateTimeOffset? LockedUntil { get; set; }
 

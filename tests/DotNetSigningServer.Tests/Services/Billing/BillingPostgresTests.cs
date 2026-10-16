@@ -120,6 +120,50 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
         });
 
     [DockerFact]
+    public async Task Grant_ThatFails_RollsBackItsClaim_AndTheRetryGrantsOnce()
+    {
+        var user = await NewUserAsync();
+
+        await using (var db = _pg.CreateContext())
+        {
+            await Assert.ThrowsAsync<TimeoutException>(() => CreditGrants.TryGrantAsync(db, "cs_fail", CreditGrants.CheckoutConfirmType,
+                user.Id, 300, "test", () => throw new TimeoutException("db"), default, "pi_fail"));
+        }
+        Assert.Equal(0, await CreditsAsync(user.Id));
+
+        await using (var db = _pg.CreateContext())
+        {
+            Assert.True(await CreditGrants.TryGrantAsync(db, "cs_fail", CreditGrants.CheckoutConfirmType,
+                user.Id, 300, "test", () => Task.CompletedTask, default, "pi_fail"));
+        }
+        await using (var db = _pg.CreateContext())
+        {
+            // The same payment intent under another key (another path) grants nothing.
+            Assert.False(await CreditGrants.TryGrantAsync(db, "auto_recharge_pi_fail", CreditGrants.AutoRechargeType,
+                user.Id, 300, "test", () => Task.CompletedTask, default, "pi_fail"));
+        }
+        Assert.Equal(300, await CreditsAsync(user.Id));
+    }
+
+    [DockerFact]
+    public async Task ConcurrentGrants_OfOnePayment_GrantOnce()
+    {
+        var user = await NewUserAsync();
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 5).Select(async _ =>
+        {
+            await using var db = _pg.CreateContext();
+            return await CreditGrants.TryGrantAsync(db, "cs_race", CreditGrants.CheckoutConfirmType,
+                user.Id, 300, "test", () => Task.CompletedTask, default, "pi_race");
+        }));
+
+        Assert.Single(results, r => r);
+        Assert.Equal(300, await CreditsAsync(user.Id));
+        await using var check = _pg.CreateContext();
+        Assert.Single(await check.CreditGrants.AsNoTracking().Where(g => g.GrantKey == "cs_race").ToListAsync());
+    }
+
+    [DockerFact]
     public async Task CheckoutCompleted_GrantsOnce_WithItsPayment()
     {
         var user = await NewUserAsync();

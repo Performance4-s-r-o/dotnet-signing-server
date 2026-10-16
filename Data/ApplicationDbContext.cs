@@ -18,6 +18,7 @@ namespace DotNetSigningServer.Data
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<Payment> Payments { get; set; }
         public DbSet<WebhookEvent> WebhookEvents { get; set; }
+        public DbSet<CreditGrant> CreditGrants { get; set; }
         public DbSet<StoredPdfTemplate> StoredPdfTemplates { get; set; }
         public DbSet<LegalDocument> LegalDocuments { get; set; }
         public DbSet<BackofficeOutboxItem> BackofficeOutboxItems { get; set; }
@@ -161,6 +162,16 @@ namespace DotNetSigningServer.Data
             modelBuilder.Entity<WebhookEvent>()
                 .HasIndex(w => w.EventId)
                 .IsUnique();
+
+            // The permanent once-only key of a payment (#79): claimed with ON CONFLICT DO NOTHING.
+            modelBuilder.Entity<CreditGrant>()
+                .HasIndex(g => g.GrantKey)
+                .IsUnique();
+
+            modelBuilder.Entity<CreditGrant>()
+                .HasIndex(g => g.PaymentIntentId)
+                .IsUnique()
+                .HasFilter("\"PaymentIntentId\" IS NOT NULL");
 
             // The dispatcher's claim filters by status and due time; cleanup and the
             // admin overview go by age.

@@ -95,6 +95,29 @@ public class BackofficeOptionsValidatorTests
         Assert.Contains(BackofficeOptionsValidator.Validate(options), p => p.Contains("Polling__Interval"));
     }
 
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(24, false)] // the service forgets the Idempotency-Key after 24 h
+    [InlineData(72, false)]
+    [InlineData(1, true)]
+    [InlineData(20, true)]
+    [InlineData(23, true)]
+    public void OutboxGiveUpAfter_MustStayUnderTheIdempotencyWindow(int hours, bool valid)
+    {
+        var options = Options();
+        options.Outbox.GiveUpAfter = TimeSpan.FromHours(hours);
+
+        var problems = BackofficeOptionsValidator.Validate(options);
+
+        Assert.Equal(valid, !problems.Any(p => p.Contains("Outbox__GiveUpAfter")));
+    }
+
+    [Fact]
+    public void OutboxGiveUpAfter_DefaultsTo20Hours()
+    {
+        Assert.Equal(TimeSpan.FromHours(20), new P4BackofficeProductOptions().Outbox.EffectiveGiveUpAfter);
+    }
+
     [Fact]
     public void PollingInterval_DefaultsToTheWebhookSetup()
     {

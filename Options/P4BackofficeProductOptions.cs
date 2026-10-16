@@ -50,6 +50,8 @@ public class P4BackofficeProductOptions
 
     public PollingOptions Polling { get; set; } = new();
 
+    public OutboxOptions Outbox { get; set; } = new();
+
     public ConsentsOptions Consents { get; set; } = new();
 
     public CookieWidgetOptions CookieWidget { get; set; } = new();
@@ -181,6 +183,19 @@ public class P4BackofficeProductOptions
 
         /// <summary>True when the webhook endpoint accepts deliveries (a secret is set).</summary>
         public bool Configured => !string.IsNullOrWhiteSpace(Secret);
+    }
+
+    public class OutboxOptions
+    {
+        /// <summary>
+        /// How long an item is retried after its first attempt before it is given up (Dead).
+        /// Empty = 20 h. Must stay under the 24 h the service keeps an <c>Idempotency-Key</c>,
+        /// or a late retry creates a second e-mail, ticket or consent batch (#79).
+        /// </summary>
+        public TimeSpan? GiveUpAfter { get; set; }
+
+        /// <summary>The give-up time actually used.</summary>
+        public TimeSpan EffectiveGiveUpAfter => GiveUpAfter ?? DotNetSigningServer.Services.Backoffice.Outbox.RetryPolicy.GiveUpAfter;
     }
 
     public class PollingOptions

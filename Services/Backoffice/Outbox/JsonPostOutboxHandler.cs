@@ -12,6 +12,9 @@ public abstract class JsonPostOutboxHandler : IOutboxHandler
 {
     public abstract string Kind { get; }
 
+    /// <inheritdoc />
+    public virtual bool ServiceDeduplicates => false;
+
     /// <summary>Endpoint relative to the service root, e.g. <c>v1/emails</c>.</summary>
     protected abstract string Path { get; }
 

@@ -171,4 +171,30 @@ public class ConsentReconciliationServiceTests
         Assert.Equal(0, differing);
         Assert.Empty(StatusRequests(status));
     }
+
+    [Fact]
+    public async Task Run_IsSkippedWhileAnotherInstanceHoldsTheLease()
+    {
+        var dbName = "consents-rec-" + Guid.NewGuid();
+        var status = new StubServiceHandler();
+        using var on = Host("On", dbName, status);
+        await ConsentTestHost.SignUpAsync(on, "leased@example.com");
+        await on.WithDbAsync(async db =>
+        {
+            await DotNetSigningServer.Services.Backoffice.BackofficeStateStore.SetAsync(db,
+                DotNetSigningServer.Services.Backoffice.BackofficeLease.KeyFor(ConsentReconciliationService.LeaseName), "other-instance", on.Time.Now);
+            return 0;
+        });
+
+        var skipped = await on.Services.GetRequiredService<ConsentReconciliationService>().RunIfDueAsync(CancellationToken.None);
+
+        Assert.Null(skipped);
+        Assert.Null(await on.WithDbAsync(db => DotNetSigningServer.Services.Backoffice.BackofficeStateStore.GetAsync(db, BackofficeStateKeys.ConsentsReconciledAt)));
+
+        // Expired (its holder died): this instance runs, and gives the lease back.
+        on.Time.Advance(ConsentReconciliationService.LeaseDuration);
+        Assert.Equal(0, await on.Services.GetRequiredService<ConsentReconciliationService>().RunIfDueAsync(CancellationToken.None));
+        Assert.Null(await on.WithDbAsync(db => DotNetSigningServer.Services.Backoffice.BackofficeStateStore.GetAsync(db,
+            DotNetSigningServer.Services.Backoffice.BackofficeLease.KeyFor(ConsentReconciliationService.LeaseName))));
+    }
 }

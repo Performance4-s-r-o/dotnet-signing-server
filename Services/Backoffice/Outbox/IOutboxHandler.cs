@@ -13,6 +13,13 @@ public interface IOutboxHandler
 {
     string Kind { get; }
 
+    /// <summary>
+    /// True when the service recognises a repeat of this kind by its content (a once-only key in
+    /// the payload), not only by <c>Idempotency-Key</c>, which it keeps 24 h. Only such kinds are
+    /// retried past <see cref="RetryPolicy.GiveUpAfter"/> (up to <see cref="RetryPolicy.DeduplicatedGiveUpAfter"/>).
+    /// </summary>
+    bool ServiceDeduplicates => false;
+
     Task<OutboxAttemptResult> SendAsync(OutboxRequest request, CancellationToken cancellationToken);
 }
 

@@ -109,7 +109,7 @@ public class BackofficeInboxProcessorTests
     }
 
     [Fact]
-    public async Task AfterMaxAttempts_ProcessingStops()
+    public async Task AfterMaxAttempts_ProcessingStops_AndTheItemIsDead()
     {
         var handler = new RecordingEventHandler(BackofficeEventTypes.EmailBounced) { Fail = _ => new Exception("down") };
         using var host = Host(handler);
@@ -125,6 +125,7 @@ public class BackofficeInboxProcessorTests
         var item = Assert.Single(await host.ItemsAsync());
         Assert.Null(item.ProcessedAt);
         Assert.Null(item.NextAttemptAt);
+        Assert.NotNull(item.DeadAt);
         Assert.Equal(BackofficeInboxProcessor.MaxAttempts, item.Attempts);
     }
 

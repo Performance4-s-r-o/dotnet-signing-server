@@ -94,7 +94,7 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
                     Currency = (purchase.Currency ?? "").ToUpperInvariant(),
                     Status = "succeeded",
                 });
-            }, cancellationToken);
+            }, cancellationToken, purchase.PaymentIntentId);
         if (!grantedNow) return;
         _logger.LogInformation("[billing] {EventId}: granted {Credits} credits to user {UserId}", evt.Id, purchase.Documents, user.Id);
     }
@@ -130,7 +130,7 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
                         Status = "succeeded",
                     });
                     return Task.CompletedTask;
-                }, cancellationToken))
+                }, cancellationToken, payment.PaymentIntentId))
         {
             _logger.LogInformation("[billing] {EventId}: granted {Credits} auto-recharge credits to user {UserId}",
                 evt.Id, payment.Documents, payment.UserId);

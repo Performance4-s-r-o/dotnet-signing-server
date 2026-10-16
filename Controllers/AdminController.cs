@@ -5,6 +5,7 @@ using DotNetSigningServer.Resources;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Services.Backoffice;
+using DotNetSigningServer.Services.Backoffice.Inbox;
 using DotNetSigningServer.Services.Backoffice.Outbox;
 using DotNetSigningServer.Services.Consents;
 using Microsoft.AspNetCore.Authorization;
@@ -80,6 +81,7 @@ public class AdminController : Controller
         ViewBag.Search = search;
         ViewBag.Backoffice = BackofficeStatus.From(_backofficeOptions.Value);
         ViewBag.Outbox = await ReadOutboxAsync();
+        ViewBag.InboxDead = await ReadInboxDeadAsync();
         return View(users);
     }
 
@@ -98,6 +100,38 @@ public class AdminController : Controller
             _logger.LogWarning(ex, "Backoffice outbox overview unavailable");
             return null;
         }
+    }
+
+    /// <summary>Dead backoffice events for the admin page; null when the table cannot be read.</summary>
+    private async Task<int?> ReadInboxDeadAsync()
+    {
+        try
+        {
+            return await BackofficeInboxProcessor.CountDeadAsync(_dbContext, HttpContext.RequestAborted);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Backoffice inbox overview unavailable");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Puts dead backoffice events (out of attempts) back in the queue once their cause is fixed —
+    /// e.g. a <c>billing.checkout.completed</c> whose credits were never granted (#79).
+    /// </summary>
+    [HttpPost("/Admin/Backoffice/Inbox/ReplayDead")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReplayDeadInbox()
+    {
+        var ids = await BackofficeInboxProcessor.ReplayDeadAsync(_dbContext, _time.GetUtcNow(), cancellationToken: HttpContext.RequestAborted);
+        AdminAudit.Record(_dbContext, User, null, AdminAudit.Actions.InboxReplay, new { count = ids.Count }, _time.GetUtcNow());
+        await _dbContext.SaveChangesAsync();
+        if (ids.Count > 0) HttpContext.RequestServices.GetService<BackofficeInboxSignal>()?.Notify();
+
+        _logger.LogInformation("Admin replayed {Count} dead backoffice inbox event(s)", ids.Count);
+        TempData["Info"] = string.Format(_localizer["AdminInboxReplayed"].Value, ids.Count);
+        return RedirectToAction(nameof(Index));
     }
 
     /// <summary>

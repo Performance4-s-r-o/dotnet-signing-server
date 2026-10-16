@@ -100,34 +100,27 @@ public class InboxPostgresTests : IClassFixture<OutboxPostgresFixture>
     }
 
     [DockerFact]
-    public async Task Polling_SkipsWhileAnotherInstanceHoldsTheLock_AndReleasesItsOwn()
+    public async Task Polling_SkipsWhileAnotherInstanceHoldsTheLease_AndReleasesItsOwn()
     {
         await ClearAsync();
         using var host = new InboxTestHost(_pg.Configure);
+        var leaseKey = BackofficeLease.KeyFor(BackofficePollingService.LeaseName);
         await host.WithDbAsync(async db =>
         {
             await BackofficeStateStore.SetAsync(db, BackofficeStateKeys.EventsCursor, "cur_1", host.Time.Now);
+            // Another instance is in the middle of a run (renewed just now).
+            await BackofficeStateStore.SetAsync(db, leaseKey, "other-instance", host.Time.Now);
             return 0;
         });
 
-        // Another instance is in the middle of a run.
-        await using (var other = new NpgsqlConnection(_pg.ConnectionString))
-        {
-            await other.OpenAsync();
-            await using (var take = new NpgsqlCommand($"SELECT pg_advisory_lock({BackofficePollingService.AdvisoryLockKey})", other))
-                await take.ExecuteNonQueryAsync();
+        var skipped = await host.Polling.PollOnceAsync(CancellationToken.None);
 
-            var skipped = await host.Polling.PollOnceAsync(CancellationToken.None);
+        Assert.True(skipped.Skipped);
+        Assert.Empty(host.Service.Requests);
+        Assert.Equal("cur_1", await host.CursorAsync());
 
-            Assert.True(skipped.Skipped);
-            Assert.Empty(host.Service.Requests);
-            Assert.Equal("cur_1", await host.CursorAsync());
-
-            await using var free = new NpgsqlCommand($"SELECT pg_advisory_unlock({BackofficePollingService.AdvisoryLockKey})", other);
-            await free.ExecuteNonQueryAsync();
-        }
-
-        // The other instance has finished: this one polls, and frees the lock after.
+        // The other instance died: once its lease has expired, this one polls, and gives its own lease back.
+        host.Time.Advance(BackofficePollingService.LeaseDuration);
         host.Service.Enqueue(System.Net.HttpStatusCode.OK,
             """{"data":[],"next_cursor":"cur_2","has_more":false,"window_clamped":false}""");
         var result = await host.Polling.PollOnceAsync(CancellationToken.None);
@@ -135,13 +128,50 @@ public class InboxPostgresTests : IClassFixture<OutboxPostgresFixture>
         Assert.False(result.Skipped);
         Assert.Equal(1, result.Pages);
         Assert.Equal("cur_2", await host.CursorAsync());
+        Assert.Null(await host.WithDbAsync(db => BackofficeStateStore.GetAsync(db, leaseKey)));
+    }
 
-        await using var probe = new NpgsqlConnection(_pg.ConnectionString);
-        await probe.OpenAsync();
-        await using var check = new NpgsqlCommand($"SELECT pg_try_advisory_lock({BackofficePollingService.AdvisoryLockKey})", probe);
-        Assert.True((bool)(await check.ExecuteScalarAsync())!);
-        await using var unlock = new NpgsqlCommand($"SELECT pg_advisory_unlock({BackofficePollingService.AdvisoryLockKey})", probe);
-        await unlock.ExecuteNonQueryAsync();
+    [DockerFact]
+    public async Task Lease_IsExclusive_AndTakenOverOnlyAfterExpiry()
+    {
+        await ClearAsync();
+        using var host = new InboxTestHost(_pg.Configure);
+        var now = host.Time.Now;
+        var duration = TimeSpan.FromMinutes(2);
+
+        await host.WithDbAsync(async db =>
+        {
+            Assert.True(await BackofficeLease.TryTakeAsync(db, "lease:t", "a", now, duration, default));
+            Assert.False(await BackofficeLease.TryTakeAsync(db, "lease:t", "b", now + TimeSpan.FromMinutes(1), duration, default));
+            Assert.True(await BackofficeLease.TryRenewAsync(db, "lease:t", "a", now + TimeSpan.FromMinutes(1), default));
+            Assert.False(await BackofficeLease.TryTakeAsync(db, "lease:t", "b", now + TimeSpan.FromMinutes(2), duration, default));
+            Assert.True(await BackofficeLease.TryTakeAsync(db, "lease:t", "b", now + TimeSpan.FromMinutes(3), duration, default));
+            Assert.False(await BackofficeLease.TryRenewAsync(db, "lease:t", "a", now + TimeSpan.FromMinutes(3), default));
+            await BackofficeLease.ReleaseAsync(db, "lease:t", "a", default); // not a's any more: no effect
+            Assert.False(await BackofficeLease.TryTakeAsync(db, "lease:t", "c", now + TimeSpan.FromMinutes(3), duration, default));
+            await BackofficeLease.ReleaseAsync(db, "lease:t", "b", default);
+            Assert.True(await BackofficeLease.TryTakeAsync(db, "lease:t", "c", now + TimeSpan.FromMinutes(3), duration, default));
+            return 0;
+        });
+    }
+
+    [DockerFact]
+    public async Task InboxClaim_TwoInstancesNeverGetTheSameItem()
+    {
+        await ClearAsync();
+        using var host = new InboxTestHost(_pg.Configure);
+        for (var i = 0; i < 30; i++) await host.AddAsync($"msg_{i:D2}", "price.scheduled");
+
+        await using var a = _pg.CreateContext();
+        await using var b = _pg.CreateContext();
+        var claims = await Task.WhenAll(
+            BackofficeInboxProcessor.ClaimDueAsync(a, host.Time.Now, default),
+            BackofficeInboxProcessor.ClaimDueAsync(b, host.Time.Now, default));
+
+        Assert.Equal(30, claims[0].Count + claims[1].Count);
+        Assert.Empty(claims[0].Intersect(claims[1]));
+        Assert.Empty(await BackofficeInboxProcessor.ClaimDueAsync(a, host.Time.Now, default));
+        Assert.Equal(30, (await BackofficeInboxProcessor.ClaimDueAsync(a, host.Time.Now + BackofficeInboxProcessor.ClaimDuration, default)).Count);
     }
 
     [DockerFact]

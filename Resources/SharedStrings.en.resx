@@ -670,6 +670,10 @@
   <data name="AdminOutboxBlockedHint" xml:space="preserve"><value>Blocked items were refused as unauthorised. Fix the API key or its scopes first, then put them back in the queue.</value></data>
   <data name="AdminOutboxRequeueBlocked" xml:space="preserve"><value>Requeue blocked items</value></data>
   <data name="AdminOutboxRequeued" xml:space="preserve"><value>{0} blocked item(s) put back in the queue.</value></data>
+  <data name="AdminInboxTitle" xml:space="preserve"><value>Backoffice events</value></data>
+  <data name="AdminInboxDeadHint" xml:space="preserve"><value>These events failed on every attempt and will not be processed on their own. An unprocessed payment means credits not granted. Fix the cause (see the "Backoffice inbox alert" log) and replay them — credits are granted only once.</value></data>
+  <data name="AdminInboxReplayDead" xml:space="preserve"><value>Replay dead events</value></data>
+  <data name="AdminInboxReplayed" xml:space="preserve"><value>{0} dead event(s) put back in the queue.</value></data>
   <data name="SignUpAcceptTermsDpa" xml:space="preserve"><value>I agree to the {0}.</value></data>
   <data name="SignUpPrivacyNotice" xml:space="preserve"><value>How we process your personal data is described in the {0}.</value></data>
   <data name="SignUpAcceptTermsRequired" xml:space="preserve"><value>Please agree to the terms to continue.</value></data>

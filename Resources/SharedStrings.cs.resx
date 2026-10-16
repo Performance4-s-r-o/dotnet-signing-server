@@ -670,6 +670,10 @@
   <data name="AdminOutboxBlockedHint" xml:space="preserve"><value>Blokované položky služba odmítla jako neautorizované. Nejdřív opravte API klíč nebo jeho oprávnění, pak je vraťte do fronty.</value></data>
   <data name="AdminOutboxRequeueBlocked" xml:space="preserve"><value>Znovu zařadit blokované</value></data>
   <data name="AdminOutboxRequeued" xml:space="preserve"><value>Do fronty vráceno {0} blokovaných položek.</value></data>
+  <data name="AdminInboxTitle" xml:space="preserve"><value>Události z backoffice</value></data>
+  <data name="AdminInboxDeadHint" xml:space="preserve"><value>Tyto události selhaly při každém pokusu a už se samy nezpracují. Nezpracovaná platba znamená nepřipsané kredity. Odstraňte příčinu (viz log „Backoffice inbox alert“) a zařaďte je znovu – kredity se připíšou jen jednou.</value></data>
+  <data name="AdminInboxReplayDead" xml:space="preserve"><value>Znovu zpracovat mrtvé události</value></data>
+  <data name="AdminInboxReplayed" xml:space="preserve"><value>Znovu zařazeno {0} mrtvých událostí.</value></data>
   <data name="SignUpAcceptTermsDpa" xml:space="preserve"><value>Souhlasím s dokumenty {0}.</value></data>
   <data name="SignUpPrivacyNotice" xml:space="preserve"><value>Jak zpracováváme vaše osobní údaje, popisuje dokument {0}.</value></data>
   <data name="SignUpAcceptTermsRequired" xml:space="preserve"><value>Pro pokračování je potřeba souhlasit s podmínkami.</value></data>

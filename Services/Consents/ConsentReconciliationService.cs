@@ -18,8 +18,9 @@ public sealed record RemoteDocumentConsent(string Document, string? LastAction, 
 /// <c>GET /v1/subjects/{ref}/consent-status</c> and logs differences as warnings. It only
 /// reports — the gate always reads the local records — and it never runs in a request.
 /// Users whose consent batch is still in the outbox are skipped; records never queued (made while
-/// Off and not yet backfilled) show up as missing in the service. On PostgreSQL one instance
-/// runs it at a time (session advisory lock); the last run is kept in <c>BackofficeStates</c>.
+/// Off and not yet backfilled) show up as missing in the service. One instance runs it at a time
+/// (lease <see cref="LeaseName"/> in <c>BackofficeStates</c>, which works through a transaction
+/// pooler, unlike the session advisory lock used before #79); the last run is kept there too.
 /// </summary>
 public sealed class ConsentReconciliationService : BackgroundService
 {
@@ -35,8 +36,11 @@ public sealed class ConsentReconciliationService : BackgroundService
     /// <summary>Safety stop for one run.</summary>
     public const int MaxSubjectsPerRun = 2000;
 
-    /// <summary>"P4BOCREC" as ASCII.</summary>
-    public const long AdvisoryLockKey = 0x5034_424F_4352_4543;
+    /// <summary>Lease that makes one run exclusive across instances (<c>lease:consents-reconcile</c>).</summary>
+    public const string LeaseName = "consents-reconcile";
+
+    /// <summary>A lease not renewed for this long is free again; renewed every third of it while the run lasts.</summary>
+    public static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(5);
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -95,33 +99,13 @@ public sealed class ConsentReconciliationService : BackgroundService
     /// <summary>Runs when the last run is older than <see cref="Interval"/>; returns the number of subjects with differences, or null when skipped.</summary>
     public async Task<int?> RunIfDueAsync(CancellationToken cancellationToken)
     {
+        await using var lease = await BackofficeLease.TryAcquireAsync(_scopes, LeaseName, LeaseDuration, _time, _logger, cancellationToken);
+        if (lease == null) return null;
+
         using var scope = _scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        if (!db.Database.IsNpgsql())
-        {
-            return await RunLockedAsync(db, cancellationToken);
-        }
-
-        await db.Database.OpenConnectionAsync(cancellationToken);
-        try
-        {
-            var locked = await db.Database.SqlQuery<bool>($"SELECT pg_try_advisory_lock({AdvisoryLockKey}) AS \"Value\"")
-                .SingleAsync(cancellationToken);
-            if (!locked) return null;
-            try
-            {
-                return await RunLockedAsync(db, cancellationToken);
-            }
-            finally
-            {
-                await db.Database.SqlQuery<bool>($"SELECT pg_advisory_unlock({AdvisoryLockKey}) AS \"Value\"")
-                    .SingleAsync(CancellationToken.None);
-            }
-        }
-        finally
-        {
-            await db.Database.CloseConnectionAsync();
-        }
+        using var run = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lease.Lost);
+        return await RunLockedAsync(db, run.Token);
     }
 
     private async Task<int?> RunLockedAsync(ApplicationDbContext db, CancellationToken cancellationToken)

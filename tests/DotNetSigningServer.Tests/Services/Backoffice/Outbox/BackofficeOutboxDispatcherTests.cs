@@ -86,9 +86,52 @@ public class BackofficeOutboxDispatcherTests
         var pending = await host.ItemAsync(id);
         Assert.Equal(BackofficeOutboxStatus.Pending, pending.Status);
         Assert.Equal(0, pending.Attempts);
+        Assert.Null(pending.FirstAttemptAt); // a fresh round
 
         await host.Processor.DispatchDueAsync(CancellationToken.None);
         Assert.Equal(BackofficeOutboxStatus.Sent, (await host.ItemAsync(id)).Status);
+    }
+
+    [Fact]
+    public async Task ConfiguredGiveUpAfter_EndsTheRetries()
+    {
+        var options = new DotNetSigningServer.Options.P4BackofficeProductOptions { Outbox = { GiveUpAfter = TimeSpan.FromHours(1) } };
+        using var host = new OutboxTestHost(configure: s => s.AddSingleton(Microsoft.Extensions.Options.Options.Create(options)));
+        var id = await host.EnqueueAsync(new { n = 1 });
+        var started = host.Time.Now;
+
+        for (var i = 0; i < 20 && (await host.ItemAsync(id)).Status == BackofficeOutboxStatus.Pending; i++)
+        {
+            host.Service.EnqueueProblem(HttpStatusCode.ServiceUnavailable, "unavailable");
+            await host.Processor.DispatchDueAsync(CancellationToken.None);
+            var item = await host.ItemAsync(id);
+            if (item.Status == BackofficeOutboxStatus.Pending) host.Time.Now = item.NextAttemptAt;
+        }
+
+        // 5 s, 30 s, 2 min, 10 min, 30 min: the sixth attempt (42 min in) would be followed by one at 1 h 42 min.
+        var dead = await host.ItemAsync(id);
+        Assert.Equal(BackofficeOutboxStatus.Dead, dead.Status);
+        Assert.Equal(6, host.Service.Requests.Count);
+        Assert.True(host.Time.Now - started < TimeSpan.FromHours(1));
+        Assert.Equal(started, dead.FirstAttemptAt);
+    }
+
+    [Fact]
+    public void GiveUpAfter_IsLongerOnlyForKindsTheServiceDeduplicates()
+    {
+        using var host = new OutboxTestHost(configure: s => s.AddSingleton<IOutboxHandler, DeduplicatedTestHandler>());
+
+        Assert.Equal(TimeSpan.FromHours(20), host.Processor.GiveUpAfterFor(TestOutboxHandler.TestKind));
+        Assert.Equal(TimeSpan.FromHours(72), host.Processor.GiveUpAfterFor(DeduplicatedTestHandler.DedupKind));
+        Assert.Equal(TimeSpan.FromHours(20), host.Processor.GiveUpAfterFor("unknown"));
+    }
+
+    private sealed class DeduplicatedTestHandler : JsonPostOutboxHandler
+    {
+        public const string DedupKind = "test.dedup";
+        public override string Kind => DedupKind;
+        public override bool ServiceDeduplicates => true;
+        protected override string Path => "v1/test";
     }
 
     [Fact]
