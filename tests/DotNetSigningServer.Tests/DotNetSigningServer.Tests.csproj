@@ -21,7 +21,7 @@
     <!-- Tests start PostgreSQL containers themselves; the app no longer brings Testcontainers in Release (#84). -->
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.10.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.19" />
-    <PackageReference Include="coverlet.collector" Version="10.0.1">
+    <PackageReference Include="coverlet.collector" Version="10.1.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
