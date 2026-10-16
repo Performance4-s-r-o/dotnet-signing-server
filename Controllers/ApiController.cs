@@ -302,9 +302,20 @@ namespace DotNetSigningServer.Controllers
                     new { message = Localizer[globalLimit ? "ServerAtCapacity" : "TooManyRequests"].Value, retryAfter = 10 });
             }
 
+            // The portal holds one account for every tenant (#78): an operation started for one tenant
+            // is neither replayed nor continued for another — checked before anything is reserved.
+            var callerTenant = PortalTrust.CallerOf(HttpContext).TenantId;
+            var prior = presignId != null
+                ? await Operations.FindByPresignAsync(presignId, HttpContext.RequestAborted)
+                : clientKey != null ? await Operations.FindAsync(user.Id, clientKey, HttpContext.RequestAborted) : null;
+            if (prior != null && prior.UserId == user.Id && PortalTrust.TenantsConflict(prior.TenantId, callerTenant))
+            {
+                return TenantMismatch(prior.OperationId);
+            }
+
             var tier = HttpContext.Items[DotNetSigningServer.Middleware.UserConcurrencyMiddleware.TierItemKey] is int t ? t : 1;
             var begin = await Operations.BeginAsync(
-                new OperationRequest(user.Id, user.IsEnterprise, operation, clientKey, fingerprint, baseCost, tier, presignId),
+                new OperationRequest(user.Id, user.IsEnterprise, operation, clientKey, fingerprint, baseCost, tier, presignId, callerTenant),
                 HttpContext.RequestAborted);
             var op = begin.Operation;
             if (!string.IsNullOrEmpty(op.OperationId)) Response.Headers[OperationIdHeader] = op.OperationId;
@@ -469,6 +480,17 @@ namespace DotNetSigningServer.Controllers
                 });
             }
             return Ok(result.Body);
+        }
+
+        public const string TenantMismatchCode = "TENANT_MISMATCH";
+
+        /// <summary>403 for a presign or operation of another tenant (#78). Logs ids only.</summary>
+        protected IActionResult TenantMismatch(string? reference)
+        {
+            Logger.LogWarning(Logging.LoggingEvents.AuthFailed,
+                "Refused {Reference}: it belongs to another tenant than X-P4-Tenant of this call", reference);
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { code = TenantMismatchCode, message = Localizer[$"Error_{TenantMismatchCode}"].Value });
         }
 
         /// <summary>

@@ -256,7 +256,7 @@ public class ApiGateMiddlewareTests : IDisposable
 
     // cloudflared in the Docker network is a configured trusted proxy (#106).
     private static readonly IServiceProvider TrustedTunnel = new ServiceCollection()
-        .AddSingleton(TrustedProxies.Parse("172.18.0.5"))
+        .AddSingleton(new ClientIpTrust(TrustedProxies.Parse("172.18.0.5"), TrustedProxies.None))
         .BuildServiceProvider();
 
     private static HttpContext Request(string path, string ip, Guid? user = null, string method = "POST")

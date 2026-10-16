@@ -11,6 +11,14 @@ namespace dotnetsigningserver.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<string>(
+                name: "TenantId",
+                schema: "dotnet_signing",
+                table: "ApiOperations",
+                type: "character varying(64)",
+                maxLength: 64,
+                nullable: true);
+
+            migrationBuilder.AddColumn<string>(
                 name: "RequestId",
                 schema: "dotnet_signing",
                 table: "UsageRecords",
@@ -46,6 +54,11 @@ namespace dotnetsigningserver.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropColumn(
+                name: "TenantId",
+                schema: "dotnet_signing",
+                table: "ApiOperations");
+
             migrationBuilder.DropColumn(
                 name: "RequestId",
                 schema: "dotnet_signing",

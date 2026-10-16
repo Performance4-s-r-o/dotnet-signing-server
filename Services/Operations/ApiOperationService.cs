@@ -24,7 +24,8 @@ public sealed record OperationRequest(
     string Fingerprint,
     int BaseCost,
     int Tier,
-    string? PresignId = null);
+    string? PresignId = null,
+    string? TenantId = null);
 
 public enum OperationStart
 {
@@ -212,6 +213,7 @@ public class ApiOperationService
             Operation = request.Operation,
             RequestFingerprint = request.Fingerprint,
             PresignId = request.PresignId,
+            TenantId = request.TenantId,
             State = ApiOperationState.Pending,
             BaseCost = request.BaseCost,
             Tier = request.Tier,

@@ -57,6 +57,11 @@ namespace DotNetSigningServer.Controllers
             {
                 return NotFound(new { code = "OPERATION_NOT_FOUND", message = Localizer["Error_OPERATION_NOT_FOUND"].Value });
             }
+            // Another tenant's operation (#78): the portal's one account sees every tenant's keys.
+            if (PortalTrust.TenantsConflict(op.TenantId, PortalTrust.CallerOf(HttpContext).TenantId))
+            {
+                return TenantMismatch(op.OperationId);
+            }
 
             return Ok(new
             {

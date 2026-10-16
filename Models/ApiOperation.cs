@@ -110,6 +110,13 @@ public class ApiOperation
     /// <summary>When <see cref="ResultProtected"/> is purged. The row itself lives longer, for state queries.</summary>
     public DateTimeOffset? ResultExpiresAt { get; set; }
 
+    /// <summary>
+    /// The portal's tenant that started it (<c>X-P4-Tenant</c>, #78). The portal holds one account
+    /// for every tenant: a replay or a state read for another tenant is refused. Null for other callers.
+    /// </summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(64)]
+    public string? TenantId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;

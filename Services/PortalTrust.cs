@@ -57,6 +57,13 @@ public static class PortalTrust
             Clean(context.Request.Headers[RequestIdHeader].ToString(), MaxRequestIdLength));
     }
 
+    /// <summary>
+    /// Two tenants that are both known and differ (#78). One side unknown (an older row, a caller
+    /// that is not the portal) is not a conflict: there is nothing to compare.
+    /// </summary>
+    public static bool TenantsConflict(string? recorded, string? caller) =>
+        recorded != null && caller != null && !string.Equals(recorded, caller, StringComparison.Ordinal);
+
     /// <summary>A value from a safe alphabet within the length, or null: it goes into logs and columns.</summary>
     internal static string? Clean(string? raw, int maxLength)
     {

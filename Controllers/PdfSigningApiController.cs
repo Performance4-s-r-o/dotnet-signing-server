@@ -24,7 +24,6 @@ namespace DotNetSigningServer.Controllers
         internal const string AttachmentDebitBypassHeader = "X-P4PDF-Attachment-Billing-Bypass";
         /// <summary>The name the portal sent before #78; accepted until every portal sends the one above.</summary>
         internal const string LegacyAttachmentDebitBypassHeader = "X-P4SPS-Attachment-Billing-Bypass";
-        internal const string TenantMismatchCode = "TENANT_MISMATCH";
         private const string SigningDataNotFoundCode = "SIGNING_DATA_NOT_FOUND";
 
         public PdfSigningApiController(
@@ -214,13 +213,17 @@ namespace DotNetSigningServer.Controllers
 
             // The portal holds one account for every tenant (#78): the owner check above cannot tell
             // one tenant's presign from another's. A presign made for a tenant is signed for that
-            // tenant only; one made without (older presigns, other callers) is not checked.
-            if (presign?.TenantId != null && !string.Equals(presign.TenantId, PortalTrust.CallerOf(HttpContext).TenantId, StringComparison.Ordinal))
+            // tenant only; one made without (older presigns, other callers) is not checked. Once the
+            // signature is done the presign is gone and the operation carries the tenant: a replay
+            // for another tenant is refused too.
+            var callerTenant = PortalTrust.CallerOf(HttpContext).TenantId;
+            if (presign?.TenantId != null && !string.Equals(presign.TenantId, callerTenant, StringComparison.Ordinal))
             {
-                Logger.LogWarning(Logging.LoggingEvents.AuthFailed,
-                    "Sign refused for presign {PresignId}: tenant does not match the presign's", input.Id);
-                return StatusCode(StatusCodes.Status403Forbidden,
-                    new { code = TenantMismatchCode, message = Localizer[$"Error_{TenantMismatchCode}"].Value });
+                return TenantMismatch($"presign {input.Id}");
+            }
+            if (existing != null && PortalTrust.TenantsConflict(existing.TenantId, callerTenant))
+            {
+                return TenantMismatch($"presign {input.Id}");
             }
 
             // The presign is NOT deleted before the work any more (#77): the operation row,

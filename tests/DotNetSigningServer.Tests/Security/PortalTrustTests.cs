@@ -338,6 +338,62 @@ public class PortalTrustTests : IDisposable
         Assert.NotEqual("TENANT_MISMATCH", CodeOf(result));
     }
 
+    private async Task<ApiOperation> CompletedSignForAsync(string tenant)
+    {
+        await PortalUserInDbAsync();
+        // A completed signature: the presign is gone, the operation remembers the tenant.
+        var op = new ApiOperation
+        {
+            UserId = PortalUserId, OperationId = "op-1", ClientKey = true, Operation = "sign",
+            PresignId = Guid.NewGuid().ToString(), State = ApiOperationState.Completed, TenantId = tenant,
+        };
+        _db.ApiOperations.Add(op);
+        await _db.SaveChangesAsync();
+        return op;
+    }
+
+    [Fact]
+    public async Task Replay_of_a_completed_sign_for_another_tenant_is_refused()
+    {
+        var op = await CompletedSignForAsync("tenant-a");
+        var result = await Controller(CallerContext(trusted: true, tenant: "tenant-b")).Sign(new SignInput { Id = op.PresignId! });
+        Assert.Equal(StatusCodes.Status403Forbidden, Assert.IsAssignableFrom<ObjectResult>(result).StatusCode);
+        Assert.Equal("TENANT_MISMATCH", CodeOf(result));
+    }
+
+    [Fact]
+    public async Task Replay_of_a_completed_sign_for_the_same_tenant_passes_the_check()
+    {
+        var op = await CompletedSignForAsync("tenant-a");
+        var result = await Controller(CallerContext(trusted: true, tenant: "tenant-a")).Sign(new SignInput { Id = op.PresignId! });
+        Assert.NotEqual("TENANT_MISMATCH", CodeOf(result));
+    }
+
+    private ApiOperationsController OperationsController(HttpContext context)
+    {
+        Controller(context); // the same request services
+        var localizer = new Mock<IStringLocalizer<SharedStrings>>();
+        localizer.Setup(l => l[It.IsAny<string>()]).Returns((string name) => new LocalizedString(name, name));
+        return new ApiOperationsController(
+            _db, Mock.Of<IApiAuthService>(), NullLogger<ApiOperationsController>.Instance,
+            new ContentLimitGuard(Microsoft.Extensions.Options.Options.Create(new LimitsOptions())),
+            Microsoft.Extensions.Options.Options.Create(new BillingOptions()),
+            TestHelpers.CreateMockEnvironment("Testing"), null!, localizer.Object)
+        {
+            ControllerContext = new ControllerContext { HttpContext = context },
+        };
+    }
+
+    [Theory]
+    [InlineData("tenant-b", StatusCodes.Status403Forbidden)]
+    [InlineData("tenant-a", StatusCodes.Status200OK)]
+    public async Task Operation_state_of_another_tenant_is_refused(string callerTenant, int expected)
+    {
+        await CompletedSignForAsync("tenant-a");
+        var result = await OperationsController(CallerContext(trusted: true, tenant: callerTenant)).GetOperation("op-1");
+        Assert.Equal(expected, Assert.IsAssignableFrom<ObjectResult>(result).StatusCode);
+    }
+
     // ── Billing bypass ──────────────────────────────────────────────────────────────────────────
 
     private const string BypassKey = "bypass-key-for-tests";
@@ -381,7 +437,9 @@ public class PortalTrustTests : IDisposable
 
     // ── Client IP behind Cloudflare (#78 A4, #106) ──────────────────────────────────────────────
 
-    private static readonly TrustedProxies Tunnel = TrustedProxies.Parse("172.18.0.5", "10.0.1.0/24");
+    // cloudflared at 172.18.0.5 or in 10.0.1.0/24; Traefik at 172.18.0.2.
+    private static readonly ClientIpTrust Tunnel = new(
+        TrustedProxies.Parse("172.18.0.5", "10.0.1.0/24"), TrustedProxies.Parse("172.18.0.2"));
 
     private static DefaultHttpContext FromPeer(string peer, string? cf)
     {
@@ -403,6 +461,85 @@ public class PortalTrustTests : IDisposable
     {
         // Caddy, another container, anything in the Docker network that is not the tunnel.
         Assert.Equal(IPAddress.Parse("172.18.0.99"), ClientIp.AddressOf(FromPeer("172.18.0.99", "203.0.113.7"), Tunnel));
+    }
+
+    [Fact]
+    public void A_reverse_proxy_alone_does_not_vouch_for_CF_Connecting_IP()
+    {
+        // Traefik forwards whatever reached it, tunnel or not: from it, the header counts only when
+        // the request it forwards came from cloudflared.
+        var context = FromPeer("172.18.0.2", "203.0.113.7");
+        Assert.Equal(IPAddress.Parse("172.18.0.2"), ClientIp.AddressOf(context, Tunnel));
+    }
+
+    [Fact]
+    public async Task Through_the_reverse_proxy_a_request_from_cloudflared_is_believed()
+    {
+        var context = FromPeer("172.18.0.2", "203.0.113.7");
+        await ClientIp.CaptureSocketPeer(context, () =>
+        {
+            // UseForwardedHeaders applied Traefik's X-Forwarded-For: the request came from cloudflared.
+            context.Connection.RemoteIpAddress = IPAddress.Parse("172.18.0.5");
+            return Task.CompletedTask;
+        });
+        Assert.Equal(IPAddress.Parse("203.0.113.7"), ClientIp.AddressOf(context, Tunnel));
+    }
+
+    [Fact]
+    public async Task Through_the_reverse_proxy_a_request_from_elsewhere_is_not_believed()
+    {
+        var context = FromPeer("172.18.0.2", "203.0.113.7");
+        await ClientIp.CaptureSocketPeer(context, () =>
+        {
+            context.Connection.RemoteIpAddress = IPAddress.Parse("198.51.100.1");
+            return Task.CompletedTask;
+        });
+        Assert.Equal(IPAddress.Parse("198.51.100.1"), ClientIp.AddressOf(context, Tunnel));
+    }
+
+    [Fact]
+    public void Empty_TRUSTED_CF_PROXIES_ignores_the_header()
+    {
+        var trust = ClientIpTrust.From(Config(("TRUSTED_CF_PROXIES", ""), ("TRUSTED_PROXIES", "172.18.0.5")));
+        Assert.Equal(IPAddress.Parse("172.18.0.5"), ClientIp.AddressOf(FromPeer("172.18.0.5", "203.0.113.7"), trust));
+    }
+
+    private static Microsoft.AspNetCore.Builder.ForwardedHeadersOptions Forwarded(string? proxies, string? networks = null, string? known = null)
+    {
+        var options = new Microsoft.AspNetCore.Builder.ForwardedHeadersOptions();
+        ClientIpTrust.ApplyTo(options, TrustedProxies.Parse(proxies), networks, known);
+        return options;
+    }
+
+    [Fact]
+    public void TRUSTED_PROXIES_none_trusts_no_X_Forwarded_For_at_all()
+    {
+        var options = Forwarded("none");
+        Assert.Empty(options.KnownNetworks);
+        Assert.Empty(options.KnownProxies);
+    }
+
+    [Fact]
+    public void TRUSTED_PROXIES_is_what_X_Forwarded_For_is_accepted_from()
+    {
+        var options = Forwarded("172.18.0.2, 10.9.0.0/16");
+        Assert.Equal(new[] { IPAddress.Parse("172.18.0.2") }, options.KnownProxies);
+        Assert.Single(options.KnownNetworks);
+    }
+
+    [Fact]
+    public void Unset_TRUSTED_PROXIES_keeps_the_private_range_default()
+    {
+        var options = Forwarded(null);
+        Assert.Contains(options.KnownNetworks, n => n.Prefix.Equals(IPAddress.Parse("172.16.0.0")) && n.PrefixLength == 12);
+    }
+
+    [Fact]
+    public void An_explicit_ForwardedHeaders_list_wins()
+    {
+        var options = Forwarded("none", networks: "10.1.0.0/16", known: "172.18.0.9");
+        Assert.Equal(new[] { IPAddress.Parse("172.18.0.9") }, options.KnownProxies);
+        Assert.Single(options.KnownNetworks);
     }
 
     [Fact]

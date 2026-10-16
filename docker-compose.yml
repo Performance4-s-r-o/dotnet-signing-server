@@ -40,10 +40,12 @@ services:
       # (startup fails without it). Only this account's token, on the internal port, may skip the
       # attachment debit and have its X-P4-Tenant / X-Request-Id believed.
       - PORTAL_USER_IDS=${PORTAL_USER_IDS:-{{project.DOTNET_PORTAL_USER_IDS}}}
-      # Addresses / CIDRs of cloudflared and the reverse proxy (#106). CF-Connecting-IP (and, unless
-      # ForwardedHeaders__* is set, X-Forwarded-For) is believed only from these peers. Production
-      # refuses to start while empty — behind the tunnel every visitor would share one IP limit;
-      # `none` = no proxy in front (on purpose).
+      # #106, two lists. TRUSTED_CF_PROXIES = address / CIDR of cloudflared: CF-Connecting-IP is the
+      # client only when the request came from it (directly, or through a TRUSTED_PROXIES proxy).
+      # Production refuses to start while empty (every visitor would share the tunnel's IP limit);
+      # `none` = no tunnel in front. TRUSTED_PROXIES = the reverse proxy (Traefik): whose
+      # X-Forwarded-For is believed. Empty = the private ranges (as before), `none` = nobody's.
+      - TRUSTED_CF_PROXIES=${TRUSTED_CF_PROXIES:-{{project.DOTNET_TRUSTED_CF_PROXIES}}}
       - TRUSTED_PROXIES=${TRUSTED_PROXIES:-{{project.DOTNET_TRUSTED_PROXIES}}}
       - AllowedHosts=${ALLOWED_HOSTS:-*}
       - UseLocalDb=false

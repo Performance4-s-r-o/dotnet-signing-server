@@ -133,6 +133,10 @@ namespace dotnetsigningserver.Migrations
                         .HasMaxLength(24)
                         .HasColumnType("character varying(24)");
 
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<int>("Tier")
                         .HasColumnType("integer");
 

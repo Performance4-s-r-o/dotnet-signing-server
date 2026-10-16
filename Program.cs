@@ -61,13 +61,11 @@ else if (builder.Environment.IsProduction())
         $"{dataProtectionPath}. Set DataProtection__CertificateBase64 (+ __CertificatePassword) " +
         "to encrypt it — the ring also protects stored TSA credentials.");
 }
-// #106: CF-Connecting-IP is believed only from these peers (cloudflared, the reverse proxy).
-// An explicit ForwardedHeaders list counts too; the private-range default below never does.
-var trustedProxies = TrustedProxies.Parse(
-    builder.Configuration[TrustedProxies.Variable],
-    builder.Configuration["ForwardedHeaders:KnownProxies"],
-    builder.Configuration["ForwardedHeaders:KnownNetworks"]);
-builder.Services.AddSingleton(trustedProxies);
+// #106: who may name the client. CF-Connecting-IP only from cloudflared (TRUSTED_CF_PROXIES),
+// X-Forwarded-For only from the reverse proxy (TRUSTED_PROXIES, or an explicit ForwardedHeaders
+// list; `none` = from nobody; unset = the private ranges, as before).
+var clientIpTrust = ClientIpTrust.From(builder.Configuration);
+builder.Services.AddSingleton(clientIpTrust);
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -77,62 +75,13 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
         ForwardedHeaders.XForwardedHost;
     options.ForwardLimit = 1; // Only trust the immediate reverse proxy
 
-    // The container runs behind a reverse proxy on a Docker bridge network, so
-    // the proxy is never on 127.0.0.1. By default ASP.NET ignores forwarded
-    // headers from non-loopback IPs and Request.Host stays the internal
-    // container address — which breaks the CORS allow-list (it falls back to
-    // the request's own host) and produces 403s on same-origin browser calls.
-    //
-    // We must therefore widen the trusted set, but NOT to "everything":
-    // X-Forwarded-For drives the per-token IP whitelist, so a directly reachable
-    // container would let a caller spoof a whitelisted IP. Trust only the private
-    // ranges the reverse proxy actually lives in, or an explicit operator list.
-    options.KnownNetworks.Clear();
-    options.KnownProxies.Clear();
-
-    var configuredNetworks = builder.Configuration["ForwardedHeaders:KnownNetworks"];
-    var configuredProxies = builder.Configuration["ForwardedHeaders:KnownProxies"];
-
-    if (!string.IsNullOrWhiteSpace(configuredNetworks) || !string.IsNullOrWhiteSpace(configuredProxies))
-    {
-        foreach (var entry in SplitConfigList(configuredNetworks))
-        {
-            var parts = entry.Split('/', 2);
-            if (System.Net.IPAddress.TryParse(parts[0], out var prefix)
-                && parts.Length == 2
-                && int.TryParse(parts[1], out var prefixLength))
-            {
-                options.KnownNetworks.Add(new IPNetwork(prefix, prefixLength));
-            }
-        }
-
-        foreach (var entry in SplitConfigList(configuredProxies))
-        {
-            if (System.Net.IPAddress.TryParse(entry, out var proxy))
-            {
-                options.KnownProxies.Add(proxy);
-            }
-        }
-    }
-    else if (!trustedProxies.IsEmpty)
-    {
-        // #106: the same peers that may name the client in CF-Connecting-IP may in X-Forwarded-For.
-        // Trusting every private range would let any container in the network write either.
-        foreach (var address in trustedProxies.Addresses) options.KnownProxies.Add(address);
-        foreach (var network in trustedProxies.Networks) options.KnownNetworks.Add(network);
-    }
-    else
-    {
-        // Default: Docker/Kubernetes private ranges + loopback. Covers every
-        // documented deployment (reverse proxy on a bridge network) while
-        // rejecting forwarded headers from a directly exposed container.
-        options.KnownNetworks.Add(new IPNetwork(System.Net.IPAddress.Parse("10.0.0.0"), 8));
-        options.KnownNetworks.Add(new IPNetwork(System.Net.IPAddress.Parse("172.16.0.0"), 12));
-        options.KnownNetworks.Add(new IPNetwork(System.Net.IPAddress.Parse("192.168.0.0"), 16));
-        options.KnownNetworks.Add(new IPNetwork(System.Net.IPAddress.Parse("127.0.0.0"), 8));
-        options.KnownNetworks.Add(new IPNetwork(System.Net.IPAddress.Parse("::1"), 128));
-        options.KnownNetworks.Add(new IPNetwork(System.Net.IPAddress.Parse("fc00::"), 7));
-    }
+    // The container runs behind a reverse proxy on a Docker bridge network, so the proxy is never
+    // on 127.0.0.1, and Request.Host must come from it (the CORS allow-list falls back to it). But
+    // X-Forwarded-For drives the per-token IP whitelist and the rate limits, so the trusted set is
+    // the configured reverse proxy, not everything (see ClientIpTrust.ApplyTo).
+    ClientIpTrust.ApplyTo(options, clientIpTrust.Proxies,
+        builder.Configuration["ForwardedHeaders:KnownNetworks"],
+        builder.Configuration["ForwardedHeaders:KnownProxies"]);
 });
 
 // #78: the portal's token only on the internal listener, its tenant headers only from there.
@@ -146,13 +95,6 @@ if (portalTrust.InternalPort is int internalPort)
     builder.WebHost.UseUrls(PortalTrustOptions.WithInternalListener(
         builder.Configuration[Microsoft.AspNetCore.Hosting.WebHostDefaults.ServerUrlsKey], internalPort));
 }
-
-static IEnumerable<string> SplitConfigList(string? raw) =>
-    string.IsNullOrWhiteSpace(raw)
-        ? Enumerable.Empty<string>()
-        : raw.Split(new[] { ',', ';', ' ', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
-             .Select(e => e.Trim())
-             .Where(e => e.Length > 0);
 
 // NOTE: Don't set ResourcesPath — SharedStrings.cs lives in DotNetSigningServer.Resources
 // namespace, so the default baseName "{RootNamespace}.{TypeFullName-without-rootNS}" =
@@ -495,15 +437,15 @@ if (!migrateOnly && app.Environment.IsProduction()
         + "Set CORS_ALLOWED_ORIGINS (Cors__AllowedOrigins) to the sites that use browser tokens.");
 }
 
-// #106: without a trusted proxy CF-Connecting-IP is ignored, and behind the tunnel every
-// visitor then has the tunnel's address — one sign-in limit (20 per 10 min) for everybody.
-// That breaks sign-in rather than degrading it, so production refuses to start; a host with
-// no proxy in front says so with TRUSTED_PROXIES=none.
-if (!migrateOnly && app.Environment.IsProduction() && trustedProxies.IsEmpty && !trustedProxies.DeclaredNone)
+// #106: without cloudflared in TRUSTED_CF_PROXIES the CF-Connecting-IP header is ignored, and
+// behind the tunnel every visitor then has the tunnel's address — one sign-in limit (20 per
+// 10 min) for everybody. That breaks sign-in rather than degrading it, so production refuses to
+// start; a host with no tunnel in front says so with TRUSTED_CF_PROXIES=none.
+if (!migrateOnly && app.Environment.IsProduction() && clientIpTrust.Cloudflare.IsEmpty && !clientIpTrust.Cloudflare.DeclaredNone)
 {
     throw new InvalidOperationException(
-        "TRUSTED_PROXIES is empty: behind Cloudflare every client would share the tunnel's address and its rate limits. "
-        + "Set it to the addresses / CIDRs of cloudflared and the reverse proxy, or to 'none' when no proxy is in front.");
+        "TRUSTED_CF_PROXIES is empty: behind Cloudflare every client would share the tunnel's address and its rate limits. "
+        + "Set it to the address / CIDR of cloudflared, or to 'none' when no tunnel is in front.");
 }
 
 if (postgresContainer != null)
