@@ -80,10 +80,11 @@ public class AccountSecurityTests
         Assert.Null(user.EmailOtpCode);
         Assert.Null(user.LoginChallengeHash);
 
-        // The right code no longer helps.
+        // The right code no longer helps (refused as void, or by the attempt window).
         var after = WithChallenge(db, challenge);
-        await after.TwoFactorPost("123456");
-        Assert.Equal("VerificationCodeInvalid", after.TempData["Error"]);
+        var result = await after.TwoFactorPost("123456");
+        Assert.Contains(after.TempData["Error"] as string, new[] { "VerificationCodeInvalid", "TooManyVerificationAttempts" });
+        Assert.Equal("SignIn", Assert.IsType<Microsoft.AspNetCore.Mvc.RedirectToActionResult>(result).ActionName);
     }
 
     [Fact]
@@ -102,7 +103,7 @@ public class AccountSecurityTests
         var (db, user) = await SeedAsync("123456", null);
         var stamp = user.UpdatedAt;
 
-        var c = SignInRateLimitTests.Controller(db);
+        var c = SignInRateLimitTests.Controller(db, app: new DotNetSigningServer.Options.AppOptions { FqdnServerName = "https://sign.example.test" });
         await c.ForgotPassword(new ForgotPasswordViewModel { Email = user.Email });
 
         await db.Entry(user).ReloadAsync();

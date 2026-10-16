@@ -22,14 +22,14 @@ namespace DotNetSigningServer.Tests.Services;
 /// </summary>
 public class SignInRateLimitTests
 {
-    internal static AccountController Controller(DotNetSigningServer.Data.ApplicationDbContext? db = null, string? ip = null)
+    internal static AccountController Controller(DotNetSigningServer.Data.ApplicationDbContext? db = null, string? ip = null, AppOptions? app = null)
     {
         db ??= TestHelpers.CreateInMemoryDbContext();
         var controller = new AccountController(
             db,
             new AuthService(),
             Mock.Of<ITemplatedEmailSender>(),
-            TestHelpers.WrapOptions(new AppOptions()),
+            TestHelpers.WrapOptions(app ?? new AppOptions()),
             new StringLocalizer<SharedStrings>(new KeyEchoLocalizerFactory()),
             new AuthAttemptLimiter(db),
             TestHelpers.WrapOptions(new SessionSecurityOptions()));
