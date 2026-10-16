@@ -75,7 +75,7 @@ public class RequestThrottlingMiddleware
             return $"user:{userId}";
         }
 
-        var ip = context.Connection.RemoteIpAddress?.ToString();
+        var ip = ClientIp.AddressOf(context)?.ToString();
         return !string.IsNullOrWhiteSpace(ip) ? $"ip:{ip}" : "anonymous";
     }
 }

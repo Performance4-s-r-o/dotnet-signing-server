@@ -24,7 +24,8 @@ public sealed record OperationRequest(
     string Fingerprint,
     int BaseCost,
     int Tier,
-    string? PresignId = null);
+    string? PresignId = null,
+    string? TenantId = null);
 
 public enum OperationStart
 {
@@ -212,6 +213,7 @@ public class ApiOperationService
             Operation = request.Operation,
             RequestFingerprint = request.Fingerprint,
             PresignId = request.PresignId,
+            TenantId = request.TenantId,
             State = ApiOperationState.Pending,
             BaseCost = request.BaseCost,
             Tier = request.Tier,
@@ -322,7 +324,8 @@ public class ApiOperationService
     /// False when this attempt no longer owns the operation (its lease expired and the credits
     /// went back) — then the result must not be delivered.
     /// </summary>
-    public Task<bool> CompleteAsync(ApiOperation op, int attempt, StoredResult? result)
+    /// <param name="caller">Tenant and request id of a portal call (#78), written on the usage record.</param>
+    public Task<bool> CompleteAsync(ApiOperation op, int attempt, StoredResult? result, PortalCaller? caller = null)
     {
         var body = result == null ? null : ProtectorFor(op).Protect(result.Json);
         var headers = result?.PdfHeaders is { Count: > 0 } ? JsonSerializer.Serialize(result.PdfHeaders) : null;
@@ -371,6 +374,8 @@ public class ApiOperationService
                     BaseCost = op.BaseCost,
                     Tier = op.Tier,
                     Operation = op.Operation,
+                    TenantId = caller?.TenantId,
+                    RequestId = caller?.RequestId,
                     CreatedAt = now,
                 };
                 _db.UsageRecords.Add(usage);

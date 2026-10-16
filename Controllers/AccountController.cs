@@ -1073,13 +1073,11 @@ public class AccountController : Controller
         return choices;
     }
 
-    /// <summary>End user's IP (after the forwarded headers); sent to the service only for the DPA, which stores it truncated.</summary>
-    private string? ClientIp()
-    {
-        var ip = HttpContext.Connection.RemoteIpAddress;
-        if (ip is null) return null;
-        return (ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4() : ip).ToString();
-    }
+    /// <summary>
+    /// End user's IP for the consent evidence; sent to the service only for the DPA, which stores it
+    /// truncated. The same helper as the rate limits (#78): behind Cloudflare the client, not the tunnel.
+    /// </summary>
+    private string? ClientIp() => DotNetSigningServer.Middleware.ClientIp.AddressOf(HttpContext)?.ToString();
 
     /// <summary>Re-consent: documents the signed-in user still has to confirm (see <c>RequireCurrentConsentFilter</c>).</summary>
     [CookieAuthorize]

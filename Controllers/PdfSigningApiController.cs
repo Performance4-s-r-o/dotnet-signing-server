@@ -21,7 +21,9 @@ namespace DotNetSigningServer.Controllers
         private readonly PdfSealingService _sealingService;
         private readonly PdfLtvService _ltvService;
         private readonly IDataProtector _dataProtector;
-        private const string AttachmentDebitBypassHeader = "X-P4PDF-Attachment-Billing-Bypass";
+        internal const string AttachmentDebitBypassHeader = "X-P4PDF-Attachment-Billing-Bypass";
+        /// <summary>The name the portal sent before #78; accepted until every portal sends the one above.</summary>
+        internal const string LegacyAttachmentDebitBypassHeader = "X-P4SPS-Attachment-Billing-Bypass";
         private const string SigningDataNotFoundCode = "SIGNING_DATA_NOT_FOUND";
 
         public PdfSigningApiController(
@@ -149,6 +151,10 @@ namespace DotNetSigningServer.Controllers
                     ? _dataProtector.Protect(input.TsaBackupPassword) : null;
 
                 signingData.UserId = user.Id;
+                // The portal's tenant and request id (#78); null for anybody else, whatever they sent.
+                var caller = PortalTrust.CallerOf(HttpContext);
+                signingData.TenantId = caller.TenantId;
+                signingData.RequestId = caller.RequestId;
 
                 DbContext.SigningData.Add(signingData);
                 await DbContext.SaveChangesAsync();
@@ -188,9 +194,9 @@ namespace DotNetSigningServer.Controllers
             // Ownership before an operation can exist for this presign. Once it completed the
             // presign is gone and the operation itself carries the owner.
             var existing = await Operations.FindByPresignAsync(input.Id);
+            var presign = await DbContext.SigningData.AsNoTracking().FirstOrDefaultAsync(x => x.Id == input.Id);
             if (existing == null)
             {
-                var presign = await DbContext.SigningData.AsNoTracking().FirstOrDefaultAsync(x => x.Id == input.Id);
                 if (presign == null)
                 {
                     return NotFound(new { message = Localizer["SigningDataNotFound"].Value });
@@ -203,6 +209,21 @@ namespace DotNetSigningServer.Controllers
             else if (existing.UserId != user.Id)
             {
                 return Forbid();
+            }
+
+            // The portal holds one account for every tenant (#78): the owner check above cannot tell
+            // one tenant's presign from another's. A presign made for a tenant is signed for that
+            // tenant only; one made without (older presigns, other callers) is not checked. Once the
+            // signature is done the presign is gone and the operation carries the tenant: a replay
+            // for another tenant is refused too.
+            var callerTenant = PortalTrust.CallerOf(HttpContext).TenantId;
+            if (presign?.TenantId != null && !string.Equals(presign.TenantId, callerTenant, StringComparison.Ordinal))
+            {
+                return TenantMismatch($"presign {input.Id}");
+            }
+            if (existing != null && PortalTrust.TenantsConflict(existing.TenantId, callerTenant))
+            {
+                return TenantMismatch($"presign {input.Id}");
             }
 
             // The presign is NOT deleted before the work any more (#77): the operation row,
@@ -660,7 +681,8 @@ namespace DotNetSigningServer.Controllers
             var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
 
-            var bypassDebitRequested = Request.Headers.ContainsKey(AttachmentDebitBypassHeader);
+            var bypassDebitRequested = Request.Headers.ContainsKey(AttachmentDebitBypassHeader)
+                                       || Request.Headers.ContainsKey(LegacyAttachmentDebitBypassHeader);
             // Never log any part of the bypass key — not the caller's, not the
             // configured one. head+tail+length+hash-prefix of a shared secret, emitted
             // on every request and shipped to Loki, narrows brute-force considerably.
@@ -669,7 +691,7 @@ namespace DotNetSigningServer.Controllers
                 user.Id,
                 bypassDebitRequested,
                 !string.IsNullOrWhiteSpace(BillingOptions.AttachmentDebitBypassKey));
-            if (bypassDebitRequested && !IsAttachmentDebitBypassAuthorized())
+            if (bypassDebitRequested && !IsAttachmentDebitBypassAuthorized(HttpContext, BillingOptions.AttachmentDebitBypassKey))
             {
                 Logger.LogWarning("Attachment billing bypass rejected for user {UserId}", user.Id);
                 return Forbid();
@@ -706,15 +728,29 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
-        private bool IsAttachmentDebitBypassAuthorized()
+        /// <summary>
+        /// The portal's token (#78) with the shared key, under either header name. Any other token
+        /// is refused even with the right key: the key alone is a secret that can leak, the token
+        /// on the internal listener is the portal.
+        /// </summary>
+        internal static bool IsAttachmentDebitBypassAuthorized(HttpContext context, string? configuredBypassKey)
         {
-            var configuredKey = BillingOptions.AttachmentDebitBypassKey?.Trim();
+            if (!PortalTrust.IsTrustedCaller(context))
+            {
+                return false;
+            }
+
+            var configuredKey = configuredBypassKey?.Trim();
             if (string.IsNullOrWhiteSpace(configuredKey))
             {
                 return false;
             }
 
-            var providedKey = Request.Headers[AttachmentDebitBypassHeader].ToString().Trim();
+            var providedKey = context.Request.Headers[AttachmentDebitBypassHeader].ToString().Trim();
+            if (string.IsNullOrWhiteSpace(providedKey))
+            {
+                providedKey = context.Request.Headers[LegacyAttachmentDebitBypassHeader].ToString().Trim();
+            }
             if (string.IsNullOrWhiteSpace(providedKey))
             {
                 return false;

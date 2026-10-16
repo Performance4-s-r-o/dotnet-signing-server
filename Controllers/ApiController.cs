@@ -198,11 +198,21 @@ namespace DotNetSigningServer.Controllers
                 return null;
             }
             Logger.LogDebug("Validating API token from Authorization header");
-            var tokenUser = await ApiAuthService.ValidateTokenAsync(Request.Headers["Authorization"].ToString(), originHeader, HttpContext.Connection.RemoteIpAddress);
-            if (tokenUser == null)
+            var validation = await ApiAuthService.ValidateTokenDetailedAsync(
+                Request.Headers["Authorization"].ToString(), originHeader, DotNetSigningServer.Middleware.ClientIp.AddressOf(HttpContext));
+            if (validation == null)
             {
                 return null;
             }
+            // Same rule as the authentication handler (#78): the portal's token only on the internal listener.
+            var portalTrust = HttpContext.RequestServices.GetService<DotNetSigningServer.Options.PortalTrustOptions>()
+                              ?? new DotNetSigningServer.Options.PortalTrustOptions();
+            if (PortalTrust.Classify(portalTrust, HttpContext.Connection.LocalPort, validation.User.Id, validation.IsBrowserToken)
+                == PortalCallKind.Refused)
+            {
+                return null;
+            }
+            var tokenUser = validation.User;
 
             var dbUser = await DbContext.Users.FirstOrDefaultAsync(u => u.Id == tokenUser.Id);
             if (dbUser != null && !dbUser.IsActive) return null;
@@ -292,9 +302,20 @@ namespace DotNetSigningServer.Controllers
                     new { message = Localizer[globalLimit ? "ServerAtCapacity" : "TooManyRequests"].Value, retryAfter = 10 });
             }
 
+            // The portal holds one account for every tenant (#78): an operation started for one tenant
+            // is neither replayed nor continued for another — checked before anything is reserved.
+            var callerTenant = PortalTrust.CallerOf(HttpContext).TenantId;
+            var prior = presignId != null
+                ? await Operations.FindByPresignAsync(presignId, HttpContext.RequestAborted)
+                : clientKey != null ? await Operations.FindAsync(user.Id, clientKey, HttpContext.RequestAborted) : null;
+            if (prior != null && prior.UserId == user.Id && PortalTrust.TenantsConflict(prior.TenantId, callerTenant))
+            {
+                return TenantMismatch(prior.OperationId);
+            }
+
             var tier = HttpContext.Items[DotNetSigningServer.Middleware.UserConcurrencyMiddleware.TierItemKey] is int t ? t : 1;
             var begin = await Operations.BeginAsync(
-                new OperationRequest(user.Id, user.IsEnterprise, operation, clientKey, fingerprint, baseCost, tier, presignId),
+                new OperationRequest(user.Id, user.IsEnterprise, operation, clientKey, fingerprint, baseCost, tier, presignId, callerTenant),
                 HttpContext.RequestAborted);
             var op = begin.Operation;
             if (!string.IsNullOrEmpty(op.OperationId)) Response.Headers[OperationIdHeader] = op.OperationId;
@@ -461,6 +482,17 @@ namespace DotNetSigningServer.Controllers
             return Ok(result.Body);
         }
 
+        public const string TenantMismatchCode = "TENANT_MISMATCH";
+
+        /// <summary>403 for a presign or operation of another tenant (#78). Logs ids only.</summary>
+        protected IActionResult TenantMismatch(string? reference)
+        {
+            Logger.LogWarning(Logging.LoggingEvents.AuthFailed,
+                "Refused {Reference}: it belongs to another tenant than X-P4-Tenant of this call", reference);
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { code = TenantMismatchCode, message = Localizer[$"Error_{TenantMismatchCode}"].Value });
+        }
+
         /// <summary>
         /// The answer for a TSA failure (#72, #82): a code and a generic message, the detail only
         /// in the log. The exception text carries whatever the connection said (addresses, ports,
@@ -541,7 +573,7 @@ namespace DotNetSigningServer.Controllers
             {
                 try
                 {
-                    var done = await Operations.CompleteAsync(op, attempt, stored);
+                    var done = await Operations.CompleteAsync(op, attempt, stored, PortalTrust.CallerOf(HttpContext));
                     return (done, done);
                 }
                 catch (Exception storeError)
@@ -554,7 +586,7 @@ namespace DotNetSigningServer.Controllers
             {
                 // After a failed store this is also how a commit that did go through is
                 // recognised: the row is already completed by this attempt.
-                return (await Operations.CompleteAsync(op, attempt, null), false);
+                return (await Operations.CompleteAsync(op, attempt, null, PortalTrust.CallerOf(HttpContext)), false);
             }
             catch
             {
