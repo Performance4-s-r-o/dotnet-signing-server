@@ -357,12 +357,12 @@ if (useLocalDb)
 else
 #endif
 {
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-                         ?? BuildConnectionStringFromConfiguration(builder.Configuration);
+    var connectionString = DotNetSigningServer.Options.DatabaseUrl.ResolveRuntime(
+        builder.Configuration, _ => BuildConnectionStringFromConfiguration(builder.Configuration));
 
     if (string.IsNullOrWhiteSpace(connectionString))
     {
-        throw new InvalidOperationException("A database connection string is required when UseLocalDb is false. Set 'ConnectionStrings__DefaultConnection' or the DB_* environment variables.");
+        throw new InvalidOperationException("A database connection string is required when UseLocalDb is false. Set DATABASE_URL, 'ConnectionStrings__DefaultConnection' or the DB_* environment variables.");
     }
 
     connectionString = EnsureSearchPath(connectionString, "dotnet_signing");
@@ -659,22 +659,25 @@ using (var scope = app.Services.CreateScope())
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     if (migrateOnly)
     {
-        // Migrate with the migration role (Database:MigrationUser, falls back to the
-        // runtime one), long command timeout, no retries, then exit before anything serves.
-        // The migration credentials are read only here, never by a serving process.
+        // Migrate with the migration role (MIGRATION_DATABASE_URL, else Database:MigrationUser,
+        // else the runtime one), long command timeout, no retries, then exit before anything
+        // serves. The migration credentials are read only here, never by a serving process.
         var runtimeConnectionString = useLocalDb
             ? null
             : EnsureSearchPath(
-                builder.Configuration.GetConnectionString("DefaultConnection")
-                    ?? BuildConnectionStringFromConfiguration(builder.Configuration)
+                DotNetSigningServer.Options.DatabaseUrl.ResolveRuntime(
+                    builder.Configuration, _ => BuildConnectionStringFromConfiguration(builder.Configuration))
                     ?? throw new InvalidOperationException("A database connection string is required."),
                 "dotnet_signing");
+        var migrationUrlConnectionString = DotNetSigningServer.Options.DatabaseUrl.ResolveMigration(builder.Configuration);
         var migrationUser = builder.Configuration["Database:MigrationUser"];
         using var migrationContext = runtimeConnectionString is null
             ? null
             : DotNetSigningServer.Services.DatabaseMigrator.CreateContext(
-                DotNetSigningServer.Services.DatabaseMigrator.BuildMigrationConnectionString(
-                    runtimeConnectionString, migrationUser, builder.Configuration["Database:MigrationPassword"]));
+                migrationUrlConnectionString != null
+                    ? EnsureSearchPath(migrationUrlConnectionString, "dotnet_signing")
+                    : DotNetSigningServer.Services.DatabaseMigrator.BuildMigrationConnectionString(
+                        runtimeConnectionString, migrationUser, builder.Configuration["Database:MigrationPassword"]));
         try
         {
             DotNetSigningServer.Services.DatabaseMigrator.EnsureSchemaAndMigrate(migrationContext ?? dbContext, logger);

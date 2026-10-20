@@ -151,6 +151,7 @@ alter role dotnet_user set search_path = dotnet_signing;
 
 Ověření: `select rolconnlimit, rolconfig from pg_roles where rolname = 'dotnet_user';`
 
+- Databázi jde zadat jednou URL `DATABASE_URL` (`postgresql://uživatel:heslo@host:5432/postgres?sslmode=require`, stejný tvar jako portál); je-li nastavená, má přednost před `DB_*`. Schéma v ní není, dotnet si `search_path` na `dotnet_signing` nastavuje sám. Migrační krok čte obdobně `MIGRATION_DATABASE_URL` (přednost před `MIGRATION_DB_USER`/`_PASSWORD`). Prázdné nebo nerozvinutý zástupný text Coolify = jako dřív `DB_*`.
 - Connection string runtime služby nese `Maximum Pool Size` (výchozí 20, `DB_MAX_POOL_SIZE`), `Timeout=15` a `Command Timeout` (výchozí 15 s, `DB_COMMAND_TIMEOUT_SECONDS`). Služba `migrate` má vlastní connection string s `Command Timeout=600`; `statement_timeout` 15 s nastavený na roli ale platí i pro ni, takže migrace pod rolí `dotnet_user` s dlouhým příkazem musí použít jinou roli (`MIGRATION_DB_USER`) nebo `SET LOCAL statement_timeout`.
 - Supabase pooler v transakčním režimu (port 6543) vyžaduje navíc `No Reset On Close=true;Max Auto Prepare=0`.
 - Delší operace (úklid, migrace dat) si timeout zvýší lokálně: `SET LOCAL statement_timeout = '5min'`.
