@@ -33,6 +33,26 @@ public class DatabaseUrlTests
     }
 
     [Fact]
+    public void Pgbouncer_TurnsOffPreparedStatementsAndReset()
+    {
+        var pooled = DatabaseUrl.Parse("postgresql://u:p@pooler:6543/postgres?pgbouncer=true", "DATABASE_URL");
+        Assert.True(pooled.NoResetOnClose);
+        Assert.Equal(0, pooled.MaxAutoPrepare);
+
+        var direct = DatabaseUrl.Parse("postgresql://u:p@db:5432/postgres", "DATABASE_URL");
+        Assert.False(direct.NoResetOnClose);
+    }
+
+    [Fact]
+    public void RawAtInPassword_SplitsAtTheLastAt()
+    {
+        var b = DatabaseUrl.Parse("postgresql://u:p@ss:w@db:5432/postgres", "DATABASE_URL");
+        Assert.Equal("db", b.Host);
+        Assert.Equal("u", b.Username);
+        Assert.Equal("p@ss:w", b.Password);
+    }
+
+    [Fact]
     public void MissingPortAndDatabase_Default()
     {
         var b = DatabaseUrl.Parse("postgres://u:p@db", "DATABASE_URL");

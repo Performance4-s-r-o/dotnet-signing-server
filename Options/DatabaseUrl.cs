@@ -53,20 +53,29 @@ public static class DatabaseUrl
 
     /// <summary>
     /// <c>postgres://</c> or <c>postgresql://</c>; user and password percent-decoded, port 5432 and
-    /// database <c>postgres</c> when missing. <c>sslmode</c> is honoured, other query parameters
-    /// (<c>pgbouncer</c>, …) are ignored. Errors never echo the value: it carries the password.
+    /// database <c>postgres</c> when missing. <c>sslmode</c> is honoured, <c>pgbouncer=true</c> turns off
+    /// prepared statements and the session reset; other query parameters are ignored. A raw <c>@</c> or
+    /// <c>:</c> in the password works; <c>/ ? #</c> must be percent-encoded, as in any URL. Errors
+    /// never echo the value: it carries the password.
     /// </summary>
     public static NpgsqlConnectionStringBuilder Parse(string url, string variable)
     {
-        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri)
+        // User info ends at the LAST '@' (as libpq reads it), so a raw '@' in the password still
+        // works; System.Uri would split at the first one. The rest is parsed without it.
+        var trimmed = url.Trim();
+        var schemeEnd = trimmed.IndexOf("://", StringComparison.Ordinal);
+        var at = schemeEnd < 0 ? -1 : trimmed.LastIndexOf('@');
+        var userInfo = at > schemeEnd ? trimmed[(schemeEnd + 3)..at] : string.Empty;
+        var withoutUser = at > schemeEnd ? trimmed[..(schemeEnd + 3)] + trimmed[(at + 1)..] : trimmed;
+
+        if (!Uri.TryCreate(withoutUser, UriKind.Absolute, out var uri)
             || (uri.Scheme != "postgres" && uri.Scheme != "postgresql")
             || string.IsNullOrEmpty(uri.Host))
         {
             throw new InvalidOperationException(
-                $"{variable} must look like postgresql://user:password@host:5432/database.");
+                $"{variable} must look like postgresql://user:password@host:5432/database (percent-encode / ? # in the password).");
         }
 
-        var userInfo = uri.UserInfo;
         var colon = userInfo.IndexOf(':');
         var user = Uri.UnescapeDataString(colon < 0 ? userInfo : userInfo[..colon]);
         var password = colon < 0 ? null : Uri.UnescapeDataString(userInfo[(colon + 1)..]);
@@ -102,6 +111,14 @@ public static class DatabaseUrl
                 _ => throw new InvalidOperationException(
                     $"{variable} has an unknown sslmode '{sslMode}' (disable, allow, prefer, require, verify-ca, verify-full)."),
             };
+        }
+
+        // Transaction pooler (Supabase :6543, pgbouncer): no server-side prepared statements and no
+        // session reset, the same flags docs/operations.md lists for DB_* on that port.
+        if (string.Equals(QueryValue(uri.Query, "pgbouncer"), "true", StringComparison.OrdinalIgnoreCase))
+        {
+            builder.NoResetOnClose = true;
+            builder.MaxAutoPrepare = 0;
         }
 
         return builder;
