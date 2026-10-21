@@ -34,4 +34,37 @@ public class EnvValuesTests
         Assert.Throws<InvalidOperationException>(() => EnvValues.Int(Config("fifteen"), "X"));
         Assert.Throws<InvalidOperationException>(() => EnvValues.Instant(Config("tomorrow"), "X"));
     }
+
+    [Theory]
+    [InlineData("{{project.DOTNET_X}}", true)]
+    [InlineData("{{environment.V0_X}}", true)]
+    [InlineData(" {{ project.X }} ", true)]
+    [InlineData("x{{project.Y}}", false)]
+    [InlineData("{{}}", false)]
+    [InlineData("01:00:00", false)]
+    [InlineData(null, false)]
+    public void Placeholder_Detection(string? raw, bool expected) =>
+        Assert.Equal(expected, EnvValues.IsUnresolvedPlaceholder(raw));
+
+    [Fact]
+    public void Scrub_RemovesOnlyPlaceholderValues()
+    {
+        var placeholder = "P4_TEST_SCRUB_" + Guid.NewGuid().ToString("N");
+        var real = "P4_TEST_KEEP_" + Guid.NewGuid().ToString("N");
+        Environment.SetEnvironmentVariable(placeholder, "{{project.DOTNET_P4_BACKOFFICE_OUTBOX_GIVE_UP_AFTER}}");
+        Environment.SetEnvironmentVariable(real, "01:00:00");
+        try
+        {
+            var removed = EnvValues.ScrubUnresolvedPlaceholders();
+            Assert.Contains(placeholder, removed);
+            Assert.DoesNotContain(real, removed);
+            Assert.Null(Environment.GetEnvironmentVariable(placeholder));
+            Assert.Equal("01:00:00", Environment.GetEnvironmentVariable(real));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(placeholder, null);
+            Environment.SetEnvironmentVariable(real, null);
+        }
+    }
 }

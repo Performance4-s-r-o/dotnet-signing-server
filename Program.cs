@@ -17,6 +17,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.OpenApi.Models;
 
+// A shared Coolify variable that does not exist arrives as its placeholder text
+// ({{environment.X}}); treat it as unset before anything binds configuration.
+var unresolvedPlaceholders = DotNetSigningServer.Options.EnvValues.ScrubUnresolvedPlaceholders();
+if (unresolvedPlaceholders.Count > 0)
+{
+    Console.WriteLine($"[startup] Unresolved Coolify placeholders treated as unset: {string.Join(' ', unresolvedPlaceholders)}");
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Release step (#85): migrate and exit, serve nothing.
