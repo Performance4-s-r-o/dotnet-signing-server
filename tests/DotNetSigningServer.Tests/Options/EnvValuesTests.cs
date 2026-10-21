@@ -47,24 +47,17 @@ public class EnvValuesTests
         Assert.Equal(expected, EnvValues.IsUnresolvedPlaceholder(raw));
 
     [Fact]
-    public void Scrub_RemovesOnlyPlaceholderValues()
+    public void Scrub_SelectsOnlyPlaceholderValues()
     {
-        var placeholder = "P4_TEST_SCRUB_" + Guid.NewGuid().ToString("N");
-        var real = "P4_TEST_KEEP_" + Guid.NewGuid().ToString("N");
-        Environment.SetEnvironmentVariable(placeholder, "{{project.DOTNET_P4_BACKOFFICE_OUTBOX_GIVE_UP_AFTER}}");
-        Environment.SetEnvironmentVariable(real, "01:00:00");
-        try
+        // Pure over a dictionary: the process environment is shared by parallel tests.
+        var names = EnvValues.UnresolvedPlaceholderNames(new System.Collections.Hashtable
         {
-            var removed = EnvValues.ScrubUnresolvedPlaceholders();
-            Assert.Contains(placeholder, removed);
-            Assert.DoesNotContain(real, removed);
-            Assert.Null(Environment.GetEnvironmentVariable(placeholder));
-            Assert.Equal("01:00:00", Environment.GetEnvironmentVariable(real));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable(placeholder, null);
-            Environment.SetEnvironmentVariable(real, null);
-        }
+            ["B_GIVE_UP"] = "{{project.DOTNET_P4_BACKOFFICE_OUTBOX_GIVE_UP_AFTER}}",
+            ["A_CORS"] = "{{environment.DOTNET_CORS_ALLOWED_ORIGINS}}",
+            ["REAL"] = "01:00:00",
+            ["EMBEDDED"] = "x{{project.Y}}",
+            ["EMPTY"] = "",
+        });
+        Assert.Equal(new[] { "A_CORS", "B_GIVE_UP" }, names);
     }
 }

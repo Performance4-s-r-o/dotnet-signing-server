@@ -27,17 +27,27 @@ public static class EnvValues
     /// </summary>
     public static IReadOnlyList<string> ScrubUnresolvedPlaceholders()
     {
-        var removed = new List<string>();
-        foreach (DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        var removed = UnresolvedPlaceholderNames(Environment.GetEnvironmentVariables());
+        foreach (var name in removed)
+        {
+            Environment.SetEnvironmentVariable(name, null);
+        }
+        return removed;
+    }
+
+    /// <summary>Names whose whole value is an unresolved placeholder, sorted; pure.</summary>
+    public static IReadOnlyList<string> UnresolvedPlaceholderNames(IDictionary variables)
+    {
+        var names = new List<string>();
+        foreach (DictionaryEntry entry in variables)
         {
             if (entry.Key is string name && IsUnresolvedPlaceholder(entry.Value as string))
             {
-                Environment.SetEnvironmentVariable(name, null);
-                removed.Add(name);
+                names.Add(name);
             }
         }
-        removed.Sort(StringComparer.Ordinal);
-        return removed;
+        names.Sort(StringComparer.Ordinal);
+        return names;
     }
 
     public static bool IsUnset(string? raw) =>
