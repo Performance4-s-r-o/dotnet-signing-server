@@ -95,6 +95,77 @@ public class BillingDomainTests
         Assert.Null(BillingApiResult.From(502, "<html>bad gateway</html>").ProblemCode);
     }
 
+    [Fact]
+    public void ValidationProblem_DescribesErrorPathsAndCodes()
+    {
+        var result = BillingApiResult.From(422, """
+            {"type":"about:blank","status":422,"code":"validation_failed",
+             "errors":[{"path":"success_url","message":"return_url_origin_not_allowed"},
+                       {"path":"cancel_url","message":"return_url_not_https"}]}
+            """);
+
+        Assert.Equal(
+            "HTTP 422 validation_failed [success_url: return_url_origin_not_allowed; cancel_url: return_url_not_https]",
+            result.Describe());
+        Assert.Equal(
+            "Billing API checkout: HTTP 422 validation_failed [success_url: return_url_origin_not_allowed; cancel_url: return_url_not_https]",
+            new BillingApiException("checkout", result).Message);
+    }
+
+    [Fact]
+    public void ValidationProblem_NeverLogsOtherFieldsOrTheBody()
+    {
+        var result = BillingApiResult.From(422, """
+            {"code":"validation_failed","detail":"jan.novak@example.com is not allowed",
+             "errors":[{"path":"customer.email","message":"invalid_email","value":"jan.novak@example.com"}]}
+            """);
+
+        Assert.Equal("HTTP 422 validation_failed [customer.email: invalid_email]", result.Describe());
+        Assert.DoesNotContain("example.com", result.Describe());
+    }
+
+    [Fact]
+    public void ValidationProblem_CapsEntriesAndLength()
+    {
+        var errors = string.Join(",", Enumerable.Range(1, 8).Select(i => $$"""{"path":"field_{{i}}","message":"bad"}"""));
+        var many = BillingApiResult.From(422, $$"""{"code":"validation_failed","errors":[{{errors}}]}""");
+
+        Assert.Equal(
+            "HTTP 422 validation_failed [field_1: bad; field_2: bad; field_3: bad; field_4: bad; field_5: bad; +3 more]",
+            many.Describe());
+
+        var longMessage = new string('x', 500);
+        var described = BillingApiResult.From(422, $$"""{"code":"validation_failed","errors":[{"path":"a","message":"{{longMessage}}"}]}""").Describe();
+        Assert.Equal($"HTTP 422 validation_failed [a: {new string('x', 100)}…]", described);
+    }
+
+    [Theory]
+    [InlineData("""{"code":"validation_failed","errors":"nope"}""")]
+    [InlineData("""{"code":"validation_failed","errors":[]}""")]
+    [InlineData("""{"code":"validation_failed","errors":[1,"x",{"other":"y"},{"path":"","message":"   "}]}""")]
+    [InlineData("""{"code":"validation_failed"}""")]
+    public void ValidationProblem_WithoutUsableErrors_DescribesCodeOnly(string body)
+    {
+        Assert.Equal("HTTP 422 validation_failed", BillingApiResult.From(422, body).Describe());
+    }
+
+    [Fact]
+    public void ValidationProblem_FreeTextIsNotLogged_AndStripeCodeIsKept()
+    {
+        var result = BillingApiResult.From(422, """
+            {"code":"stripe_error","stripe_code":"card_declined",
+             "errors":[{"path":"amount\nFAKE LOG LINE","message":"too_small"},
+                       {"path":"customer.email","message":"jan.novak@example.com is not valid"},
+                       {"path":"name\u202E","message":"bad"},
+                       {"message":"only_message"}]}
+            """);
+
+        Assert.Equal(
+            "HTTP 422 stripe_error [(not a code): too_small; customer.email: (not a code); (not a code): bad; only_message] (card_declined)",
+            result.Describe());
+        Assert.DoesNotContain("example.com", result.Describe());
+    }
+
     [Theory]
     [InlineData(200, """{"id":"pi_1","status":"succeeded","amount":1500,"currency":"eur"}""", ServiceChargeOutcome.Succeeded, "pi_1")]
     [InlineData(200, """{"id":"pi_1","status":"processing","amount":1500,"currency":"eur"}""", ServiceChargeOutcome.Pending, "pi_1")]
