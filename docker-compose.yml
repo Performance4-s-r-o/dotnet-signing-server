@@ -24,22 +24,24 @@ services:
       - /tmp:size=512m
     # Not published on the host (#78): a published port bypasses the host firewall (Docker writes
     # its own iptables rules) and with it Cloudflare. The tunnel / reverse proxy reaches 8085 over
-    # the Docker network; 8086 is the portal's, and nothing outside the network reaches either.
+    # the Docker network; 8086 is the trusted caller's (only when INTERNAL_API_PORT is set), and
+    # nothing outside the network reaches either.
     # Local `docker compose up`: add a docker-compose.override.yml with `ports: ["8085:8085"]`.
     expose:
       - "8085"
       - "8086"
     environment:
       - ASPNETCORE_URLS=http://+:8085
-      # Second listener for the portal only (#78), added next to ASPNETCORE_URLS. The portal's token
-      # (PORTAL_USER_IDS) is accepted on it and refused (401) on 8085; the portal's SIGN_API_BASE is
-      # then http://<this service>:8086/api/. Empty = one listener, as before. Fixed here rather than
-      # a Coolify variable: it has to match the `expose` list above.
-      - INTERNAL_API_PORT=${INTERNAL_API_PORT:-8086}
-      # The portal's service account id(s), comma-separated. Required while INTERNAL_API_PORT is set
-      # (startup fails without it). Only this account's token, on the internal port, may skip the
-      # attachment debit and have its X-P4-Tenant / X-Request-Id believed.
-      - PORTAL_USER_IDS=${PORTAL_USER_IDS:-{{project.DOTNET_PORTAL_USER_IDS}}}
+      # Second listener for the trusted caller only (#78), added next to ASPNETCORE_URLS. That
+      # caller's token (TRUSTED_CALLER_USER_IDS) is accepted on it and refused (401) on 8085.
+      # Empty (the default) = one listener, a plain API. When set, it has to be in the `expose`
+      # list above too. An unresolved Coolify placeholder counts as empty (#121).
+      - INTERNAL_API_PORT=${INTERNAL_API_PORT:-{{project.DOTNET_INTERNAL_API_PORT}}}
+      # Service account id(s) of the trusted caller, comma-separated. Required while
+      # INTERNAL_API_PORT is set (startup fails without it). Only this account's token, on the
+      # internal port, may skip the attachment debit and have its X-P4-Tenant / X-Request-Id
+      # believed. PORTAL_USER_IDS is the old name: still read, with a warning.
+      - TRUSTED_CALLER_USER_IDS=${TRUSTED_CALLER_USER_IDS:-{{project.DOTNET_TRUSTED_CALLER_USER_IDS}}}
       # #106, two lists. TRUSTED_CF_PROXIES = address / CIDR of cloudflared: CF-Connecting-IP is the
       # client only when the request came from it (directly, or through a TRUSTED_PROXIES proxy).
       # Production refuses to start while empty (every visitor would share the tunnel's IP limit);

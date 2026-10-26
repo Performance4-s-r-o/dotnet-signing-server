@@ -41,7 +41,7 @@ public class PortalTrustTests : IDisposable
     public void Dispose() => _db.Dispose();
 
     private static PortalTrustOptions Trust(int? internalPort = InternalPort) =>
-        new() { InternalPort = internalPort, PortalUserIds = new HashSet<Guid> { PortalUserId } };
+        new() { InternalPort = internalPort, TrustedCallerUserIds = new HashSet<Guid> { PortalUserId } };
 
     private static User UserWith(Guid id) => new() { Id = id, Email = $"{id:N}@example.test", IsActive = true, CreditsRemaining = 100 };
 
@@ -133,25 +133,67 @@ public class PortalTrustTests : IDisposable
     public void Internal_port_without_the_portal_account_fails_startup()
     {
         Assert.Throws<InvalidOperationException>(() =>
-            PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086"), ("PORTAL_USER_IDS", ""))));
+            PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086"), ("TRUSTED_CALLER_USER_IDS", ""))));
     }
 
     [Fact]
     public void Unset_and_placeholder_values_mean_no_internal_listener()
     {
         var options = PortalTrustOptions.From(Config(
-            ("INTERNAL_API_PORT", null), ("PORTAL_USER_IDS", "{{project.DOTNET_PORTAL_USER_IDS}}")));
+            ("INTERNAL_API_PORT", null), ("TRUSTED_CALLER_USER_IDS", "{{project.DOTNET_TRUSTED_CALLER_USER_IDS}}")));
         Assert.Null(options.InternalPort);
-        Assert.Empty(options.PortalUserIds);
+        Assert.Empty(options.TrustedCallerUserIds);
     }
 
     [Fact]
     public void Configured_portal_accounts_are_parsed()
     {
         var other = Guid.NewGuid();
-        var options = PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086"), ("PORTAL_USER_IDS", $"{PortalUserId}, {other}")));
+        var options = PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086"), ("TRUSTED_CALLER_USER_IDS", $"{PortalUserId}, {other}")));
         Assert.Equal(8086, options.InternalPort);
-        Assert.Equal(new HashSet<Guid> { PortalUserId, other }, options.PortalUserIds);
+        Assert.Equal(new HashSet<Guid> { PortalUserId, other }, options.TrustedCallerUserIds);
+    }
+
+    [Fact]
+    public void Empty_port_placeholder_needs_no_account_id()
+    {
+        var options = PortalTrustOptions.From(Config(
+            ("INTERNAL_API_PORT", "{{project.DOTNET_INTERNAL_API_PORT}}"), ("TRUSTED_CALLER_USER_IDS", null)));
+        Assert.Null(options.InternalPort);
+        Assert.Empty(options.TrustedCallerUserIds);
+    }
+
+    [Fact]
+    public void Legacy_name_is_still_read_and_flagged()
+    {
+        var options = PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086"), ("PORTAL_USER_IDS", PortalUserId.ToString())));
+        Assert.Equal(new HashSet<Guid> { PortalUserId }, options.TrustedCallerUserIds);
+        Assert.True(options.UsesLegacyVariable);
+    }
+
+    [Fact]
+    public void New_name_alone_is_not_flagged_as_legacy()
+    {
+        var options = PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086"), ("TRUSTED_CALLER_USER_IDS", PortalUserId.ToString())));
+        Assert.False(options.UsesLegacyVariable);
+    }
+
+    [Fact]
+    public void Both_names_with_the_same_ids_are_accepted()
+    {
+        var id = PortalUserId.ToString();
+        var options = PortalTrustOptions.From(Config(
+            ("INTERNAL_API_PORT", "8086"), ("TRUSTED_CALLER_USER_IDS", id), ("PORTAL_USER_IDS", id)));
+        Assert.Equal(new HashSet<Guid> { PortalUserId }, options.TrustedCallerUserIds);
+    }
+
+    [Fact]
+    public void Both_names_with_different_ids_fail_startup()
+    {
+        Assert.Throws<InvalidOperationException>(() => PortalTrustOptions.From(Config(
+            ("INTERNAL_API_PORT", "8086"),
+            ("TRUSTED_CALLER_USER_IDS", PortalUserId.ToString()),
+            ("PORTAL_USER_IDS", Guid.NewGuid().ToString()))));
     }
 
     [Theory]
