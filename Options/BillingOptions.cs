@@ -51,9 +51,24 @@ public class BillingOptions
     public int ConcurrencyQueueTimeoutSeconds { get; set; } = 0;
 
     /// <summary>
-    /// Hard cap on total concurrent operations across all users. 0 = disabled.
-    /// When exceeded, server returns 503 immediately. Set via appsettings to protect the server
-    /// under unexpected load spikes without code changes.
+    /// Hard cap on total concurrent operations across all users. Null (unset) or 0 = off; the
+    /// default stays off until the callers' own limits are set below it
+    /// (see <see cref="SuggestedGlobalLimit"/>). When exceeded after
+    /// <see cref="GlobalConcurrencyWaitMilliseconds"/>, the server returns 503.
     /// </summary>
-    public int GlobalConcurrencyLimit { get; set; } = 0;
+    public int? GlobalConcurrencyLimit { get; set; }
+
+    /// <summary>How long a request waits for a global slot before the 503 (#94). 0 = no wait.</summary>
+    public int GlobalConcurrencyWaitMilliseconds { get; set; } = 2000;
+
+    /// <summary>Lowest suggested global cap; the starting hypothesis of #69 for the signing instance.</summary>
+    public const int MinComputedGlobalLimit = 16;
+
+    /// <summary>Starting hypothesis for the cap, max(16, 2/3 of the CPUs). Not applied automatically.</summary>
+    public static int SuggestedGlobalLimit(int processorCount) =>
+        Math.Max(MinComputedGlobalLimit, processorCount * 2 / 3);
+
+    /// <summary>The cap in force: the configured one, or 0 (off) when unset.</summary>
+    public static int EffectiveGlobalLimit(BillingOptions options, int processorCount) =>
+        options.GlobalConcurrencyLimit is { } configured ? Math.Max(0, configured) : 0;
 }
