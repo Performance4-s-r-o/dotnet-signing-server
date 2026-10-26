@@ -94,10 +94,21 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
         builder.Configuration["ForwardedHeaders:KnownProxies"]);
 });
 
-// #78: the portal's token only on the internal listener, its tenant headers only from there.
+// #78: the trusted caller's token only on the internal listener, its tenant headers only from there.
 // The migrate step serves nothing and may be given only the database variables.
 var portalTrust = migrateOnly ? new PortalTrustOptions() : PortalTrustOptions.From(builder.Configuration);
 builder.Services.AddSingleton(portalTrust);
+if (portalTrust.TrustedOnEveryPort)
+{
+    Console.Error.WriteLine(
+        $"WARN: {PortalTrustOptions.TrustedCallerUserIdsVariable} is set but {PortalTrustOptions.InternalPortVariable} is empty: "
+        + "the trusted token is accepted on every port, the public one included.");
+}
+if (portalTrust.UsesLegacyVariable)
+{
+    Console.Error.WriteLine(
+        $"WARN: {PortalTrustOptions.LegacyUserIdsVariable} is deprecated, rename it to {PortalTrustOptions.TrustedCallerUserIdsVariable}.");
+}
 if (portalTrust.InternalPort is int internalPort)
 {
     // A second listener next to whatever ASPNETCORE_URLS names (Kestrel's default otherwise).

@@ -36,7 +36,7 @@ public static class PortalTrust
     public static PortalCallKind Classify(PortalTrustOptions options, int localPort, Guid userId, bool isBrowserToken)
     {
         // A browser token is used from a browser, through the public hostname, whoever issued it.
-        if (isBrowserToken || !options.PortalUserIds.Contains(userId)) return PortalCallKind.Ordinary;
+        if (isBrowserToken || !options.TrustedCallerUserIds.Contains(userId)) return PortalCallKind.Ordinary;
         if (options.InternalPort is int internalPort && localPort != internalPort) return PortalCallKind.Refused;
         return PortalCallKind.Trusted;
     }

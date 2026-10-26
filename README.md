@@ -31,7 +31,7 @@ docker compose up --build
 ```
 
 `docker-compose.yml` does not publish a port (#78): it only `expose`s 8085 (public API, behind
-the tunnel) and 8086 (the portal) to the Docker network. To reach it from the host locally, add a
+the tunnel) and, when `INTERNAL_API_PORT` is set, 8086 (the trusted caller) to the Docker network. To reach it from the host locally, add a
 `docker-compose.override.yml` with `ports: ["${HTTP_PORT:-8085}:8085"]`.
 
 ### Local .NET
@@ -166,8 +166,8 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `AUTH_OTP_MAX_FAILED_ATTEMPTS` | no (5) | Wrong 2FA codes after which the code is void. The count is cleared only by a successful code or a password reset, not by signing in again |
 | `AUTH_ACCOUNT_MAX_ATTEMPTS` / `AUTH_ACCOUNT_WINDOW_MINUTES` | no (30 / 15) | Sign-in and 2FA attempts per account whatever the IP (on top of the per-IP+address limit), counted in PostgreSQL |
 | `MAX_API_TOKENS_PER_USER` | no (100) | Live API tokens per account; 0 = no limit |
-| `INTERNAL_API_PORT` | no (empty; `8086` in `docker-compose.yml`) | Second listener for the portal (#78), added next to `ASPNETCORE_URLS`. A token of a `PORTAL_USER_IDS` account is accepted on it only; on the public port it gets `401`. Empty = one listener, nothing changes |
-| `PORTAL_USER_IDS` | when `INTERNAL_API_PORT` is set (startup fails otherwise) | The portal's service account id(s), comma-separated. Only that account's server token, on the internal port, is a trusted caller: it alone may skip the attachment debit (`X-P4PDF-Attachment-Billing-Bypass`, the old `X-P4SPS-…` still read) and its `X-P4-Tenant` / `X-Request-Id` are logged and stored on presigns, operations and usage records. `/api/sign` (a replay included), any keyed replay and `/api/operations/{id}` refuse another tenant's presign or operation (`403 TENANT_MISMATCH`) |
+| `INTERNAL_API_PORT` | no (empty) | Second listener for a trusted internal caller (#78), added next to `ASPNETCORE_URLS`; `docker-compose.yml` only `expose`s 8086, so with the shipped file use 8086. A token of a `TRUSTED_CALLER_USER_IDS` account is accepted on it only; on the public port it gets `401`. Empty = one listener, a plain API |
+| `TRUSTED_CALLER_USER_IDS` | when `INTERNAL_API_PORT` is set (startup fails otherwise) | Service account id(s) of the trusted caller, comma-separated. The old name `PORTAL_USER_IDS` is still read, with a warning at start; both set and different = startup fails. Only that account's server token, on the internal port, is a trusted caller: it alone may skip the attachment debit (`X-P4PDF-Attachment-Billing-Bypass`, the old `X-P4SPS-…` still read) and its `X-P4-Tenant` / `X-Request-Id` are logged and stored on presigns, operations and usage records. `/api/sign` (a replay included), any keyed replay and `/api/operations/{id}` refuse another tenant's presign or operation (`403 TENANT_MISMATCH`) |
 | `TRUSTED_CF_PROXIES` | in production (startup fails when empty) | Address / CIDR of cloudflared (#106). `CF-Connecting-IP` is the client (rate limits, token IP whitelist, consent evidence) only for a request that came from cloudflared — it is the TCP peer, or a `TRUSTED_PROXIES` proxy is the peer and cloudflared the forwarded address. Empty = never believed; `none` = no tunnel in front, on purpose |
 | `TRUSTED_PROXIES` | no | Reverse proxy (Traefik/Caddy) addresses / CIDRs (#106): whose `X-Forwarded-For` is applied. An explicit `ForwardedHeaders__KnownProxies` / `__KnownNetworks` wins; empty = the private ranges and loopback (as before); `none` = nobody's. A reverse proxy alone never vouches for `CF-Connecting-IP` |
 | `BILLING_PRODUCT_TAG_GRACE_UNTIL` | no (empty = strict) | UTC instant; checkout sessions created before it are accepted without the `product` metadata marker (sessions already open at the deploy). Every other ownership check still applies. Remove it a day after the deploy |
@@ -189,7 +189,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `P4Backoffice__Consents__Documents__0…` / `…__Acknowledged__0…` | | Documents consented to at sign-up (default `terms`, `dpa`) and documents only acknowledged (default `privacy`) |
 
 The `#80` variables (`CORS_ALLOWED_ORIGINS`, `AUTH_*`, `MAX_API_TOKENS_PER_USER`,
-`BILLING_PRODUCT_TAG_GRACE_UNTIL`) and `PORTAL_USER_IDS` / `TRUSTED_CF_PROXIES` / `TRUSTED_PROXIES` fall back to Coolify project variables (`DOTNET_*`) in
+`BILLING_PRODUCT_TAG_GRACE_UNTIL`) and `TRUSTED_CALLER_USER_IDS` / `TRUSTED_CF_PROXIES` / `TRUSTED_PROXIES` fall back to Coolify project variables (`DOTNET_*`) in
 `docker-compose.yml`. An empty value or an unresolved `{{project.…}}` placeholder means the
 default; any other value that does not parse stops the server at startup.
 
