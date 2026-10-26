@@ -164,6 +164,14 @@ public class PortalTrustTests : IDisposable
     }
 
     [Fact]
+    public void Ids_without_port_are_flagged_as_trusted_on_every_port()
+    {
+        var options = PortalTrustOptions.From(Config(("TRUSTED_CALLER_USER_IDS", PortalUserId.ToString())));
+        Assert.True(options.TrustedOnEveryPort);
+        Assert.False(PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086"), ("TRUSTED_CALLER_USER_IDS", PortalUserId.ToString()))).TrustedOnEveryPort);
+    }
+
+    [Fact]
     public void Legacy_name_is_still_read_and_flagged()
     {
         var options = PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086"), ("PORTAL_USER_IDS", PortalUserId.ToString())));

@@ -27,6 +27,9 @@ public class PortalTrustOptions
     /// <summary>The trusted caller's service account(s).</summary>
     public HashSet<Guid> TrustedCallerUserIds { get; set; } = new();
 
+    /// <summary>True when ids are set without an internal port: the trusted token then works on every port.</summary>
+    public bool TrustedOnEveryPort => InternalPort == null && TrustedCallerUserIds.Count > 0;
+
     /// <summary>True when the ids came from the deprecated <c>PORTAL_USER_IDS</c> only.</summary>
     public bool UsesLegacyVariable { get; set; }
 

@@ -42,6 +42,9 @@ services:
       # internal port, may skip the attachment debit and have its X-P4-Tenant / X-Request-Id
       # believed. PORTAL_USER_IDS is the old name: still read, with a warning.
       - TRUSTED_CALLER_USER_IDS=${TRUSTED_CALLER_USER_IDS:-{{project.DOTNET_TRUSTED_CALLER_USER_IDS}}}
+      # Old name, passed through so a deployment that still sets only it keeps working (with a
+      # warning at start). Remove once nobody sets it.
+      - PORTAL_USER_IDS=${PORTAL_USER_IDS:-{{project.DOTNET_PORTAL_USER_IDS}}}
       # #106, two lists. TRUSTED_CF_PROXIES = address / CIDR of cloudflared: CF-Connecting-IP is the
       # client only when the request came from it (directly, or through a TRUSTED_PROXIES proxy).
       # Production refuses to start while empty (every visitor would share the tunnel's IP limit);

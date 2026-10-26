@@ -98,6 +98,12 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 // The migrate step serves nothing and may be given only the database variables.
 var portalTrust = migrateOnly ? new PortalTrustOptions() : PortalTrustOptions.From(builder.Configuration);
 builder.Services.AddSingleton(portalTrust);
+if (portalTrust.TrustedOnEveryPort)
+{
+    Console.Error.WriteLine(
+        $"WARN: {PortalTrustOptions.TrustedCallerUserIdsVariable} is set but {PortalTrustOptions.InternalPortVariable} is empty: "
+        + "the trusted token is accepted on every port, the public one included.");
+}
 if (portalTrust.UsesLegacyVariable)
 {
     Console.Error.WriteLine(
