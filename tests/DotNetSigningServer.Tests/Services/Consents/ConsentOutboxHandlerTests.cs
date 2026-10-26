@@ -59,7 +59,7 @@ public class ConsentOutboxHandlerTests
             Assert.Contains(e.GetProperty("action").GetString(), new[] { "granted", "acknowledged" });
             Assert.Equal("web", e.GetProperty("channel").GetString());
             Assert.True(DateTimeOffset.TryParse(e.GetProperty("occurred_at").GetString(), out _));
-            Assert.Equal("Mozilla/5.0 (test)", e.GetProperty("user_agent").GetString());
+            Assert.Equal(JsonValueKind.Null, e.GetProperty("user_agent").ValueKind); // unrecognised agent is not sent
             Assert.Equal("signup", e.GetProperty("metadata").GetProperty("flow").GetString());
 
             // content_hash is a string when present — never null (the schema does not allow it).
