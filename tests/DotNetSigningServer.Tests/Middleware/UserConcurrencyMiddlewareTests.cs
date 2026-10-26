@@ -435,23 +435,22 @@ public class UserConcurrencyMiddlewareTests
         var gate = new UserConcurrencyMiddleware.UserGate(1);
         Assert.Equal(1, await gate.WaitAsync(Bounded, CancellationToken.None));
 
-        var order = new List<int>();
-        var a = Task.Run(async () => { var s = await gate.WaitAsync(Bounded, CancellationToken.None); lock (order) order.Add(1); return s; });
+        // The slot number returned is the order of the grant, so it proves FIFO without racing continuations.
+        var a = Task.Run(() => gate.WaitAsync(Bounded, CancellationToken.None));
         await Task.Delay(50);
-        var b = Task.Run(async () => { var s = await gate.WaitAsync(Bounded, CancellationToken.None); lock (order) order.Add(2); return s; });
-        var c = Task.Run(async () => { await Task.Delay(100); var s = await gate.WaitAsync(Bounded, CancellationToken.None); lock (order) order.Add(3); return s; });
-        await Task.Delay(250);
+        var b = Task.Run(() => gate.WaitAsync(Bounded, CancellationToken.None));
+        await Task.Delay(50);
+        var c = Task.Run(() => gate.WaitAsync(Bounded, CancellationToken.None));
+        await Task.Delay(150);
 
         gate.SetLimit(3);
         Assert.Equal(2, await a);
         Assert.Equal(3, await b);
         Assert.False(c.IsCompleted);
-        Assert.Equal(new[] { 1, 2 }, order);
         Assert.Equal(3, gate.Held);
 
         gate.Release();
         Assert.Equal(3, await c);
-        Assert.Equal(new[] { 1, 2, 3 }, order);
     }
 
     [Fact]
