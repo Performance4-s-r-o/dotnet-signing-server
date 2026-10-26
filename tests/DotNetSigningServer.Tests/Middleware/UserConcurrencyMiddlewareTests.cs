@@ -411,14 +411,85 @@ public class UserConcurrencyMiddlewareTests
     }
 
     [Theory]
-    [InlineData(null, 4, 16)]
-    [InlineData(null, 24, 16)]
-    [InlineData(null, 96, 64)]
+    [InlineData(null, 24, 0)]
     [InlineData(0, 24, 0)]
     [InlineData(7, 24, 7)]
-    public void Effective_global_limit_defaults_from_cpu_count_and_zero_means_off(int? configured, int cpus, int expected)
+    public void Effective_global_limit_is_off_unless_configured(int? configured, int cpus, int expected)
     {
         var options = new BillingOptions { GlobalConcurrencyLimit = configured };
         Assert.Equal(expected, BillingOptions.EffectiveGlobalLimit(options, cpus));
+    }
+
+    [Theory]
+    [InlineData(4, 16)]
+    [InlineData(24, 16)]
+    [InlineData(96, 64)]
+    public void Suggested_global_limit_is_the_start_hypothesis(int cpus, int expected)
+    {
+        Assert.Equal(expected, BillingOptions.SuggestedGlobalLimit(cpus));
+    }
+
+    [Fact]
+    public async Task Gate_grants_waiters_in_fifo_order_and_raising_the_limit_wakes_exactly_the_difference()
+    {
+        var gate = new UserConcurrencyMiddleware.UserGate(1);
+        Assert.Equal(1, await gate.WaitAsync(Bounded, CancellationToken.None));
+
+        var order = new List<int>();
+        var a = Task.Run(async () => { var s = await gate.WaitAsync(Bounded, CancellationToken.None); lock (order) order.Add(1); return s; });
+        await Task.Delay(50);
+        var b = Task.Run(async () => { var s = await gate.WaitAsync(Bounded, CancellationToken.None); lock (order) order.Add(2); return s; });
+        var c = Task.Run(async () => { await Task.Delay(100); var s = await gate.WaitAsync(Bounded, CancellationToken.None); lock (order) order.Add(3); return s; });
+        await Task.Delay(250);
+
+        gate.SetLimit(3);
+        Assert.Equal(2, await a);
+        Assert.Equal(3, await b);
+        Assert.False(c.IsCompleted);
+        Assert.Equal(new[] { 1, 2 }, order);
+        Assert.Equal(3, gate.Held);
+
+        gate.Release();
+        Assert.Equal(3, await c);
+        Assert.Equal(new[] { 1, 2, 3 }, order);
+    }
+
+    [Fact]
+    public async Task Gate_lowered_limit_applies_as_running_requests_finish()
+    {
+        var gate = new UserConcurrencyMiddleware.UserGate(3);
+        for (var i = 0; i < 3; i++) await gate.WaitAsync(Bounded, CancellationToken.None);
+        var waiting = gate.WaitAsync(Bounded, CancellationToken.None);
+
+        gate.SetLimit(1);
+        Assert.Equal(3, gate.Held);
+        gate.Release();
+        gate.Release();
+        Assert.False(waiting.IsCompleted);
+        Assert.Equal(1, gate.Held);
+        gate.Release();
+        Assert.Equal(1, await waiting);
+    }
+
+    [Fact]
+    public async Task Gate_timeouts_racing_releases_never_leak_or_double_grant()
+    {
+        var gate = new UserConcurrencyMiddleware.UserGate(2);
+        var granted = 0;
+        var tasks = Enumerable.Range(0, 400).Select(_ => Task.Run(async () =>
+        {
+            var slot = await gate.WaitAsync(TimeSpan.FromMilliseconds(1), CancellationToken.None);
+            if (slot > 0)
+            {
+                Interlocked.Increment(ref granted);
+                await Task.Yield();
+                gate.Release();
+            }
+        })).ToArray();
+        await Task.WhenAll(tasks);
+
+        Assert.Equal(0, gate.Held);
+        // Nobody is left waiting: a fresh request gets a slot at once.
+        Assert.Equal(1, await gate.WaitAsync(TimeSpan.Zero, CancellationToken.None));
     }
 }

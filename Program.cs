@@ -435,6 +435,15 @@ builder.Services.AddOptions<BillingOptions>()
         options.AttachmentDebitBypassKey = builder.Configuration["ATTACHMENT_DEBIT_BYPASS_KEY"] ?? options.AttachmentDebitBypassKey;
         options.GlobalConcurrencyLimit = EnvValues.Int(builder.Configuration, "GLOBAL_CONCURRENCY_LIMIT") ?? options.GlobalConcurrencyLimit;
         options.GlobalConcurrencyWaitMilliseconds = EnvValues.Int(builder.Configuration, "GLOBAL_CONCURRENCY_WAIT_MS") ?? options.GlobalConcurrencyWaitMilliseconds;
+        // A value that makes no sense stops the server, it does not quietly switch the cap off.
+        if (options.GlobalConcurrencyLimit is < 0)
+        {
+            throw new InvalidOperationException("GLOBAL_CONCURRENCY_LIMIT must be 0 (off) or a positive number.");
+        }
+        if (options.GlobalConcurrencyWaitMilliseconds < 0)
+        {
+            throw new InvalidOperationException("GLOBAL_CONCURRENCY_WAIT_MS must be 0 or a positive number of milliseconds.");
+        }
         options.ProductTagGraceUntil = EnvValues.Instant(builder.Configuration, "BILLING_PRODUCT_TAG_GRACE_UNTIL") ?? options.ProductTagGraceUntil;
     })
     .ValidateOnStart();
