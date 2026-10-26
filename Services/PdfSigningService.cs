@@ -95,11 +95,22 @@ namespace DotNetSigningServer.Services
             byte[] preSignedPdf = File.ReadAllBytes(presignedPdfPath);
             ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(tsaUrl, tsaUsername, tsaPassword, tsaBackup);
             var chain = PdfCryptoHelper.LoadCertificatesFromPemString(certificatePem);
-            byte[] signatureBytes = PdfCryptoHelper.HexStringToByteArray(input.SignedHash);
+            byte[] signatureBytes = ParseClientSignature(input.SignedHash);
             fieldName = PdfCryptoHelper.EnsureFieldName(fieldName);
             byte[] fullySignedPdf = InjectFinalSignature(preSignedPdf, signatureBytes, chain, fieldName, tsaClient, tsaUrlForErrorContext: tsaUrl);
 
             return Convert.ToBase64String(fullySignedPdf);
+        }
+
+        /// <summary>The client's signature as bytes; anything that is not hex is refused like a wrong signature.</summary>
+        private static byte[] ParseClientSignature(string? signedHash)
+        {
+            var hex = signedHash?.Trim() ?? string.Empty;
+            if (hex.Length == 0 || hex.Length % 2 != 0 || !hex.All(Uri.IsHexDigit))
+            {
+                throw new SignatureInvalidException(SignatureInvalidReason.Malformed, "signedHash is not hex");
+            }
+            return Convert.FromHexString(hex);
         }
 
         public virtual string SignWithPfx(PfxSignInput input) =>
@@ -492,6 +503,11 @@ namespace DotNetSigningServer.Services
             {
                 PdfSigner.SignDeferred(reader, fieldName, msOut, external);
             }
+            catch (Exception ex) when (ex is not SignatureInvalidException && FindInner<SignatureInvalidException>(ex) is { } invalid)
+            {
+                // However iText wraps it, a refused client signature stays a refused signature.
+                throw invalid;
+            }
             catch (Exception ex) when (FindTspException(ex) is TspException tsp)
             {
                 throw new TsaCommunicationException(
@@ -516,6 +532,15 @@ namespace DotNetSigningServer.Services
         {
             if (string.IsNullOrWhiteSpace(signerName)) return;
             signer.SetSignatureEvent(new SignerNameEvent(signerName));
+        }
+
+        private static T? FindInner<T>(Exception ex) where T : Exception
+        {
+            for (var current = ex.InnerException; current != null; current = current.InnerException)
+            {
+                if (current is T match) return match;
+            }
+            return null;
         }
 
         private static TspException? FindTspException(Exception ex)

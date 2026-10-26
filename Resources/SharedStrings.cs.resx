@@ -617,6 +617,7 @@
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Příliš mnoho požadavků. Zkuste to později.</value></data>
   <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Příliš mnoho dokumentů čeká na podpis. Dokončete je, nebo počkejte, až vyprší.</value></data>
   <data name="Error_TENANT_MISMATCH" xml:space="preserve"><value>Dokument byl připraven k podpisu pro jinou organizaci.</value></data>
+  <data name="Error_SIGNATURE_INVALID" xml:space="preserve"><value>Podpis neodpovídá dokumentu připravenému k podpisu ani certifikátu. Nic se nepodepsalo ani nestrhlo.</value></data>
   <data name="Error_TOO_MANY_TEMPLATES" xml:space="preserve"><value>Byl dosažen maximální počet uložených šablon.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Stránka PDF je pro hledání kódů příliš velká (víc než asi 1,6 m² nebo strana delší než 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>PDF obsahuje aktivní obsah (akci Launch nebo JavaScript spouštěný při otevření) a bylo odmítnuto.</value></data>

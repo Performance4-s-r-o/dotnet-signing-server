@@ -92,13 +92,16 @@ Content-Type: application/json
 
 {
   "id": "ef2c4d7a-…",
-  "signedHash": "base64-signature"
+  "signedHash": "hex-signature"
 }
 
 Response:
-{ "result": "base64-pdf-with-signature" }
+{ "result": "base64-pdf-with-signature", "signatureVerified": true }
+
+A signature that does not verify against the presigned data:
+422 { "code": "SIGNATURE_INVALID", "message": "…", "reason": "mismatch", "attemptsRemaining": 2 }
 """,
-                Curl: $$"""curl -X POST {{b}}/sign -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"id":"ef2c4d7a-0000-0000-0000-000000000000","signedHash":"base64-signature"}'"""),
+                Curl: $$"""curl -X POST {{b}}/sign -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"id":"ef2c4d7a-0000-0000-0000-000000000000","signedHash":"hex-signature"}'"""),
 
             new ApiEndpointDoc(
                 Slug: "sign-pfx",

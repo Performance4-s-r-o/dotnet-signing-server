@@ -31,6 +31,19 @@ States as seen by the caller:
   2 min by a heartbeat while the work runs. A lease that runs out (process died) is
   expired by the sweep or the next request: `failed_uncertain`, credits back.
 
+## Client signature check on `/api/sign` (#81)
+
+Before the client's signature is embedded, it is verified with the public key of the
+presign's signing certificate over the signed attributes, rebuilt from the presigned PDF.
+RSA PKCS#1 v1.5 and ECDSA (strict DER `SEQUENCE { r, s }`), both SHA-256. Raw ECDSA `r‖s`,
+RSA-PSS and other key types are refused.
+
+| | |
+|---|---|
+| `422` + `code: SIGNATURE_INVALID` | `reason`: `malformed` (not hex, empty, wrong length, not DER), `mismatch` (does not verify), `algorithm_unsupported` (RSA-PSS, other key types). `attemptsRemaining`: attempts left on this presign. The operation is `failed` (`errorCode: SIGNATURE_INVALID`), the reservation is returned, nothing is charged. |
+| Presign | Stays for a corrected signature. `/api/sign` gets 3 attempts per presign (all attempts count, a TSA failure too); an invalid signature on the third removes the presign, after that `404`. |
+| Success | JSON gains `signatureVerified: true`; a raw PDF answer (`Accept: application/pdf`) carries `X-Signature-Verified: true`. Both are kept for replay. |
+
 ## Credits
 
 Reserved (debited) when the attempt starts, in the same transaction as the claim, so two

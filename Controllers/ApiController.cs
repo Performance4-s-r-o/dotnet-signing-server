@@ -50,6 +50,8 @@ namespace DotNetSigningServer.Controllers
         public const string OperationIdHeader = "X-Operation-Id";
         public const string OperationStateHeader = "X-Operation-State";
         public const string ReplayedHeader = "Idempotent-Replayed";
+        /// <summary>The attempt number this request claimed, for endpoints that react to their own failure.</summary>
+        public const string OperationAttemptItemKey = "ApiOperation.Attempt";
 
         protected ApiControllerBase(
             ApplicationDbContext dbContext,
@@ -360,6 +362,7 @@ namespace DotNetSigningServer.Controllers
             }
 
             var attempt = begin.Attempt;
+            HttpContext.Items[OperationAttemptItemKey] = attempt;
 
             // A browser token spends from its own budget too (#80). The reservation is given back
             // when this method is left any way other than through a completed operation.
