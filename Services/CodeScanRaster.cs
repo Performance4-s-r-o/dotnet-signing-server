@@ -214,7 +214,7 @@ public static class CodeScanRaster
             };
             using var image = new MagickImage(pdf, settings);
             image.ColorSpace = ColorSpace.sRGB;
-            image.Alpha(AlphaOption.Remove);
+            image.Alpha(AlphaAction.Remove);
             image.ColorType = ColorType.Grayscale;
             image.Depth = 8;
             return use(image);
