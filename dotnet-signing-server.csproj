@@ -33,7 +33,7 @@
     <PackageReference Include="Stripe.net" Version="52.3.0" />
     <!-- Dev-only (UseLocalDb starts a container). Release, and so the production image, does not carry it (#84). -->
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.10.0" Condition="'$(Configuration)' == 'Debug'" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.3.0" />
 
   </ItemGroup>
 

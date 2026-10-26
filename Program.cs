@@ -15,7 +15,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 
 // A shared Coolify variable that does not exist arrives as its placeholder text
 // ({{environment.X}}); treat it as unset before anything binds configuration.
