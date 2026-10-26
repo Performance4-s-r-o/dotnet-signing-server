@@ -325,6 +325,88 @@ public class OperationStateTests : IClassFixture<OperationStateFixture>, IDispos
     }
 
     [DockerFact]
+    public async Task Invalid_client_signature_is_422_failed_uncharged_and_the_presign_takes_a_corrected_one()
+    {
+        var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+        var presign = await _fx.NewPresignAsync(userId);
+        var key = Guid.NewGuid().ToString();
+        var body = new SignInput { Id = presign, SignedHash = "00" };
+
+        var calls = 0;
+        _fx.Sign = () => ++calls == 1
+            ? throw new SignatureInvalidException(SignatureInvalidReason.Mismatch, "simulated")
+            : SignedPdf;
+
+        var first = await client.SendAsync(Post("/api/sign", body, key));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, first.StatusCode);
+        Assert.Equal(ApiOperationState.Failed, Header(first, ApiControllerBase.OperationStateHeader));
+        using (var error = JsonDocument.Parse(await first.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal("SIGNATURE_INVALID", error.RootElement.GetProperty("code").GetString());
+            Assert.Equal("mismatch", error.RootElement.GetProperty("reason").GetString());
+            Assert.Equal(2, error.RootElement.GetProperty("attemptsRemaining").GetInt32());
+            Assert.False(string.IsNullOrWhiteSpace(error.RootElement.GetProperty("message").GetString()));
+        }
+        Assert.True(await _fx.PresignExistsAsync(presign), "a refused signature must not consume the presign");
+        Assert.Equal(5, await _fx.BalanceAsync(userId));
+        Assert.Empty(await _fx.UsageAsync(userId));
+
+        var state = await StatusAsync(client, key);
+        Assert.Equal("failed", state.GetProperty("state").GetString());
+        Assert.Equal("SIGNATURE_INVALID", state.GetProperty("errorCode").GetString());
+        Assert.Equal(0, state.GetProperty("creditsCharged").GetInt32());
+        Assert.Equal(0, state.GetProperty("creditsReserved").GetInt32());
+
+        // A corrected signature on the same presign and key signs and charges once.
+        var retry = await client.SendAsync(Post("/api/sign", body, key));
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        using (var ok = JsonDocument.Parse(await retry.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal(SignedPdf, ok.RootElement.GetProperty("result").GetString());
+            Assert.True(ok.RootElement.GetProperty("signatureVerified").GetBoolean());
+        }
+        Assert.Equal(4, await _fx.BalanceAsync(userId));
+        Assert.Single(await _fx.UsageAsync(userId));
+
+        // Replay keeps the flag in JSON and as a header on the raw PDF, without new work.
+        var replay = await client.SendAsync(Post("/api/sign", body, key));
+        Assert.Equal("true", Header(replay, ApiControllerBase.ReplayedHeader));
+        Assert.Contains("\"signatureVerified\":true", await replay.Content.ReadAsStringAsync());
+        var raw = Post("/api/sign", body, key);
+        raw.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/pdf"));
+        var rawResponse = await client.SendAsync(raw);
+        Assert.Equal("application/pdf", rawResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("true", Header(rawResponse, PdfSigningApiController.SignatureVerifiedHeader));
+        Assert.Equal(2, _fx.SignCalls);
+        Assert.Equal(4, await _fx.BalanceAsync(userId));
+    }
+
+    [DockerFact]
+    public async Task Third_invalid_client_signature_removes_the_presign()
+    {
+        var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+        var presign = await _fx.NewPresignAsync(userId);
+        var body = new SignInput { Id = presign, SignedHash = "00" };
+        _fx.Sign = () => throw new SignatureInvalidException(SignatureInvalidReason.Malformed, "simulated");
+
+        for (var remaining = 2; remaining >= 0; remaining--)
+        {
+            var response = await client.SendAsync(Post("/api/sign", body));
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+            using var error = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(remaining, error.RootElement.GetProperty("attemptsRemaining").GetInt32());
+            Assert.Equal(remaining > 0, await _fx.PresignExistsAsync(presign));
+        }
+
+        var after = await client.SendAsync(Post("/api/sign", body));
+        Assert.Equal(HttpStatusCode.NotFound, after.StatusCode);
+        Assert.Equal(3, _fx.SignCalls);
+        Assert.Equal(5, await _fx.BalanceAsync(userId));
+        Assert.Empty(await _fx.UsageAsync(userId));
+        Assert.Equal(ApiOperationState.Failed, (await _fx.OperationAsync(userId)).State);
+    }
+
+    [DockerFact]
     public async Task Portal_timeout_during_tsa_then_retry_with_the_same_key_gets_the_result_without_a_second_signature_or_debit()
     {
         var (userId, client) = await _fx.NewAccountAsync(credits: 5);

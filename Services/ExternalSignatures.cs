@@ -1,7 +1,5 @@
 using iText.Kernel.Pdf;
 using iText.Signatures;
-using Org.BouncyCastle.Security;
-using Org.BouncyCastle.Crypto.Parameters;
 using System.IO;
 using System;
 using iText.Kernel.Crypto;
@@ -63,13 +61,11 @@ namespace DotNetSigningServer.ExternalSignatures
         {
             var sgn = new PdfPKCS7(null, _chain, "SHA256", false);
             byte[] hash = DigestAlgorithms.Digest(inputStream, DigestAlgorithms.SHA256);
-            var pubKey = _chain[0].GetPublicKey();
-            string algorithm = pubKey switch
-            {
-                RsaKeyParameters => "RSA",
-                ECPublicKeyParameters => "ECDSA",
-                _ => "RSA"
-            };
+            // The same signed attributes the presign handed out, rebuilt from the bytes being signed.
+            byte[] signedAttributes = sgn.GetAuthenticatedAttributeBytes(
+                hash, Services.PdfCryptoHelper.SignatureCryptoStandard, null, null);
+            // Nothing is embedded unless the signature verifies with the certificate's key (#81).
+            string algorithm = Services.ClientSignatureVerifier.Verify(signedAttributes, _signature, _chain[0]);
             sgn.SetExternalSignatureValue(_signature, null, algorithm);
             // Same standard as the presign phase used — see PdfCryptoHelper.SignatureCryptoStandard.
             // A TSA client here adds the signature timestamp that lifts B-B to B-T.

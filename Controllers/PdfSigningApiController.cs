@@ -25,6 +25,10 @@ namespace DotNetSigningServer.Controllers
         /// <summary>The name the portal sent before #78; accepted until every portal sends the one above.</summary>
         internal const string LegacyAttachmentDebitBypassHeader = "X-P4SPS-Attachment-Billing-Bypass";
         private const string SigningDataNotFoundCode = "SIGNING_DATA_NOT_FOUND";
+        /// <summary>Set on a raw PDF answer of <c>/api/sign</c>; the JSON answer carries <c>signatureVerified</c>.</summary>
+        public const string SignatureVerifiedHeader = "X-Signature-Verified";
+        /// <summary>Attempts of <c>/api/sign</c> per presign; an invalid signature on the last one removes the presign.</summary>
+        internal const int MaxSignAttemptsPerPresign = 3;
 
         public PdfSigningApiController(
             ApplicationDbContext dbContext,
@@ -265,7 +269,11 @@ namespace DotNetSigningServer.Controllers
                             tsaUsername,
                             tsaPassword,
                             tsaBackup);
-                        return new PaidResult(new { result }, result);
+                        // HandleSign embeds only a signature that verified (#81); the binary channel gets it as a header.
+                        return new PaidResult(
+                            new { result, signatureVerified = true },
+                            result,
+                            new Dictionary<string, string> { [SignatureVerifiedHeader] = "true" });
                     },
                     presignId: input.Id,
                     afterCompleted: async () =>
@@ -283,6 +291,10 @@ namespace DotNetSigningServer.Controllers
                 // Presign expired between the check and the work.
                 return NotFound(new { message = Localizer["SigningDataNotFound"].Value });
             }
+            catch (SignatureInvalidException ex)
+            {
+                return await SignatureInvalidResultAsync(input.Id, ex);
+            }
             catch (TsaCommunicationException ex)
             {
                 Logger.LogWarning(ex, "Sign failed: TSA communication error ({TsaUrl})", ex.TsaUrl);
@@ -293,6 +305,38 @@ namespace DotNetSigningServer.Controllers
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Sign failed");
                 return SafeProblem(Localizer["SignError"], ex);
             }
+        }
+
+        /// <summary>
+        /// 422 for a client signature that does not verify (#81). The operation is already
+        /// <c>failed</c> with its reservation returned; the presign stays for a corrected
+        /// signature until <see cref="MaxSignAttemptsPerPresign"/> attempts, then it is removed.
+        /// </summary>
+        private async Task<IActionResult> SignatureInvalidResultAsync(string presignId, SignatureInvalidException ex)
+        {
+            var attempts = (await Operations.FindByPresignAsync(presignId))?.Attempts ?? 0;
+            var remaining = Math.Max(0, MaxSignAttemptsPerPresign - attempts);
+            Logger.LogWarning("Sign refused for presign {PresignId}: client signature invalid ({Detail}); attempt {Attempt}",
+                presignId, ex.Message, attempts);
+            if (remaining == 0)
+            {
+                // Out of attempts: the presign goes, so a caller cannot keep probing it.
+                var path = await DbContext.SigningData.Where(x => x.Id == presignId)
+                    .Select(x => x.PresignedPdfPath).FirstOrDefaultAsync();
+                await DbContext.SigningData.Where(x => x.Id == presignId).ExecuteDeleteAsync();
+                if (path != null)
+                {
+                    try { System.IO.File.Delete(path); }
+                    catch { /* best-effort; PresignCleanupService is the backstop */ }
+                }
+            }
+            return UnprocessableEntity(new
+            {
+                code = SignatureInvalidException.ErrorCode,
+                message = Localizer[$"Error_{SignatureInvalidException.ErrorCode}"].Value,
+                reason = ex.Reason,
+                attemptsRemaining = remaining,
+            });
         }
 
         [HttpPost("/api/sign-pfx")]

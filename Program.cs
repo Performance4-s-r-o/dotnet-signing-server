@@ -576,7 +576,7 @@ app.Use(async (context, next) =>
             context.Response.Headers["Vary"] = "Origin";
             // No billing-bypass header (#78): only the portal sends it, server to server, never a browser.
             context.Response.Headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type,Idempotency-Key";
-            context.Response.Headers["Access-Control-Expose-Headers"] = "X-Operation-Id,X-Operation-State,Idempotent-Replayed,Retry-After";
+            context.Response.Headers["Access-Control-Expose-Headers"] = "X-Operation-Id,X-Operation-State,Idempotent-Replayed,Retry-After,X-Signature-Verified";
             context.Response.Headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS";
         }
 
