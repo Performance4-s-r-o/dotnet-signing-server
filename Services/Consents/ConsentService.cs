@@ -166,7 +166,7 @@ public sealed class ConsentService
             Action: r.Action,
             OccurredAt: r.OccurredAt.ToUniversalTime(),
             Channel: r.Channel,
-            UserAgent: r.UserAgent,
+            UserAgent: UserAgentCoarsening.Coarsen(r.UserAgent),
             Ip: ConsentRequirements.DocumentsWithIp.Contains(r.Document) ? ClientIpTruncation.Truncate(ip) : null,
             Metadata: backfill
                 ? new Dictionary<string, object?> { ["flow"] = flow, ["backfill"] = true }
