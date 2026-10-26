@@ -29,5 +29,11 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    ignore:
+      # The project targets net8.0 (LTS): a runtime major is a decision with a TFM change, not a bot PR.
+      - dependency-name: "dotnet/sdk"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "dotnet/aspnet"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore(docker)"
