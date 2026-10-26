@@ -88,7 +88,7 @@ public class ConsentServiceTests
         {
             Assert.Equal($"dotnet:user:{user.Id}", e.GetProperty("subject_ref").GetString());
             var document = e.GetProperty("document").GetString();
-            Assert.Equal(document == "dpa" ? "203.0.113.7" : null, e.GetProperty("ip").GetString());
+            Assert.Equal(document == "dpa" ? "203.0.113.0" : null, e.GetProperty("ip").GetString());
         }
     }
 

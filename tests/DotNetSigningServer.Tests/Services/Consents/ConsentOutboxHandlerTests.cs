@@ -69,7 +69,7 @@ public class ConsentOutboxHandlerTests
             }
 
             var document = e.GetProperty("document").GetString();
-            if (document == "dpa") Assert.Equal("203.0.113.7", e.GetProperty("ip").GetString());
+            if (document == "dpa") Assert.Equal("203.0.113.0", e.GetProperty("ip").GetString());
             else Assert.Equal(JsonValueKind.Null, e.GetProperty("ip").ValueKind);
         }
 
