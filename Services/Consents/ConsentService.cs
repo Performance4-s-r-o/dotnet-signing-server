@@ -142,7 +142,7 @@ public sealed class ConsentService
     }
 
     /// <summary>The <c>POST /v1/consents</c> body for <paramref name="records"/>.</summary>
-    /// <param name="ip">End user's IP; sent only for documents with legal weight (DPA), else null.</param>
+    /// <param name="ip">End user's IP; sent truncated (IPv4 /24, IPv6 /48) and only for documents with legal weight (DPA), else null.</param>
     /// <param name="prompt">
     /// The published wording the form showed, when it showed one. Attached to granted consents
     /// whose document the sentence links to: an acknowledgement is a notice rather than a
@@ -167,7 +167,7 @@ public sealed class ConsentService
             OccurredAt: r.OccurredAt.ToUniversalTime(),
             Channel: r.Channel,
             UserAgent: r.UserAgent,
-            Ip: ConsentRequirements.DocumentsWithIp.Contains(r.Document) && !string.IsNullOrWhiteSpace(ip) ? ip : null,
+            Ip: ConsentRequirements.DocumentsWithIp.Contains(r.Document) ? ClientIpTruncation.Truncate(ip) : null,
             Metadata: backfill
                 ? new Dictionary<string, object?> { ["flow"] = flow, ["backfill"] = true }
                 : new Dictionary<string, object?> { ["flow"] = flow },
