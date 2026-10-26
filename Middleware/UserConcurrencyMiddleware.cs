@@ -18,7 +18,7 @@ namespace DotNetSigningServer.Middleware;
 /// slot index — not a value that drifts due to Release races while the request processes.
 ///
 /// Order of acquisition (#69): the user's slot first — including the wait in the user's queue —
-/// and only then the global slot, taken without waiting. A request queued behind its own user's
+/// and only then the global slot, after a short wait (<c>GlobalConcurrencyWaitMilliseconds</c>). A request queued behind its own user's
 /// limit therefore never holds a global slot, so one user's backlog cannot starve other users.
 /// Every slot taken is released in a <c>finally</c> on every path: success, 429, 503, an
 /// exception from the pipeline and a request cancelled by the client.
@@ -27,20 +27,104 @@ public class UserConcurrencyMiddleware
 {
     public const string TierItemKey = "ConcurrencyTier";
 
-    private sealed class SemaphoreEntry
+    /// <summary>
+    /// Per-user counting gate with a limit that can change while requests run. Unlike a
+    /// replaced <see cref="SemaphoreSlim"/>, the count of running requests survives a new limit.
+    /// </summary>
+    internal sealed class UserGate
     {
-        public int Capacity { get; }
-        public SemaphoreSlim Semaphore { get; }
-        public int InFlight; // mutated via Interlocked
-
-        public SemaphoreEntry(int capacity)
+        private sealed class Waiter
         {
-            Capacity = capacity;
-            Semaphore = new SemaphoreSlim(capacity, capacity);
+            public readonly TaskCompletionSource<int> Granted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public bool Done;
+        }
+
+        private readonly object _lock = new();
+        private readonly LinkedList<Waiter> _waiters = new();
+        private int _limit;
+        private int _held;
+
+        public UserGate(int limit) => _limit = Math.Max(0, limit);
+
+        public int Held { get { lock (_lock) return _held; } }
+
+        public int Limit { get { lock (_lock) return _limit; } }
+
+        /// <summary>Applies a new limit; a lower one takes effect as running requests finish.</summary>
+        public void SetLimit(int limit)
+        {
+            lock (_lock)
+            {
+                _limit = Math.Max(0, limit);
+                GrantWaiters();
+            }
+        }
+
+        /// <summary>Returns the 1-based slot taken, or 0 on timeout. Throws when cancelled.</summary>
+        public async Task<int> WaitAsync(TimeSpan timeout, CancellationToken ct)
+        {
+            Waiter waiter;
+            LinkedListNode<Waiter> node;
+            lock (_lock)
+            {
+                if (_waiters.Count == 0 && _held < _limit)
+                {
+                    return ++_held;
+                }
+                if (timeout <= TimeSpan.Zero)
+                {
+                    return 0;
+                }
+                waiter = new Waiter();
+                node = _waiters.AddLast(waiter);
+            }
+
+            try
+            {
+                return await waiter.Granted.Task.WaitAsync(timeout, ct);
+            }
+            catch (Exception ex) when (ex is TimeoutException or OperationCanceledException)
+            {
+                lock (_lock)
+                {
+                    if (waiter.Done)
+                    {
+                        // The slot was granted in the race with the timeout: give it back.
+                        _held--;
+                        GrantWaiters();
+                    }
+                    else
+                    {
+                        _waiters.Remove(node);
+                    }
+                }
+                if (ex is TimeoutException) return 0;
+                throw;
+            }
+        }
+
+        public void Release()
+        {
+            lock (_lock)
+            {
+                _held--;
+                GrantWaiters();
+            }
+        }
+
+        private void GrantWaiters()
+        {
+            while (_waiters.First != null && _held < _limit)
+            {
+                var waiter = _waiters.First.Value;
+                _waiters.RemoveFirst();
+                waiter.Done = true;
+                waiter.Granted.SetResult(++_held);
+            }
         }
     }
 
-    private static readonly ConcurrentDictionary<Guid, SemaphoreEntry> Semaphores = new();
+    private static readonly ConcurrentDictionary<Guid, UserGate> Semaphores = new();
 
     private const int LimitCacheDurationSeconds = 60;
     private static readonly ConcurrentDictionary<Guid, (int Limit, int QueueTimeoutSeconds, DateTimeOffset ExpiresAt)> LimitCache = new();
@@ -58,11 +142,7 @@ public class UserConcurrencyMiddleware
     /// </summary>
     public static int GetInFlightCount(Guid userId)
     {
-        if (!Semaphores.TryGetValue(userId, out var entry))
-        {
-            return 0;
-        }
-        return Math.Max(0, Volatile.Read(ref entry.InFlight));
+        return Semaphores.TryGetValue(userId, out var gate) ? gate.Held : 0;
     }
 
     /// <summary>
@@ -85,6 +165,7 @@ public class UserConcurrencyMiddleware
     // semaphore it never took from could then overfill it.
     private readonly SemaphoreSlim? _globalSemaphore;
     private readonly int _globalCapacity;
+    private readonly TimeSpan _globalWait;
 
     /// <summary>
     /// Free global slots, or null when the global cap is off. Diagnostics and tests: after any
@@ -101,7 +182,8 @@ public class UserConcurrencyMiddleware
         _logger = logger;
         _billingOptions = billingOptions.Value;
 
-        var globalLimit = _billingOptions.GlobalConcurrencyLimit;
+        var globalLimit = BillingOptions.EffectiveGlobalLimit(_billingOptions, Environment.ProcessorCount);
+        _globalWait = TimeSpan.FromMilliseconds(Math.Max(0, _billingOptions.GlobalConcurrencyWaitMilliseconds));
         if (globalLimit > 0)
         {
             _globalSemaphore = new SemaphoreSlim(globalLimit, globalLimit);
@@ -127,36 +209,33 @@ public class UserConcurrencyMiddleware
 
         var (limit, queueTimeoutSeconds) = await GetUserSettings(userId.Value, context.RequestServices);
 
-        var entry = Semaphores.AddOrUpdate(
-            userId.Value,
-            _ => new SemaphoreEntry(limit),
-            (_, existing) => existing.Capacity == limit ? existing : new SemaphoreEntry(limit));
+        // The gate is kept when the limit changes, so running requests stay counted.
+        var gate = Semaphores.GetOrAdd(userId.Value, _ => new UserGate(limit));
+        gate.SetLimit(limit);
 
         var waitTimeout = queueTimeoutSeconds > 0
             ? TimeSpan.FromSeconds(queueTimeoutSeconds)
             : TimeSpan.Zero;
 
-        // Both semaphores are captured locally: the finally releases exactly what was taken,
-        // even if the user's entry is replaced (limit changed) while the request runs.
-        // Known gap: a replaced entry starts with InFlight = 0, so for a moment the user can run old + new limit.
-        var userSemaphore = entry.Semaphore;
+        // The finally releases exactly what was taken.
         var globalSemaphore = _globalSemaphore;
         var userSlotAcquired = false;
         var globalSlotAcquired = false;
-        var inFlightCounted = false;
 
         try
         {
             // 1) The user's own slot, waiting in the user's queue. No global slot is held here.
+            int slot;
             try
             {
-                userSlotAcquired = await userSemaphore.WaitAsync(waitTimeout, context.RequestAborted);
+                slot = await gate.WaitAsync(waitTimeout, context.RequestAborted);
             }
             catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
             {
                 // The client went away while queued; nobody is left to answer.
                 return;
             }
+            userSlotAcquired = slot > 0;
 
             if (!userSlotAcquired)
             {
@@ -175,10 +254,17 @@ public class UserConcurrencyMiddleware
                 return;
             }
 
-            // 2) The global slot, without waiting: protects the server as a whole.
+            // 2) The global slot after a short wait, so the time spent in the user's queue is not wasted.
             if (globalSemaphore != null)
             {
-                globalSlotAcquired = globalSemaphore.Wait(0);
+                try
+                {
+                    globalSlotAcquired = await globalSemaphore.WaitAsync(_globalWait, context.RequestAborted);
+                }
+                catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+                {
+                    return;
+                }
                 if (!globalSlotAcquired)
                 {
                     _logger.LogWarning("Global concurrency limit ({Limit}) reached", _globalCapacity);
@@ -195,9 +281,7 @@ public class UserConcurrencyMiddleware
                 }
             }
 
-            // Atomic: this request's slot is determined right here, not later at debit time.
-            var slot = Interlocked.Increment(ref entry.InFlight);
-            inFlightCounted = true;
+            // Atomic: the slot was fixed when the gate granted it, not at debit time.
             var tier = ComputeTier(slot, _billingOptions.ConcurrencyTierSize, _billingOptions.MaxConcurrencyTier);
             context.Items[TierItemKey] = tier;
 
@@ -205,9 +289,8 @@ public class UserConcurrencyMiddleware
         }
         finally
         {
-            if (inFlightCounted) Interlocked.Decrement(ref entry.InFlight);
             if (globalSlotAcquired) globalSemaphore!.Release();
-            if (userSlotAcquired) userSemaphore.Release();
+            if (userSlotAcquired) gate.Release();
         }
     }
 

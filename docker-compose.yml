@@ -75,6 +75,10 @@ services:
       # Checkout sessions created before this UTC instant are accepted without the product
       # marker (those open at the deploy). Empty = strict. Remove a day after the deploy.
       - BILLING_PRODUCT_TAG_GRACE_UNTIL=${BILLING_PRODUCT_TAG_GRACE_UNTIL:-{{project.DOTNET_BILLING_PRODUCT_TAG_GRACE_UNTIL}}}
+      # #69/#94: cap on concurrent operations of the whole server. Empty = computed from the
+      # CPU count (max(16, 2/3 of the CPUs)); 0 = off. A request waits this many ms for a slot.
+      - GLOBAL_CONCURRENCY_LIMIT=${GLOBAL_CONCURRENCY_LIMIT:-{{project.DOTNET_GLOBAL_CONCURRENCY_LIMIT}}}
+      - GLOBAL_CONCURRENCY_WAIT_MS=${GLOBAL_CONCURRENCY_WAIT_MS:-{{project.DOTNET_GLOBAL_CONCURRENCY_WAIT_MS}}}
       - FqdnServerName=${FQDN_SERVER:-localhost}
       # Pool and timeouts (#75): the database is shared with the portal's PostgREST and pool,
       # so this server must not take what its connection-limited role would refuse anyway.
