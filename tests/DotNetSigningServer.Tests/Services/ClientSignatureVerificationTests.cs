@@ -44,21 +44,63 @@ public class ClientSignatureVerificationTests : IDisposable
 
     private sealed record Signer(string CertificatePem, AsymmetricKeyParameter PrivateKey);
 
-    private static Signer NewRsaSigner() => NewSigner(
-        GenerateRsa(), "SHA256WithRSA");
+    private static Signer NewRsaSigner(int bits = 2048) => NewSigner(
+        GenerateRsa(bits), "SHA256WithRSA");
 
-    private static Signer NewEcSigner()
+    private static Signer NewEcSigner() => NewEcSigner(SecObjectIdentifiers.SecP256r1);
+
+    private static Signer NewEcSigner(DerObjectIdentifier curve)
     {
         var generator = new ECKeyPairGenerator("EC");
-        generator.Init(new ECKeyGenerationParameters(SecObjectIdentifiers.SecP256r1, new SecureRandom()));
+        generator.Init(new ECKeyGenerationParameters(curve, new SecureRandom()));
         return NewSigner(generator.GenerateKeyPair(), "SHA256WithECDSA");
     }
 
-    private static AsymmetricCipherKeyPair GenerateRsa()
+    private static AsymmetricCipherKeyPair GenerateRsa(int bits = 2048)
     {
         var generator = new RsaKeyPairGenerator();
-        generator.Init(new KeyGenerationParameters(new SecureRandom(), 2048));
+        generator.Init(new KeyGenerationParameters(new SecureRandom(), bits));
         return generator.GenerateKeyPair();
+    }
+
+    /// <summary>ECDSA as WebCrypto returns it: IEEE P1363 <c>r‖s</c>, each padded to the curve size.</summary>
+    private static byte[] SignP1363(AsymmetricKeyParameter key, byte[] data)
+    {
+        var ecKey = (ECPrivateKeyParameters)key;
+        var size = (ecKey.Parameters.N.BitLength + 7) / 8;
+        var digest = new Sha256Digest();
+        digest.BlockUpdate(data, 0, data.Length);
+        var hash = new byte[digest.GetDigestSize()];
+        digest.DoFinal(hash, 0);
+        var ecdsa = new ECDsaSigner();
+        ecdsa.Init(true, new ParametersWithRandom(key, new SecureRandom()));
+        var rs = ecdsa.GenerateSignature(hash);
+        var raw = new byte[size * 2];
+        var r = rs[0].ToByteArrayUnsigned();
+        var s = rs[1].ToByteArrayUnsigned();
+        r.CopyTo(raw.AsSpan(size - r.Length));
+        s.CopyTo(raw.AsSpan(2 * size - s.Length));
+        return raw;
+    }
+
+    /// <summary>The portal's conversion: minimal DER integers, short or long (0x81) length form.</summary>
+    private static byte[] P1363ToDer(byte[] raw)
+    {
+        static byte[] Integer(ReadOnlySpan<byte> value)
+        {
+            var start = 0;
+            while (start < value.Length - 1 && value[start] == 0) start++;
+            var body = value[start..].ToArray();
+            if ((body[0] & 0x80) != 0) body = new byte[] { 0 }.Concat(body).ToArray();
+            return new byte[] { 0x02, (byte)body.Length }.Concat(body).ToArray();
+        }
+
+        var half = raw.Length / 2;
+        var content = Integer(raw.AsSpan(0, half)).Concat(Integer(raw.AsSpan(half))).ToArray();
+        var header = content.Length < 0x80
+            ? new byte[] { 0x30, (byte)content.Length }
+            : new byte[] { 0x30, 0x81, (byte)content.Length };
+        return header.Concat(content).ToArray();
     }
 
     private static Signer NewSigner(AsymmetricCipherKeyPair keyPair, string certificateAlgorithm)
@@ -144,6 +186,44 @@ public class ClientSignatureVerificationTests : IDisposable
 
         // BouncyCastle's ECDSA signer outputs DER, like the portal sends after converting r‖s.
         AssertVerifies(Finish(path, signer, Sign("SHA256withECDSA", signer.PrivateKey, attributes)));
+    }
+
+    public static IEnumerable<object[]> WebCryptoCurves() => new[]
+    {
+        new object[] { "P-256", SecObjectIdentifiers.SecP256r1, false },
+        new object[] { "P-384", SecObjectIdentifiers.SecP384r1, false },
+        new object[] { "P-521", SecObjectIdentifiers.SecP521r1, true },
+    };
+
+    [Theory]
+    [MemberData(nameof(WebCryptoCurves))]
+    public void Webcrypto_ecdsa_converted_to_der_is_embedded_and_verifies(string curveName, DerObjectIdentifier curve, bool longForm)
+    {
+        var signer = NewEcSigner(curve);
+        var (path, attributes) = Presign(signer);
+
+        // P-521 almost always needs the long length form; retry the rare short one so both forms are covered.
+        byte[] der;
+        var attempts = 0;
+        do
+        {
+            der = P1363ToDer(SignP1363(signer.PrivateKey, attributes));
+        } while ((der[1] == 0x81) != longForm && ++attempts < 20);
+        Assert.True((der[1] == 0x81) == longForm, $"{curveName}: expected {(longForm ? "long" : "short")} DER length form");
+
+        AssertVerifies(Finish(path, signer, der));
+    }
+
+    [Theory]
+    [InlineData(3072)]
+    [InlineData(4096)]
+    public void Webcrypto_rsa_pkcs1_of_larger_keys_is_embedded_and_verifies(int bits)
+    {
+        var signer = NewRsaSigner(bits);
+        var (path, attributes) = Presign(signer);
+
+        // RSASSA-PKCS1-v1_5 with SHA-256 is exactly what WebCrypto produces.
+        AssertVerifies(Finish(path, signer, Sign("SHA256withRSA", signer.PrivateKey, attributes)));
     }
 
     [Fact]

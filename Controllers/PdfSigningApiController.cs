@@ -314,7 +314,8 @@ namespace DotNetSigningServer.Controllers
         /// </summary>
         private async Task<IActionResult> SignatureInvalidResultAsync(string presignId, SignatureInvalidException ex)
         {
-            var attempts = (await Operations.FindByPresignAsync(presignId))?.Attempts ?? 0;
+            // This request's own attempt, not a re-read: a concurrent claim must not move it.
+            var attempts = HttpContext.Items[OperationAttemptItemKey] is int own ? own : 0;
             var remaining = Math.Max(0, MaxSignAttemptsPerPresign - attempts);
             Logger.LogWarning("Sign refused for presign {PresignId}: client signature invalid ({Detail}); attempt {Attempt}",
                 presignId, ex.Message, attempts);
