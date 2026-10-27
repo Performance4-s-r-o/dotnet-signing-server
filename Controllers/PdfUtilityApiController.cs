@@ -48,17 +48,18 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { message = Localizer["PdfContentRequired"].Value });
             }
 
+            int pages;
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "PDF/A conversion");
-                SafetyGuard.EnsureSafePdf(input.PdfContent, "PDF/A conversion");
+                pages = SafetyGuard.EnsureSafePdf(input.PdfContent, "PDF/A conversion");
             }
             catch (ApiValidationException ex)
             {
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
-            return await ConvertToPdfACoreAsync(user, input, null, ApiOperationService.Fingerprint("pdfa", input));
+            return await ConvertToPdfACoreAsync(user, input, null, pages, ApiOperationService.Fingerprint("pdfa", input));
         }
 
         /// <summary>
@@ -81,24 +82,24 @@ namespace DotNetSigningServer.Controllers
             {
                 return BadRequest(new { message = Localizer["PdfContentRequired"].Value });
             }
+            int pages;
             try
             {
-                SafetyGuard.EnsureSafePdf(pdf, "PDF/A conversion");
+                pages = SafetyGuard.EnsureSafePdf(pdf, "PDF/A conversion");
             }
             catch (ApiValidationException ex)
             {
                 return InputRefused(ex);
             }
 
-            return await ConvertToPdfACoreAsync(user, input!, pdf, BinaryFingerprint("pdfa", input!, pdf));
+            return await ConvertToPdfACoreAsync(user, input!, pdf, pages, BinaryFingerprint("pdfa", input!, pdf));
         }
 
         /// <summary>pdfa po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
-        private async Task<IActionResult> ConvertToPdfACoreAsync(User user, ConvertToPdfAInput input, byte[]? pdf, string fingerprint)
+        private async Task<IActionResult> ConvertToPdfACoreAsync(User user, ConvertToPdfAInput input, byte[]? pdf, int pageCount, string fingerprint)
         {
             try
             {
-                var pageCount = pdf == null ? CountPagesFromBase64(input.PdfContent) : CountPages(pdf);
                 var requiredCredits = CalculateCreditsForPages(pageCount);
 
                 // Reserved before the conversion; 402 here means it never ran.
@@ -142,12 +143,13 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { message = Localizer["DataSetRequired"].Value });
             }
 
+            int? directPages = null;
             try
             {
                 if (hasContent)
                 {
                     LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Fill PDF");
-                    SafetyGuard.EnsureSafePdf(input.PdfContent, "Fill PDF");
+                    directPages = SafetyGuard.EnsureSafePdf(input.PdfContent, "Fill PDF");
                 }
             }
             catch (ApiValidationException ex)
@@ -158,7 +160,7 @@ namespace DotNetSigningServer.Controllers
             try
             {
                 var fingerprint = ApiOperationService.Fingerprint("fill-pdf", input);
-                var (pdfBase64, pageCount) = await ResolvePdfForFillAsync(input, user.Id);
+                var (pdfBase64, pageCount) = await ResolvePdfForFillAsync(input, user.Id, directPages);
                 var requiredCredits = CalculateCreditsForPages(pageCount) * (input.Data?.Count ?? 0);
 
                 return await RunOperationAsync(user, "fill-pdf", fingerprint, requiredCredits, async ct =>
@@ -578,19 +580,18 @@ namespace DotNetSigningServer.Controllers
             return single != null ? new List<Result> { single } : new List<Result>();
         }
 
-        private async Task<(string pdfBase64, int pageCount)> ResolvePdfForFillAsync(FillPdfInput input, Guid userId)
+        private async Task<(string pdfBase64, int pageCount)> ResolvePdfForFillAsync(FillPdfInput input, Guid userId, int? directPages)
         {
             if (input.TemplateId != null)
             {
                 var template = await PdfTemplateService.GetTemplateAsync(input.TemplateId.Value, userId);
                 // A stored template skipped the check in FillPdf; run it before anything parses it.
-                SafetyGuard.EnsureSafePdf(template.PdfContent, "Fill PDF (template)");
-                var pages = CountPagesFromBase64(template.PdfContent);
+                var pages = SafetyGuard.EnsureSafePdf(template.PdfContent, "Fill PDF (template)");
                 return (template.PdfContent, pages);
             }
 
-            var count = CountPagesFromBase64(input.PdfContent);
-            return (input.PdfContent, count);
+            // The direct PDF was parsed by the guard in FillPdf; its page count is reused (#70).
+            return (input.PdfContent, directPages ?? CountPagesFromBase64(input.PdfContent));
         }
 
         #endregion

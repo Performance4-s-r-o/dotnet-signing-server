@@ -38,7 +38,7 @@ public class BinaryChannelEndpointsTests
 
     // ── harness ──────────────────────────────────────────────────────────
 
-    private sealed record Call(string Operation, string Fingerprint, int BaseCost, string Body);
+    private sealed record Call(string Operation, string Fingerprint, int BaseCost, string Body, int Opens = 0);
 
     /// <summary>Otisk bajtů, které služba dostala: stejný dokument → stejný výsledek, v obou kanálech.</summary>
     private static string Stamp(byte[] pdf) => Convert.ToBase64String(SHA256.HashData(pdf));
@@ -70,7 +70,7 @@ public class BinaryChannelEndpointsTests
         {
             // Zapsáno dřív než práce: otisk a cena platí i pro operaci, která skončí chybou.
             var index = Calls.Count;
-            Calls.Add(new Call(operation, fingerprint, baseCost, ""));
+            Calls.Add(new Call(operation, fingerprint, baseCost, "", PdfOpenCounter.Current));
             var result = await work(CancellationToken.None);
             Calls[index] = Calls[index] with { Body = JsonSerializer.Serialize(result.Body, result.Body.GetType(), WebJson) };
             return Ok(result.Body);
@@ -95,7 +95,7 @@ public class BinaryChannelEndpointsTests
         {
             // Zapsáno dřív než práce: otisk a cena platí i pro operaci, která skončí chybou.
             var index = Calls.Count;
-            Calls.Add(new Call(operation, fingerprint, baseCost, ""));
+            Calls.Add(new Call(operation, fingerprint, baseCost, "", PdfOpenCounter.Current));
             var result = await work(CancellationToken.None);
             Calls[index] = Calls[index] with { Body = JsonSerializer.Serialize(result.Body, result.Body.GetType(), WebJson) };
             return Ok(result.Body);
@@ -227,6 +227,17 @@ public class BinaryChannelEndpointsTests
         private List<Call> _calls = new();
         public IReadOnlyList<Call> RecordedCalls => _calls;
 
+        public async Task<Guid> StoreTemplateAsync(byte[] pdf)
+        {
+            var fields = new List<PdfFieldDefinition>
+            {
+                new() { FieldName = "F", Type = PdfFieldType.Text, Rect = new SignRect { X = 10, Y = 10, Width = 100, Height = 20 }, Page = 1, FontSize = 12 },
+            };
+            var created = await _templates.CreateTemplateAsync(
+                new CreateTemplateInput { PdfContent = Convert.ToBase64String(pdf), Fields = fields }, _user.Id);
+            return created.TemplateId;
+        }
+
         /// <summary>Účet bez oprávnění k pečeti.</summary>
         public void RevokeSeal()
         {
@@ -356,6 +367,62 @@ public class BinaryChannelEndpointsTests
 
     private static Task<IActionResult> RunJson(Endpoint e, Attempt a, byte[] pdf) =>
         e.Json(a, Convert.ToBase64String(pdf));
+
+    // ── PDF se v jednom požadavku čte nejvýš jednou před prací (#70) ────
+
+    [Fact]
+    public async Task Pdfa_opens_the_pdf_once_before_the_work_in_both_channels()
+    {
+        var e = Find("convert/pdfa");
+        var pdf = Pdf(pages: 3);
+
+        PdfOpenCounter.Begin();
+        var json = new Attempt();
+        await RunJson(e, json, pdf);
+        Assert.Equal(1, json.RecordedCalls.Single().Opens);
+        Assert.Equal(1, PdfOpenCounter.Current); // the mocked conversion opens nothing
+
+        PdfOpenCounter.Begin();
+        var binary = new Attempt();
+        await RunBinary(e, binary, pdf);
+        Assert.Equal(1, binary.RecordedCalls.Single().Opens);
+    }
+
+    [Fact]
+    public async Task Fill_with_a_direct_pdf_opens_it_once_before_the_work()
+    {
+        var pdf = Pdf(pages: 2);
+        var input = new FillPdfInput
+        {
+            PdfContent = Convert.ToBase64String(pdf),
+            Fields = new List<PdfFieldDefinition>
+            {
+                new() { FieldName = "F", Type = PdfFieldType.Text, Rect = new SignRect { X = 10, Y = 10, Width = 100, Height = 20 }, Page = 1, FontSize = 12 },
+            },
+            Data = new List<FillDataSet> { new() },
+        };
+
+        PdfOpenCounter.Begin();
+        var a = new Attempt();
+        try { await a.Utility().FillPdf(input); }
+        catch (InvalidOperationException) { /* the test harness has no ProblemDetails; only the count before the work matters */ }
+
+        Assert.Equal(1, a.RecordedCalls.Single().Opens);
+    }
+
+    [Fact]
+    public async Task Fill_with_a_template_opens_it_once_before_the_work()
+    {
+        var a = new Attempt();
+        var templateId = await a.StoreTemplateAsync(Pdf(pages: 2));
+        var input = new FillPdfInput { TemplateId = templateId, Data = new List<FillDataSet> { new() } };
+
+        PdfOpenCounter.Begin();
+        try { await a.Utility().FillPdf(input); }
+        catch (InvalidOperationException) { /* see above */ }
+
+        Assert.Equal(1, a.RecordedCalls.Single().Opens);
+    }
 
     // ── binární varianta dá totéž co JSON ────────────────────────────────
 

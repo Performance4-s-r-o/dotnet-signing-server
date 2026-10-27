@@ -44,7 +44,7 @@ public class PdfSafetyGuard
         _options = options.Value;
     }
 
-    public void EnsureSafePdf(string? base64, string context, bool checkActiveContent = true)
+    public int EnsureSafePdf(string? base64, string context, bool checkActiveContent = true)
     {
         if (string.IsNullOrWhiteSpace(base64))
         {
@@ -61,7 +61,7 @@ public class PdfSafetyGuard
             throw new ApiValidationException("PDF_INVALID", $"{context}: not base64");
         }
 
-        EnsureSafePdf(bytes, context, checkActiveContent);
+        return EnsureSafePdf(bytes, context, checkActiveContent);
     }
 
     /// <param name="checkActiveContent">
@@ -69,7 +69,8 @@ public class PdfSafetyGuard
     /// document that is only read, and refusing them would refuse verifying it.
     /// The structural limits apply either way.
     /// </param>
-    public void EnsureSafePdf(byte[] bytes, string context, bool checkActiveContent = true)
+    /// <returns>The page count, read from the one parse done here (#70).</returns>
+    public int EnsureSafePdf(byte[] bytes, string context, bool checkActiveContent = true)
     {
         if (bytes.LongLength > _options.PdfMaxBytes)
         {
@@ -97,6 +98,7 @@ public class PdfSafetyGuard
             handler.SetMaxSizeOfSingleDecompressedPdfStream((int)Math.Min(_options.PdfMaxStreamBytes, int.MaxValue));
             handler.SetMaxSizeOfDecompressedPdfStreamsSum(_options.PdfMaxTotalStreamBytes);
             handler.SetMaxNumberOfElementsInXrefStructure(_options.PdfMaxObjects);
+            PdfOpenCounter.Record();
             reader = new PdfReader(new MemoryStream(bytes), new ReaderProperties().SetMemoryLimitsAwareHandler(handler));
             document = new PdfDocument(reader);
         }
@@ -140,6 +142,8 @@ public class PdfSafetyGuard
                     throw new ApiValidationException("PDF_ACTIVE_CONTENT", $"{context}: {offender}");
                 }
             }
+
+            return pages;
         }
     }
 
