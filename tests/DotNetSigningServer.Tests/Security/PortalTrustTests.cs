@@ -282,14 +282,15 @@ public class PortalTrustTests : IDisposable
 
     // ── Presign / sign: tenant stored, tenant checked ───────────────────────────────────────────
 
-    private PdfSigningApiController Controller(HttpContext context)
+    private PdfSigningApiController Controller(HttpContext context, LimitsOptions? limits = null)
     {
+        limits ??= new LimitsOptions();
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddMvcCore(); // Problem() of the unchecked path needs its factory
         services.AddSingleton(_db);
-        services.AddSingleton(Microsoft.Extensions.Options.Options.Create(new LimitsOptions()));
-        services.AddSingleton(new PdfSafetyGuard(Microsoft.Extensions.Options.Options.Create(new LimitsOptions())));
+        services.AddSingleton(Microsoft.Extensions.Options.Options.Create(limits));
+        services.AddSingleton(new PdfSafetyGuard(Microsoft.Extensions.Options.Options.Create(limits)));
         services.AddSingleton(new ApiOperationService(_db, new EphemeralDataProtectionProvider(),
             NullLogger<ApiOperationService>.Instance, Microsoft.Extensions.Options.Options.Create(new OperationsOptions())));
         context.RequestServices = services.BuildServiceProvider();
@@ -340,6 +341,93 @@ public class PortalTrustTests : IDisposable
         {
             File.Delete(row.PresignedPdfPath);
         }
+    }
+
+    private async Task<IActionResult> PresignOverTheCapAsync(bool trusted)
+    {
+        await PortalUserInDbAsync();
+        var path = Path.GetTempFileName();
+        _db.SigningData.Add(new SigningData { UserId = PortalUserId, PresignedPdfPath = path });
+        await _db.SaveChangesAsync();
+        var (certPem, _, _) = TestHelpers.CreateTestCertificate();
+        var controller = Controller(CallerContext(trusted), new LimitsOptions { MaxPendingPresignsPerUser = 1 });
+        try
+        {
+            return await controller.PreSign(new PreSignInput
+            {
+                PdfContent = TestHelpers.CreateMinimalPdfBase64(),
+                CertificatePem = certPem,
+                SignRect = new SignRect { X = 10, Y = 10, Width = 200, Height = 50 },
+            });
+        }
+        finally
+        {
+            File.Delete(path);
+            foreach (var row in _db.SigningData.ToList()) File.Delete(row.PresignedPdfPath);
+        }
+    }
+
+    [Fact]
+    public async Task The_pending_presign_cap_does_not_apply_to_the_portal()
+    {
+        Assert.IsType<OkObjectResult>(await PresignOverTheCapAsync(trusted: true));
+    }
+
+    [Fact]
+    public async Task The_pending_presign_cap_applies_to_any_other_caller()
+    {
+        var result = await PresignOverTheCapAsync(trusted: false);
+        Assert.Equal(StatusCodes.Status429TooManyRequests, Assert.IsAssignableFrom<ObjectResult>(result).StatusCode);
+        Assert.Equal("TOO_MANY_PENDING_PRESIGNS", CodeOf(result));
+    }
+
+    private async Task<IActionResult> CreateTemplateOverTheCapAsync(bool trusted)
+    {
+        await PortalUserInDbAsync();
+        var limits = new LimitsOptions { MaxTemplatesPerUser = 1 };
+        var guard = new ContentLimitGuard(Microsoft.Extensions.Options.Options.Create(limits));
+        var strings = new Mock<IStringLocalizer>();
+        strings.Setup(l => l[It.IsAny<string>()]).Returns((string n) => new LocalizedString(n, n));
+        var factory = new Mock<IStringLocalizerFactory>();
+        factory.Setup(f => f.Create(It.IsAny<Type>())).Returns(strings.Object);
+        var service = new PdfTemplateService(_db, NullLogger<PdfTemplateService>.Instance, guard, factory.Object);
+        var localizer = new Mock<IStringLocalizer<SharedStrings>>();
+        localizer.Setup(l => l[It.IsAny<string>()]).Returns((string n) => new LocalizedString(n, n));
+
+        var services = new ServiceCollection();
+        services.AddSingleton(new PdfSafetyGuard(Microsoft.Extensions.Options.Options.Create(limits)));
+        var context = CallerContext(trusted);
+        context.RequestServices = services.BuildServiceProvider();
+        var controller = new PdfTemplateApiController(
+            _db, Mock.Of<IApiAuthService>(), NullLogger<PdfTemplateApiController>.Instance, guard,
+            Microsoft.Extensions.Options.Options.Create(new BillingOptions()), TestHelpers.CreateMockEnvironment("Testing"),
+            service, null!, localizer.Object)
+        {
+            ControllerContext = new ControllerContext { HttpContext = context },
+        };
+        CreateTemplateInput Input() => new()
+        {
+            PdfContent = TestHelpers.CreateMinimalPdfBase64(),
+            Fields = new List<PdfFieldDefinition>
+            {
+                new() { FieldName = "F", Type = PdfFieldType.Text, Rect = new SignRect { X = 10, Y = 10, Width = 100, Height = 20 }, Page = 1, FontSize = 12 },
+            },
+        };
+        await service.CreateTemplateAsync(Input(), PortalUserId, default, trustedCaller: true); // one already stored
+        return await controller.CreatePdfTemplate(Input());
+    }
+
+    [Fact]
+    public async Task The_template_cap_does_not_apply_to_the_portal()
+    {
+        Assert.IsType<OkObjectResult>(await CreateTemplateOverTheCapAsync(trusted: true));
+    }
+
+    [Fact]
+    public async Task The_template_cap_applies_to_any_other_caller()
+    {
+        var result = await CreateTemplateOverTheCapAsync(trusted: false);
+        Assert.Equal("TOO_MANY_TEMPLATES", CodeOf(result));
     }
 
     private async Task<string> PresignForAsync(string? tenant)

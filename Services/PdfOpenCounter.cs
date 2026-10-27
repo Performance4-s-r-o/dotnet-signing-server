@@ -6,7 +6,7 @@ namespace DotNetSigningServer.Services;
 /// Counts how often a request opens a PDF with iText (#70: at most once per request). Counts only
 /// inside a <see cref="Begin"/> scope, so production pays one null check.
 /// </summary>
-public static class PdfOpenCounter
+internal static class PdfOpenCounter
 {
     private static readonly AsyncLocal<int[]?> Scope = new();
 

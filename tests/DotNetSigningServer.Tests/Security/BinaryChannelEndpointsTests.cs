@@ -227,6 +227,17 @@ public class BinaryChannelEndpointsTests
         private List<Call> _calls = new();
         public IReadOnlyList<Call> RecordedCalls => _calls;
 
+        public async Task<Guid> StoreTemplateAsync(byte[] pdf)
+        {
+            var fields = new List<PdfFieldDefinition>
+            {
+                new() { FieldName = "F", Type = PdfFieldType.Text, Rect = new SignRect { X = 10, Y = 10, Width = 100, Height = 20 }, Page = 1, FontSize = 12 },
+            };
+            var created = await _templates.CreateTemplateAsync(
+                new CreateTemplateInput { PdfContent = Convert.ToBase64String(pdf), Fields = fields }, _user.Id);
+            return created.TemplateId;
+        }
+
         /// <summary>Účet bez oprávnění k pečeti.</summary>
         public void RevokeSeal()
         {
@@ -395,6 +406,20 @@ public class BinaryChannelEndpointsTests
         var a = new Attempt();
         try { await a.Utility().FillPdf(input); }
         catch (InvalidOperationException) { /* the test harness has no ProblemDetails; only the count before the work matters */ }
+
+        Assert.Equal(1, a.RecordedCalls.Single().Opens);
+    }
+
+    [Fact]
+    public async Task Fill_with_a_template_opens_it_once_before_the_work()
+    {
+        var a = new Attempt();
+        var templateId = await a.StoreTemplateAsync(Pdf(pages: 2));
+        var input = new FillPdfInput { TemplateId = templateId, Data = new List<FillDataSet> { new() } };
+
+        PdfOpenCounter.Begin();
+        try { await a.Utility().FillPdf(input); }
+        catch (InvalidOperationException) { /* see above */ }
 
         Assert.Equal(1, a.RecordedCalls.Single().Opens);
     }

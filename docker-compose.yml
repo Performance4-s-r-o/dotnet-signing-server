@@ -63,8 +63,8 @@ services:
       - TRUSTED_PROXIES=${TRUSTED_PROXIES:-{{project.DOTNET_TRUSTED_PROXIES}}}
       - AllowedHosts=${ALLOWED_HOSTS:-*}
       - UseLocalDb=false
-      # Per-account caps (#74); 0 = no limit. The portal uses one account for every tenant, so a
-      # number here caps the whole platform: set it with that in mind.
+      # Per-account caps (#74); 0 = no limit. The portal's account (TRUSTED_CALLER_USER_IDS)
+      # is exempt: it works for every tenant, so a number here would cap the whole platform.
       - Limits__MaxPendingPresignsPerUser=${MAX_PENDING_PRESIGNS_PER_USER:-20}
       - Limits__MaxTemplatesPerUser=${MAX_TEMPLATES_PER_USER:-100}
       # #80. Each falls back to a Coolify project-shared variable (DOTNET_*); an unset one
