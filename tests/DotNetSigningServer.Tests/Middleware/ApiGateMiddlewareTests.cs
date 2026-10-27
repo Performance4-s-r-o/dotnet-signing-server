@@ -246,6 +246,7 @@ public class ApiGateMiddlewareTests : IDisposable
             {
                 ["RateLimits:UnauthenticatedPerMinute"] = options.UnauthenticatedPerMinute.ToString(),
                 ["RateLimits:TsaProbePerMinute"] = options.TsaProbePerMinute.ToString(),
+                ["RateLimits:TimestampDigestPerMinute"] = options.TimestampDigestPerMinute.ToString(),
                 ["RateLimits:SignUpPerHour"] = options.SignUpPerHour.ToString(),
                 ["RateLimits:PerKeyPerMinute"] = options.PerKeyPerMinute.ToString(),
             }).Build();
@@ -307,6 +308,17 @@ public class ApiGateMiddlewareTests : IDisposable
         {
             Assert.True(limiter.AttemptAcquire(Request("/api/code-formats", "203.0.113.7", method: "GET")).IsAcquired);
         }
+    }
+
+    [Fact]
+    public void Timestamp_digest_has_its_own_limit_per_key()
+    {
+        var limiter = Limiter(new RateLimitOptions { TimestampDigestPerMinute = 1 });
+        var user = Guid.NewGuid();
+        Assert.True(limiter.AttemptAcquire(Request("/api/timestamp-digest", "203.0.113.7", user)).IsAcquired);
+        Assert.False(limiter.AttemptAcquire(Request("/api/timestamp-digest", "203.0.113.7", user)).IsAcquired);
+        Assert.True(limiter.AttemptAcquire(Request("/api/timestamp-digest", "203.0.113.7", Guid.NewGuid())).IsAcquired);
+        Assert.True(limiter.AttemptAcquire(Request("/api/presign", "203.0.113.7", user)).IsAcquired);
     }
 
     [Fact]

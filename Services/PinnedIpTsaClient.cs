@@ -38,7 +38,7 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
 
     private static string KeyFor(string url, string? username, string? password)
     {
-        var host = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : url;
+        var host = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Authority : url;
         if (string.IsNullOrEmpty(username)) return host;
         var hash = System.Security.Cryptography.SHA256.HashData(
             Encoding.UTF8.GetBytes($"{username}\0{password}"));

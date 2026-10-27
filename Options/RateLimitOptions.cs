@@ -16,6 +16,7 @@ public class RateLimitOptions
 
     public int TsaProbePerMinute { get; set; } = 6;
     public int InspectSignaturesPerMinute { get; set; } = 30;
+    public int TimestampDigestPerMinute { get; set; } = 30;
 
     public int SignUpPerHour { get; set; } = 5;
 

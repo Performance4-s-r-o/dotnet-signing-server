@@ -183,6 +183,9 @@ public class TsaCircuitBreakerTests
 
         Assert.NotEqual(a.BreakerKey, b.BreakerKey);
         Assert.Equal(a.BreakerKey, a2.BreakerKey);
+        // Same host on another port is another authority.
+        Assert.NotEqual(new PinnedIpTsaClient("https://tsa.example/tsr", null, null).BreakerKey,
+            new PinnedIpTsaClient("https://tsa.example:8443/tsr", null, null).BreakerKey);
         Assert.DoesNotContain("wrong", a.BreakerKey);
     }
 

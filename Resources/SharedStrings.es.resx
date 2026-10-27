@@ -508,6 +508,20 @@
   <data name="ApiDocTimestampCredits" xml:space="preserve"><value>1</value></data>
   <data name="ApiDocTimestampMeta" xml:space="preserve"><value>Añada a un PDF un sello de tiempo RFC 3161 de confianza desde cualquier TSA. Prueba que el documento existía en un momento dado, sin necesidad de certificado de firma.</value></data>
   <data name="ApiDocTimestampIntro" xml:space="preserve"><value>Aplica un sello de una autoridad de sellado de tiempo RFC 3161 sin firmar el documento con un certificado personal. Útil por sí solo como prueba de existencia, o combinado con una firma para la validación a largo plazo.</value></data>
+  <data name="ApiDocTsDigestTitle" xml:space="preserve"><value>Sellar en el tiempo un resumen</value></data>
+  <data name="ApiDocTsDigestPurpose" xml:space="preserve"><value>Token RFC 3161 para un resumen SHA-256</value></data>
+  <data name="ApiDocTsDigestCredits" xml:space="preserve"><value>Gratis</value></data>
+  <data name="ApiDocTsDigestMeta" xml:space="preserve"><value>Obtenga un token de sello de tiempo RFC 3161 para un resumen SHA-256 que ya tiene. No se sube ningún documento.</value></data>
+  <data name="ApiDocTsDigestIntro" xml:space="preserve"><value>Envía un resumen SHA-256 a la autoridad de sellado de tiempo que indique y devuelve el token RFC 3161 con la hora de emisión y el sujeto de la autoridad. Sirve para demostrar que unos datos existían en un momento dado (raíz de Merkle, cabecera de un registro de auditoría, hash de un archivo) sin enviar los datos.</value></data>
+  <data name="ApiDocTsDigestNote1" xml:space="preserve"><value>Gratis: no se cobra nada.</value></data>
+  <data name="ApiDocTsDigestNote2" xml:space="preserve"><value>El resumen tiene exactamente 32 bytes: 64 caracteres hexadecimales o base64. Otras longitudes y algoritmos se rechazan (DIGEST_INVALID).</value></data>
+  <data name="ApiDocTsDigestNote3" xml:space="preserve"><value>La autoridad se elige en la solicitud y se somete a las mismas comprobaciones que cualquier sello: solo HTTPS en el puerto 443, sin direcciones internas, sin credenciales en la URL, copia de seguridad opcional. Esta ruta gratuita no consulta ni alimenta el cortacircuitos (como tsa-probe), ejecuta como máximo 8 solicitudes a la vez y se rinde a los 30 s. El token no se valida contra una lista de confianza.</value></data>
+  <data name="TimestampDigestError" xml:space="preserve"><value>Se produjo un error al sellar el resumen en el tiempo</value></data>
+  <data name="Error_TSA_URL_REQUIRED" xml:space="preserve"><value>Se requiere la URL de la autoridad de sellado de tiempo (tsaUrl).</value></data>
+  <data name="Error_TSA_PORT_NOT_ALLOWED" xml:space="preserve"><value>La URL de la autoridad de sellado de tiempo debe usar el puerto HTTPS predeterminado (443).</value></data>
+  <data name="Error_TSA_URL_INVALID" xml:space="preserve"><value>La URL de la autoridad de sellado de tiempo no puede contener credenciales.</value></data>
+  <data name="Error_TIMESTAMP_DIGEST_BUSY" xml:space="preserve"><value>Hay demasiadas solicitudes de sello de tiempo en curso. Inténtelo de nuevo en breve.</value></data>
+  <data name="Error_DIGEST_INVALID" xml:space="preserve"><value>El resumen debe tener exactamente 32 bytes (SHA-256), indicado como 64 caracteres hexadecimales o como base64.</value></data>
   <data name="ApiDocInspectTitle" xml:space="preserve"><value>Inspeccionar las firmas de un PDF</value></data>
   <data name="ApiDocInspectPurpose" xml:space="preserve"><value>Listar firmas, niveles y fechas de caducidad</value></data>
   <data name="ApiDocInspectCredits" xml:space="preserve"><value>Gratis</value></data>

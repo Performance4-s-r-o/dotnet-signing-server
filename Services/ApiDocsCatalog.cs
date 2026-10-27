@@ -167,6 +167,39 @@ Response:
                 Curl: $$"""curl -X POST {{b}}/timestamp -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"pdfContent":"base64-pdf","fieldName":"Timestamp1","tsaUrl":"https://freetsa.org/tsr"}'"""),
 
             new ApiEndpointDoc(
+                Slug: "timestamp-digest",
+                Method: "POST",
+                Path: "/api/timestamp-digest",
+                TitleKey: "ApiDocTsDigestTitle",
+                PurposeKey: "ApiDocTsDigestPurpose",
+                CreditsKey: "ApiDocTsDigestCredits",
+                MetaKey: "ApiDocTsDigestMeta",
+                IntroKey: "ApiDocTsDigestIntro",
+                Sample: """
+POST /api/timestamp-digest
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "digest": "9f2c…64 hex characters, or base64 of the 32 bytes",
+  "tsaUrl": "https://timestamp.example.com/tsr",
+  "tsaUsername": null,
+  "tsaPassword": null,
+  "tsaBackupUrl": null
+}
+
+Response:
+{
+  "token": "base64-der-timestamp-token",
+  "genTime": "2026-10-27T08:15:02Z",
+  "tsaSubject": "CN=Example TSA, O=Example",
+  "digestAlgorithm": "SHA-256"
+}
+""",
+                Curl: $$"""curl -X POST {{b}}/timestamp-digest -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"digest":"<64-hex-or-base64>","tsaUrl":"https://timestamp.example.com/tsr"}'""",
+                NoteKeys: new[] { "ApiDocTsDigestNote1", "ApiDocTsDigestNote2", "ApiDocTsDigestNote3" }),
+
+            new ApiEndpointDoc(
                 Slug: "inspect-signatures",
                 Method: "POST",
                 Path: "/api/inspect-signatures",

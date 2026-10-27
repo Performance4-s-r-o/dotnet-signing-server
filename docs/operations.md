@@ -148,7 +148,7 @@ values ('feature:find-codes', 'zahlcení 14. 10.', now());
 delete from dotnet_signing."OperatorSwitches" where "Name" = 'feature:find-codes';
 ```
 
-Limity (`RateLimits:*`, env `RateLimits__…`): neautentizované `/api` 30/min na IP (`CF-Connecting-IP`), klíč 600/min, `tsa-probe` 6/min, `inspect-signatures` 30/min, registrace 5/h, přihlášení a reset hesla 20/10 min na IP; blok klíče po `RateLimits:FailuresBeforeBlock` odmítnutých vstupech (400/413) na těžkých cestách za 10 min na 15 min (429 + `Retry-After`) je **ve výchozím stavu vypnutý (0)**: portál volá s jedním účtem za všechny nájemce, takže před zapnutím je třeba jeho účet uvést v `RateLimits:ExemptUserIds`. `CF-Connecting-IP` se věří jen od peeru ze soukromé sítě.
+Limity (`RateLimits:*`, env `RateLimits__…`): neautentizované `/api` 30/min na IP (`CF-Connecting-IP`), klíč 600/min, `tsa-probe` 6/min, `inspect-signatures` 30/min, `timestamp-digest` 30/min, registrace 5/h, přihlášení a reset hesla 20/10 min na IP; blok klíče po `RateLimits:FailuresBeforeBlock` odmítnutých vstupech (400/413) na těžkých cestách za 10 min na 15 min (429 + `Retry-After`) je **ve výchozím stavu vypnutý (0)**: portál volá s jedním účtem za všechny nájemce, takže před zapnutím je třeba jeho účet uvést v `RateLimits:ExemptUserIds`. `CF-Connecting-IP` se věří jen od peeru ze soukromé sítě.
 
 ## Role databáze `dotnet_user` (#75)
 

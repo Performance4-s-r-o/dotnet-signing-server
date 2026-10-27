@@ -518,6 +518,20 @@
   <data name="ApiDocTimestampCredits" xml:space="preserve"><value>1</value></data>
   <data name="ApiDocTimestampMeta" xml:space="preserve"><value>Add a trusted RFC 3161 timestamp to a PDF from any TSA. Proves the document existed at a point in time, no signing certificate required.</value></data>
   <data name="ApiDocTimestampIntro" xml:space="preserve"><value>Applies a timestamp from an RFC 3161 timestamping authority without signing the document with a personal certificate. Useful on its own as proof of existence, or combined with a signature for long-term validation.</value></data>
+  <data name="ApiDocTsDigestTitle" xml:space="preserve"><value>Timestamp a digest</value></data>
+  <data name="ApiDocTsDigestPurpose" xml:space="preserve"><value>RFC 3161 token for a SHA-256 digest</value></data>
+  <data name="ApiDocTsDigestCredits" xml:space="preserve"><value>Free</value></data>
+  <data name="ApiDocTsDigestMeta" xml:space="preserve"><value>Get an RFC 3161 timestamp token over a SHA-256 digest you already hold. No document is uploaded.</value></data>
+  <data name="ApiDocTsDigestIntro" xml:space="preserve"><value>Sends a SHA-256 digest to the timestamping authority you name and returns the RFC 3161 token with the time it was issued and the authority's subject. Use it to prove that data existed at a point in time (a Merkle root, an audit log head, a hash of a file) without sending the data itself.</value></data>
+  <data name="ApiDocTsDigestNote1" xml:space="preserve"><value>Free — nothing is charged.</value></data>
+  <data name="ApiDocTsDigestNote2" xml:space="preserve"><value>The digest is exactly 32 bytes: 64 hex characters or base64. Other lengths and algorithms are refused (DIGEST_INVALID).</value></data>
+  <data name="ApiDocTsDigestNote3" xml:space="preserve"><value>The authority is chosen in the request and faces the same checks as on every timestamp: HTTPS only on port 443, no internal addresses, no credentials in the URL, optional backup. This free path neither consults nor feeds the circuit breaker (as tsa-probe), runs at most 8 requests at once and gives up after 30 s. The token is not validated against a trust list.</value></data>
+  <data name="TimestampDigestError" xml:space="preserve"><value>An error occurred while timestamping the digest</value></data>
+  <data name="Error_TSA_URL_REQUIRED" xml:space="preserve"><value>A timestamp authority URL (tsaUrl) is required.</value></data>
+  <data name="Error_TSA_PORT_NOT_ALLOWED" xml:space="preserve"><value>The timestamp authority URL must use the default HTTPS port (443).</value></data>
+  <data name="Error_TSA_URL_INVALID" xml:space="preserve"><value>The timestamp authority URL must not contain credentials.</value></data>
+  <data name="Error_TIMESTAMP_DIGEST_BUSY" xml:space="preserve"><value>Too many timestamp requests are running at once. Try again shortly.</value></data>
+  <data name="Error_DIGEST_INVALID" xml:space="preserve"><value>The digest must be exactly 32 bytes (SHA-256), given as 64 hexadecimal characters or as base64.</value></data>
   <data name="ApiDocInspectTitle" xml:space="preserve"><value>Inspect the signatures in a PDF</value></data>
   <data name="ApiDocInspectPurpose" xml:space="preserve"><value>List signatures, levels and expiry dates</value></data>
   <data name="ApiDocInspectCredits" xml:space="preserve"><value>Free</value></data>
