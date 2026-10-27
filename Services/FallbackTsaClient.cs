@@ -50,13 +50,20 @@ public sealed class FallbackTsaClient : ITSAClient
 
     public IMessageDigest GetMessageDigest() => _primary.GetMessageDigest();
 
+    // Our own limit is full: the backup would meet the same gate, so it is not asked.
+    private static bool IsBusy(Exception ex)
+    {
+        for (var e = ex; e != null; e = e.InnerException) if (e is TsaBusyException) return true;
+        return false;
+    }
+
     public byte[] GetTimeStampToken(byte[] imprint)
     {
         try
         {
             return _primary.GetTimeStampToken(imprint);
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (ex is not OutOfMemoryException && !IsBusy(ex))
         {
             // Stdout reaches Loki; the signing service has no logger to hand.
             Console.Error.WriteLine(

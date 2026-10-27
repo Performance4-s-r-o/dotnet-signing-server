@@ -20,6 +20,12 @@ public sealed class TsaCircuitOpenException : HttpRequestException
     public TimeSpan RetryAfter { get; }
 }
 
+/// <summary>The authority-call limit is full (<c>PinnedIpTsaClient.CallGate</c>); answered as 503 TSA_BUSY (#72).</summary>
+public sealed class TsaBusyException : Exception
+{
+    public TsaBusyException() : base("The timestamp authority call limit is reached.") { }
+}
+
 /// <summary>Settings of <see cref="TsaCircuitBreaker"/>; section <c>Tsa:Breaker</c> (#72).</summary>
 public sealed class TsaCircuitBreakerOptions
 {

@@ -531,6 +531,8 @@
   <data name="Error_TSA_PORT_NOT_ALLOWED" xml:space="preserve"><value>URL autority časových razítek musí používat výchozí port HTTPS (443).</value></data>
   <data name="Error_TSA_URL_INVALID" xml:space="preserve"><value>URL autority časových razítek nesmí obsahovat přihlašovací údaje.</value></data>
   <data name="Error_TIMESTAMP_DIGEST_BUSY" xml:space="preserve"><value>Běží příliš mnoho požadavků na časové razítko najednou. Zkuste to za chvíli.</value></data>
+  <data name="Error_TSA_BUSY" xml:space="preserve"><value>Běží příliš mnoho volání časové autority najednou. Zkuste to za chvíli.</value></data>
+  <data name="Error_INSPECT_DEADLINE_EXCEEDED" xml:space="preserve"><value>Požadavek trval příliš dlouho. Zkuste to znovu nebo pošlete menší dokument.</value></data>
   <data name="Error_DIGEST_INVALID" xml:space="preserve"><value>Otisk musí mít přesně 32 bajtů (SHA-256), zadaných jako 64 hexadecimálních znaků nebo jako base64.</value></data>
   <data name="ApiDocInspectTitle" xml:space="preserve"><value>Zjištění podpisů v PDF</value></data>
   <data name="ApiDocInspectPurpose" xml:space="preserve"><value>Výpis podpisů, úrovní a dat expirace</value></data>

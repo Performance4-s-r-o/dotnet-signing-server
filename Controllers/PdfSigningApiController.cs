@@ -669,7 +669,7 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { message = Localizer["InvalidBase64"].Value });
             }
 
-            return InspectSignaturesCore(pdfBytes);
+            return await InspectSignaturesCore(pdfBytes);
         }
 
         /// <summary><c>/api/inspect-signatures</c> v interním binárním kanálu (#74), viz <see cref="SignWithPfxBinary"/>.</summary>
@@ -696,20 +696,37 @@ namespace DotNetSigningServer.Controllers
                 return InputRefused(ex);
             }
 
-            return InspectSignaturesCore(pdf);
+            return await InspectSignaturesCore(pdf);
         }
 
-        private IActionResult InspectSignaturesCore(byte[] pdfBytes)
+        /// <summary>Time allowed for one inspection; a light, free operation (#72).</summary>
+        internal static TimeSpan InspectDeadline { get; set; } = TimeSpan.FromSeconds(15);
+
+        internal async Task<IActionResult> InspectSignaturesCore(byte[] pdfBytes)
         {
             var aborted = HttpContext?.RequestAborted ?? CancellationToken.None;
+            using var limit = CancellationTokenSource.CreateLinkedTokenSource(aborted);
+            limit.CancelAfter(InspectDeadline);
             try
             {
-                return Ok(PdfSignatureInspector.Inspect(pdfBytes, aborted));
+                // Off the request thread, so the answer does not depend on the parser noticing the token.
+                var work = Task.Run(() => PdfSignatureInspector.Inspect(pdfBytes, limit.Token), CancellationToken.None);
+                _ = work.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                return Ok(await work.WaitAsync(limit.Token));
             }
             catch (OperationCanceledException) when (aborted.IsCancellationRequested)
             {
                 // The caller is gone; nobody reads the answer.
                 return new EmptyResult();
+            }
+            catch (OperationCanceledException)
+            {
+                Logger.LogWarning("Signature inspection exceeded {Seconds} s", InspectDeadline.TotalSeconds);
+                return StatusCode(StatusCodes.Status504GatewayTimeout, new
+                {
+                    code = "INSPECT_DEADLINE_EXCEEDED",
+                    message = Localizer["Error_INSPECT_DEADLINE_EXCEEDED"].Value,
+                });
             }
             catch (Exception ex)
             {

@@ -183,6 +183,8 @@ builder.Services.AddHostedService<DataRetentionService>();
 builder.Services.AddApiOperations(builder.Configuration);
 // TSA deadline per authority (#77); the shared TSA client reads it per request.
 PinnedIpTsaClient.RequestTimeout = TimeSpan.FromSeconds(builder.Configuration.GetValue<int?>("Tsa:TimeoutSeconds") ?? 10);
+// Own limit for authority calls (#72); empty = default from code, nonsense stops the start.
+PinnedIpTsaClient.SetMaxConcurrentCalls(EnvValues.Int(builder.Configuration, "TSA_MAX_CONCURRENT_CALLS") ?? PinnedIpTsaClient.MaxConcurrentCalls);
 // Circuit breaker per TSA host (#72). Invalid values throw here: startup fails closed rather
 // than running with the protection silently off.
 TsaCircuitBreaker.Default = new TsaCircuitBreaker(new TsaCircuitBreakerOptions
@@ -210,7 +212,8 @@ builder.Services.AddHttpClient(nameof(LokiClient));
 builder.Services.AddSingleton<LokiClient>();
 // Ship all ILogger output (not just unhandled exceptions) to Loki.
 builder.Services.AddSingleton<ILoggerProvider, DotNetSigningServer.Logging.LokiLoggerProvider>();
-builder.Services.AddHttpClient<TemplateAiService>();
+// The model gets 60 s; the caller's RequestAborted is passed on per call (#72).
+builder.Services.AddHttpClient<TemplateAiService>(c => c.Timeout = TimeSpan.FromSeconds(60));
 builder.Services.AddHttpClient("osticket", client =>
 {
     var timeout = builder.Configuration.GetValue<int?>("OsTicket:TimeoutSeconds") ?? 10;
