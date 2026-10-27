@@ -1009,6 +1009,26 @@ public class OperationStateTests : IClassFixture<OperationStateFixture>, IDispos
     }
 
     [DockerFact]
+    public async Task Busy_tsa_gate_is_a_certain_failure_with_its_own_code()
+    {
+        var (userId, client) = await _fx.NewAccountAsync(credits: 5);
+        var presign = await _fx.NewPresignAsync(userId);
+        var key = Guid.NewGuid().ToString();
+        var body = new SignInput { Id = presign, SignedHash = "00" };
+        _fx.Sign = () => throw new TsaCommunicationException("https://tsa.example.com", "busy", new TsaBusyException());
+
+        var response = await client.SendAsync(Post("/api/sign", body, key));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Contains("TSA_BUSY", await response.Content.ReadAsStringAsync());
+        Assert.Equal(ApiOperationState.Failed, Header(response, ApiControllerBase.OperationStateHeader));
+        var status = await StatusAsync(client, key);
+        Assert.Equal("failed", status.GetProperty("state").GetString());
+        Assert.Equal("TSA_BUSY", status.GetProperty("errorCode").GetString());
+        Assert.Equal(5, await _fx.BalanceAsync(userId));
+    }
+
+    [DockerFact]
     public async Task Deadline_after_the_tsa_was_called_is_failed_uncertain()
     {
         var options = LiveOptions();

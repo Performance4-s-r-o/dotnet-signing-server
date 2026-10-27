@@ -671,6 +671,8 @@ namespace DotNetSigningServer.Controllers
         /// </summary>
         internal static bool IsUncertainFailure(Exception ex)
         {
+            // Our own limit refused the call: the authority was never asked, nothing happened.
+            for (var e = ex; e != null; e = e.InnerException) if (e is TsaBusyException) return false;
             for (var e = ex; e != null; e = e.InnerException)
             {
                 if (e is TsaCommunicationException or TimeoutException or HttpRequestException or OperationCanceledException
@@ -691,10 +693,17 @@ namespace DotNetSigningServer.Controllers
             return null;
         }
 
+        private static bool HasBusy(Exception ex)
+        {
+            for (var e = ex; e != null; e = e.InnerException) if (e is TsaBusyException) return true;
+            return false;
+        }
+
         private static string FailureCode(Exception ex) => ex switch
         {
             ApiValidationException validation => validation.Code,
             OperationDeadlineExceededException => "DEADLINE_EXCEEDED",
+            _ when HasBusy(ex) => "TSA_BUSY",
             _ when FindTsaFailure(ex) != null => "TSA_UNREACHABLE",
             FormatException => "INVALID_BASE64",
             _ when IsUncertainFailure(ex) => "UPSTREAM_UNCERTAIN",

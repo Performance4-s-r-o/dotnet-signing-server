@@ -71,6 +71,42 @@ public class DeadlinesAndGatesTests
         Assert.Equal(0, backup.Calls);
     }
 
+    [Fact]
+    public void The_call_over_the_limit_is_refused_and_passes_once_a_place_is_free()
+    {
+        var saved = (PinnedIpTsaClient.CallGate, PinnedIpTsaClient.GateWait);
+        try
+        {
+            PinnedIpTsaClient.SetMaxConcurrentCalls(2);
+            PinnedIpTsaClient.GateWait = TimeSpan.FromMilliseconds(30);
+            var gate = PinnedIpTsaClient.CallGate;
+            gate.Wait(); gate.Wait(); // two calls in flight
+            var ex = Assert.Throws<TsaCommunicationException>(() => new ExposedTsa().Call());
+            Assert.IsType<TsaBusyException>(ex.InnerException);
+            gate.Release();
+            // A place is free: the call goes on and fails for another reason (the host is not real).
+            var other = Assert.ThrowsAny<Exception>(() => new ExposedTsa().Call());
+            Assert.False(other.InnerException is TsaBusyException);
+            gate.Release();
+            Assert.Equal(2, gate.CurrentCount);
+        }
+        finally { (PinnedIpTsaClient.CallGate, PinnedIpTsaClient.GateWait) = saved; }
+    }
+
+    [Fact]
+    public void A_busy_chain_is_not_an_uncertain_failure()
+    {
+        var busy = new TsaCommunicationException("u", "x", new TsaBusyException());
+        Assert.False(DotNetSigningServer.Controllers.ApiControllerBase.IsUncertainFailure(busy));
+        Assert.True(DotNetSigningServer.Controllers.ApiControllerBase.IsUncertainFailure(new TsaCommunicationException("u", "x")));
+    }
+
+    [Fact]
+    public void The_limit_setting_refuses_nonsense()
+    {
+        Assert.Throws<InvalidOperationException>(() => PinnedIpTsaClient.SetMaxConcurrentCalls(0));
+    }
+
     // ── inspect-signatures ───────────────────────────────────────────────
 
     private sealed class Inspector : PdfSigningApiController
@@ -83,6 +119,20 @@ public class DeadlinesAndGatesTests
         {
             ControllerContext = new ControllerContext { HttpContext = context };
         }
+
+        public IActionResult BusyResult(TsaCommunicationException ex) => TsaUnreachableResult(ex);
+    }
+
+    [Fact]
+    public void Busy_maps_to_503_TSA_BUSY_with_retry_after()
+    {
+        var ctx = new DefaultHttpContext();
+        var controller = new Inspector(ctx, Localizer());
+        var result = controller.BusyResult(new TsaCommunicationException("u", "x", new TsaBusyException()));
+        var obj = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(503, obj.StatusCode);
+        Assert.Contains("TSA_BUSY", obj.Value!.ToString());
+        Assert.Equal("1", ctx.Response.Headers.RetryAfter.ToString());
     }
 
     private static byte[] SmallPdf()
@@ -105,7 +155,7 @@ public class DeadlinesAndGatesTests
         var saved = PdfSigningApiController.InspectDeadline;
         try
         {
-            PdfSigningApiController.InspectDeadline = TimeSpan.Zero;
+            PdfSigningApiController.InspectDeadline = TimeSpan.Zero; // already expired: a 1 ms limit races a tiny PDF
             var result = await new Inspector(new DefaultHttpContext(), Localizer()).InspectSignaturesCore(SmallPdf());
             var obj = Assert.IsType<ObjectResult>(result);
             Assert.Equal(504, obj.StatusCode);

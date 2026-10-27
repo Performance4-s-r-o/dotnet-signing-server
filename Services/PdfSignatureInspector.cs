@@ -89,6 +89,7 @@ public static class PdfSignatureInspector
         var revisionEnds = PdfRevisionScanner.FindRevisionEnds(
             pdfBytes, working.Where(w => w.SignedEnd.HasValue).Select(w => w.SignedEnd!.Value));
         var revisionHashes = PdfRevisionScanner.HashPrefixes(pdfBytes, revisionEnds);
+        cancellationToken.ThrowIfCancellationRequested();
         var revisions = revisionEnds
             .Select((end, i) => new InspectedRevision { Revision = i + 1, EndOffset = end, Sha256 = revisionHashes[i] })
             .ToList();
@@ -105,6 +106,7 @@ public static class PdfSignatureInspector
 
         foreach (var w in working)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             w.Entry.StructuralLevel = DetermineLevel(w, working, revisionEnds, validationData);
         }
         openedBytes = validationData?.OpenedBytes ?? 0;

@@ -171,11 +171,18 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
     }
 
     /// <summary>
-    /// Authority calls in flight at once, all paths together. A fixed constant, not a setting:
-    /// it protects the thread pool (each call blocks a thread), so it follows the code, not the
-    /// deployment. Tests swap the gate.
+    /// Authority calls in flight at once, all paths together (signing, timestamps, digest, LTV,
+    /// probe). Protects the thread pool: each call blocks a thread. Default; <c>TSA_MAX_CONCURRENT_CALLS</c>
+    /// overrides it at startup.
     /// </summary>
-    public const int MaxConcurrentCalls = 12;
+    public const int MaxConcurrentCalls = 24;
+
+    /// <summary>Replaces the gate; startup and tests.</summary>
+    internal static void SetMaxConcurrentCalls(int limit)
+    {
+        if (limit < 1 || limit > 1000) throw new InvalidOperationException("TSA_MAX_CONCURRENT_CALLS must be within 1..1000.");
+        CallGate = new SemaphoreSlim(limit, limit);
+    }
 
     /// <summary>How long a call waits for a free place before it is refused as busy.</summary>
     internal static TimeSpan GateWait { get; set; } = TimeSpan.FromSeconds(2);
