@@ -274,4 +274,17 @@ public class P4BackofficeProductOptionsTests
         options.Consents.Documents = new[] { "terms" };
         Assert.Equal(new[] { "terms" }, options.Consents.EffectiveDocuments);
     }
+
+    [Fact]
+    public void ConsentDocumentWithoutAPage_NeedsDocsOn()
+    {
+        var off = new P4BackofficeProductOptions();
+        off.Consents.Documents = ["terms", "custom_doc"];
+        Assert.Contains(BackofficeOptionsValidator.Validate(off), p => p.Contains("custom_doc") && p.Contains("Docs"));
+
+        var on = new P4BackofficeProductOptions { BaseUrl = "https://backoffice.example.com", SecretKey = "p4sk_test_abc", Environment = "test" };
+        on.Modules.Docs = "On";
+        on.Consents.Documents = ["terms", "custom_doc"];
+        Assert.DoesNotContain(BackofficeOptionsValidator.Validate(on), p => p.Contains("custom_doc"));
+    }
 }

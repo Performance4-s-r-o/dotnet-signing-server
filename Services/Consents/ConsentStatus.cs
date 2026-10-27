@@ -166,7 +166,8 @@ public sealed class ConsentStatusProvider : IConsentStatusProvider
     {
         if (_cache.TryGet(userId, out var cached) && cached != null) return cached;
 
-        var meta = await _cache.GetMetaAsync(() => DocumentsMetaUpdater.ReadAsync(_db, cancellationToken));
+        var meta = ConsentDocsMeta.WhenDocsOn(_options.Value,
+            await _cache.GetMetaAsync(() => DocumentsMetaUpdater.ReadAsync(_db, cancellationToken)));
         var status = ConsentStatusEvaluator.Evaluate(
             ConsentRequirements.From(_options.Value.Consents), meta, await LatestAsync(_db, userId, cancellationToken));
         _cache.Set(userId, status);
@@ -221,11 +222,11 @@ public sealed class ConsentNoticeProvider
         if (options.ModeFor(Backoffice.BackofficeModule.Consents) != Backoffice.BackofficeMode.On) return [];
         try
         {
-            var meta = await _cache.GetMetaAsync(async () =>
+            var meta = ConsentDocsMeta.WhenDocsOn(options, await _cache.GetMetaAsync(async () =>
             {
                 using var scope = _scopes.CreateScope();
                 return await DocumentsMetaUpdater.ReadAsync(scope.ServiceProvider.GetRequiredService<ApplicationDbContext>());
-            });
+            }));
             return Upcoming(ConsentRequirements.From(options.Consents), meta, _time.GetUtcNow());
         }
         catch (Exception ex)
@@ -246,4 +247,20 @@ public sealed class ConsentNoticeProvider
                 .Select(x => new UpcomingDocumentNotice(x.Document, LegalSlugMap.SlugFor(x.Document), x.Upcoming!.Version, x.Upcoming.EffectiveFrom!.Value))
                 .OrderBy(n => n.EffectiveFrom)
                 .ToList();
+}
+
+/// <summary>
+/// The one rule for when <c>docs:meta</c> counts: only with <c>Modules:Docs=On</c>. Otherwise the
+/// reader gets the local text (static page v1 or a hand-maintained row), so both the version a
+/// consent form records (<see cref="ConsentDocumentResolver"/>) and the version the re-consent
+/// gate requires (<see cref="ConsentStatusProvider"/>) come from the same place. Using it in
+/// only one of them makes a user consent v1 and be asked again for v3, forever.
+/// </summary>
+public static class ConsentDocsMeta
+{
+    public static bool IsActive(P4BackofficeProductOptions? options) =>
+        options?.ModeFor(Backoffice.BackofficeModule.Docs) == Backoffice.BackofficeMode.On;
+
+    public static DocumentsMeta? WhenDocsOn(P4BackofficeProductOptions? options, DocumentsMeta? meta) =>
+        IsActive(options) ? meta : null;
 }

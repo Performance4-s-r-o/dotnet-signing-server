@@ -699,6 +699,7 @@
   <data name="SignUpPrivacyNotice" xml:space="preserve"><value>How we process your personal data is described in the {0}.</value></data>
   <data name="SignUpAcceptTermsRequired" xml:space="preserve"><value>Please agree to the terms to continue.</value></data>
   <data name="LegalVersionOutdated" xml:space="preserve"><value>The legal documents have just been updated. Please review the current versions and confirm again.</value></data>
+  <data name="ConsentVersionUnknown" xml:space="preserve"><value>The terms cannot be confirmed right now because their current version is unknown. Please try again later.</value></data>
   <data name="LegalDocumentVersion" xml:space="preserve"><value>{0} (version {1})</value></data>
   <data name="ListAnd" xml:space="preserve"><value> and </value></data>
   <data name="ConsentTitle" xml:space="preserve"><value>Confirm the terms</value></data>

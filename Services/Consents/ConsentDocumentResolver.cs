@@ -1,5 +1,8 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Options;
+using DotNetSigningServer.Services.Backoffice;
 using DotNetSigningServer.Services.Backoffice.Documents;
+using Microsoft.Extensions.Options;
 using DotNetSigningServer.Services.Legal;
 using Microsoft.EntityFrameworkCore;
 
@@ -26,14 +29,19 @@ public sealed record ConsentDocumentVersion(
 /// Which version of each consent document a form shows, from local data only — never from the
 /// service: the text a reader of <c>/Legal/…</c> gets (<see cref="ILegalDocumentSource"/>: the
 /// service's cached copy, the <c>LegalDocuments</c> snapshot or hand-maintained rows), then
-/// <c>docs:meta</c>, then version 1 (the static Razor page, imported into the service as v1).
+/// <c>docs:meta</c>, then version 1 for a document with a static page. A document with none of these
+/// throws <see cref="ConsentVersionUnknownException"/> (no consent is recorded with a made-up version).
 /// </summary>
 public sealed class ConsentDocumentResolver
 {
+    /// <summary>The static Razor page of a legal document, imported into the service as v1.</summary>
+    public const int StaticPageVersion = 1;
+
     private readonly ApplicationDbContext _db;
     private readonly ILegalDocumentSource _documents;
     private readonly BackofficeDocumentsCache? _cache;
     private readonly ILogger<ConsentDocumentResolver> _logger;
+    private readonly IOptions<P4BackofficeProductOptions>? _options;
 
     public ConsentDocumentResolver(
         ApplicationDbContext db,
@@ -45,6 +53,7 @@ public sealed class ConsentDocumentResolver
         _documents = documents;
         // Registered only when the Docs module is Shadow or On.
         _cache = services.GetService<BackofficeDocumentsCache>();
+        _options = services.GetService<IOptions<P4BackofficeProductOptions>>();
         _logger = logger;
     }
 
@@ -52,9 +61,11 @@ public sealed class ConsentDocumentResolver
         IEnumerable<ConsentRequirement> requirements, string uiLocale, CancellationToken cancellationToken = default)
     {
         DocumentsMeta? meta = null;
+        // docs:meta describes the service's texts; with Docs not On the reader gets the local ones.
+        var docsOn = ConsentDocsMeta.IsActive(_options?.Value);
         try
         {
-            meta = await DocumentsMetaUpdater.ReadAsync(_db, cancellationToken);
+            if (docsOn) meta = await DocumentsMetaUpdater.ReadAsync(_db, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -68,7 +79,14 @@ public sealed class ConsentDocumentResolver
             var shown = slug is null ? null : await _documents.GetAsync(slug, uiLocale, cancellationToken);
             var entry = meta?.Documents.GetValueOrDefault(requirement.Document);
 
-            var version = shown?.Version ?? entry?.CurrentVersion ?? 1;
+            // No published text: a document with a static page is v1 (what /Legal/<slug> shows),
+            // unless docs:meta says a newer one is in force, which the reader cannot see now.
+            // A document with no page takes the meta version. Nothing known: refuse, don't invent.
+            int? known = shown?.Version
+                ?? (slug is null
+                    ? entry?.CurrentVersion
+                    : entry?.CurrentVersion is null or StaticPageVersion ? StaticPageVersion : null);
+            var version = known ?? throw new ConsentVersionUnknownException(requirement.Document);
             var locale = shown?.Locale ?? LegalLocales.Default;
             var fromMeta = entry?.CurrentVersion == version;
             result.Add(new ConsentDocumentVersion(
@@ -115,4 +133,11 @@ public sealed class ConsentDocumentResolver
             return null;
         }
     }
+}
+
+/// <summary>No local source names a version of a consent document, so no consent can be recorded for it.</summary>
+public sealed class ConsentVersionUnknownException(string document)
+    : InvalidOperationException($"No version of the consent document '{document}' is known (no published text, docs:meta or static page).")
+{
+    public string Document { get; } = document;
 }

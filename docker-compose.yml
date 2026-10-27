@@ -61,6 +61,12 @@ services:
       # X-Forwarded-For is believed. Empty = the private ranges (as before), `none` = nobody's.
       - TRUSTED_CF_PROXIES=${TRUSTED_CF_PROXIES:-{{project.DOTNET_TRUSTED_CF_PROXIES}}}
       - TRUSTED_PROXIES=${TRUSTED_PROXIES:-{{project.DOTNET_TRUSTED_PROXIES}}}
+      # The key ring also protects stored TSA credentials. Production refuses to start with an
+      # unencrypted ring: give it a certificate (base64 PFX + password), or set
+      # DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS=true to accept plaintext keys on purpose.
+      - DataProtection__CertificateBase64=${DATA_PROTECTION_CERTIFICATE_BASE64:-{{project.DOTNET_DATA_PROTECTION_CERTIFICATE_BASE64}}}
+      - DataProtection__CertificatePassword=${DATA_PROTECTION_CERTIFICATE_PASSWORD:-{{project.DOTNET_DATA_PROTECTION_CERTIFICATE_PASSWORD}}}
+      - DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS=${DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS:-{{project.DOTNET_DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS}}}
       - AllowedHosts=${ALLOWED_HOSTS:-*}
       - UseLocalDb=false
       # Per-account caps (#74); 0 = no limit. The portal's account (TRUSTED_CALLER_USER_IDS)

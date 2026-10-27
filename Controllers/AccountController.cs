@@ -21,6 +21,7 @@ using System.Security.Cryptography;
 
 namespace DotNetSigningServer.Controllers;
 
+[ServiceFilter(typeof(DotNetSigningServer.Filters.ConsentVersionUnknownFilter))]
 public class AccountController : Controller
 {
     private readonly ApplicationDbContext _dbContext;

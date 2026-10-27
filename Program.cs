@@ -64,12 +64,15 @@ if (!string.IsNullOrWhiteSpace(keyProtectionCertBase64))
         certBytes, keyProtectionCertPassword);
     dataProtection.ProtectKeysWithCertificate(keyProtectionCert);
 }
-else if (builder.Environment.IsProduction())
+else if (DotNetSigningServer.Options.DataProtectionKeyPolicy.Evaluate(
+             builder.Environment.IsProduction(), migrateOnly, builder.Configuration["DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS"])
+         is { } plaintextOutcome)
 {
-    Console.WriteLine(
-        "[startup] WARNING: DataProtection key ring is stored unencrypted at " +
-        $"{dataProtectionPath}. Set DataProtection__CertificateBase64 (+ __CertificatePassword) " +
-        "to encrypt it — the ring also protects stored TSA credentials.");
+    if (plaintextOutcome.Refuse)
+    {
+        throw new InvalidOperationException(plaintextOutcome.Message(dataProtectionPath));
+    }
+    Console.WriteLine("[startup] WARNING: " + plaintextOutcome.Message(dataProtectionPath));
 }
 // #106: who may name the client. CF-Connecting-IP only from cloudflared (TRUSTED_CF_PROXIES),
 // X-Forwarded-For only from the reverse proxy (TRUSTED_PROXIES, or an explicit ForwardedHeaders
@@ -151,6 +154,7 @@ builder.Services.AddControllersWithViews(options =>
     })
     .AddViewLocalization()
     .AddDataAnnotationsLocalization();
+builder.Services.AddScoped<DotNetSigningServer.Filters.ConsentVersionUnknownFilter>();
 builder.Services.AddScoped<PdfVisualSigningService>();
 builder.Services.AddScoped<PdfSealingService>();
 builder.Services.AddScoped<PdfSigningService>();

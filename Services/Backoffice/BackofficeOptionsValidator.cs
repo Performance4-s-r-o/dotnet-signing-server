@@ -57,7 +57,7 @@ public static class BackofficeOptionsValidator
         {
             problems.Add($"{Setting("Polling:Interval")} must be positive.");
         }
-        CheckConsentDocuments(problems, options.Consents);
+        CheckConsentDocuments(problems, options.Consents, options.RequestedModeFor(BackofficeModule.Docs));
         CheckBilling(problems, options);
 
         // A self-hosted installation is forced Off whatever it asks for, so a key or URL
@@ -92,7 +92,8 @@ public static class BackofficeOptionsValidator
     /// <summary>Document keys as the service accepts them (<c>ConsentInput.document</c>).</summary>
     private static readonly System.Text.RegularExpressions.Regex DocumentKey = new("^[a-z][a-z0-9_]{1,39}$");
 
-    private static void CheckConsentDocuments(List<string> problems, P4BackofficeProductOptions.ConsentsOptions consents)
+    private static void CheckConsentDocuments(
+        List<string> problems, P4BackofficeProductOptions.ConsentsOptions consents, BackofficeMode docsMode)
     {
         var granted = consents.EffectiveDocuments;
         var acknowledged = consents.EffectiveAcknowledged;
@@ -101,6 +102,18 @@ public static class BackofficeOptionsValidator
             if (!DocumentKey.IsMatch(key ?? ""))
             {
                 problems.Add($"{Setting("Consents:Documents")} / {Setting("Consents:Acknowledged")}: '{key}' is not a document key (lower case letters, digits, '_').");
+            }
+        }
+        // Without the service's documents (Docs not On) a form can name a version only for a
+        // document that has a static page; any other would make sign-up and re-consent answer 503.
+        if (docsMode != BackofficeMode.On)
+        {
+            foreach (var key in granted.Concat(acknowledged).Where(k => DocumentKey.IsMatch(k ?? "")).Distinct(StringComparer.Ordinal))
+            {
+                if (Legal.LegalSlugMap.SlugFor(key) is null)
+                {
+                    problems.Add($"{Setting("Consents:Documents")} / {Setting("Consents:Acknowledged")}: '{key}' has no page in this product, so it needs {Setting("Modules:Docs")} On.");
+                }
             }
         }
         foreach (var key in granted.Intersect(acknowledged, StringComparer.Ordinal))
