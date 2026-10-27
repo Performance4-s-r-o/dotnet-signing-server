@@ -26,10 +26,14 @@ public sealed record ConsentDocumentVersion(
 /// Which version of each consent document a form shows, from local data only — never from the
 /// service: the text a reader of <c>/Legal/…</c> gets (<see cref="ILegalDocumentSource"/>: the
 /// service's cached copy, the <c>LegalDocuments</c> snapshot or hand-maintained rows), then
-/// <c>docs:meta</c>, then version 1 (the static Razor page, imported into the service as v1).
+/// <c>docs:meta</c>, then version 1 for a document with a static page. A document with none of these
+/// throws <see cref="ConsentVersionUnknownException"/> (no consent is recorded with a made-up version).
 /// </summary>
 public sealed class ConsentDocumentResolver
 {
+    /// <summary>The static Razor page of a legal document, imported into the service as v1.</summary>
+    public const int StaticPageVersion = 1;
+
     private readonly ApplicationDbContext _db;
     private readonly ILegalDocumentSource _documents;
     private readonly BackofficeDocumentsCache? _cache;
@@ -68,7 +72,11 @@ public sealed class ConsentDocumentResolver
             var shown = slug is null ? null : await _documents.GetAsync(slug, uiLocale, cancellationToken);
             var entry = meta?.Documents.GetValueOrDefault(requirement.Document);
 
-            var version = shown?.Version ?? entry?.CurrentVersion ?? 1;
+            // Version 1 is the static Razor page, which is what /Legal/<slug> shows when nothing
+            // else is published. A document without a page and without docs:meta has no version
+            // we could honestly name: refuse instead of inventing one.
+            var version = shown?.Version ?? entry?.CurrentVersion ?? (slug is null ? (int?)null : StaticPageVersion)
+                ?? throw new ConsentVersionUnknownException(requirement.Document);
             var locale = shown?.Locale ?? LegalLocales.Default;
             var fromMeta = entry?.CurrentVersion == version;
             result.Add(new ConsentDocumentVersion(
@@ -115,4 +123,11 @@ public sealed class ConsentDocumentResolver
             return null;
         }
     }
+}
+
+/// <summary>No local source names a version of a consent document, so no consent can be recorded for it.</summary>
+public sealed class ConsentVersionUnknownException(string document)
+    : InvalidOperationException($"No version of the consent document '{document}' is known (no published text, docs:meta or static page).")
+{
+    public string Document { get; } = document;
 }

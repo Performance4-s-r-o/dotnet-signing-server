@@ -175,6 +175,8 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `TRUSTED_CALLER_USER_IDS` | when `INTERNAL_API_PORT` is set (startup fails otherwise) | Service account id(s) of the trusted caller, comma-separated. The old name `PORTAL_USER_IDS` is still read, with a warning at start; both set and different = startup fails. Only that account's server token, on the internal port, is a trusted caller: it alone may skip the attachment debit (`X-P4PDF-Attachment-Billing-Bypass`, the old `X-P4SPS-…` still read) and its `X-P4-Tenant` / `X-Request-Id` are logged and stored on presigns, operations and usage records. `/api/sign` (a replay included), any keyed replay and `/api/operations/{id}` refuse another tenant's presign or operation (`403 TENANT_MISMATCH`) |
 | `TRUSTED_CF_PROXIES` | in production (startup fails when empty) | Address / CIDR of cloudflared (#106). `CF-Connecting-IP` is the client (rate limits, token IP whitelist, consent evidence) only for a request that came from cloudflared — it is the TCP peer, or a `TRUSTED_PROXIES` proxy is the peer and cloudflared the forwarded address. Empty = never believed; `none` = no tunnel in front, on purpose |
 | `TRUSTED_PROXIES` | no | Reverse proxy (Traefik/Caddy) addresses / CIDRs (#106): whose `X-Forwarded-For` is applied. An explicit `ForwardedHeaders__KnownProxies` / `__KnownNetworks` wins; empty = the private ranges and loopback (as before); `none` = nobody's. A reverse proxy alone never vouches for `CF-Connecting-IP` |
+| `DataProtection__CertificateBase64` / `__CertificatePassword` (compose: `DATA_PROTECTION_CERTIFICATE_BASE64` / `_PASSWORD`) | in production, unless the next row is `true` | Base64 PFX that encrypts the Data Protection key ring, which also protects stored TSA credentials |
+| `DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS` | no | `true` = a Production start without the certificate is allowed, with a warning (single host, protected volume). Otherwise Production refuses to start with an unencrypted key ring. Outside Production it is only a warning |
 | `BILLING_PRODUCT_TAG_GRACE_UNTIL` | no (empty = strict) | UTC instant; checkout sessions created before it are accepted without the `product` metadata marker (sessions already open at the deploy). Every other ownership check still applies. Remove it a day after the deploy |
 | `Seal__Enabled` | | Server-side sealing; needs `Seal__PfxBase64` + `Seal__PfxPassword` |
 | `Stripe__ApiKey` / `Stripe__WebhookSecret` | for billing | Payments; the webhook secret must start with `whsec_` in production |
@@ -233,6 +235,20 @@ consent batch twice). Items refused with 401/403 stay
 `Blocked` until the key is fixed and they are requeued from `/Admin`, where the
 outbox card also shows counts per status, the oldest pending item and the last
 error. Finished items are deleted after 30 days.
+
+E-mails with secrets (2FA code, password reset, verification link): the service has no
+"sensitive" marker and keeps the body of a sent message in its log for its own retention (30 days
+at the time of writing). The outbox payload here is deleted once the item is sent. What this
+product can do today is `critical` (so the message is not held back) and, with
+`P4Backoffice__Email__Templates`, sending a template key plus variables instead of raw HTML;
+the code or link is then still a variable stored by the service. What stays open is a retention
+or redaction switch on the service's side for these messages. A dead inbox event is logged as an
+error starting with `Backoffice inbox alert:` (a fixed marker, also repeated daily); with
+`Sentry__Dsn` set, Sentry captures it, and there is no other alert channel in this server.
+
+A consent form for a document with no known version (no published text, no `docs:meta`
+entry and no static page) answers `503` and records nothing, instead of recording a made-up
+version. Documents with a static page keep version 1, which is the page the reader sees.
 
 #### Backoffice webhooks
 

@@ -299,4 +299,38 @@ public class BreakGlassEmailFallbackTests
         Assert.Equal(BackofficeOutboxStatus.FallbackSent, (await email.Host.ItemAsync(id)).Status);
         Assert.Empty(email.Host.Service.Requests);
     }
+
+    [Fact]
+    public async Task StuckService_TwoFactorCodeLeavesWithin20Seconds_ExactlyOnce()
+    {
+        using var email = new EmailTestHost();
+        var id = await email.SendAsync(EmailTemplateId.TwoFactorCode);
+        var started = email.Host.Time.Now;
+        var dispatcher = new BackofficeOutboxDispatcher(
+            email.Host.Processor, email.Host.Signal, email.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            email.Host.Time, NullLogger<BackofficeOutboxDispatcher>.Instance, [email.Fallback]);
+
+        // The service does not answer: its first attempt fails, then the breaker opens.
+        email.Host.Service.Responses.Enqueue(_ => throw new HttpRequestException("Connection refused"));
+        await dispatcher.RunPassAsync(CancellationToken.None);
+        for (var i = 0; i < OutboxCircuitBreaker.Threshold; i++) email.Breaker.RecordFailure();
+        email.Host.Time.Advance(TimeSpan.FromSeconds(5));
+
+        await dispatcher.RunPassAsync(CancellationToken.None);
+
+        Assert.True(email.Host.Time.Now - started <= TimeSpan.FromSeconds(20));
+        var (to, _, html) = Assert.Single(email.DirectSends);
+        Assert.Equal("jan@example.com", to);
+        Assert.Contains("123456", html);
+        Assert.Equal(BackofficeOutboxStatus.FallbackSent, (await email.Host.ItemAsync(id)).Status);
+
+        // The service comes back and the retry window passes: neither path sends it a second time.
+        email.Host.Service.Enqueue(HttpStatusCode.Accepted, "{\"id\":\"em_1\",\"status\":\"queued\"}");
+        email.Host.Time.Advance(TimeSpan.FromHours(3));
+        await dispatcher.RunPassAsync(CancellationToken.None);
+        await dispatcher.RunPassAsync(CancellationToken.None);
+
+        Assert.Single(email.DirectSends);
+        Assert.Single(email.Host.Service.Requests); // only the failed first attempt
+    }
 }

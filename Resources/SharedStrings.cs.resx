@@ -700,6 +700,7 @@
   <data name="SignUpPrivacyNotice" xml:space="preserve"><value>Jak zpracováváme vaše osobní údaje, popisuje dokument {0}.</value></data>
   <data name="SignUpAcceptTermsRequired" xml:space="preserve"><value>Pro pokračování je potřeba souhlasit s podmínkami.</value></data>
   <data name="LegalVersionOutdated" xml:space="preserve"><value>Právní dokumenty byly právě aktualizovány. Projděte si prosím aktuální verze a potvrďte je znovu.</value></data>
+  <data name="ConsentVersionUnknown" xml:space="preserve"><value>Podmínky teď nelze potvrdit, protože není známá jejich aktuální verze. Zkuste to prosím později.</value></data>
   <data name="LegalDocumentVersion" xml:space="preserve"><value>{0} (verze {1})</value></data>
   <data name="ListAnd" xml:space="preserve"><value> a </value></data>
   <data name="ConsentTitle" xml:space="preserve"><value>Potvrzení podmínek</value></data>
