@@ -829,6 +829,7 @@ namespace DotNetSigningServer.Controllers
 
         protected static int CountPages(byte[] pdfBytes)
         {
+            PdfOpenCounter.Record();
             using var ms = new MemoryStream(pdfBytes);
             using var reader = new PdfReader(ms);
             using var pdf = new PdfDocument(reader);

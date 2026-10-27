@@ -72,6 +72,23 @@ public class StorageLimitsTests : IDisposable
     }
 
     [Fact]
+    public async Task A_trusted_caller_is_not_held_to_the_template_cap()
+    {
+        var sut = Templates(max: 1);
+        var user = Guid.NewGuid();
+        await sut.CreateTemplateAsync(Input("a"), user);
+        await sut.CreateTemplateAsync(Input("b"), user, default, trustedCaller: true);
+    }
+
+    [Fact]
+    public void The_caps_have_defaults()
+    {
+        var o = new LimitsOptions();
+        Assert.Equal(20, o.MaxPendingPresignsPerUser);
+        Assert.Equal(100, o.MaxTemplatesPerUser);
+    }
+
+    [Fact]
     public async Task Without_a_cap_templates_are_not_counted()
     {
         var sut = Templates(max: 0);

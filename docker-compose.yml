@@ -65,8 +65,8 @@ services:
       - UseLocalDb=false
       # Per-account caps (#74); 0 = no limit. The portal uses one account for every tenant, so a
       # number here caps the whole platform: set it with that in mind.
-      - Limits__MaxPendingPresignsPerUser=${MAX_PENDING_PRESIGNS_PER_USER:-0}
-      - Limits__MaxTemplatesPerUser=${MAX_TEMPLATES_PER_USER:-0}
+      - Limits__MaxPendingPresignsPerUser=${MAX_PENDING_PRESIGNS_PER_USER:-20}
+      - Limits__MaxTemplatesPerUser=${MAX_TEMPLATES_PER_USER:-100}
       # #80. Each falls back to a Coolify project-shared variable (DOTNET_*); an unset one
       # arrives empty or as the placeholder and the code default applies (Options/EnvValues.cs).
       # Live API tokens per account; 0 = no limit (default 100). The portal holds one token.

@@ -108,9 +108,9 @@ namespace DotNetSigningServer.Controllers
         private async Task<IActionResult> PreSignCoreAsync(User user, PreSignInput input, byte[] pdf)
         {
             var maxPending = HttpContext.RequestServices.GetRequiredService<IOptions<LimitsOptions>>().Value.MaxPendingPresignsPerUser;
-            if (maxPending > 0 && await DbContext.SigningData.CountAsync(x => x.UserId == user.Id) >= maxPending)
+            if (maxPending > 0 && !PortalTrust.IsTrustedCaller(HttpContext) && await DbContext.SigningData.CountAsync(x => x.UserId == user.Id) >= maxPending)
             {
-                // Each presign is a PDF on disk until it is signed or expires (#74).
+                // Each presign is a PDF on disk until it is signed or expires (#74). The portal is exempt: one account for all tenants.
                 Response.Headers.RetryAfter = "60";
                 return StatusCode(StatusCodes.Status429TooManyRequests, new
                 {
