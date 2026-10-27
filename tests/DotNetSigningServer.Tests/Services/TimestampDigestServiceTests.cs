@@ -74,6 +74,21 @@ public class TimestampDigestServiceTests
     }
 
     [Fact]
+    public void The_authority_is_asked_with_the_circuit_breaker_bypassed()
+    {
+        var local = new LocalTsaClient();
+        bool? bypassed = null;
+        TimestampDigestService.Stamp(new FakeTsa(i =>
+        {
+            bypassed = TsaCircuitBreaker.IsBypassed;
+            return local.GetTimeStampToken(i);
+        }), Digest, "https://tsa.example/tsr");
+
+        Assert.True(bypassed);
+        Assert.False(TsaCircuitBreaker.IsBypassed);
+    }
+
+    [Fact]
     public void Token_for_another_digest_is_not_passed_on()
     {
         var local = new LocalTsaClient();
@@ -103,7 +118,7 @@ public class TimestampDigestServiceTests
     [Fact]
     public void Authority_must_be_named()
     {
-        Assert.Equal("TSA_NOT_CONFIGURED",
+        Assert.Equal("TSA_URL_REQUIRED",
             Assert.Throws<ApiValidationException>(() =>
                 TimestampDigestService.CreateClient(new TimestampDigestInput { Digest = "x" })).Code);
     }
@@ -117,6 +132,42 @@ public class TimestampDigestServiceTests
         Assert.Equal(code,
             Assert.Throws<ApiValidationException>(() =>
                 TimestampDigestService.CreateClient(new TimestampDigestInput { TsaUrl = url })).Code);
+    }
+
+    [Theory]
+    [InlineData("https://8.8.8.8:8443/tsr", "TSA_PORT_NOT_ALLOWED")]
+    [InlineData("https://8.8.8.8:444/tsr", "TSA_PORT_NOT_ALLOWED")]
+    [InlineData("https://user:secret@8.8.8.8/tsr", "TSA_URL_INVALID")]
+    [InlineData("https://user@8.8.8.8/tsr", "TSA_URL_INVALID")]
+    public void Port_and_credentials_in_the_url_are_refused(string url, string code)
+    {
+        Assert.Equal(code,
+            Assert.Throws<ApiValidationException>(() =>
+                TimestampDigestService.CreateClient(new TimestampDigestInput { TsaUrl = url })).Code);
+        Assert.Equal(code,
+            Assert.Throws<ApiValidationException>(() =>
+                TimestampDigestService.CreateClient(new TimestampDigestInput { TsaUrl = "https://8.8.8.8/tsr", TsaBackupUrl = url })).Code);
+    }
+
+    [Fact]
+    public void Explicit_default_port_is_fine()
+    {
+        Assert.NotNull(TimestampDigestService.CreateClient(new TimestampDigestInput { TsaUrl = "https://8.8.8.8:443/tsr" }));
+    }
+
+    [Fact]
+    public void The_gate_is_bounded()
+    {
+        var taken = 0;
+        try
+        {
+            while (TimestampDigestService.Gate.Wait(0)) taken++;
+            Assert.Equal(TimestampDigestService.MaxConcurrent, taken);
+        }
+        finally
+        {
+            TimestampDigestService.Gate.Release(taken);
+        }
     }
 
     [Fact]

@@ -765,9 +765,45 @@ namespace DotNetSigningServer.Controllers
                 return InputRefused(ex);
             }
 
+            if (!TimestampDigestService.Gate.Wait(0))
+            {
+                Response.Headers.RetryAfter = "1";
+                return StatusCode(StatusCodes.Status429TooManyRequests, new
+                {
+                    code = "TIMESTAMP_DIGEST_BUSY",
+                    message = Localizer["Error_TIMESTAMP_DIGEST_BUSY"].Value,
+                });
+            }
+
+            var tsaUrl = input!.TsaUrl!;
+            var aborted = HttpContext?.RequestAborted ?? CancellationToken.None;
+            // Off the request thread: the client is synchronous and the authority may be slow.
+            var work = Task.Run(() =>
+            {
+                try
+                {
+                    return TimestampDigestService.Stamp(client, digest, tsaUrl);
+                }
+                finally
+                {
+                    TimestampDigestService.Gate.Release();
+                }
+            });
+            _ = work.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+
             try
             {
-                return Ok(TimestampDigestService.Stamp(client, digest, input!.TsaUrl!));
+                return Ok(await work.WaitAsync(TimestampDigestService.Deadline, aborted));
+            }
+            catch (OperationCanceledException) when (aborted.IsCancellationRequested)
+            {
+                return new EmptyResult();
+            }
+            catch (TimeoutException)
+            {
+                Logger.LogWarning("Timestamp digest: the authority did not answer within {Seconds} s ({TsaUrl})",
+                    TimestampDigestService.Deadline.TotalSeconds, tsaUrl);
+                return TsaUnreachableResult(new TsaCommunicationException(tsaUrl, "The timestamp authority did not answer in time."));
             }
             catch (TsaCommunicationException ex)
             {

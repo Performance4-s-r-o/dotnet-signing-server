@@ -16,7 +16,14 @@ public static class TimestampDigestService
 {
     public const int DigestBytes = 32;
     public const string DigestInvalid = "DIGEST_INVALID";
-    public const string TsaNotConfigured = "TSA_NOT_CONFIGURED";
+    public const string TsaUrlRequired = "TSA_URL_REQUIRED";
+    public const string TsaUrlInvalid = "TSA_URL_INVALID";
+    public const string TsaPortNotAllowed = "TSA_PORT_NOT_ALLOWED";
+
+    /// <summary>At most this many stamps in flight on this path; each holds a pool thread while the authority answers.</summary>
+    public const int MaxConcurrent = 8;
+    public static readonly TimeSpan Deadline = TimeSpan.FromSeconds(30);
+    public static readonly SemaphoreSlim Gate = new(MaxConcurrent, MaxConcurrent);
 
     /// <summary>64 hex characters or base64 (padded or not) of exactly 32 bytes; anything else is refused.</summary>
     public static byte[] ParseDigest(string? value)
@@ -41,18 +48,38 @@ public static class TimestampDigestService
 
     public static ITSAClient CreateClient(TimestampDigestInput input)
     {
-        if (string.IsNullOrWhiteSpace(input.TsaUrl)) throw new ApiValidationException(TsaNotConfigured);
+        if (string.IsNullOrWhiteSpace(input.TsaUrl)) throw new ApiValidationException(TsaUrlRequired);
+        EnsureUrlAllowed(input.TsaUrl);
+        if (!string.IsNullOrWhiteSpace(input.TsaBackupUrl)) EnsureUrlAllowed(input.TsaBackupUrl);
 
         return PdfCryptoHelper.CreateTsaClient(
             input.TsaUrl,
             string.IsNullOrWhiteSpace(input.TsaUsername) ? null : input.TsaUsername,
             string.IsNullOrWhiteSpace(input.TsaPassword) ? null : input.TsaPassword,
             TsaEndpoint.From(input.TsaBackupUrl, input.TsaBackupUsername, input.TsaBackupPassword))
-            ?? throw new ApiValidationException(TsaNotConfigured);
+            ?? throw new ApiValidationException(TsaUrlRequired);
+    }
+
+    /// <summary>
+    /// Port 443 only and no credentials in the URL (they would end up in logs and in the error
+    /// body). A URL that does not parse falls through to the HTTPS check in CreateTsaClient.
+    /// </summary>
+    private static void EnsureUrlAllowed(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return;
+        if (!string.IsNullOrEmpty(uri.UserInfo)) throw new ApiValidationException(TsaUrlInvalid);
+        if (string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) && !uri.IsDefaultPort)
+        {
+            throw new ApiValidationException(TsaPortNotAllowed);
+        }
     }
 
     public static TimestampDigestResult Stamp(ITSAClient client, byte[] digest, string tsaUrl)
     {
+        // Free and takes any URL and password: like /api/tsa-probe it must not consult or feed
+        // the breaker, or anyone could open it for a platform authority.
+        using var noBreaker = TsaCircuitBreaker.Bypass();
+
         byte[] tokenBytes;
         TimeStampToken token;
         try

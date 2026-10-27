@@ -515,8 +515,12 @@
   <data name="ApiDocTsDigestIntro" xml:space="preserve"><value>Sendet einen SHA-256-Digest an die von Ihnen genannte Zeitstempelstelle und liefert das RFC-3161-Token mit Ausstellungszeit und Subjekt der Stelle zurück. So lässt sich belegen, dass Daten zu einem Zeitpunkt existierten (Merkle-Wurzel, Kopf eines Audit-Logs, Hash einer Datei), ohne die Daten selbst zu senden.</value></data>
   <data name="ApiDocTsDigestNote1" xml:space="preserve"><value>Kostenlos — es wird nichts berechnet.</value></data>
   <data name="ApiDocTsDigestNote2" xml:space="preserve"><value>Der Digest hat genau 32 Bytes: 64 Hexadezimalzeichen oder Base64. Andere Längen und Algorithmen werden abgelehnt (DIGEST_INVALID).</value></data>
-  <data name="ApiDocTsDigestNote3" xml:space="preserve"><value>Die Stelle wird in der Anfrage gewählt und unterliegt denselben Prüfungen wie jeder Zeitstempel: nur HTTPS, keine internen Adressen, optionales Backup, Circuit Breaker. Das Token wird nicht gegen eine Vertrauensliste geprüft.</value></data>
+  <data name="ApiDocTsDigestNote3" xml:space="preserve"><value>Die Stelle wird in der Anfrage gewählt und unterliegt denselben Prüfungen wie jeder Zeitstempel: nur HTTPS auf Port 443, keine internen Adressen, keine Zugangsdaten in der URL, optionales Backup. Dieser kostenlose Pfad nutzt den Circuit Breaker nicht und speist ihn nicht (wie tsa-probe), führt höchstens 8 Anfragen gleichzeitig aus und gibt nach 30 s auf. Das Token wird nicht gegen eine Vertrauensliste geprüft.</value></data>
   <data name="TimestampDigestError" xml:space="preserve"><value>Beim Zeitstempeln des Digests ist ein Fehler aufgetreten</value></data>
+  <data name="Error_TSA_URL_REQUIRED" xml:space="preserve"><value>Die URL der Zeitstempelstelle (tsaUrl) ist erforderlich.</value></data>
+  <data name="Error_TSA_PORT_NOT_ALLOWED" xml:space="preserve"><value>Die URL der Zeitstempelstelle muss den Standard-HTTPS-Port (443) verwenden.</value></data>
+  <data name="Error_TSA_URL_INVALID" xml:space="preserve"><value>Die URL der Zeitstempelstelle darf keine Zugangsdaten enthalten.</value></data>
+  <data name="Error_TIMESTAMP_DIGEST_BUSY" xml:space="preserve"><value>Zu viele Zeitstempelanfragen laufen gleichzeitig. Bitte in Kürze erneut versuchen.</value></data>
   <data name="Error_DIGEST_INVALID" xml:space="preserve"><value>Der Digest muss genau 32 Bytes (SHA-256) haben, angegeben als 64 Hexadezimalzeichen oder als Base64.</value></data>
   <data name="ApiDocInspectTitle" xml:space="preserve"><value>Signaturen in einem PDF auslesen</value></data>
   <data name="ApiDocInspectPurpose" xml:space="preserve"><value>Signaturen, Stufen und Ablaufdaten auflisten</value></data>
