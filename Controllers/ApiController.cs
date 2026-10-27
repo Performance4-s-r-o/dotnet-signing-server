@@ -524,6 +524,12 @@ namespace DotNetSigningServer.Controllers
         {
             for (Exception? e = ex; e != null; e = e.InnerException)
             {
+                if (e is TsaBusyException)
+                {
+                    Response.Headers.RetryAfter = "1";
+                    return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                        new { code = "TSA_BUSY", message = Localizer["Error_TSA_BUSY"].Value });
+                }
                 if (e is TsaCircuitOpenException open)
                 {
                     Response.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling(open.RetryAfter.TotalSeconds)).ToString();

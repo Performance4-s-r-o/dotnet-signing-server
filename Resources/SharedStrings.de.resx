@@ -521,6 +521,8 @@
   <data name="Error_TSA_PORT_NOT_ALLOWED" xml:space="preserve"><value>Die URL der Zeitstempelstelle muss den Standard-HTTPS-Port (443) verwenden.</value></data>
   <data name="Error_TSA_URL_INVALID" xml:space="preserve"><value>Die URL der Zeitstempelstelle darf keine Zugangsdaten enthalten.</value></data>
   <data name="Error_TIMESTAMP_DIGEST_BUSY" xml:space="preserve"><value>Zu viele Zeitstempelanfragen laufen gleichzeitig. Bitte in Kürze erneut versuchen.</value></data>
+  <data name="Error_TSA_BUSY" xml:space="preserve"><value>Zu viele Aufrufe der Zeitstempelstelle laufen gleichzeitig. Bitte in Kürze erneut versuchen.</value></data>
+  <data name="Error_INSPECT_DEADLINE_EXCEEDED" xml:space="preserve"><value>Die Anfrage hat zu lange gedauert. Bitte erneut versuchen oder ein kleineres Dokument senden.</value></data>
   <data name="Error_DIGEST_INVALID" xml:space="preserve"><value>Der Digest muss genau 32 Bytes (SHA-256) haben, angegeben als 64 Hexadezimalzeichen oder als Base64.</value></data>
   <data name="ApiDocInspectTitle" xml:space="preserve"><value>Signaturen in einem PDF auslesen</value></data>
   <data name="ApiDocInspectPurpose" xml:space="preserve"><value>Signaturen, Stufen und Ablaufdaten auflisten</value></data>

@@ -210,7 +210,8 @@ builder.Services.AddHttpClient(nameof(LokiClient));
 builder.Services.AddSingleton<LokiClient>();
 // Ship all ILogger output (not just unhandled exceptions) to Loki.
 builder.Services.AddSingleton<ILoggerProvider, DotNetSigningServer.Logging.LokiLoggerProvider>();
-builder.Services.AddHttpClient<TemplateAiService>();
+// The model gets 60 s; the caller's RequestAborted is passed on per call (#72).
+builder.Services.AddHttpClient<TemplateAiService>(c => c.Timeout = TimeSpan.FromSeconds(60));
 builder.Services.AddHttpClient("osticket", client =>
 {
     var timeout = builder.Configuration.GetValue<int?>("OsTicket:TimeoutSeconds") ?? 10;

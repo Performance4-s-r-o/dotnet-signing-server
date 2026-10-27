@@ -531,6 +531,8 @@
   <data name="Error_TSA_PORT_NOT_ALLOWED" xml:space="preserve"><value>The timestamp authority URL must use the default HTTPS port (443).</value></data>
   <data name="Error_TSA_URL_INVALID" xml:space="preserve"><value>The timestamp authority URL must not contain credentials.</value></data>
   <data name="Error_TIMESTAMP_DIGEST_BUSY" xml:space="preserve"><value>Too many timestamp requests are running at once. Try again shortly.</value></data>
+  <data name="Error_TSA_BUSY" xml:space="preserve"><value>Too many calls to the timestamp authority are running at once. Try again shortly.</value></data>
+  <data name="Error_INSPECT_DEADLINE_EXCEEDED" xml:space="preserve"><value>Request took too long. Try again or send a smaller document.</value></data>
   <data name="Error_DIGEST_INVALID" xml:space="preserve"><value>The digest must be exactly 32 bytes (SHA-256), given as 64 hexadecimal characters or as base64.</value></data>
   <data name="ApiDocInspectTitle" xml:space="preserve"><value>Inspect the signatures in a PDF</value></data>
   <data name="ApiDocInspectPurpose" xml:space="preserve"><value>List signatures, levels and expiry dates</value></data>

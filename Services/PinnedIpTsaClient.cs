@@ -47,6 +47,27 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
 
     protected override byte[] GetTSAResponse(byte[] requestBytes)
     {
+        // Own limit for the authority calls, apart from the global request limit: a slow
+        // authority holds a blocked thread per call and must not drain the pool for the rest (#72).
+        var gate = CallGate;
+        if (!gate.Wait(GateWait, OperationDeadline.CurrentToken))
+        {
+            if (OperationDeadline.CurrentToken.IsCancellationRequested) OperationDeadline.CurrentToken.ThrowIfCancellationRequested();
+            throw new TsaCommunicationException(tsaURL, "Too many timestamp authority calls are in flight.",
+                new TsaBusyException());
+        }
+        try
+        {
+            return GetTsaResponseGuarded(requestBytes);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private byte[] GetTsaResponseGuarded(byte[] requestBytes)
+    {
         var breaker = TsaCircuitBreaker.Default;
         var feed = !TsaCircuitBreaker.IsBypassed;
         try
@@ -148,6 +169,18 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
             ? value
             : throw new ArgumentOutOfRangeException(nameof(value), value, $"TSA timeout must be within (0, {MaxRequestTimeout}].");
     }
+
+    /// <summary>
+    /// Authority calls in flight at once, all paths together. A fixed constant, not a setting:
+    /// it protects the thread pool (each call blocks a thread), so it follows the code, not the
+    /// deployment. Tests swap the gate.
+    /// </summary>
+    public const int MaxConcurrentCalls = 12;
+
+    /// <summary>How long a call waits for a free place before it is refused as busy.</summary>
+    internal static TimeSpan GateWait { get; set; } = TimeSpan.FromSeconds(2);
+
+    internal static SemaphoreSlim CallGate { get; set; } = new(MaxConcurrentCalls, MaxConcurrentCalls);
 
     private static TimeSpan _requestTimeout = TimeSpan.FromSeconds(10);
 
