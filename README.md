@@ -69,6 +69,7 @@ from the portal under **API Tokens**. Interactive documentation is served at
 | `POST /api/seal` | Server-side seal using the configured PFX |
 | `POST /api/timestamp` | Apply an RFC 3161 timestamp |
 | `POST /api/tsa-probe` | Check that a TSA is reachable and RFC 3161 compliant |
+| `POST /api/timestamp-digest` | RFC 3161 token over a SHA-256 digest you supply |
 | `POST /api/attachment` | Embed a file attachment in a PDF |
 
 The two-step `presign` → `sign` flow exists so the private key never leaves the

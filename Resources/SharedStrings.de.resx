@@ -508,6 +508,16 @@
   <data name="ApiDocTimestampCredits" xml:space="preserve"><value>1</value></data>
   <data name="ApiDocTimestampMeta" xml:space="preserve"><value>Fügen Sie einem PDF einen vertrauenswürdigen RFC-3161-Zeitstempel von einer beliebigen TSA hinzu. Belegt, dass das Dokument zu einem Zeitpunkt existierte — ohne Signaturzertifikat.</value></data>
   <data name="ApiDocTimestampIntro" xml:space="preserve"><value>Setzt einen Zeitstempel einer RFC-3161-Zeitstempelstelle, ohne das Dokument mit einem persönlichen Zertifikat zu signieren. Für sich genommen als Existenznachweis nützlich oder in Kombination mit einer Signatur für die Langzeitvalidierung.</value></data>
+  <data name="ApiDocTsDigestTitle" xml:space="preserve"><value>Digest mit Zeitstempel versehen</value></data>
+  <data name="ApiDocTsDigestPurpose" xml:space="preserve"><value>RFC-3161-Token für einen SHA-256-Digest</value></data>
+  <data name="ApiDocTsDigestCredits" xml:space="preserve"><value>Kostenlos</value></data>
+  <data name="ApiDocTsDigestMeta" xml:space="preserve"><value>Erhalten Sie ein RFC-3161-Zeitstempel-Token für einen SHA-256-Digest, den Sie bereits haben. Es wird kein Dokument hochgeladen.</value></data>
+  <data name="ApiDocTsDigestIntro" xml:space="preserve"><value>Sendet einen SHA-256-Digest an die von Ihnen genannte Zeitstempelstelle und liefert das RFC-3161-Token mit Ausstellungszeit und Subjekt der Stelle zurück. So lässt sich belegen, dass Daten zu einem Zeitpunkt existierten (Merkle-Wurzel, Kopf eines Audit-Logs, Hash einer Datei), ohne die Daten selbst zu senden.</value></data>
+  <data name="ApiDocTsDigestNote1" xml:space="preserve"><value>Kostenlos — es wird nichts berechnet.</value></data>
+  <data name="ApiDocTsDigestNote2" xml:space="preserve"><value>Der Digest hat genau 32 Bytes: 64 Hexadezimalzeichen oder Base64. Andere Längen und Algorithmen werden abgelehnt (DIGEST_INVALID).</value></data>
+  <data name="ApiDocTsDigestNote3" xml:space="preserve"><value>Die Stelle wird in der Anfrage gewählt und unterliegt denselben Prüfungen wie jeder Zeitstempel: nur HTTPS, keine internen Adressen, optionales Backup, Circuit Breaker. Das Token wird nicht gegen eine Vertrauensliste geprüft.</value></data>
+  <data name="TimestampDigestError" xml:space="preserve"><value>Beim Zeitstempeln des Digests ist ein Fehler aufgetreten</value></data>
+  <data name="Error_DIGEST_INVALID" xml:space="preserve"><value>Der Digest muss genau 32 Bytes (SHA-256) haben, angegeben als 64 Hexadezimalzeichen oder als Base64.</value></data>
   <data name="ApiDocInspectTitle" xml:space="preserve"><value>Signaturen in einem PDF auslesen</value></data>
   <data name="ApiDocInspectPurpose" xml:space="preserve"><value>Signaturen, Stufen und Ablaufdaten auflisten</value></data>
   <data name="ApiDocInspectCredits" xml:space="preserve"><value>Kostenlos</value></data>

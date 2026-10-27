@@ -49,6 +49,8 @@ public static class RateLimiting
                     c => $"probe:{UserKey(c)}", options.TsaProbePerMinute, TimeSpan.FromMinutes(1)),
                 Link(c => PathIs(c, "/api/inspect-signatures"),
                     c => $"inspect:{UserKey(c)}", options.InspectSignaturesPerMinute, TimeSpan.FromMinutes(1)),
+                Link(c => PathIs(c, "/api/timestamp-digest"),
+                    c => $"tsdigest:{UserKey(c)}", options.TimestampDigestPerMinute, TimeSpan.FromMinutes(1)),
                 Link(c => c.Request.Method == "POST" && PathIs(c, "/Account/SignUp"),
                     c => $"signup:{ClientIp.Of(c)}", options.SignUpPerHour, TimeSpan.FromHours(1)),
                 Link(c => c.Request.Method == "POST" && AuthPaths.Any(p => PathIs(c, p)),

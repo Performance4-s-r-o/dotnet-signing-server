@@ -3,6 +3,7 @@ using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Services.Operations;
+using iText.Signatures;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
 using Microsoft.AspNetCore.Mvc;
@@ -738,6 +739,45 @@ namespace DotNetSigningServer.Controllers
             {
                 Logger.LogWarning(ex, "TSA probe unexpected failure for {TsaUrl}", input.TsaUrl);
                 return Ok(new { ok = false, code = "TSA_PROBE_FAILED", message = Localizer["Error_TSA_PROBE_FAILED"].Value, tsaUrl = input.TsaUrl });
+            }
+        }
+
+        /// <summary>
+        /// RFC 3161 token over a SHA-256 digest the caller already holds (no document is sent).
+        /// Free, like <c>inspect-signatures</c>; the authority comes from the request and faces the
+        /// same checks as on every other timestamp.
+        /// </summary>
+        [HttpPost("/api/timestamp-digest")]
+        public async Task<IActionResult> TimestampDigest([FromBody] TimestampDigestInput input)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            byte[] digest;
+            ITSAClient client;
+            try
+            {
+                digest = TimestampDigestService.ParseDigest(input?.Digest);
+                client = TimestampDigestService.CreateClient(input!);
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
+            }
+
+            try
+            {
+                return Ok(TimestampDigestService.Stamp(client, digest, input!.TsaUrl!));
+            }
+            catch (TsaCommunicationException ex)
+            {
+                Logger.LogWarning(ex, "Timestamp digest failed: TSA communication error ({TsaUrl})", ex.TsaUrl);
+                return TsaUnreachableResult(ex);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Timestamp digest failed");
+                return SafeProblem(Localizer["TimestampDigestError"], ex);
             }
         }
 

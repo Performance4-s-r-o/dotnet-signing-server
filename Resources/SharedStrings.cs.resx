@@ -518,6 +518,16 @@
   <data name="ApiDocTimestampCredits" xml:space="preserve"><value>1</value></data>
   <data name="ApiDocTimestampMeta" xml:space="preserve"><value>Připojte k PDF důvěryhodné časové razítko RFC 3161 od libovolné TSA. Prokazuje, že dokument v daném okamžiku existoval, bez podpisového certifikátu.</value></data>
   <data name="ApiDocTimestampIntro" xml:space="preserve"><value>Připojí razítko od autority časových razítek podle RFC 3161, aniž by dokument podepsal osobním certifikátem. Užitečné samo o sobě jako důkaz existence, nebo v kombinaci s podpisem pro dlouhodobou ověřitelnost.</value></data>
+  <data name="ApiDocTsDigestTitle" xml:space="preserve"><value>Časové razítko na otisk</value></data>
+  <data name="ApiDocTsDigestPurpose" xml:space="preserve"><value>Token RFC 3161 pro otisk SHA-256</value></data>
+  <data name="ApiDocTsDigestCredits" xml:space="preserve"><value>Zdarma</value></data>
+  <data name="ApiDocTsDigestMeta" xml:space="preserve"><value>Získejte token časového razítka RFC 3161 pro otisk SHA-256, který už máte. Žádný dokument se nenahrává.</value></data>
+  <data name="ApiDocTsDigestIntro" xml:space="preserve"><value>Pošle otisk SHA-256 autoritě časových razítek, kterou určíte, a vrátí token RFC 3161 s časem vystavení a subjektem autority. Hodí se k doložení, že data existovala v daném okamžiku (kořen Merkleova stromu, hlava auditního logu, otisk souboru), aniž by se data posílala.</value></data>
+  <data name="ApiDocTsDigestNote1" xml:space="preserve"><value>Zdarma — nic se neúčtuje.</value></data>
+  <data name="ApiDocTsDigestNote2" xml:space="preserve"><value>Otisk má přesně 32 bajtů: 64 hexadecimálních znaků nebo base64. Jiné délky a algoritmy se odmítnou (DIGEST_INVALID).</value></data>
+  <data name="ApiDocTsDigestNote3" xml:space="preserve"><value>Autorita se volí v požadavku a platí pro ni stejné kontroly jako u každého razítka: jen HTTPS, žádné interní adresy, volitelná záloha, jistič. Token se neověřuje proti seznamu důvěryhodných autorit.</value></data>
+  <data name="TimestampDigestError" xml:space="preserve"><value>Při časovém razítkování otisku došlo k chybě</value></data>
+  <data name="Error_DIGEST_INVALID" xml:space="preserve"><value>Otisk musí mít přesně 32 bajtů (SHA-256), zadaných jako 64 hexadecimálních znaků nebo jako base64.</value></data>
   <data name="ApiDocInspectTitle" xml:space="preserve"><value>Zjištění podpisů v PDF</value></data>
   <data name="ApiDocInspectPurpose" xml:space="preserve"><value>Výpis podpisů, úrovní a dat expirace</value></data>
   <data name="ApiDocInspectCredits" xml:space="preserve"><value>Zdarma</value></data>
