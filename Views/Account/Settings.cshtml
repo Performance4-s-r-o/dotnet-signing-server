@@ -4,6 +4,8 @@
     ViewData["Title"] = L["AccountSettingsTitle"].Value;
     int? maxConcurrent = Model.MaxConcurrentOperations;
     int? queueTimeout = Model.ConcurrencyQueueTimeoutSeconds;
+    var maxSelfConcurrency = DotNetSigningServer.Controllers.AccountController.SelfServiceMaxConcurrency(Context);
+    var maxQueueSeconds = DotNetSigningServer.Controllers.AccountController.UserQueueMaxSeconds(Context);
 }
 
 <h1 class="content-box-title">@L["AccountSettingsTitle"]</h1>
@@ -47,11 +49,15 @@
         <div class="tokens-form-group" style="flex:0 0 auto">
             <label for="max-concurrent" class="tokens-label">@L["MaxParallelRequests"]</label>
             <input type="number" id="max-concurrent" name="maxConcurrent" class="tokens-input"
-                   min="1" max="50" placeholder="@L["ConcurrencyDefault"]"
+                   min="1" max="@DotNetSigningServer.Services.CapacityPools.AllowedSelfServiceValue(maxSelfConcurrency, maxConcurrent)" placeholder="@L["ConcurrencyDefault"]"
                    value="@(maxConcurrent?.ToString() ?? "")" style="width:120px" />
         </div>
         <button type="submit" class="btn btn-primary" style="margin-bottom:0.125rem">@L["SaveLimit"]</button>
     </form>
+    @if (maxConcurrent > maxSelfConcurrency)
+    {
+        <p class="text-small muted" style="margin-top:0.5rem">@L["ConcurrencyAboveSelfServiceCap", maxConcurrent!.Value, maxSelfConcurrency]</p>
+    }
 </div>
 
 <!-- Queue timeout (long polling vs 429) -->
@@ -63,7 +69,7 @@
         <div class="tokens-form-group" style="flex:0 0 auto">
             <label for="queue-timeout" class="tokens-label">@L["ConcurrencyQueueTimeout"]</label>
             <input type="number" id="queue-timeout" name="queueTimeoutSeconds" class="tokens-input"
-                   min="0" placeholder="@L["ConcurrencyQueueDefault"]"
+                   min="0" max="@maxQueueSeconds" placeholder="@L["ConcurrencyQueueDefault"]"
                    value="@(queueTimeout?.ToString() ?? "")" style="width:120px" />
         </div>
         <button type="submit" class="btn btn-primary" style="margin-bottom:0.125rem">@L["SaveLimit"]</button>

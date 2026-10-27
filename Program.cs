@@ -447,9 +447,38 @@ builder.Services.AddOptions<BillingOptions>()
         {
             throw new InvalidOperationException("GLOBAL_CONCURRENCY_WAIT_MS must be 0 or a positive number of milliseconds.");
         }
+        // #69: pools H and A, and the bounds of a user's queue.
+        options.HeavyOperationsLimit = EnvValues.Int(builder.Configuration, "HEAVY_OPERATIONS_LIMIT") ?? options.HeavyOperationsLimit;
+        options.AiOperationsLimit = EnvValues.Int(builder.Configuration, "AI_OPERATIONS_LIMIT") ?? options.AiOperationsLimit;
+        options.UserQueueMaxSeconds = EnvValues.Int(builder.Configuration, "USER_QUEUE_MAX_SECONDS") ?? options.UserQueueMaxSeconds;
+        options.UserQueueLengthFactor = EnvValues.Int(builder.Configuration, "USER_QUEUE_LENGTH_FACTOR") ?? options.UserQueueLengthFactor;
+        if (options.HeavyOperationsLimit is < 0 or > BillingOptions.MaxPoolLimit)
+        {
+            throw new InvalidOperationException($"HEAVY_OPERATIONS_LIMIT must be 0 (off) or 1-{BillingOptions.MaxPoolLimit}.");
+        }
+        if (options.AiOperationsLimit is < 0 or > BillingOptions.MaxPoolLimit)
+        {
+            throw new InvalidOperationException($"AI_OPERATIONS_LIMIT must be 0 (off) or 1-{BillingOptions.MaxPoolLimit}.");
+        }
+        if (options.UserQueueMaxSeconds is < 0 or > BillingOptions.MaxQueueSeconds)
+        {
+            throw new InvalidOperationException($"USER_QUEUE_MAX_SECONDS must be 0-{BillingOptions.MaxQueueSeconds}.");
+        }
+        if (options.UserQueueLengthFactor is < 1 or > 100)
+        {
+            throw new InvalidOperationException("USER_QUEUE_LENGTH_FACTOR must be 1-100.");
+        }
+        if (options.ConcurrencyQueueTimeoutSeconds is < 0 or > BillingOptions.MaxQueueSeconds)
+        {
+            throw new InvalidOperationException($"Billing:ConcurrencyQueueTimeoutSeconds must be 0-{BillingOptions.MaxQueueSeconds}.");
+        }
         options.ProductTagGraceUntil = EnvValues.Instant(builder.Configuration, "BILLING_PRODUCT_TAG_GRACE_UNTIL") ?? options.ProductTagGraceUntil;
     })
     .ValidateOnStart();
+builder.Services.AddSingleton<CapacityPools>();
+// On SIGTERM, requests already running may finish (#69): the longest deadline is 75 s. Stays
+// under the container's stop_grace_period (135 s); the .NET default is 30 s.
+builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = TimeSpan.FromSeconds(120));
 
 
 var app = builder.Build();
@@ -665,6 +694,23 @@ app.MapControllers();
 // Health check endpoints
 app.MapHealthChecks("/health");
 app.MapHealthChecks("/healthz");
+
+// Occupancy of the concurrency pools and queues (#69): counts only, served on the internal
+// listener only (404 elsewhere, and everywhere while INTERNAL_API_PORT is empty).
+app.MapGet(ConcurrencyDiagnostics.Path, (HttpContext context,
+        PortalTrustOptions trust, CapacityPools pools) =>
+    ConcurrencyDiagnostics.IsServedOn(trust, context.Connection.LocalPort)
+        ? Results.Json(ConcurrencyDiagnostics.Snapshot(pools))
+        : Results.NotFound());
+{
+    var pools = app.Services.GetRequiredService<CapacityPools>();
+    var cpus = Environment.ProcessorCount;
+    app.Logger.LogInformation(
+        "Concurrency pools (0 = off): global {Global}, heavy {Heavy}, ai {Ai}, raster {Raster}; suggested for {Cpus} CPUs: "
+        + "global {SuggestedGlobal}, heavy {SuggestedHeavy}, ai {SuggestedAi}",
+        pools.Global.Limit, pools.Heavy.Limit, pools.Ai.Limit, CodeScanRaster.PoolSize, cpus,
+        BillingOptions.SuggestedGlobalLimit(cpus), BillingOptions.SuggestedHeavyLimit(cpus), BillingOptions.SuggestedAiLimit);
+}
 
 // Loki test endpoint (Development only, #80: it is anonymous and writes to the log store)
 if (app.Environment.IsDevelopment())

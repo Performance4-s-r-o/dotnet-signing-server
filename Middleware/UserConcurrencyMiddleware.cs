@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
+using DotNetSigningServer.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
@@ -22,6 +23,10 @@ namespace DotNetSigningServer.Middleware;
 /// limit therefore never holds a global slot, so one user's backlog cannot starve other users.
 /// Every slot taken is released in a <c>finally</c> on every path: success, 429, 503, an
 /// exception from the pipeline and a request cancelled by the client.
+///
+/// The user's queue is bounded (#69): at most <c>UserQueueMaxSeconds</c> of waiting and
+/// <c>UserQueueLengthFactor</c> × limit waiting requests, then 429 with an honest Retry-After.
+/// The trusted caller is exempt from both bounds; it shares its capacity between tenants itself.
 /// </summary>
 public class UserConcurrencyMiddleware
 {
@@ -50,6 +55,8 @@ public class UserConcurrencyMiddleware
 
         public int Limit { get { lock (_lock) return _limit; } }
 
+        public int Waiting { get { lock (_lock) return _waiters.Count; } }
+
         /// <summary>Applies a new limit; a lower one takes effect as running requests finish.</summary>
         public void SetLimit(int limit)
         {
@@ -60,8 +67,17 @@ public class UserConcurrencyMiddleware
             }
         }
 
+        /// <summary>Slot result: the queue already holds as many as it may (#69).</summary>
+        public const int QueueFull = -1;
+
         /// <summary>Returns the 1-based slot taken, or 0 on timeout. Throws when cancelled.</summary>
-        public async Task<int> WaitAsync(TimeSpan timeout, CancellationToken ct)
+        public Task<int> WaitAsync(TimeSpan timeout, CancellationToken ct) => WaitAsync(timeout, int.MaxValue, ct);
+
+        /// <summary>
+        /// Returns the 1-based slot taken, 0 on timeout, or <see cref="QueueFull"/> when
+        /// <paramref name="maxWaiting"/> requests are already queued. Throws when cancelled.
+        /// </summary>
+        public async Task<int> WaitAsync(TimeSpan timeout, int maxWaiting, CancellationToken ct)
         {
             Waiter waiter;
             LinkedListNode<Waiter> node;
@@ -74,6 +90,10 @@ public class UserConcurrencyMiddleware
                 if (timeout <= TimeSpan.Zero)
                 {
                     return 0;
+                }
+                if (_waiters.Count >= maxWaiting)
+                {
+                    return QueueFull;
                 }
                 waiter = new Waiter();
                 node = _waiters.AddLast(waiter);
@@ -145,6 +165,38 @@ public class UserConcurrencyMiddleware
         return Semaphores.TryGetValue(userId, out var gate) ? gate.Held : 0;
     }
 
+    private static long _rejectedQueueFull;
+    private static long _rejectedTimeout;
+    private static long _rejectedNoQueue;
+
+    /// <summary>All users' queues together, for the diagnostics endpoint (#69). No user ids.</summary>
+    public static UserQueuesSnapshot QueuesSnapshot()
+    {
+        int users = 0, running = 0, waiting = 0;
+        foreach (var gate in Semaphores.Values)
+        {
+            var held = gate.Held;
+            var queued = gate.Waiting;
+            if (held == 0 && queued == 0) continue;
+            users++;
+            running += held;
+            waiting += queued;
+        }
+        return new UserQueuesSnapshot(users, running, waiting,
+            Interlocked.Read(ref _rejectedNoQueue),
+            Interlocked.Read(ref _rejectedTimeout),
+            Interlocked.Read(ref _rejectedQueueFull));
+    }
+
+    /// <summary>Users with work running or queued, and the 429s since start by cause.</summary>
+    public sealed record UserQueuesSnapshot(
+        int ActiveUsers,
+        int Running,
+        int Waiting,
+        long RejectedWithoutQueue,
+        long RejectedAfterTimeout,
+        long RejectedQueueFull);
+
     /// <summary>
     /// Computes the tier multiplier for a given 1-based slot (1 = first in, N = Nth in).
     /// Exposed so tests can verify the same formula used by the middleware.
@@ -163,32 +215,40 @@ public class UserConcurrencyMiddleware
     // One middleware instance serves the whole pipeline, so the global cap lives on the instance.
     // It used to be static and was swapped in the constructor; a request releasing into a
     // semaphore it never took from could then overfill it.
-    private readonly SemaphoreSlim? _globalSemaphore;
-    private readonly int _globalCapacity;
+    private readonly CapacityPool _global;
     private readonly TimeSpan _globalWait;
 
     /// <summary>
     /// Free global slots, or null when the global cap is off. Diagnostics and tests: after any
     /// mix of finished, rejected, failed and cancelled requests it must be back at capacity.
     /// </summary>
-    public int? GlobalSlotsAvailable => _globalSemaphore?.CurrentCount;
+    public int? GlobalSlotsAvailable => _global.Available;
 
-    public UserConcurrencyMiddleware(
+    /// <summary>
+    /// Tests only: a private set of pools built from <paramref name="billingOptions"/>. Internal, so
+    /// the pipeline can only ever use the constructor that takes the shared pools.
+    /// </summary>
+    internal UserConcurrencyMiddleware(
         RequestDelegate next,
         ILogger<UserConcurrencyMiddleware> logger,
         IOptions<BillingOptions> billingOptions)
+        : this(next, logger, billingOptions, new CapacityPools(billingOptions.Value, Environment.ProcessorCount))
+    {
+    }
+
+    /// <summary>The pipeline's constructor: the shared pools, so diagnostics see the same global pool.</summary>
+    [ActivatorUtilitiesConstructor]
+    public UserConcurrencyMiddleware(
+        RequestDelegate next,
+        ILogger<UserConcurrencyMiddleware> logger,
+        IOptions<BillingOptions> billingOptions,
+        CapacityPools pools)
     {
         _next = next;
         _logger = logger;
         _billingOptions = billingOptions.Value;
-
-        var globalLimit = BillingOptions.EffectiveGlobalLimit(_billingOptions, Environment.ProcessorCount);
-        _globalWait = TimeSpan.FromMilliseconds(Math.Max(0, _billingOptions.GlobalConcurrencyWaitMilliseconds));
-        if (globalLimit > 0)
-        {
-            _globalSemaphore = new SemaphoreSlim(globalLimit, globalLimit);
-            _globalCapacity = globalLimit;
-        }
+        _global = pools.Global;
+        _globalWait = pools.Wait;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -213,12 +273,16 @@ public class UserConcurrencyMiddleware
         var gate = Semaphores.GetOrAdd(userId.Value, _ => new UserGate(limit));
         gate.SetLimit(limit);
 
-        var waitTimeout = queueTimeoutSeconds > 0
-            ? TimeSpan.FromSeconds(queueTimeoutSeconds)
+        // #69: the queue is bounded in time and length, except for the trusted caller, which
+        // queues its own tenants fairly and keeps what its account has stored.
+        var trusted = PortalTrust.IsTrustedCaller(context);
+        var queueSeconds = BillingOptions.EffectiveQueueSeconds(queueTimeoutSeconds, _billingOptions.UserQueueMaxSeconds, trusted);
+        var maxWaiting = BillingOptions.MaxWaiting(limit, _billingOptions.UserQueueLengthFactor, trusted);
+        var waitTimeout = queueSeconds > 0
+            ? TimeSpan.FromSeconds(queueSeconds)
             : TimeSpan.Zero;
 
         // The finally releases exactly what was taken.
-        var globalSemaphore = _globalSemaphore;
         var userSlotAcquired = false;
         var globalSlotAcquired = false;
 
@@ -228,7 +292,7 @@ public class UserConcurrencyMiddleware
             int slot;
             try
             {
-                slot = await gate.WaitAsync(waitTimeout, context.RequestAborted);
+                slot = await gate.WaitAsync(waitTimeout, maxWaiting, context.RequestAborted);
             }
             catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
             {
@@ -239,27 +303,44 @@ public class UserConcurrencyMiddleware
 
             if (!userSlotAcquired)
             {
-                _logger.LogWarning("User {UserId} exceeded concurrency limit ({Limit}), queue timeout {QueueTimeout}s",
-                    userId.Value, limit, queueTimeoutSeconds);
+                string cause;
+                if (slot == UserGate.QueueFull)
+                {
+                    cause = "queue full";
+                    Interlocked.Increment(ref _rejectedQueueFull);
+                }
+                else if (queueSeconds > 0)
+                {
+                    cause = "queue timeout";
+                    Interlocked.Increment(ref _rejectedTimeout);
+                }
+                else
+                {
+                    cause = "no queue";
+                    Interlocked.Increment(ref _rejectedNoQueue);
+                }
+                _logger.LogWarning("User {UserId} exceeded concurrency limit ({Limit}): {Cause}, queue wait {QueueSeconds}s",
+                    userId.Value, limit, cause, queueSeconds);
+                var retryAfter = BillingOptions.RetryAfterSeconds(queueSeconds);
                 context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-                context.Response.Headers["Retry-After"] = queueTimeoutSeconds > 0 ? "1" : "5";
+                context.Response.Headers["Retry-After"] = retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 var factory = context.RequestServices.GetRequiredService<IStringLocalizerFactory>();
                 var localizer = factory.Create(typeof(SharedStrings));
                 await context.Response.WriteAsJsonAsync(new
                 {
                     message = localizer["TooManyRequests"].Value,
                     limit,
-                    retryAfter = queueTimeoutSeconds > 0 ? 1 : 5,
+                    retryAfter,
                 });
                 return;
             }
 
             // 2) The global slot after a short wait, so the time spent in the user's queue is not wasted.
-            if (globalSemaphore != null)
+            if (_global.Enabled)
             {
                 try
                 {
-                    globalSlotAcquired = await globalSemaphore.WaitAsync(_globalWait, context.RequestAborted);
+                    globalSlotAcquired = await _global.TryEnterAsync(_globalWait, context.RequestAborted);
                 }
                 catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
                 {
@@ -267,7 +348,7 @@ public class UserConcurrencyMiddleware
                 }
                 if (!globalSlotAcquired)
                 {
-                    _logger.LogWarning("Global concurrency limit ({Limit}) reached", _globalCapacity);
+                    _logger.LogWarning("Global concurrency limit ({Limit}) reached", _global.Limit);
                     context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
                     context.Response.Headers["Retry-After"] = "10";
                     var factory = context.RequestServices.GetRequiredService<IStringLocalizerFactory>();
@@ -289,7 +370,7 @@ public class UserConcurrencyMiddleware
         }
         finally
         {
-            if (globalSlotAcquired) globalSemaphore!.Release();
+            if (globalSlotAcquired) _global.Release();
             if (userSlotAcquired) gate.Release();
         }
     }

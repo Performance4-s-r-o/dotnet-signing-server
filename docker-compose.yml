@@ -15,6 +15,15 @@ services:
         # true builds with the P4 Backoffice SDK (needs registry access at
         # restore time); false leaves it out and the integration stays Off.
     restart: unless-stopped
+    # Container resources (#69). Tune to the machine. 0 = no limit, which keeps the behaviour of
+    # a deployment that sets nothing. With a memory limit .NET sizes its GC heap from it (75 % by
+    # default) and the /tmp tmpfs below counts against it; cpus also sets the CPU count the
+    # server sizes its pools from (Environment.ProcessorCount).
+    mem_limit: ${CONTAINER_MEM_LIMIT:-0}
+    cpus: ${CONTAINER_CPUS:-0}
+    # Time between SIGTERM and SIGKILL: long enough for a request already running to finish
+    # (the longest operation deadline is 75 s, plus a queue wait).
+    stop_grace_period: ${CONTAINER_STOP_GRACE_PERIOD:-135s}
     volumes:
       - data_protection_keys:/app/data-protection-keys
     # Magick.NET and Ghostscript spill big pages to /tmp (#74). On RAM-backed tmpfs a
@@ -75,10 +84,19 @@ services:
       # Checkout sessions created before this UTC instant are accepted without the product
       # marker (those open at the deploy). Empty = strict. Remove a day after the deploy.
       - BILLING_PRODUCT_TAG_GRACE_UNTIL=${BILLING_PRODUCT_TAG_GRACE_UNTIL:-{{project.DOTNET_BILLING_PRODUCT_TAG_GRACE_UNTIL}}}
-      # #69/#94: cap on concurrent operations of the whole server. Empty = computed from the
-      # CPU count (max(16, 2/3 of the CPUs)); 0 = off. A request waits this many ms for a slot.
+      # #69/#94: cap on concurrent operations of the whole server (G). Empty or 0 = off. A request
+      # waits GLOBAL_CONCURRENCY_WAIT_MS (default 2000) for a slot of G, H or A, then 503.
+      # The start hypotheses for this machine are logged at startup and shown on /internal/concurrency.
       - GLOBAL_CONCURRENCY_LIMIT=${GLOBAL_CONCURRENCY_LIMIT:-{{project.DOTNET_GLOBAL_CONCURRENCY_LIMIT}}}
       - GLOBAL_CONCURRENCY_WAIT_MS=${GLOBAL_CONCURRENCY_WAIT_MS:-{{project.DOTNET_GLOBAL_CONCURRENCY_WAIT_MS}}}
+      # Pools (#69), empty or 0 = off: H = presign/sign/seal/timestamp/extend/fill/PDF/A at once
+      # (start at the CPU count), A = AI calls at once (start at 4).
+      - HEAVY_OPERATIONS_LIMIT=${HEAVY_OPERATIONS_LIMIT:-{{project.DOTNET_HEAVY_OPERATIONS_LIMIT}}}
+      - AI_OPERATIONS_LIMIT=${AI_OPERATIONS_LIMIT:-{{project.DOTNET_AI_OPERATIONS_LIMIT}}}
+      # A user's queue (#69): longest wait whatever the account stores (empty = 30 s, 0-600) and
+      # waiting requests per slot of the user's limit (empty = 2). The trusted caller is exempt.
+      - USER_QUEUE_MAX_SECONDS=${USER_QUEUE_MAX_SECONDS:-{{project.DOTNET_USER_QUEUE_MAX_SECONDS}}}
+      - USER_QUEUE_LENGTH_FACTOR=${USER_QUEUE_LENGTH_FACTOR:-{{project.DOTNET_USER_QUEUE_LENGTH_FACTOR}}}
       - FqdnServerName=${FQDN_SERVER:-localhost}
       # Pool and timeouts (#75): the database is shared with the portal's PostgREST and pool,
       # so this server must not take what its connection-limited role would refuse anyway.
@@ -182,7 +200,6 @@ services:
       - Limits__ImageMaxBytes=${IMAGE_MAX_BYTES:-1048576}
       - Limits__AttachmentMaxBytes=${ATTACHMENT_MAX_BYTES:-10485760}
       - Limits__RequestBodyLimitBytes=${REQUEST_BODY_LIMIT_BYTES:-41943040}
-      - Limits__MaxConcurrentRequestsPerKey=${MAX_CONCURRENT_REQUESTS_PER_KEY:-25}
       # PDF safety: refuse Launch actions and JavaScript that runs on open
       # (PDF_ACTIVE_CONTENT). false switches the whole check off, Launch included —
       # only where documents carrying Acrobat boilerplate scripts must still be signed.

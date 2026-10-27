@@ -1,3 +1,4 @@
+using DotNetSigningServer.Filters;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
@@ -147,6 +148,7 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
+        [CapacityPool(CapacityPoolKind.Ai)]
         [HttpPost("/api/ai/detect-fields")]
         [AllowCookieSession] // template builder (Views/Home/TemplateBuilder.cshtml)
         public async Task<IActionResult> DetectTemplateFields([FromBody] AiDetectFieldsInput input)
@@ -195,6 +197,7 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
+        [CapacityPool(CapacityPoolKind.Ai)]
         [HttpPost("/api/ai/extract-data")]
         public async Task<IActionResult> ExtractData([FromBody] AiExtractDataInput input)
         {

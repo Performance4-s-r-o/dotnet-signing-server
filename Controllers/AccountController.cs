@@ -722,12 +722,14 @@ public class AccountController : Controller
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
         if (user == null) return RedirectToAction(nameof(SignIn));
 
-        // Clamp to a sane range; NULL = use plan default
+        // NULL = plan default. A user may raise it to ⌊H/2⌋ (#69); more only by an operator.
         if (maxConcurrent.HasValue)
         {
-            if (maxConcurrent.Value < 1 || maxConcurrent.Value > 50)
+            // A value an operator stored above the cap may be kept or lowered, not raised.
+            var max = CapacityPools.AllowedSelfServiceValue(SelfServiceMaxConcurrency(HttpContext), user.MaxConcurrentOperations);
+            if (maxConcurrent.Value < 1 || maxConcurrent.Value > max)
             {
-                TempData["Error"] = _localizer["InvalidConcurrencyLimit"].Value;
+                TempData["Error"] = _localizer["InvalidConcurrencyLimit", max].Value;
                 return RedirectToAction(nameof(Settings));
             }
         }
@@ -753,6 +755,14 @@ public class AccountController : Controller
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
         if (user == null) return RedirectToAction(nameof(SignIn));
 
+        // -1 = global default; otherwise 0..USER_QUEUE_MAX_SECONDS (#69).
+        var maxQueue = UserQueueMaxSeconds(HttpContext);
+        if (queueTimeoutSeconds is < -1 || queueTimeoutSeconds > maxQueue)
+        {
+            TempData["Error"] = _localizer["InvalidQueueTimeout", maxQueue].Value;
+            return RedirectToAction(nameof(Settings));
+        }
+
         user.ConcurrencyQueueTimeoutSeconds = queueTimeoutSeconds < 0 ? null : queueTimeoutSeconds;
         await _dbContext.SaveChangesAsync();
         UserConcurrencyMiddleware.InvalidateLimitCache(user.Id);
@@ -760,6 +770,15 @@ public class AccountController : Controller
         TempData["Info"] = _localizer["ConcurrencyQueueTimeoutUpdated"].Value;
         return RedirectToAction(nameof(Settings));
     }
+
+    internal static int SelfServiceMaxConcurrency(HttpContext context) =>
+        context.RequestServices.GetService<CapacityPools>()?.SelfServiceMaxConcurrency
+        ?? CapacityPools.SelfServiceMax(BillingOptions.SuggestedHeavyLimit(Environment.ProcessorCount),
+            new BillingOptions().ConcurrencyDefaultLimit);
+
+    internal static int UserQueueMaxSeconds(HttpContext context) =>
+        context.RequestServices.GetService<IOptions<BillingOptions>>()?.Value.UserQueueMaxSeconds
+        ?? new BillingOptions().UserQueueMaxSeconds;
 
     // ── Account deletion (GDPR art. 17, #217) ─────────────────────────────────────────
     // Needs a password or e-mailed code confirmed within the last 10 minutes (stricter than

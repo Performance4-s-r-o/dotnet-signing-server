@@ -174,7 +174,7 @@ public class CulturePrefixMiddleware
 
     private static readonly string[] ExcludedPrefixes =
     {
-        "/health", "/healthz", "/swagger", "/debug",
+        "/health", "/healthz", "/internal", "/swagger", "/debug",
         "/css", "/js", "/img", "/lib", "/fonts",
         "/robots.txt", "/sitemap.xml", "/favicon.ico",
         // Stripe and the SPFx clients post back to fixed URLs; a locale prefix

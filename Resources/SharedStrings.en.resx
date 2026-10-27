@@ -93,7 +93,9 @@
   <data name="ServerAtCapacity" xml:space="preserve"><value>Server is at full capacity. Please retry in a few seconds.</value></data>
   <data name="SaveLimit" xml:space="preserve"><value>Save</value></data>
   <data name="SeePricing" xml:space="preserve"><value>See pricing</value></data>
-  <data name="InvalidConcurrencyLimit" xml:space="preserve"><value>Concurrency limit must be between 1 and 50 (leave empty for default).</value></data>
+  <data name="InvalidConcurrencyLimit" xml:space="preserve"><value>Concurrency limit must be between 1 and {0} (leave empty for default).</value></data>
+  <data name="InvalidQueueTimeout" xml:space="preserve"><value>Queue timeout must be between 0 and {0} seconds (leave empty for default).</value></data>
+  <data name="ConcurrencyAboveSelfServiceCap" xml:space="preserve"><value>Your limit {0} was set by an operator above the self-service maximum {1}. It still applies; you can lower it, not raise it.</value></data>
   <data name="ConcurrencyLimitUpdated" xml:space="preserve"><value>Concurrency limit updated.</value></data>
   <data name="ConcurrencyPricingTitle" xml:space="preserve"><value>Parallel processing pricing</value></data>
   <data name="ConcurrencyPricingDescription" xml:space="preserve"><value>Running more operations in parallel uses tiered credit pricing:</value></data>

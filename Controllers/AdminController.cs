@@ -347,6 +347,13 @@ public class AdminController : Controller
             return RedirectToAction(nameof(Index));
         }
 
+        // An operator may go past the user's cap, which binds only the trusted caller at run time.
+        if (queueTimeoutSeconds is < -1 or > BillingOptions.MaxQueueSeconds)
+        {
+            TempData["Error"] = _localizer["InvalidQueueTimeout", BillingOptions.MaxQueueSeconds].Value;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
         var before = user.ConcurrencyQueueTimeoutSeconds;
         user.ConcurrencyQueueTimeoutSeconds = queueTimeoutSeconds < 0 ? null : queueTimeoutSeconds;
         AdminAudit.Record(_dbContext, User, user.Id, AdminAudit.Actions.ConcurrencyQueueTimeout,

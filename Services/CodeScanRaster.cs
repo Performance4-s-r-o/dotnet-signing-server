@@ -54,6 +54,9 @@ public static class CodeScanRaster
     public static int PoolSize { get; } = Math.Max(1, Environment.ProcessorCount / 2);
 
     private static readonly SemaphoreSlim Pool = new(PoolSize, PoolSize);
+
+    /// <summary>Rasterisations running now; diagnostics only (#69).</summary>
+    internal static int InUse => PoolSize - Pool.CurrentCount;
     private static readonly object ConfigureLock = new();
     private static bool _policyApplied;
 
