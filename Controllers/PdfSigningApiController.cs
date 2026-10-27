@@ -901,17 +901,17 @@ namespace DotNetSigningServer.Controllers
             return await SealCoreAsync(user, input, pdf, BinaryFingerprint("seal", input, pdf!));
         }
 
-        /// <summary>422 for a <c>Reason</c>/<c>Location</c> that must not go into a signature dictionary (#81).</summary>
+        /// <summary>400 for a <c>Reason</c>/<c>Location</c> that must not go into a signature dictionary (#81); tab and no-break space become a space.</summary>
         private IActionResult? SealTextRefused(SealInput input)
         {
             try
             {
-                SealTextGuard.EnsureSafe(input.Reason, input.Location);
+                (input.Reason, input.Location) = SealTextGuard.EnsureSafe(input.Reason, input.Location);
                 return null;
             }
             catch (ApiValidationException ex)
             {
-                return UnprocessableEntity(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
+                return InputRefused(ex);
             }
         }
 

@@ -31,6 +31,31 @@ public class SealCredentialStoreTests
     }
 
     [Fact]
+    public void Replacing_the_pfx_file_is_picked_up_without_a_restart()
+    {
+        var (_, first, password) = TestHelpers.CreateTestCertificate();
+        var (_, second, password2) = TestHelpers.CreateTestCertificate();
+        var path = Path.Combine(Path.GetTempPath(), $"seal-{Guid.NewGuid():N}.pfx");
+        try
+        {
+            File.WriteAllBytes(path, Convert.FromBase64String(first));
+            var options = new SealOptions { Enabled = true, PfxPath = path, PfxPassword = password };
+            var before = SealCredentialStore.Get(options);
+
+            File.WriteAllBytes(path, Convert.FromBase64String(second));
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(5));
+            options.PfxPassword = password2;
+            var after = SealCredentialStore.Get(options);
+
+            Assert.NotSame(before.PrivateKey, after.PrivateKey);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Failed_load_is_not_cached()
     {
         var (_, pfxBase64, password) = TestHelpers.CreateTestCertificate();
