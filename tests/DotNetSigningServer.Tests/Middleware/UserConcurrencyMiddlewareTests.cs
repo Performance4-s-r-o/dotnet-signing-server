@@ -613,13 +613,22 @@ public class UserConcurrencyMiddlewareTests
     }
 
     [Theory]
-    [InlineData(24, 12)]
-    [InlineData(12, 6)]
-    [InlineData(3, 1)]
-    [InlineData(1, 1)]
-    public void Self_service_concurrency_is_half_of_heavy(int heavy, int expected)
+    [InlineData(24, 3, 12)]
+    [InlineData(12, 3, 6)]
+    [InlineData(2, 3, 3)]
+    [InlineData(1, 1, 1)]
+    public void Self_service_concurrency_is_half_of_heavy_but_never_below_the_plan_default(int heavy, int planDefault, int expected)
     {
-        Assert.Equal(expected, DotNetSigningServer.Services.CapacityPools.SelfServiceMax(heavy));
+        Assert.Equal(expected, DotNetSigningServer.Services.CapacityPools.SelfServiceMax(heavy, planDefault));
+    }
+
+    [Theory]
+    [InlineData(12, null, 12)]
+    [InlineData(12, 6, 12)]
+    [InlineData(12, 49, 49)]
+    public void Operator_value_above_the_cap_can_be_kept_or_lowered(int cap, int? stored, int expected)
+    {
+        Assert.Equal(expected, DotNetSigningServer.Services.CapacityPools.AllowedSelfServiceValue(cap, stored));
     }
 
     [Fact]
@@ -629,6 +638,8 @@ public class UserConcurrencyMiddlewareTests
         Assert.Equal(6, on.SelfServiceMaxConcurrency);
         var off = new DotNetSigningServer.Services.CapacityPools(new BillingOptions(), processorCount: 24);
         Assert.Equal(12, off.SelfServiceMaxConcurrency);
+        var small = new DotNetSigningServer.Services.CapacityPools(new BillingOptions(), processorCount: 2);
+        Assert.Equal(3, small.SelfServiceMaxConcurrency);
         Assert.False(off.Heavy.Enabled);
         Assert.False(off.Ai.Enabled);
         Assert.False(off.Global.Enabled);

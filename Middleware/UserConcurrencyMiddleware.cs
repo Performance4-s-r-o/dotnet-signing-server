@@ -224,18 +224,29 @@ public class UserConcurrencyMiddleware
     /// </summary>
     public int? GlobalSlotsAvailable => _global.Available;
 
-    /// <param name="pools">The shared pools (diagnostics see the same global pool); tests may omit it.</param>
+    /// <summary>
+    /// Tests only: a private set of pools built from <paramref name="billingOptions"/>. Internal, so
+    /// the pipeline can only ever use the constructor that takes the shared pools.
+    /// </summary>
+    internal UserConcurrencyMiddleware(
+        RequestDelegate next,
+        ILogger<UserConcurrencyMiddleware> logger,
+        IOptions<BillingOptions> billingOptions)
+        : this(next, logger, billingOptions, new CapacityPools(billingOptions.Value, Environment.ProcessorCount))
+    {
+    }
+
+    /// <summary>The pipeline's constructor: the shared pools, so diagnostics see the same global pool.</summary>
+    [ActivatorUtilitiesConstructor]
     public UserConcurrencyMiddleware(
         RequestDelegate next,
         ILogger<UserConcurrencyMiddleware> logger,
         IOptions<BillingOptions> billingOptions,
-        CapacityPools? pools = null)
+        CapacityPools pools)
     {
         _next = next;
         _logger = logger;
         _billingOptions = billingOptions.Value;
-
-        pools ??= new CapacityPools(_billingOptions, Environment.ProcessorCount);
         _global = pools.Global;
         _globalWait = pools.Wait;
     }

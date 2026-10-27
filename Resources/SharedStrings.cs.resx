@@ -95,6 +95,7 @@
   <data name="SeePricing" xml:space="preserve"><value>Zobrazit ceník</value></data>
   <data name="InvalidConcurrencyLimit" xml:space="preserve"><value>Limit paralelizace musí být mezi 1 a {0} (prázdné = výchozí).</value></data>
   <data name="InvalidQueueTimeout" xml:space="preserve"><value>Timeout fronty musí být mezi 0 a {0} sekundami (prázdné = výchozí).</value></data>
+  <data name="ConcurrencyAboveSelfServiceCap" xml:space="preserve"><value>Váš limit {0} nastavil správce nad maximum pro vlastní nastavení ({1}). Dál platí; můžete ho snížit, ne zvýšit.</value></data>
   <data name="ConcurrencyLimitUpdated" xml:space="preserve"><value>Limit paralelizace uložen.</value></data>
   <data name="ConcurrencyPricingTitle" xml:space="preserve"><value>Cena za paralelní zpracování</value></data>
   <data name="ConcurrencyPricingDescription" xml:space="preserve"><value>Souběžné operace používají stupňované ceny kreditů:</value></data>

@@ -725,7 +725,8 @@ public class AccountController : Controller
         // NULL = plan default. A user may raise it to ⌊H/2⌋ (#69); more only by an operator.
         if (maxConcurrent.HasValue)
         {
-            var max = SelfServiceMaxConcurrency(HttpContext);
+            // A value an operator stored above the cap may be kept or lowered, not raised.
+            var max = CapacityPools.AllowedSelfServiceValue(SelfServiceMaxConcurrency(HttpContext), user.MaxConcurrentOperations);
             if (maxConcurrent.Value < 1 || maxConcurrent.Value > max)
             {
                 TempData["Error"] = _localizer["InvalidConcurrencyLimit", max].Value;
@@ -772,7 +773,8 @@ public class AccountController : Controller
 
     internal static int SelfServiceMaxConcurrency(HttpContext context) =>
         context.RequestServices.GetService<CapacityPools>()?.SelfServiceMaxConcurrency
-        ?? CapacityPools.SelfServiceMax(BillingOptions.SuggestedHeavyLimit(Environment.ProcessorCount));
+        ?? CapacityPools.SelfServiceMax(BillingOptions.SuggestedHeavyLimit(Environment.ProcessorCount),
+            new BillingOptions().ConcurrencyDefaultLimit);
 
     internal static int UserQueueMaxSeconds(HttpContext context) =>
         context.RequestServices.GetService<IOptions<BillingOptions>>()?.Value.UserQueueMaxSeconds

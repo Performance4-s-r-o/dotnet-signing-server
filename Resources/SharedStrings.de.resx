@@ -95,6 +95,7 @@
   <data name="SeePricing" xml:space="preserve"><value>Preisliste anzeigen</value></data>
   <data name="InvalidConcurrencyLimit" xml:space="preserve"><value>Parallelitätslimit muss zwischen 1 und {0} liegen (leer = Standard).</value></data>
   <data name="InvalidQueueTimeout" xml:space="preserve"><value>Warteschlangen-Timeout muss zwischen 0 und {0} Sekunden liegen (leer = Standard).</value></data>
+  <data name="ConcurrencyAboveSelfServiceCap" xml:space="preserve"><value>Ihr Limit {0} wurde von einem Administrator über dem Selbstbedienungs-Maximum {1} gesetzt. Es gilt weiter; Sie können es senken, aber nicht erhöhen.</value></data>
   <data name="ConcurrencyLimitUpdated" xml:space="preserve"><value>Parallelitätslimit aktualisiert.</value></data>
   <data name="ConcurrencyPricingTitle" xml:space="preserve"><value>Preise für parallele Verarbeitung</value></data>
   <data name="ConcurrencyPricingDescription" xml:space="preserve"><value>Parallele Operationen verwenden gestaffelte Credit-Preise:</value></data>

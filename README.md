@@ -201,8 +201,12 @@ default; any other value that does not parse stops the server at startup.
 `GET /internal/concurrency` shows what the limits are doing (#69): occupancy, waits and
 rejections of the global, heavy and AI pools, the users' queues together (no user ids), the
 rasterisation pool, process memory and the thread pool, plus the start hypotheses for this
-machine. Counts only; it answers on the `INTERNAL_API_PORT` listener and is `404` everywhere
-else (and everywhere while that port is not set).
+machine. Counts only, and no token of its own: it answers on the `INTERNAL_API_PORT` listener
+and is `404` everywhere else (and everywhere while that port is not set).
+
+Pool H counts the request, not the work: when a call's deadline (#72) answers the client, the
+slot goes back while iText may still finish the abandoned operation in the background, so CPU
+in use can briefly exceed H.
 
 Every integration degrades gracefully: leave a section empty and the feature
 switches itself off rather than failing at startup.

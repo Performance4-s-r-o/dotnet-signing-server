@@ -99,6 +99,34 @@ public class CapacityPoolTests
     }
 
     [Fact]
+    public async Task Filter_client_gone_while_waiting_ends_empty_and_takes_no_slot()
+    {
+        var pools = new CapacityPools(new BillingOptions { HeavyOperationsLimit = 1, GlobalConcurrencyWaitMilliseconds = 10_000 }, 8);
+        var filter = new CapacityPoolAttribute(CapacityPoolKind.Heavy);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var (first, _) = FilterContext(pools);
+        var running = filter.OnResourceExecutionAsync(first, Next(first, () => release.Task));
+
+        var (waiting, http) = FilterContext(pools);
+        using var aborted = new CancellationTokenSource();
+        http.RequestAborted = aborted.Token;
+        var called = false;
+        var waitingTask = filter.OnResourceExecutionAsync(waiting, Next(waiting, () => { called = true; return Task.CompletedTask; }));
+        Assert.False(waitingTask.IsCompleted);
+        aborted.Cancel();
+        await waitingTask.WaitAsync(Bounded);
+
+        Assert.False(called);
+        Assert.IsType<EmptyResult>(waiting.Result);
+        Assert.Equal(1, pools.Heavy.InUse);
+        release.SetResult();
+        await running.WaitAsync(Bounded);
+        Assert.Equal(1, pools.Heavy.Available);
+        Assert.Equal(0, pools.Heavy.Snapshot().Waiting);
+    }
+
+    [Fact]
     public async Task Filter_gives_the_slot_back_when_the_action_throws()
     {
         var pools = new CapacityPools(new BillingOptions { AiOperationsLimit = 1 }, 8);

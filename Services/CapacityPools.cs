@@ -141,6 +141,7 @@ public sealed class CapacityPools
         Ai = new CapacityPool("ai", billing.AiOperationsLimit ?? 0);
         Wait = TimeSpan.FromMilliseconds(Math.Max(0, billing.GlobalConcurrencyWaitMilliseconds));
         HeavyCapacity = Heavy.Enabled ? Heavy.Limit : BillingOptions.SuggestedHeavyLimit(processorCount);
+        SelfServiceMaxConcurrency = SelfServiceMax(HeavyCapacity, billing.ConcurrencyDefaultLimit);
     }
 
     public CapacityPool Global { get; }
@@ -155,8 +156,11 @@ public sealed class CapacityPools
     /// <summary>H in force, or the suggested H while the pool is off; the base of the self-service cap.</summary>
     public int HeavyCapacity { get; }
 
-    /// <summary>The highest concurrency a user may set for themselves, ⌊H/2⌋; more only by an operator.</summary>
-    public int SelfServiceMaxConcurrency => SelfServiceMax(HeavyCapacity);
+    /// <summary>
+    /// The highest concurrency a user may set for themselves: ⌊H/2⌋, but never below the plan
+    /// default (a small machine must still accept it). More only by an operator.
+    /// </summary>
+    public int SelfServiceMaxConcurrency { get; }
 
     public CapacityPool Get(CapacityPoolKind kind) => kind switch
     {
@@ -165,5 +169,9 @@ public sealed class CapacityPools
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 
-    public static int SelfServiceMax(int heavyCapacity) => Math.Max(1, heavyCapacity / 2);
+    /// <summary>What a user may save: up to the cap, or keep / lower a higher value an operator stored.</summary>
+    public static int AllowedSelfServiceValue(int cap, int? stored) => Math.Max(cap, stored ?? 0);
+
+    public static int SelfServiceMax(int heavyCapacity, int defaultLimit) =>
+        Math.Max(Math.Max(1, heavyCapacity / 2), defaultLimit);
 }
