@@ -128,6 +128,33 @@ public class SignUpIntegrationTests : IClassFixture<SignUpPostgresFixture>
     private static string Email() => $"u{Guid.NewGuid():N}@example.com";
 
     [DockerFact]
+    public async Task DocumentWithoutAKnownVersion_Answers503_AndRecordsNothing()
+    {
+        using var app = new SignUpAppFactory(_fixture.Postgres.ConnectionString, "On", services =>
+            services.PostConfigure<P4BackofficeProductOptions>(o =>
+            {
+                o.Modules.Docs = "On";
+                o.Consents.Documents = ["terms", "unknown_doc"];
+            }));
+        var client = app.CreateClient();
+        var signIn = await (await client.GetAsync("/Account/SignIn")).Content.ReadAsStringAsync();
+        var token = AntiforgeryToken.Match(signIn).Groups[1].Value;
+        var email = Email();
+        var users = await DbAsync(db => db.Users.CountAsync());
+        var records = await DbAsync(db => db.ConsentRecords.CountAsync());
+
+        var get = await client.GetAsync("/Account/SignUp");
+        var post = await PostAsync(client, token, email, accept: true,
+            new Dictionary<string, string> { ["ShownVersions[terms]"] = "1", ["ShownVersions[unknown_doc]"] = "1" });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, get.StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, post.StatusCode);
+        Assert.False(await DbAsync(db => db.Users.AnyAsync(u => u.Email == email)));
+        Assert.Equal(users, await DbAsync(db => db.Users.CountAsync()));
+        Assert.Equal(records, await DbAsync(db => db.ConsentRecords.CountAsync()));
+    }
+
+    [DockerFact]
     public async Task On_FormShowsVersionsAndAnUncheckedBox()
     {
         using var app = new SignUpAppFactory(_fixture.Postgres.ConnectionString, "On");
@@ -229,7 +256,7 @@ public class SignUpIntegrationTests : IClassFixture<SignUpPostgresFixture>
         }
         finally
         {
-            await DbAsync(async db => await db.BackofficeStates.Where(s => s.Key == BackofficeStateKeys.DocsMeta).ExecuteDeleteAsync());
+            await DbAsync(async db => await db.LegalDocuments.Where(d => d.Slug == "terms-of-service" && d.Version == 2).ExecuteDeleteAsync());
         }
     }
 
@@ -266,16 +293,23 @@ public class SignUpIntegrationTests : IClassFixture<SignUpPostgresFixture>
         Assert.False(await DbAsync(db => db.Users.AnyAsync(u => u.Email == email)));
     }
 
+    /// <summary>Terms v2 as a hand-maintained row in force since <paramref name="termsSince"/> (Docs is Off).</summary>
     private Task<int> SetDocsMetaAsync(DateTimeOffset termsSince) =>
         DbAsync(async db =>
         {
-            var meta = new DocumentsMeta(DateTimeOffset.UtcNow, new()
+            var row = await db.LegalDocuments.SingleOrDefaultAsync(d => d.Slug == "terms-of-service" && d.Locale == "en" && d.Version == 2);
+            if (row == null)
             {
-                ["terms"] = new DocumentMeta(true, 2, 2, null, termsSince, "Clearer refund rules."),
-                ["dpa"] = new DocumentMeta(true, 1, 1, null, termsSince.AddDays(-100)),
-                ["privacy"] = new DocumentMeta(true, 1, 1, null, termsSince.AddDays(-100)),
-            });
-            await BackofficeStateStore.SetAsync(db, BackofficeStateKeys.DocsMeta, meta.ToJson(), DateTimeOffset.UtcNow);
+                db.LegalDocuments.Add(new LegalDocument
+                {
+                    Slug = "terms-of-service", Locale = "en", Version = 2, Title = "Terms", Content = "Terms v2", EffectiveFrom = termsSince,
+                });
+            }
+            else
+            {
+                row.EffectiveFrom = termsSince;
+            }
+            await db.SaveChangesAsync();
             return 0;
         });
 }

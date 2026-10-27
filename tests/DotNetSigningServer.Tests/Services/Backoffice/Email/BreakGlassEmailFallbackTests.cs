@@ -301,24 +301,21 @@ public class BreakGlassEmailFallbackTests
     }
 
     [Fact]
-    public async Task StuckService_TwoFactorCodeLeavesWithin20Seconds_ExactlyOnce()
+    public async Task ConnectionRefused_TwoFactorCodeIsSentDirectlyOnce_AndNeverAgainWhenTheServiceRecovers()
     {
         using var email = new EmailTestHost();
         var id = await email.SendAsync(EmailTemplateId.TwoFactorCode);
-        var started = email.Host.Time.Now;
         var dispatcher = new BackofficeOutboxDispatcher(
             email.Host.Processor, email.Host.Signal, email.Host.Services.GetRequiredService<IServiceScopeFactory>(),
             email.Host.Time, NullLogger<BackofficeOutboxDispatcher>.Instance, [email.Fallback]);
 
-        // The service does not answer: its first attempt fails, then the breaker opens.
+        // The service refuses the connection: it cannot have accepted the message.
         email.Host.Service.Responses.Enqueue(_ => throw new HttpRequestException("Connection refused"));
         await dispatcher.RunPassAsync(CancellationToken.None);
-        for (var i = 0; i < OutboxCircuitBreaker.Threshold; i++) email.Breaker.RecordFailure();
         email.Host.Time.Advance(TimeSpan.FromSeconds(5));
 
         await dispatcher.RunPassAsync(CancellationToken.None);
 
-        Assert.True(email.Host.Time.Now - started <= TimeSpan.FromSeconds(20));
         var (to, _, html) = Assert.Single(email.DirectSends);
         Assert.Equal("jan@example.com", to);
         Assert.Contains("123456", html);
@@ -332,5 +329,31 @@ public class BreakGlassEmailFallbackTests
 
         Assert.Single(email.DirectSends);
         Assert.Single(email.Host.Service.Requests); // only the failed first attempt
+    }
+
+    [Fact]
+    public async Task OldDeadAndBlockedEmailPayloads_AreDropped_ButNotRecentOrOtherOnes()
+    {
+        using var email = new EmailTestHost();
+        var oldDead = await email.SendAsync(EmailTemplateId.TwoFactorCode);
+        var oldBlocked = await email.SendAsync(EmailTemplateId.PasswordReset);
+        var recentDead = await email.SendAsync(EmailTemplateId.TwoFactorCode);
+        var plainDead = await email.SendAsync(EmailTemplateId.PriceChangeNotice);
+        var other = await email.Host.EnqueueAsync(new { x = 1 });
+        var now = email.Host.Time.Now;
+        await email.UpdateAsync(oldDead, i => { i.Status = BackofficeOutboxStatus.Dead; i.CreatedAt = now - TimeSpan.FromHours(25); });
+        await email.UpdateAsync(oldBlocked, i => { i.Status = BackofficeOutboxStatus.Blocked; i.CreatedAt = now - TimeSpan.FromHours(25); });
+        await email.UpdateAsync(recentDead, i => { i.Status = BackofficeOutboxStatus.Dead; i.CreatedAt = now - TimeSpan.FromHours(2); });
+        await email.UpdateAsync(plainDead, i => { i.Status = BackofficeOutboxStatus.Dead; i.CreatedAt = now - TimeSpan.FromHours(25); });
+        await email.UpdateAsync(other, i => { i.Status = BackofficeOutboxStatus.Dead; i.CreatedAt = now - TimeSpan.FromHours(25); });
+
+        Assert.Equal(3, await email.Host.WithDbAsync(db => OutboxHealth.ScrubStaleEmailPayloadsAsync(db, now))); // plainDead is an e-mail kind too
+
+        Assert.Null((await email.Host.ItemAsync(oldDead)).PayloadProtected);
+        var blocked = await email.Host.ItemAsync(oldBlocked);
+        Assert.Null(blocked.PayloadProtected);
+        Assert.Equal(BackofficeOutboxStatus.Dead, blocked.Status);
+        Assert.NotNull((await email.Host.ItemAsync(recentDead)).PayloadProtected);
+        Assert.NotNull((await email.Host.ItemAsync(other)).PayloadProtected);
     }
 }

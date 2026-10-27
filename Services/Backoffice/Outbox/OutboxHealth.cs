@@ -90,6 +90,7 @@ public static class OutboxHealth
     /// <summary>Deletes finished items older than <see cref="Retention"/>. Returns how many.</summary>
     public static async Task<int> CleanupAsync(ApplicationDbContext db, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
+        await ScrubStaleEmailPayloadsAsync(db, now, cancellationToken);
         var cutoff = now - Retention;
         var finished = db.BackofficeOutboxItems.Where(i =>
             (i.Status == BackofficeOutboxStatus.Sent
@@ -105,6 +106,31 @@ public static class OutboxHealth
         var rows = await finished.ToListAsync(cancellationToken);
         db.BackofficeOutboxItems.RemoveRange(rows);
         await db.SaveChangesAsync(cancellationToken);
+        return rows.Count;
+    }
+
+    /// <summary>
+    /// A critical or e-mail item that ended Dead or Blocked keeps its payload (2FA code, reset link)
+    /// for a manual requeue only until the break-glass window closes; after that the code is
+    /// expired anyway, so the payload is dropped instead of staying until the item is deleted.
+    /// </summary>
+    public static async Task<int> ScrubStaleEmailPayloadsAsync(ApplicationDbContext db, DateTimeOffset now, CancellationToken cancellationToken = default)
+    {
+        var cutoff = now - BreakGlassEmailFallback.MaxAge;
+        var kinds = BreakGlassEmailFallback.Kinds.ToArray();
+        var rows = await db.BackofficeOutboxItems
+            .Where(i => (i.Status == BackofficeOutboxStatus.Dead || i.Status == BackofficeOutboxStatus.Blocked)
+                        && i.PayloadProtected != null && i.CreatedAt < cutoff
+                        && (i.Critical || kinds.Contains(i.Kind)))
+            .ToListAsync(cancellationToken);
+        foreach (var row in rows)
+        {
+            row.PayloadProtected = null;
+            // Nothing is left to send, so a blocked item must not be requeued from /Admin.
+            row.Status = BackofficeOutboxStatus.Dead;
+            row.LastError = "Payload discarded: the message is older than the break-glass window.";
+        }
+        if (rows.Count > 0) await db.SaveChangesAsync(cancellationToken);
         return rows.Count;
     }
 }

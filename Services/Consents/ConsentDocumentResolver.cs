@@ -1,5 +1,8 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Options;
+using DotNetSigningServer.Services.Backoffice;
 using DotNetSigningServer.Services.Backoffice.Documents;
+using Microsoft.Extensions.Options;
 using DotNetSigningServer.Services.Legal;
 using Microsoft.EntityFrameworkCore;
 
@@ -38,6 +41,7 @@ public sealed class ConsentDocumentResolver
     private readonly ILegalDocumentSource _documents;
     private readonly BackofficeDocumentsCache? _cache;
     private readonly ILogger<ConsentDocumentResolver> _logger;
+    private readonly IOptions<P4BackofficeProductOptions>? _options;
 
     public ConsentDocumentResolver(
         ApplicationDbContext db,
@@ -49,6 +53,7 @@ public sealed class ConsentDocumentResolver
         _documents = documents;
         // Registered only when the Docs module is Shadow or On.
         _cache = services.GetService<BackofficeDocumentsCache>();
+        _options = services.GetService<IOptions<P4BackofficeProductOptions>>();
         _logger = logger;
     }
 
@@ -56,9 +61,11 @@ public sealed class ConsentDocumentResolver
         IEnumerable<ConsentRequirement> requirements, string uiLocale, CancellationToken cancellationToken = default)
     {
         DocumentsMeta? meta = null;
+        // docs:meta describes the service's texts; with Docs not On the reader gets the local ones.
+        var docsOn = _options?.Value.ModeFor(BackofficeModule.Docs) == BackofficeMode.On;
         try
         {
-            meta = await DocumentsMetaUpdater.ReadAsync(_db, cancellationToken);
+            if (docsOn) meta = await DocumentsMetaUpdater.ReadAsync(_db, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -72,11 +79,14 @@ public sealed class ConsentDocumentResolver
             var shown = slug is null ? null : await _documents.GetAsync(slug, uiLocale, cancellationToken);
             var entry = meta?.Documents.GetValueOrDefault(requirement.Document);
 
-            // Version 1 is the static Razor page, which is what /Legal/<slug> shows when nothing
-            // else is published. A document without a page and without docs:meta has no version
-            // we could honestly name: refuse instead of inventing one.
-            var version = shown?.Version ?? entry?.CurrentVersion ?? (slug is null ? (int?)null : StaticPageVersion)
-                ?? throw new ConsentVersionUnknownException(requirement.Document);
+            // No published text: a document with a static page is v1 (what /Legal/<slug> shows),
+            // unless docs:meta says a newer one is in force, which the reader cannot see now.
+            // A document with no page takes the meta version. Nothing known: refuse, don't invent.
+            int? known = shown?.Version
+                ?? (slug is null
+                    ? entry?.CurrentVersion
+                    : entry?.CurrentVersion is null or StaticPageVersion ? StaticPageVersion : null);
+            var version = known ?? throw new ConsentVersionUnknownException(requirement.Document);
             var locale = shown?.Locale ?? LegalLocales.Default;
             var fromMeta = entry?.CurrentVersion == version;
             result.Add(new ConsentDocumentVersion(

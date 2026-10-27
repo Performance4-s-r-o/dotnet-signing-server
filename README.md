@@ -176,7 +176,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `TRUSTED_CF_PROXIES` | in production (startup fails when empty) | Address / CIDR of cloudflared (#106). `CF-Connecting-IP` is the client (rate limits, token IP whitelist, consent evidence) only for a request that came from cloudflared — it is the TCP peer, or a `TRUSTED_PROXIES` proxy is the peer and cloudflared the forwarded address. Empty = never believed; `none` = no tunnel in front, on purpose |
 | `TRUSTED_PROXIES` | no | Reverse proxy (Traefik/Caddy) addresses / CIDRs (#106): whose `X-Forwarded-For` is applied. An explicit `ForwardedHeaders__KnownProxies` / `__KnownNetworks` wins; empty = the private ranges and loopback (as before); `none` = nobody's. A reverse proxy alone never vouches for `CF-Connecting-IP` |
 | `DataProtection__CertificateBase64` / `__CertificatePassword` (compose: `DATA_PROTECTION_CERTIFICATE_BASE64` / `_PASSWORD`) | in production, unless the next row is `true` | Base64 PFX that encrypts the Data Protection key ring, which also protects stored TSA credentials |
-| `DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS` | no | `true` = a Production start without the certificate is allowed, with a warning (single host, protected volume). Otherwise Production refuses to start with an unencrypted key ring. Outside Production it is only a warning |
+| `DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS` | no | `true` = a Production start without the certificate is allowed, with a warning (single host, protected volume). Otherwise Production refuses to start with an unencrypted key ring; with `true` it starts and prints a warning. Outside Production nothing is checked or printed. Back up the certificate: adding it does not encrypt keys already written in plaintext (they are replaced when the ring rotates, about every 90 days), and a lost certificate makes the ring unreadable |
 | `BILLING_PRODUCT_TAG_GRACE_UNTIL` | no (empty = strict) | UTC instant; checkout sessions created before it are accepted without the `product` metadata marker (sessions already open at the deploy). Every other ownership check still applies. Remove it a day after the deploy |
 | `Seal__Enabled` | | Server-side sealing; needs `Seal__PfxBase64` + `Seal__PfxPassword` |
 | `Stripe__ApiKey` / `Stripe__WebhookSecret` | for billing | Payments; the webhook secret must start with `whsec_` in production |
@@ -238,7 +238,7 @@ error. Finished items are deleted after 30 days.
 
 E-mails with secrets (2FA code, password reset, verification link): the service has no
 "sensitive" marker and keeps the body of a sent message in its log for its own retention (30 days
-at the time of writing). The outbox payload here is deleted once the item is sent. What this
+at the time of writing). The outbox payload here is deleted once the item is sent, and for a critical or e-mail item that ended Dead or Blocked it is dropped after 24 h (the code has expired by then). A 2FA or reset e-mail leaves directly within seconds when the service refuses the connection, answers 5xx or its breaker is open. After a single timeout the product waits `Email:FallbackAfter` (1 min) on purpose, because the service may have accepted the message and a direct send would duplicate it. What this
 product can do today is `critical` (so the message is not held back) and, with
 `P4Backoffice__Email__Templates`, sending a template key plus variables instead of raw HTML;
 the code or link is then still a variable stored by the service. What stays open is a retention
@@ -246,9 +246,11 @@ or redaction switch on the service's side for these messages. A dead inbox event
 error starting with `Backoffice inbox alert:` (a fixed marker, also repeated daily); with
 `Sentry__Dsn` set, Sentry captures it, and there is no other alert channel in this server.
 
-A consent form for a document with no known version (no published text, no `docs:meta`
-entry and no static page) answers `503` and records nothing, instead of recording a made-up
-version. Documents with a static page keep version 1, which is the page the reader sees.
+A consent form for a document with no known version answers `503` and records nothing, instead
+of recording a made-up version. A document with a static page is version 1, the page the reader
+sees, unless `docs:meta` says a newer version is in force (cold cache): then it is refused too.
+`docs:meta` is read only with `Modules:Docs=On`. With Docs not On, startup is refused when a
+`Consents:Documents` / `Acknowledged` key has no page in this product.
 
 #### Backoffice webhooks
 
