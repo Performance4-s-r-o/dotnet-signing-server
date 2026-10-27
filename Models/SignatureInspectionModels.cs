@@ -13,15 +13,83 @@ public class SignatureInspectionEntry
     public string? SubFilter { get; set; }
     /// <summary>True for an RFC 3161 document (archive) timestamp rather than a signature.</summary>
     public bool IsDocumentTimestamp { get; set; }
-    /// <summary>Structural PAdES level: B-B, B-T, B-LT, B-LTA, archive-timestamp or non-PAdES.</summary>
-    public string Level { get; set; } = "unknown";
+    /// <summary>
+    /// Structural PAdES level of this signature: B-B, B-T, B-LT, B-LTA,
+    /// archive-timestamp or non-PAdES. Read per signature from the file, not a
+    /// conformance verdict and never a statement of trust: no certificate chain
+    /// is checked against a trust list.
+    ///
+    /// The levels build on each other. B-T needs a timestamp that verifies (its
+    /// own token signed by the certificate it carries and stamping this
+    /// signature's value, or a verified document timestamp in a later revision);
+    /// a token that is present but fails either check counts as none. B-LT also
+    /// needs validation data for this signature added after it
+    /// (<see cref="ValidationDataRevision"/>), B-LTA a verified document
+    /// timestamp over that validation data. Validation data added for a later
+    /// signature does not raise an earlier one.
+    /// </summary>
+    public string StructuralLevel { get; set; } = "unknown";
+
+    /// <summary>
+    /// Deprecated: the same value as <see cref="StructuralLevel"/>, kept for
+    /// existing callers. The name suggested a validation result it never was.
+    /// </summary>
+    [Obsolete("Use StructuralLevel. Kept in the response for existing callers.")]
+    public string Level => StructuralLevel;
     public string? SignerName { get; set; }
     public DateTime? SignedAt { get; set; }
     public string? DigestAlgorithm { get; set; }
     public string? SignatureAlgorithm { get; set; }
     public bool CoversWholeDocument { get; set; }
     public bool IntegrityVerified { get; set; }
+    /// <summary>
+    /// The raw /ByteRange array as the signature dictionary states it, or null
+    /// when it is missing or not a list of integers.
+    /// </summary>
+    public long[]? ByteRange { get; set; }
+    /// <summary>
+    /// True when the ByteRange has the only acceptable shape: two ranges, the
+    /// first starting at 0, the gap exactly this signature's /Contents hex
+    /// string, the end inside the file. False means bytes outside /Contents are
+    /// left unsigned, ranges overlap, or the range points past the file.
+    /// </summary>
+    public bool ByteRangeSane { get; set; }
+    /// <summary>
+    /// The entry of <see cref="SignatureInspectionResult.Revisions"/> whose end
+    /// is this signature's signed end. Null when the ByteRange is not sane.
+    /// Not the same numbering as <see cref="Revision"/>, which counts signatures.
+    /// </summary>
+    public int? FileRevision { get; set; }
+    /// <summary>
+    /// The entry of <see cref="SignatureInspectionResult.Revisions"/> that first
+    /// carried validation data for this signature. Only set for B-LT and B-LTA.
+    /// </summary>
+    public int? ValidationDataRevision { get; set; }
+    /// <summary>
+    /// True when a timestamp token is present, verified or not. See
+    /// <see cref="TimestampVerified"/> before saying the signature is timestamped.
+    /// </summary>
     public bool HasTimestamp { get; set; }
+    /// <summary>
+    /// True only when the token's signature verifies with the certificate it
+    /// carries (<see cref="TimestampSignatureValid"/>) and its messageImprint
+    /// is the hash of what it claims to stamp (<see cref="TimestampMessageImprintMatches"/>).
+    /// Not a trust statement: the authority's certificate is not checked against
+    /// any trust list.
+    /// </summary>
+    public bool TimestampVerified { get; set; }
+    /// <summary>
+    /// The token's CMS signature, ESS certificate binding, critical timeStamping
+    /// key usage and validity at genTime, checked against the certificate inside
+    /// the token. Null when there is no token or it carries no certificate.
+    /// </summary>
+    public bool? TimestampSignatureValid { get; set; }
+    /// <summary>
+    /// For a signature timestamp: messageImprint equals the hash of the
+    /// SignerInfo signature value. For a document timestamp: the hash of its
+    /// signed byte ranges. Null when there is nothing to compare against.
+    /// </summary>
+    public bool? TimestampMessageImprintMatches { get; set; }
     public DateTime? TimestampedAt { get; set; }
     /// <summary>
     /// Who the token SAYS signed it — the subject of the embedded signer
@@ -79,4 +147,24 @@ public class SignatureInspectionResult
     /// timestamp covers it, which is a reason to renew now rather than in years.
     /// </summary>
     public bool HasUnprotectedSignature { get; set; }
+    /// <summary>SHA-256 (lowercase hex) of the whole file as received.</summary>
+    public string DocumentSha256 { get; set; } = "";
+    public long ByteLength { get; set; }
+    /// <summary>
+    /// Every incremental revision of the file, oldest first. A revision ends
+    /// where a signature's ByteRange ends or after a %%EOF that closes a trailer.
+    /// Bytes after the last revision (if any) belong to none of them.
+    /// </summary>
+    public List<InspectedRevision> Revisions { get; set; } = new();
+}
+
+/// <summary>One incremental revision: the file's first <see cref="EndOffset"/> bytes.</summary>
+public class InspectedRevision
+{
+    /// <summary>1-based, oldest first.</summary>
+    public int Revision { get; set; }
+    /// <summary>Exclusive end offset of the revision in the file.</summary>
+    public long EndOffset { get; set; }
+    /// <summary>SHA-256 (lowercase hex) of bytes [0, EndOffset).</summary>
+    public string Sha256 { get; set; } = "";
 }

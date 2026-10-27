@@ -179,7 +179,10 @@ public class PdfLtvServiceTests
         Assert.True(result.HasDss, "extending to B-LT must write a DSS dictionary");
 
         var signature = Assert.Single(result.Signatures);
-        Assert.Equal("B-LT", signature.Level);
+        // Validation data alone is not B-LT: the signature has no verified time
+        // (no token, no archive timestamp), and B-LT builds on B-T (#81).
+        Assert.Equal("B-B", signature.StructuralLevel);
+        Assert.Null(signature.ValidationDataRevision);
         // Validation data is added as an incremental update, so the original
         // signature must still verify afterwards.
         Assert.True(signature.IntegrityVerified);
@@ -204,7 +207,7 @@ public class PdfLtvServiceTests
         Assert.Equal(1, result.ArchiveTimestampCount);
 
         var signature = result.Signatures.Single(s => !s.IsDocumentTimestamp);
-        Assert.Equal("B-LTA", signature.Level);
+        Assert.Equal("B-LTA", signature.StructuralLevel);
 
         var archiveTimestamp = result.Signatures.Single(s => s.IsDocumentTimestamp);
         Assert.Equal("ETSI.RFC3161", archiveTimestamp.SubFilter);
@@ -255,6 +258,6 @@ public class PdfLtvServiceTests
         Assert.All(result.Signatures, s => Assert.True(s.IntegrityVerified, $"{s.FieldName} no longer verifies"));
         Assert.All(
             result.Signatures.Where(s => !s.IsDocumentTimestamp),
-            s => Assert.Equal("B-LTA", s.Level));
+            s => Assert.Equal("B-LTA", s.StructuralLevel));
     }
 }

@@ -191,6 +191,7 @@ Response:
       "fieldName": "Signature1",
       "subFilter": "ETSI.CAdES.detached",
       "isDocumentTimestamp": false,
+      "structuralLevel": "B-T",
       "level": "B-T",
       "signerName": "CN=Jane Doe, O=Example",
       "signedAt": "2026-08-25T10:12:04Z",
@@ -198,7 +199,14 @@ Response:
       "signatureAlgorithm": "RSA",
       "coversWholeDocument": true,
       "integrityVerified": true,
+      "byteRange": [0, 1840, 34610, 1123],
+      "byteRangeSane": true,
+      "fileRevision": 2,
+      "validationDataRevision": null,
       "hasTimestamp": true,
+      "timestampVerified": true,
+      "timestampSignatureValid": true,
+      "timestampMessageImprintMatches": true,
       "timestampedAt": "2026-08-25T10:12:06Z",
       "timestampAuthority": "CN=Performance4 TSA, O=Performance4 s.r.o.",
       "timestampCertificateNotBefore": "2021-05-01T00:00:00Z",
@@ -208,11 +216,18 @@ Response:
   ],
   "hasDss": false,
   "archiveTimestampCount": 0,
-  "earliestTimestampCertificateExpiry": "2031-04-30T23:59:59Z"
+  "earliestTimestampCertificateExpiry": "2031-04-30T23:59:59Z",
+  "hasUnprotectedSignature": false,
+  "documentSha256": "9f2c…",
+  "byteLength": 35733,
+  "revisions": [
+    { "revision": 1, "endOffset": 1210, "sha256": "4b1e…" },
+    { "revision": 2, "endOffset": 35733, "sha256": "9f2c…" }
+  ]
 }
 """,
                 Curl: $$"""curl -X POST {{b}}/inspect-signatures -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"pdfContent":"base64-pdf"}'""",
-                NoteKeys: new[] { "ApiDocInspectNote1", "ApiDocInspectNote2" }),
+                NoteKeys: new[] { "ApiDocInspectNote1", "ApiDocInspectNote2", "ApiDocInspectNote3" }),
 
             new ApiEndpointDoc(
                 Slug: "extend-signature",
