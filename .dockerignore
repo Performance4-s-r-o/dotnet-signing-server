@@ -12,6 +12,8 @@ data-protection-keys/
 debug_images/
 tests/
 TestResults/
+# Validátor (Java) má vlastní image.
+validator/
 *.md
 *.log
 *.sln.iml
