@@ -249,7 +249,7 @@ error starting with `Backoffice inbox alert:` (a fixed marker, also repeated dai
 A consent form for a document with no known version answers `503` and records nothing, instead
 of recording a made-up version. A document with a static page is version 1, the page the reader
 sees, unless `docs:meta` says a newer version is in force (cold cache): then it is refused too.
-`docs:meta` is read only with `Modules:Docs=On`. With Docs not On, startup is refused when a
+`docs:meta` counts only with `Modules:Docs=On`, both for the version a form records and for the version the re-consent gate requires (`ConsentDocsMeta`), so a Docs rollback cannot start a re-consent loop. With Docs not On, startup is refused when a
 `Consents:Documents` / `Acknowledged` key has no page in this product.
 
 #### Backoffice webhooks

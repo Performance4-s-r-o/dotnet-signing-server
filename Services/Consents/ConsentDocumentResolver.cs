@@ -62,7 +62,7 @@ public sealed class ConsentDocumentResolver
     {
         DocumentsMeta? meta = null;
         // docs:meta describes the service's texts; with Docs not On the reader gets the local ones.
-        var docsOn = _options?.Value.ModeFor(BackofficeModule.Docs) == BackofficeMode.On;
+        var docsOn = ConsentDocsMeta.IsActive(_options?.Value);
         try
         {
             if (docsOn) meta = await DocumentsMetaUpdater.ReadAsync(_db, cancellationToken);
