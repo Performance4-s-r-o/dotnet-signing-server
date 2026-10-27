@@ -71,11 +71,13 @@ public class SignatureInspectionEntry
     /// </summary>
     public bool HasTimestamp { get; set; }
     /// <summary>
-    /// True only when the token's signature verifies with the certificate it
-    /// carries (<see cref="TimestampSignatureValid"/>) and its messageImprint
-    /// is the hash of what it claims to stamp (<see cref="TimestampMessageImprintMatches"/>).
-    /// Not a trust statement: the authority's certificate is not checked against
-    /// any trust list.
+    /// Internal consistency of the token only: its signature verifies with the
+    /// certificate it carries itself (<see cref="TimestampSignatureValid"/>) and
+    /// its messageImprint is the hash of what it claims to stamp
+    /// (<see cref="TimestampMessageImprintMatches"/>). Anyone can make a token
+    /// like that with a self-made certificate. It is NOT a statement that the
+    /// time comes from a trusted authority: the certificate is not checked
+    /// against any trust list, nor for revocation.
     /// </summary>
     public bool TimestampVerified { get; set; }
     /// <summary>
@@ -87,7 +89,8 @@ public class SignatureInspectionEntry
     /// <summary>
     /// For a signature timestamp: messageImprint equals the hash of the
     /// SignerInfo signature value. For a document timestamp: the hash of its
-    /// signed byte ranges. Null when there is nothing to compare against.
+    /// signed byte ranges. Null when there is nothing to compare against, or
+    /// when the imprint uses a hash weaker than SHA-256 (not evaluated).
     /// </summary>
     public bool? TimestampMessageImprintMatches { get; set; }
     public DateTime? TimestampedAt { get; set; }
@@ -152,10 +155,18 @@ public class SignatureInspectionResult
     public long ByteLength { get; set; }
     /// <summary>
     /// Every incremental revision of the file, oldest first. A revision ends
-    /// where a signature's ByteRange ends or after a %%EOF that closes a trailer.
-    /// Bytes after the last revision (if any) belong to none of them.
+    /// where a signature's ByteRange ends or after a %%EOF that closes a trailer
+    /// (its startxref points at an xref table or xref stream).
     /// </summary>
     public List<InspectedRevision> Revisions { get; set; } = new();
+    /// <summary>
+    /// Bytes after the end of the last revision, which belong to none of them.
+    /// Usually 0. More means something was appended after the last %%EOF (or
+    /// an update without a valid trailer): <see cref="DocumentSha256"/> then
+    /// differs from the last revision's hash, and those bytes are not covered
+    /// by any signature.
+    /// </summary>
+    public long TrailingBytes { get; set; }
 }
 
 /// <summary>One incremental revision: the file's first <see cref="EndOffset"/> bytes.</summary>

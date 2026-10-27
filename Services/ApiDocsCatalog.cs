@@ -223,7 +223,8 @@ Response:
   "revisions": [
     { "revision": 1, "endOffset": 1210, "sha256": "4b1e…" },
     { "revision": 2, "endOffset": 35733, "sha256": "9f2c…" }
-  ]
+  ],
+  "trailingBytes": 0
 }
 """,
                 Curl: $$"""curl -X POST {{b}}/inspect-signatures -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"pdfContent":"base64-pdf"}'""",

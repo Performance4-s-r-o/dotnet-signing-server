@@ -48,6 +48,8 @@ public class PdfSignatureInspectorHonestyTests
         ForeignImprint,
         /// <summary>The right imprint, but the token's signature value is damaged.</summary>
         CorruptSignature,
+        /// <summary>A consistent token, but its imprint is SHA-1.</summary>
+        WeakImprint,
     }
 
     /// <summary>
@@ -57,10 +59,16 @@ public class PdfSignatureInspectorHonestyTests
     private sealed class CraftedTsaClient : ITSAClient
     {
         private readonly TokenMode _mode;
-        private readonly ITSAClient _digestSource = new TSAClientBouncyCastle("http://tsa.invalid/");
+        private readonly ITSAClient _digestSource;
         private static int _serial;
 
-        internal CraftedTsaClient(TokenMode mode) => _mode = mode;
+        internal CraftedTsaClient(TokenMode mode)
+        {
+            _mode = mode;
+            _digestSource = mode == TokenMode.WeakImprint
+                ? new TSAClientBouncyCastle("http://tsa.invalid/", null, null, 8192, "SHA-1")
+                : new TSAClientBouncyCastle("http://tsa.invalid/");
+        }
 
         public int GetTokenSizeEstimate() => 8192;
 
@@ -74,7 +82,8 @@ public class PdfSignatureInspectorHonestyTests
 
             var requestGenerator = new TimeStampRequestGenerator();
             requestGenerator.SetCertReq(true);
-            var request = requestGenerator.Generate(TspAlgorithms.Sha256, stamped);
+            var request = requestGenerator.Generate(
+                _mode == TokenMode.WeakImprint ? TspAlgorithms.Sha1 : TspAlgorithms.Sha256, stamped);
 
             var (certificate, key) = Tsa.Value;
             var generator = new TimeStampTokenGenerator(key, certificate, TspAlgorithms.Sha256, "1.3.6.1.4.1.13762.3");
@@ -135,15 +144,64 @@ public class PdfSignatureInspectorHonestyTests
         return output.ToArray();
     }
 
-    /// <summary>Adds a DSS with a VRI entry for one named signature only.</summary>
-    private static byte[] AddValidationDataFor(byte[] pdf, string fieldName, X509Certificate certificate)
+    /// <summary>Stand-in revocation data: the inspector only checks that it is there and when it arrived.</summary>
+    private static byte[] FakeCrl(string label) => Encoding.ASCII.GetBytes("crl:" + label);
+
+    /// <summary>Adds a DSS with a VRI entry (certificate + one CRL) for one named signature only.</summary>
+    private static byte[] AddValidationDataFor(byte[] pdf, string fieldName, X509Certificate certificate) =>
+        AddVri(pdf, fieldName, certificate, new List<byte[]> { FakeCrl(fieldName) });
+
+    private static byte[] AddVri(byte[] pdf, string fieldName, X509Certificate certificate, List<byte[]> crls)
     {
         using var input = new MemoryStream(pdf);
         using var output = new MemoryStream();
         var document = new PdfDocument(new PdfReader(input), new PdfWriter(output), new StampingProperties().UseAppendMode());
         var verification = new LtvVerification(document);
-        verification.AddVerification(fieldName, new List<byte[]>(), new List<byte[]>(), new List<byte[]> { certificate.GetEncoded() });
+        verification.AddVerification(fieldName, new List<byte[]>(), crls, new List<byte[]> { certificate.GetEncoded() });
         verification.Merge();
+        document.Close();
+        return output.ToArray();
+    }
+
+    /// <summary>Replaces the DSS with one without VRI: just /Certs and /CRLs.</summary>
+    private static byte[] SetDssWithoutVri(byte[] pdf, X509Certificate[] certificates, byte[][] crls)
+    {
+        using var input = new MemoryStream(pdf);
+        using var output = new MemoryStream();
+        var document = new PdfDocument(new PdfReader(input), new PdfWriter(output), new StampingProperties().UseAppendMode());
+        PdfArray Streams(IEnumerable<byte[]> items)
+        {
+            var array = new PdfArray();
+            foreach (var item in items)
+            {
+                var stream = new PdfStream(item);
+                stream.MakeIndirect(document);
+                array.Add(stream);
+            }
+            return array;
+        }
+        var dss = new PdfDictionary();
+        dss.Put(new PdfName("Certs"), Streams(certificates.Select(c => c.GetEncoded())));
+        if (crls.Length > 0) dss.Put(new PdfName("CRLs"), Streams(crls));
+        document.GetCatalog().Put(new PdfName("DSS"), dss);
+        document.GetCatalog().SetModified();
+        document.Close();
+        return output.ToArray();
+    }
+
+    /// <summary>A DSS whose VRI entry for the signature lists nothing.</summary>
+    private static byte[] AddEmptyVriEntry(byte[] pdf, string fieldName)
+    {
+        using var input = new MemoryStream(pdf);
+        using var output = new MemoryStream();
+        var document = new PdfDocument(new PdfReader(input), new PdfWriter(output), new StampingProperties().UseAppendMode());
+        var contents = new SignatureUtil(document).GetSignatureDictionary(fieldName).GetAsString(PdfName.Contents).GetValueBytes();
+        var vri = new PdfDictionary();
+        vri.Put(new PdfName(Convert.ToHexString(SHA1.HashData(contents))), new PdfDictionary());
+        var dss = new PdfDictionary();
+        dss.Put(new PdfName("VRI"), vri);
+        document.GetCatalog().Put(new PdfName("DSS"), dss);
+        document.GetCatalog().SetModified();
         document.Close();
         return output.ToArray();
     }
@@ -317,6 +375,173 @@ public class PdfSignatureInspectorHonestyTests
         Assert.Equal("B-B", Field(result, "Signature1").StructuralLevel);
     }
 
+    /// <summary>
+    /// Review probe p1: the same signer signs twice and validation data for its
+    /// certificate is added between the signatures. That data predates the
+    /// second signature, so it says nothing about it.
+    /// </summary>
+    [Fact]
+    public void ValidationDataThatPredatesTheSignature_DoesNotCountForIt()
+    {
+        var tsa = new CraftedTsaClient(TokenMode.Honest);
+        var pdf = Sign(UnsignedPdf(), "Signature1", tsa);
+        pdf = SetDssWithoutVri(pdf, new[] { Signer.Value.Certificate }, new[] { FakeCrl("before") });
+        pdf = Sign(pdf, "Signature2", tsa);
+        pdf = DocumentTimestamp(pdf, "DocTs1");
+
+        var result = PdfSignatureInspector.Inspect(pdf);
+
+        Assert.Equal("B-LTA", Field(result, "Signature1").StructuralLevel);
+        Assert.Equal("B-T", Field(result, "Signature2").StructuralLevel);
+        Assert.Null(Field(result, "Signature2").ValidationDataRevision);
+    }
+
+    /// <summary>Without VRI, revocation data added after the signature counts.</summary>
+    [Fact]
+    public void DssWithoutVri_CountsRevocationDataAddedAfterTheSignature()
+    {
+        var tsa = new CraftedTsaClient(TokenMode.Honest);
+        var pdf = Sign(UnsignedPdf(), "Signature1", tsa);
+        pdf = SetDssWithoutVri(pdf, new[] { Signer.Value.Certificate }, new[] { FakeCrl("before") });
+        pdf = Sign(pdf, "Signature2", tsa);
+        pdf = SetDssWithoutVri(pdf, new[] { Signer.Value.Certificate }, new[] { FakeCrl("before"), FakeCrl("after") });
+
+        var result = PdfSignatureInspector.Inspect(pdf);
+
+        Assert.Equal("B-LT", Field(result, "Signature2").StructuralLevel);
+        Assert.Equal(result.Revisions.Count, Field(result, "Signature2").ValidationDataRevision);
+    }
+
+    /// <summary>Review probe p2: a VRI entry with no OCSP response and no CRL is not validation data.</summary>
+    [Fact]
+    public void EmptyVriEntry_IsNotValidationData()
+    {
+        var pdf = Sign(UnsignedPdf(), "Signature1", new CraftedTsaClient(TokenMode.Honest));
+        pdf = AddEmptyVriEntry(pdf, "Signature1");
+
+        var signature = Assert.Single(PdfSignatureInspector.Inspect(pdf).Signatures);
+
+        Assert.Equal("B-T", signature.StructuralLevel);
+    }
+
+    [Fact]
+    public void VriEntryWithCertificateOnly_IsNotValidationData()
+    {
+        var pdf = Sign(UnsignedPdf(), "Signature1", new CraftedTsaClient(TokenMode.Honest));
+        pdf = AddVri(pdf, "Signature1", Signer.Value.Certificate, new List<byte[]>());
+
+        Assert.Equal("B-T", Assert.Single(PdfSignatureInspector.Inspect(pdf).Signatures).StructuralLevel);
+    }
+
+    /// <summary>
+    /// Review probe p3b: validation data that was added and later replaced by a
+    /// DSS that no longer covers the signature is not in the file any more.
+    /// </summary>
+    [Fact]
+    public void ValidationDataReplacedLater_DoesNotCount()
+    {
+        var pdf = Sign(UnsignedPdf(), "Signature1", new CraftedTsaClient(TokenMode.Honest));
+        pdf = SetDssWithoutVri(pdf, new[] { Signer.Value.Certificate }, new[] { FakeCrl("signer") });
+        pdf = SetDssWithoutVri(pdf, new[] { SecondSigner.Value.Certificate }, new[] { FakeCrl("other") });
+
+        var result = PdfSignatureInspector.Inspect(pdf);
+
+        Assert.True(result.HasDss);
+        Assert.Equal("B-T", Field(result, "Signature1").StructuralLevel);
+    }
+
+    [Fact]
+    public void TimestampWithWeakImprintAlgorithm_IsNotEvaluated()
+    {
+        var signature = Assert.Single(PdfSignatureInspector.Inspect(
+            Sign(UnsignedPdf(), "Signature1", new CraftedTsaClient(TokenMode.WeakImprint))).Signatures);
+
+        Assert.True(signature.HasTimestamp);
+        Assert.Null(signature.TimestampMessageImprintMatches);
+        Assert.False(signature.TimestampVerified);
+        Assert.Equal("B-B", signature.StructuralLevel);
+    }
+
+    // ---- cost ------------------------------------------------------------
+
+    /// <summary>
+    /// Review probe p5: trailers whose startxref points at an ordinary object
+    /// would make iText rebuild the xref table for every prefix. They are not
+    /// revisions, nothing is parsed for them, and they show as trailing bytes.
+    /// </summary>
+    [Fact]
+    public void ForgedTrailers_AreNotRevisionsAndAreNotParsed()
+    {
+        var pdf = Sign(UnsignedPdf(), "Signature1", new CraftedTsaClient(TokenMode.Honest));
+        pdf = SetDssWithoutVri(pdf, new[] { SecondSigner.Value.Certificate }, new[] { FakeCrl("other") });
+        var honestLength = pdf.LongLength;
+
+        var objectOffset = Encoding.Latin1.GetString(pdf).IndexOf("1 0 obj", StringComparison.Ordinal);
+        var chunk = new StringBuilder();
+        for (var i = 0; i < 200; i++) chunk.Append($"{100000 + i} 0 obj\n<< /DSS 1 /A [1 2 3] >>\nendobj\n");
+        using var forged = new MemoryStream();
+        forged.Write(pdf);
+        for (var i = 0; i < 30; i++)
+        {
+            forged.Write(Encoding.ASCII.GetBytes($"\n{chunk}startxref\n{objectOffset}\n%%EOF\n"));
+        }
+        var bytes = forged.ToArray();
+
+        var result = PdfSignatureInspector.Inspect(bytes, CancellationToken.None, out var openedBytes);
+
+        Assert.Equal(honestLength, result.Revisions[^1].EndOffset);
+        Assert.Equal(bytes.LongLength - honestLength, result.TrailingBytes);
+        Assert.True(openedBytes <= PdfValidationDataIndex.BudgetFactor * bytes.LongLength);
+        Assert.Equal("B-T", Assert.Single(result.Signatures).StructuralLevel);
+    }
+
+    /// <summary>
+    /// Many genuine revisions that each touch the DSS: the prefixes parsed to
+    /// read them stay within the budget, and what was not read covers nothing.
+    /// </summary>
+    [Fact]
+    public void ManyValidationDataRevisions_StayWithinTheParsingBudget()
+    {
+        var pdf = Sign(UnsignedPdf(), "Signature1", new CraftedTsaClient(TokenMode.Honest));
+        for (var i = 0; i < 12; i++)
+        {
+            pdf = SetDssWithoutVri(pdf, new[] { SecondSigner.Value.Certificate }, new[] { FakeCrl($"other-{i}") });
+        }
+
+        var result = PdfSignatureInspector.Inspect(pdf, CancellationToken.None, out var openedBytes);
+
+        Assert.Equal(14, result.Revisions.Count);
+        Assert.True(openedBytes > 0, "some revisions are read");
+        Assert.True(openedBytes <= PdfValidationDataIndex.BudgetFactor * pdf.LongLength,
+            $"opened {openedBytes} bytes of a {pdf.LongLength}-byte file");
+        Assert.Equal("B-T", Assert.Single(result.Signatures).StructuralLevel);
+    }
+
+    [Fact]
+    public void Inspect_HonoursCancellation()
+    {
+        var pdf = Sign(UnsignedPdf(), "Signature1", tsa: null);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        Assert.ThrowsAny<OperationCanceledException>(() => PdfSignatureInspector.Inspect(pdf, cancelled.Token));
+    }
+
+    /// <summary>Review probe p4: bytes appended after the last %%EOF belong to no revision.</summary>
+    [Fact]
+    public void BytesAfterTheLastEof_AreReportedAsTrailing()
+    {
+        var pdf = Sign(UnsignedPdf(), "Signature1", tsa: null);
+        var garbage = Encoding.ASCII.GetBytes("\n\0\0garbage after eof\n");
+        var appended = pdf.Concat(garbage).ToArray();
+
+        var result = PdfSignatureInspector.Inspect(appended);
+
+        Assert.Equal(garbage.LongLength, result.TrailingBytes);
+        Assert.Equal(pdf.LongLength, result.Revisions[^1].EndOffset);
+        Assert.NotEqual(result.Revisions[^1].Sha256, result.DocumentSha256);
+    }
+
     // ---- revisions -------------------------------------------------------
 
     [Fact]
@@ -343,6 +568,7 @@ public class PdfSignatureInspectorHonestyTests
         Assert.Equal(Convert.ToHexString(SHA256.HashData(pdf)).ToLowerInvariant(), result.DocumentSha256);
         Assert.Equal(pdf.LongLength, result.ByteLength);
         Assert.Equal(result.Revisions[^1].Sha256, result.DocumentSha256);
+        Assert.Equal(0, result.TrailingBytes);
 
         // Each signature ends exactly where its revision ends.
         Assert.Equal(new int?[] { 2, 3, 4 }, new[] { "Signature1", "Signature2", "DocTs1" }.Select(n => Field(result, n).FileRevision));

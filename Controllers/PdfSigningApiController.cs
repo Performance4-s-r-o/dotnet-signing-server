@@ -700,9 +700,15 @@ namespace DotNetSigningServer.Controllers
 
         private IActionResult InspectSignaturesCore(byte[] pdfBytes)
         {
+            var aborted = HttpContext?.RequestAborted ?? CancellationToken.None;
             try
             {
-                return Ok(PdfSignatureInspector.Inspect(pdfBytes));
+                return Ok(PdfSignatureInspector.Inspect(pdfBytes, aborted));
+            }
+            catch (OperationCanceledException) when (aborted.IsCancellationRequested)
+            {
+                // The caller is gone; nobody reads the answer.
+                return new EmptyResult();
             }
             catch (Exception ex)
             {

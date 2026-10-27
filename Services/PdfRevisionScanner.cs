@@ -10,14 +10,16 @@ namespace DotNetSigningServer.Services;
 /// that point) or after a <c>%%EOF</c> marker that closes a real trailer. The
 /// second source is a heuristic: a <c>%%EOF</c> can also sit inside a stream,
 /// for example in an attached PDF, so a marker only counts when the
-/// <c>startxref</c> before it points at an <c>xref</c> table or an object header
-/// earlier in this file.
+/// <c>startxref</c> before it points at an <c>xref</c> table or an xref stream
+/// object earlier in this file.
 /// </summary>
 internal static class PdfRevisionScanner
 {
     private static readonly byte[] EofMarker = Encoding.ASCII.GetBytes("%%EOF");
     private static readonly byte[] StartXref = Encoding.ASCII.GetBytes("startxref");
     private static readonly byte[] XrefKeyword = Encoding.ASCII.GetBytes("xref");
+    private static readonly byte[] XrefType = Encoding.ASCII.GetBytes("/XRef");
+    private static readonly byte[] StreamKeyword = Encoding.ASCII.GetBytes("stream");
 
     /// <summary>
     /// End offsets (exclusive) of every revision, ascending and distinct.
@@ -40,6 +42,21 @@ internal static class PdfRevisionScanner
         // A file without a recognisable marker is still one revision.
         if (ends.Count == 0) ends.Add(pdf.Length);
         return ends.ToList();
+    }
+
+    /// <summary>
+    /// True when the bytes [0, end) finish with a <c>%%EOF</c> (and at most one
+    /// end of line) that closes a real trailer. Only such a prefix is worth
+    /// handing to a PDF parser.
+    /// </summary>
+    internal static bool EndsWithTrailer(byte[] pdf, long end)
+    {
+        if (end <= 0 || end > pdf.LongLength) return false;
+        var from = (int)Math.Max(0, end - EofMarker.Length - 2);
+        var marker = pdf.AsSpan(from, (int)end - from).LastIndexOf(EofMarker);
+        if (marker < 0) return false;
+        var index = from + marker;
+        return SkipSingleEol(pdf, index + EofMarker.Length) == end && ClosesATrailer(pdf, index);
     }
 
     /// <summary>SHA-256 of the bytes [0, end) for every end, in one pass over the file.</summary>
@@ -67,7 +84,9 @@ internal static class PdfRevisionScanner
 
     /// <summary>
     /// True when the marker is preceded by <c>startxref &lt;offset&gt;</c> and
-    /// that offset lands on an <c>xref</c> table or an <c>N G obj</c> header.
+    /// that offset lands on an <c>xref</c> table or on an <c>N G obj</c> whose
+    /// dictionary is <c>/Type /XRef</c>. Any other object would only make a parser
+    /// rebuild the cross-reference table by scanning the whole prefix.
     /// </summary>
     private static bool ClosesATrailer(byte[] pdf, int markerIndex)
     {
@@ -87,17 +106,23 @@ internal static class PdfRevisionScanner
         for (var d = digitsStart; d <= digitsEnd; d++) offset = offset * 10 + (pdf[d] - '0');
         if (offset >= keywordStart) return false;
 
-        return Matches(pdf, (int)offset, XrefKeyword) || IsObjectHeader(pdf, (int)offset);
+        return Matches(pdf, (int)offset, XrefKeyword) || IsXrefStream(pdf, (int)offset);
     }
 
-    private static bool IsObjectHeader(byte[] pdf, int offset)
+    private static bool IsXrefStream(byte[] pdf, int offset)
     {
         var i = offset;
         if (!ReadDigits(pdf, ref i)) return false;
         if (!ReadWhitespace(pdf, ref i)) return false;
         if (!ReadDigits(pdf, ref i)) return false;
         if (!ReadWhitespace(pdf, ref i)) return false;
-        return i + 3 <= pdf.Length && pdf[i] == 'o' && pdf[i + 1] == 'b' && pdf[i + 2] == 'j';
+        if (!(i + 3 <= pdf.Length && pdf[i] == 'o' && pdf[i + 1] == 'b' && pdf[i + 2] == 'j')) return false;
+
+        // The stream dictionary sits right after the header; /Type /XRef must be in it.
+        var window = pdf.AsSpan(i + 3, Math.Min(1024, pdf.Length - i - 3));
+        var stream = window.IndexOf(StreamKeyword);
+        if (stream >= 0) window = window[..stream];
+        return window.IndexOf(XrefType) >= 0;
     }
 
     private static bool ReadDigits(byte[] pdf, ref int i)

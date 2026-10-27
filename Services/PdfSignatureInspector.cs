@@ -33,19 +33,24 @@ public static class PdfSignatureInspector
     private const string PadesSubFilter = "ETSI.CAdES.detached";
     private const string TimestampSubFilter = "ETSI.RFC3161";
 
-    /// <summary>
-    /// Revisions after a signature are opened one by one to find where its
-    /// validation data was added. Past this many revisions in the file the work
-    /// is skipped and no signature is reported as B-LT or higher.
-    /// </summary>
-    internal const int MaxRevisionsForValidationData = 100;
-
     /// <summary>RFC 3161 signature-timestamp attribute (id-aa-signatureTimeStampToken).</summary>
     private static readonly DerObjectIdentifier SignatureTimeStampOid = new("1.2.840.113549.1.9.16.2.14");
 
     private static readonly PdfName DssName = new("DSS");
-    private static readonly PdfName VriName = new("VRI");
-    private static readonly PdfName CertsName = new("Certs");
+
+    /// <summary>
+    /// messageImprint algorithms accepted when checking a timestamp. A weaker one
+    /// (SHA-1, MD5) is not evaluated: the imprint check stays null.
+    /// </summary>
+    private static readonly HashSet<string> AcceptedImprintAlgorithms = new(StringComparer.Ordinal)
+    {
+        "2.16.840.1.101.3.4.2.1", // SHA-256
+        "2.16.840.1.101.3.4.2.2", // SHA-384
+        "2.16.840.1.101.3.4.2.3", // SHA-512
+        "2.16.840.1.101.3.4.2.8", // SHA3-256
+        "2.16.840.1.101.3.4.2.9", // SHA3-384
+        "2.16.840.1.101.3.4.2.10", // SHA3-512
+    };
 
     /// <summary>Facts about one signature that the response does not carry.</summary>
     private sealed class Working
@@ -58,17 +63,24 @@ public static class PdfSignatureInspector
         public HashSet<string> VriKeys { get; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
-    /// <summary>The validation data present at the end of one revision.</summary>
-    private sealed record DssSnapshot(bool HasVri, HashSet<string> VriKeys, HashSet<string> CertificateHashes);
+    public static SignatureInspectionResult Inspect(byte[] pdfBytes, CancellationToken cancellationToken = default) =>
+        Inspect(pdfBytes, cancellationToken, out _);
 
-    public static SignatureInspectionResult Inspect(byte[] pdfBytes)
+    /// <param name="openedBytes">Bytes of revision prefixes parsed to read validation data.</param>
+    internal static SignatureInspectionResult Inspect(byte[] pdfBytes, CancellationToken cancellationToken, out long openedBytes)
     {
         using var stream = new MemoryStream(pdfBytes, writable: false);
         using var reader = new PdfReader(stream);
         using var document = new PdfDocument(reader);
 
         var util = new SignatureUtil(document);
-        var working = util.GetSignatureNames().Select(name => Describe(util, name, pdfBytes)).ToList();
+        var working = util.GetSignatureNames()
+            .Select(name =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Describe(util, name, pdfBytes);
+            })
+            .ToList();
         var signatures = working.Select(w => w.Entry).ToList();
 
         var hasDss = document.GetCatalog().GetPdfObject().ContainsKey(DssName);
@@ -87,14 +99,15 @@ public static class PdfSignatureInspector
             w.Entry.FileRevision = index >= 0 ? index + 1 : null;
         }
 
-        var dssAt = hasDss && revisionEnds.Count <= MaxRevisionsForValidationData
-            ? ValidationDataReader(pdfBytes, revisionEnds)
+        var validationData = hasDss
+            ? new PdfValidationDataIndex(pdfBytes, revisionEnds, DssSnapshot.From(document), cancellationToken)
             : null;
 
         foreach (var w in working)
         {
-            w.Entry.StructuralLevel = DetermineLevel(w, working, revisionEnds, dssAt);
+            w.Entry.StructuralLevel = DetermineLevel(w, working, revisionEnds, validationData);
         }
+        openedBytes = validationData?.OpenedBytes ?? 0;
 
         // Revisions are ordered, so anything signed after the newest archive
         // timestamp is outside its byte range and therefore unprotected.
@@ -115,6 +128,7 @@ public static class PdfSignatureInspector
             DocumentSha256 = Convert.ToHexString(SHA256.HashData(pdfBytes)).ToLowerInvariant(),
             ByteLength = pdfBytes.LongLength,
             Revisions = revisions,
+            TrailingBytes = pdfBytes.LongLength - revisionEnds[^1],
             // The document can only be renewed as late as its earliest-expiring
             // timestamp certificate allows, so that is the date to plan against.
             EarliestTimestampCertificateExpiry = signatures
@@ -327,6 +341,7 @@ public static class PdfSignatureInspector
     {
         if (signatureValue == null) return null;
         var info = token.TimeStampInfo;
+        if (!AcceptedImprintAlgorithms.Contains(info.MessageImprintAlgOid)) return null;
         var expected = DigestUtilities.CalculateDigest(info.MessageImprintAlgOid, signatureValue);
         return CryptographicOperations.FixedTimeEquals(expected, info.GetMessageImprintDigest());
     }
@@ -336,6 +351,7 @@ public static class PdfSignatureInspector
     {
         if (!entry.ByteRangeSane || entry.ByteRange == null) return null;
         var info = token.TimeStampInfo;
+        if (!AcceptedImprintAlgorithms.Contains(info.MessageImprintAlgOid)) return null;
         var digest = DigestUtilities.GetDigest(info.MessageImprintAlgOid);
         var range = entry.ByteRange;
         digest.BlockUpdate(pdf, (int)range[0], (int)range[1]);
@@ -345,75 +361,30 @@ public static class PdfSignatureInspector
     }
 
     /// <summary>
-    /// The DSS as it stood at the end of a revision (by index), read on first
-    /// use and cached, so only the revisions a level actually depends on are
-    /// opened. Null when the revision cannot be read or carries no DSS.
+    /// Whether this DSS holds validation data for the signature.
+    /// With a VRI dictionary the signature needs its own entry, and that entry
+    /// must list at least one OCSP response or CRL: a writer that files data per
+    /// signature and left this one out (or left it empty) did not cover it.
+    /// Without VRI (it is optional) the DSS must carry the signing certificate
+    /// and at least one OCSP response or CRL that was not there yet when the
+    /// signature was made (<paramref name="atSigning"/>), so data that predates
+    /// the signature never counts for it.
     /// </summary>
-    private static Func<int, DssSnapshot?> ValidationDataReader(byte[] pdf, List<long> revisionEnds)
+    private static bool Covers(DssSnapshot? dss, Working signature, DssSnapshot? atSigning)
     {
-        var cache = new Dictionary<int, DssSnapshot?>();
-        return index =>
+        if (dss == null || dss.IsUnknown) return false;
+        if (dss.HasVri)
         {
-            if (!cache.TryGetValue(index, out var snapshot))
-            {
-                snapshot = ReadDssAt(pdf, revisionEnds[index]);
-                cache[index] = snapshot;
-            }
-            return snapshot;
-        };
-    }
-
-    private static DssSnapshot? ReadDssAt(byte[] pdf, long end)
-    {
-        try
-        {
-            // A window over the same array, not a copy of the file per revision.
-            // A fresh source each time: closing the reader closes its source.
-            var file = new RandomAccessSourceFactory().CreateSource(pdf);
-            using var reader = new PdfReader(new WindowRandomAccessSource(file, 0, end), new ReaderProperties());
-            using var document = new PdfDocument(reader);
-
-            var dss = document.GetCatalog().GetPdfObject().GetAsDictionary(DssName);
-            if (dss == null) return null;
-
-            var vri = dss.GetAsDictionary(VriName);
-            var vriKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (vri != null)
-            {
-                foreach (var key in vri.KeySet()) vriKeys.Add(key.GetValue());
-            }
-
-            var certificates = new HashSet<string>(StringComparer.Ordinal);
-            var certs = dss.GetAsArray(CertsName);
-            if (certs != null)
-            {
-                for (var i = 0; i < certs.Size(); i++)
-                {
-                    var bytes = certs.GetAsStream(i)?.GetBytes();
-                    if (bytes != null) certificates.Add(Convert.ToHexString(SHA256.HashData(bytes)));
-                }
-            }
-
-            return new DssSnapshot(vri != null, vriKeys, certificates);
+            return signature.VriKeys.Any(key => dss.Vri.TryGetValue(key, out var hasRevocation) && hasRevocation);
         }
-        catch (Exception)
-        {
-            // A prefix that does not open as a PDF is not a revision we can read.
-            return null;
-        }
-    }
 
-    /// <summary>
-    /// Whether this DSS covers the signature. With a VRI dictionary the
-    /// signature must have its own entry: a writer that files validation data
-    /// per signature and left this one out did not cover it. Without VRI (it is
-    /// optional) the DSS must at least carry the signing certificate.
-    /// </summary>
-    private static bool Covers(DssSnapshot dss, Working signature)
-    {
-        if (dss.HasVri) return signature.VriKeys.Overlaps(dss.VriKeys);
-        return signature.SigningCertificate != null
-            && dss.CertificateHashes.Contains(Convert.ToHexString(SHA256.HashData(signature.SigningCertificate)));
+        if (signature.SigningCertificate == null
+            || !dss.Certificates.Contains(Convert.ToHexString(SHA256.HashData(signature.SigningCertificate))))
+        {
+            return false;
+        }
+        if (atSigning is { IsUnknown: true }) return false;
+        return dss.Revocation.Any(r => atSigning == null || !atSigning.Revocation.Contains(r));
     }
 
     /// <summary>
@@ -423,10 +394,11 @@ public static class PdfSignatureInspector
     /// <list type="bullet">
     /// <item>B-T: its own timestamp token verifies, or a verified document
     /// timestamp in a later revision covers it.</item>
-    /// <item>B-LT: B-T, and validation data for this signature (its VRI entry,
-    /// or its certificate in a DSS without VRI) was added after it.</item>
-    /// <item>B-LTA: B-LT, and a verified document timestamp covers the revision
-    /// that added that validation data.</item>
+    /// <item>B-LT: B-T, and validation data for this signature (see
+    /// <see cref="Covers"/>) first appears in a revision after it and is still
+    /// in the DSS of the file as received.</item>
+    /// <item>B-LTA: B-LT, and a verified document timestamp covers a revision in
+    /// which that validation data is present.</item>
     /// </list>
     /// A token that is present but does not verify counts as no token.
     /// </summary>
@@ -434,7 +406,7 @@ public static class PdfSignatureInspector
         Working signature,
         List<Working> all,
         List<long> revisionEnds,
-        Func<int, DssSnapshot?>? dssAt)
+        PdfValidationDataIndex? validationData)
     {
         var entry = signature.Entry;
         if (entry.IsDocumentTimestamp)
@@ -459,22 +431,32 @@ public static class PdfSignatureInspector
             || (signedEnd.HasValue && verifiedDocumentTimestampEnds.Any(end => end > signedEnd.Value));
         if (!hasT) return "B-B";
 
-        if (dssAt == null || !signedEnd.HasValue) return "B-T";
+        if (validationData == null || !signedEnd.HasValue) return "B-T";
 
-        long? coveredAt = null;
-        for (var i = 0; i < revisionEnds.Count; i++)
+        var signedIndex = revisionEnds.IndexOf(signedEnd.Value);
+        if (signedIndex < 0) return "B-T";
+        var atSigning = validationData.At(signedIndex);
+
+        int? coveredIndex = null;
+        for (var i = signedIndex + 1; i < revisionEnds.Count; i++)
         {
-            if (revisionEnds[i] <= signedEnd.Value) continue;
-            if (dssAt(i) is { } dss && Covers(dss, signature))
+            if (Covers(validationData.At(i), signature, atSigning))
             {
-                coveredAt = revisionEnds[i];
+                coveredIndex = i;
                 break;
             }
         }
-        if (coveredAt == null) return "B-T";
+        // Data removed or replaced later is not in the file any more.
+        if (coveredIndex == null || !Covers(validationData.Final, signature, atSigning)) return "B-T";
 
-        entry.ValidationDataRevision = revisionEnds.IndexOf(coveredAt.Value) + 1;
-        return verifiedDocumentTimestampEnds.Any(end => end >= coveredAt.Value) ? "B-LTA" : "B-LT";
+        entry.ValidationDataRevision = coveredIndex.Value + 1;
+
+        var coveredAt = revisionEnds[coveredIndex.Value];
+        var archived = all.Any(w =>
+            w.Entry.IsDocumentTimestamp && w.Entry.TimestampVerified && w.SignedEnd >= coveredAt
+            && revisionEnds.IndexOf(w.SignedEnd!.Value) is var tsIndex and >= 0
+            && Covers(validationData.At(tsIndex, read: true), signature, atSigning));
+        return archived ? "B-LTA" : "B-LT";
     }
 
     /// <summary>
