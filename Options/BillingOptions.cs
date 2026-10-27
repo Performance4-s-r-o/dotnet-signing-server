@@ -58,17 +58,68 @@ public class BillingOptions
     /// </summary>
     public int? GlobalConcurrencyLimit { get; set; }
 
-    /// <summary>How long a request waits for a global slot before the 503 (#94). 0 = no wait.</summary>
+    /// <summary>
+    /// How long a request waits for a slot in the global, heavy or AI pool before the 503 (#94, #69).
+    /// 0 = no wait.
+    /// </summary>
     public int GlobalConcurrencyWaitMilliseconds { get; set; } = 2000;
 
-    /// <summary>Lowest suggested global cap; the starting hypothesis of #69 for the signing instance.</summary>
-    public const int MinComputedGlobalLimit = 16;
+    /// <summary>
+    /// Pool H (#69): presign, sign, sign-pfx, seal, visual-sign, timestamp, extend, fill-pdf and
+    /// PDF/A at once in the process. Null or 0 = off (the default, like the global cap: the
+    /// callers' own limits must be below it first). Env <c>HEAVY_OPERATIONS_LIMIT</c>.
+    /// </summary>
+    public int? HeavyOperationsLimit { get; set; }
 
-    /// <summary>Starting hypothesis for the cap, max(16, 2/3 of the CPUs). Not applied automatically.</summary>
+    /// <summary>Pool A (#69): AI calls at once. Null or 0 = off. Env <c>AI_OPERATIONS_LIMIT</c>.</summary>
+    public int? AiOperationsLimit { get; set; }
+
+    /// <summary>
+    /// Longest wait in a user's queue, whatever the account has stored (#69). The trusted caller
+    /// is exempt: it queues fairly between its own tenants. Env <c>USER_QUEUE_MAX_SECONDS</c>.
+    /// </summary>
+    public int UserQueueMaxSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// Requests that may wait per slot of a user's limit (#69): a user with limit 3 queues at
+    /// most 6, the next one gets 429 at once. Trusted caller exempt. Env <c>USER_QUEUE_LENGTH_FACTOR</c>.
+    /// </summary>
+    public int UserQueueLengthFactor { get; set; } = 2;
+
+    /// <summary>Upper bound for any stored or configured queue wait, seconds.</summary>
+    public const int MaxQueueSeconds = 600;
+
+    /// <summary>Upper bound for a configured pool size; anything above is a typo.</summary>
+    public const int MaxPoolLimit = 10_000;
+
+    /// <summary>Starting hypothesis for A (#69).</summary>
+    public const int SuggestedAiLimit = 4;
+
+    /// <summary>H starts at C, the CPUs the process sees (cgroup quota included), not 2 × C (#69).</summary>
+    public static int SuggestedHeavyLimit(int processorCount) => Math.Max(1, processorCount);
+
+    /// <summary>R, as <c>CodeScanRaster</c> sizes it: max(1, ⌊C/2⌋).</summary>
+    public static int SuggestedRasterLimit(int processorCount) => Math.Max(1, processorCount / 2);
+
+    /// <summary>Starting hypothesis for the global cap, G = H + R + A (#69). Not applied automatically.</summary>
     public static int SuggestedGlobalLimit(int processorCount) =>
-        Math.Max(MinComputedGlobalLimit, processorCount * 2 / 3);
+        SuggestedHeavyLimit(processorCount) + SuggestedRasterLimit(processorCount) + SuggestedAiLimit;
 
     /// <summary>The cap in force: the configured one, or 0 (off) when unset.</summary>
     public static int EffectiveGlobalLimit(BillingOptions options, int processorCount) =>
         options.GlobalConcurrencyLimit is { } configured ? Math.Max(0, configured) : 0;
+
+    /// <summary>The wait in a user's queue: the stored one, capped unless the caller is trusted.</summary>
+    public static int EffectiveQueueSeconds(int stored, int maxSeconds, bool trustedCaller) =>
+        Math.Max(0, trustedCaller ? stored : Math.Min(stored, maxSeconds));
+
+    /// <summary>How many may wait behind a user's limit; unlimited for the trusted caller.</summary>
+    public static int MaxWaiting(int limit, int factor, bool trustedCaller) =>
+        trustedCaller ? int.MaxValue : (int)Math.Min(int.MaxValue, (long)Math.Max(0, limit) * Math.Max(0, factor));
+
+    /// <summary>
+    /// Retry-After after a 429 from the user's queue (#69): at least 5 s, and no sooner than the
+    /// queue wait, since a request that just waited that long found nothing free. At most 60 s.
+    /// </summary>
+    public static int RetryAfterSeconds(int queueSeconds) => Math.Clamp(queueSeconds, 5, 60);
 }

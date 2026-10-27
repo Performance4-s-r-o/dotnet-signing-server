@@ -1,3 +1,4 @@
+using DotNetSigningServer.Filters;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
@@ -35,6 +36,7 @@ namespace DotNetSigningServer.Controllers
             _pdfConversionService = pdfConversionService;
         }
 
+        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/convert/pdfa")]
         public async Task<IActionResult> ConvertToPdfA([FromBody] ConvertToPdfAInput input)
         {
@@ -64,6 +66,7 @@ namespace DotNetSigningServer.Controllers
         /// s částmi <c>metadata</c> (<c>conformance</c>) a <c>pdf</c>. Stejné kontroly, účtování
         /// i odpověď jako JSON varianta; <c>Request.Form</c> se tu číst nesmí.
         /// </summary>
+        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/convert/pdfa")]
         [Consumes(BinaryPdfChannel.ContentType)]
         [ApiExplorerSettings(IgnoreApi = true)]
@@ -116,6 +119,7 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
+        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/fill-pdf")]
         public async Task<IActionResult> FillPdf([FromBody] FillPdfInput input)
         {

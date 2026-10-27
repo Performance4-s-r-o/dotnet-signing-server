@@ -167,7 +167,10 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `AUTH_OTP_MAX_FAILED_ATTEMPTS` | no (5) | Wrong 2FA codes after which the code is void. The count is cleared only by a successful code or a password reset, not by signing in again |
 | `AUTH_ACCOUNT_MAX_ATTEMPTS` / `AUTH_ACCOUNT_WINDOW_MINUTES` | no (30 / 15) | Sign-in and 2FA attempts per account whatever the IP (on top of the per-IP+address limit), counted in PostgreSQL |
 | `MAX_API_TOKENS_PER_USER` | no (100) | Live API tokens per account; 0 = no limit |
-| `GLOBAL_CONCURRENCY_LIMIT` / `GLOBAL_CONCURRENCY_WAIT_MS` | no (off / 2000) | Cap on concurrent operations of the whole server (#69), taken after the user's own slot. Empty or `0` = off; a start hypothesis is max(16, 2/3 of the CPUs), to be set only once every caller's own limit is below it (otherwise the caller gets `503`). A request waits up to the given milliseconds for a global slot, then gets `503` + `Retry-After`. Negative values stop the server at start; this variable wins over `Billing__GlobalConcurrencyLimit` |
+| `GLOBAL_CONCURRENCY_LIMIT` / `GLOBAL_CONCURRENCY_WAIT_MS` | no (off / 2000) | Cap on concurrent operations of the whole server (#69), taken after the user's own slot. Empty or `0` = off; a start hypothesis is H + R + A (logged at startup), to be set only once every caller's own limit is below it (otherwise the caller gets `503`). A request waits up to the given milliseconds for a slot of the global, heavy or AI pool, then gets `503` + `Retry-After`. Negative values stop the server at start; this variable wins over `Billing__GlobalConcurrencyLimit` |
+| `HEAVY_OPERATIONS_LIMIT` / `AI_OPERATIONS_LIMIT` | no (off / off) | Pools H and A (#69): presign, sign, sign-pfx, seal, visual-sign, timestamp, extend-signature, fill-pdf and PDF/A at once, and AI calls at once. Empty or `0` = off. Start hypotheses: H = the CPU count, A = 4. Full after `GLOBAL_CONCURRENCY_WAIT_MS` = `503` + `Retry-After: 10`. Negative or above 10000 stops the server at start |
+| `USER_QUEUE_MAX_SECONDS` / `USER_QUEUE_LENGTH_FACTOR` | no (30 / 2) | A user's queue (#69): the longest wait whatever the account stores (0–600), and requests that may wait per slot of the user's limit (1–100); the next one gets `429` at once. `Retry-After` after a `429` is the queue wait, at least 5 and at most 60 s. The trusted caller is exempt from both. Out of range stops the server at start |
+| `CONTAINER_MEM_LIMIT` / `CONTAINER_CPUS` / `CONTAINER_STOP_GRACE_PERIOD` | no (0 / 0 / 135s) | Read by `docker-compose.yml` itself (#69): `mem_limit`, `cpus` and `stop_grace_period` of the server container. `0` = no limit. Tune to the machine; `cpus` also sets the CPU count the pools are sized from |
 | `INTERNAL_API_PORT` | no (empty) | Second listener for a trusted internal caller (#78), added next to `ASPNETCORE_URLS`; `docker-compose.yml` only `expose`s 8086, so with the shipped file use 8086. A token of a `TRUSTED_CALLER_USER_IDS` account is accepted on it only; on the public port it gets `401`. Empty = one listener, a plain API |
 | `TRUSTED_CALLER_USER_IDS` | when `INTERNAL_API_PORT` is set (startup fails otherwise) | Service account id(s) of the trusted caller, comma-separated. The old name `PORTAL_USER_IDS` is still read, with a warning at start; both set and different = startup fails. Only that account's server token, on the internal port, is a trusted caller: it alone may skip the attachment debit (`X-P4PDF-Attachment-Billing-Bypass`, the old `X-P4SPS-…` still read) and its `X-P4-Tenant` / `X-Request-Id` are logged and stored on presigns, operations and usage records. `/api/sign` (a replay included), any keyed replay and `/api/operations/{id}` refuse another tenant's presign or operation (`403 TENANT_MISMATCH`) |
 | `TRUSTED_CF_PROXIES` | in production (startup fails when empty) | Address / CIDR of cloudflared (#106). `CF-Connecting-IP` is the client (rate limits, token IP whitelist, consent evidence) only for a request that came from cloudflared — it is the TCP peer, or a `TRUSTED_PROXIES` proxy is the peer and cloudflared the forwarded address. Empty = never believed; `none` = no tunnel in front, on purpose |
@@ -180,7 +183,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `AI__Enabled` / `AI__Google__ApiKey` | | AI-assisted template field detection |
 | `Sentry__Dsn` | | Error monitoring; disabled when empty |
 | `Loki__Url` | | Log shipping; disabled when empty |
-| `Limits__*` | | Request/PDF/image/attachment size caps and per-key concurrency |
+| `Limits__*` | | Request/PDF/image/attachment size caps |
 | `P4Backoffice__Mode` / `P4Backoffice__Modules__*` | | P4 Backoffice integration: `Off` (default), `Shadow` or `On`, globally or per module (`Docs`, `Consents`, `Email`, `Pricing`, `Support`, `Billing`; `Billing` never follows the global mode) |
 | `P4Backoffice__BaseUrl` / `P4Backoffice__SecretKey` | when not `Off` | Service URL (https) and `p4sk_` key; startup fails without them |
 | `P4Backoffice__Webhook__Secret` | | Webhook signing secret (`whsec_` + base64 of at least 24 bytes); `…__PreviousSecret` during rotation |
@@ -191,9 +194,15 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `P4Backoffice__Consents__Documents__0…` / `…__Acknowledged__0…` | | Documents consented to at sign-up (default `terms`, `dpa`) and documents only acknowledged (default `privacy`) |
 
 The `#80` variables (`CORS_ALLOWED_ORIGINS`, `AUTH_*`, `MAX_API_TOKENS_PER_USER`,
-`BILLING_PRODUCT_TAG_GRACE_UNTIL`, `GLOBAL_CONCURRENCY_*`) and `TRUSTED_CALLER_USER_IDS` / `TRUSTED_CF_PROXIES` / `TRUSTED_PROXIES` fall back to Coolify project variables (`DOTNET_*`) in
+`BILLING_PRODUCT_TAG_GRACE_UNTIL`, `GLOBAL_CONCURRENCY_*`, `HEAVY_OPERATIONS_LIMIT`, `AI_OPERATIONS_LIMIT`, `USER_QUEUE_*`) and `TRUSTED_CALLER_USER_IDS` / `TRUSTED_CF_PROXIES` / `TRUSTED_PROXIES` fall back to Coolify project variables (`DOTNET_*`) in
 `docker-compose.yml`. An empty value or an unresolved `{{project.…}}` placeholder means the
 default; any other value that does not parse stops the server at startup.
+
+`GET /internal/concurrency` shows what the limits are doing (#69): occupancy, waits and
+rejections of the global, heavy and AI pools, the users' queues together (no user ids), the
+rasterisation pool, process memory and the thread pool, plus the start hypotheses for this
+machine. Counts only; it answers on the `INTERNAL_API_PORT` listener and is `404` everywhere
+else (and everywhere while that port is not set).
 
 Every integration degrades gracefully: leave a section empty and the feature
 switches itself off rather than failing at startup.

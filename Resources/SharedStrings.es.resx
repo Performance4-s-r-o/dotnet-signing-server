@@ -93,7 +93,8 @@
   <data name="ServerAtCapacity" xml:space="preserve"><value>El servidor está a plena capacidad. Por favor, inténtelo de nuevo en unos segundos.</value></data>
   <data name="SaveLimit" xml:space="preserve"><value>Guardar</value></data>
   <data name="SeePricing" xml:space="preserve"><value>Ver precios</value></data>
-  <data name="InvalidConcurrencyLimit" xml:space="preserve"><value>El límite de paralelismo debe estar entre 1 y 50 (vacío = predeterminado).</value></data>
+  <data name="InvalidConcurrencyLimit" xml:space="preserve"><value>El límite de paralelismo debe estar entre 1 y {0} (vacío = predeterminado).</value></data>
+  <data name="InvalidQueueTimeout" xml:space="preserve"><value>El tiempo de espera en cola debe estar entre 0 y {0} segundos (vacío = predeterminado).</value></data>
   <data name="ConcurrencyLimitUpdated" xml:space="preserve"><value>Límite de paralelismo actualizado.</value></data>
   <data name="ConcurrencyPricingTitle" xml:space="preserve"><value>Precio del procesamiento paralelo</value></data>
   <data name="ConcurrencyPricingDescription" xml:space="preserve"><value>Las operaciones en paralelo usan precios de créditos escalonados:</value></data>

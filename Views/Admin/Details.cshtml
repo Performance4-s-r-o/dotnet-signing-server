@@ -47,7 +47,7 @@
             <p class="muted" style="font-size:0.875rem;margin-bottom:0.75rem">@L["ConcurrencyQueueTimeoutDescription"]</p>
             <form method="post" action="/Admin/Users/@Model.User.Id/SetConcurrencyQueueTimeout" style="display:flex;gap:0.5rem;align-items:center">
                 @Html.AntiForgeryToken()
-                <input type="number" name="queueTimeoutSeconds" min="-1"
+                <input type="number" name="queueTimeoutSeconds" min="-1" max="@DotNetSigningServer.Options.BillingOptions.MaxQueueSeconds"
                        value="@(Model.User.ConcurrencyQueueTimeoutSeconds?.ToString() ?? "")"
                        placeholder="@L["ConcurrencyQueueDefault"]"
                        style="width:6rem;padding:0.25rem 0.5rem;border:1px solid #d1d5db;border-radius:4px;font-size:0.875rem" />

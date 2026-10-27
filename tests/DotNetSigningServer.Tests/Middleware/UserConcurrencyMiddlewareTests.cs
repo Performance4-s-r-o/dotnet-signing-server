@@ -43,12 +43,15 @@ public class UserConcurrencyMiddlewareTests
         return context;
     }
 
-    private static BillingOptions Billing(int userLimit, int queueSeconds, int globalLimit, int globalWaitMs = 0) => new()
+    private static BillingOptions Billing(int userLimit, int queueSeconds, int globalLimit, int globalWaitMs = 0,
+        int queueFactor = 2, int queueMaxSeconds = 30) => new()
     {
         ConcurrencyDefaultLimit = userLimit,
         ConcurrencyQueueTimeoutSeconds = queueSeconds,
         GlobalConcurrencyLimit = globalLimit,
         GlobalConcurrencyWaitMilliseconds = globalWaitMs,
+        UserQueueLengthFactor = queueFactor,
+        UserQueueMaxSeconds = queueMaxSeconds,
     };
 
     private static async Task<bool> Eventually(Func<bool> condition)
@@ -114,7 +117,8 @@ public class UserConcurrencyMiddlewareTests
     [Fact]
     public async Task Requests_queued_behind_one_user_do_not_hold_global_slots()
     {
-        var billing = Billing(userLimit: 1, queueSeconds: 30, globalLimit: 2);
+        // Four may wait, so all five get through in the end.
+        var billing = Billing(userLimit: 1, queueSeconds: 30, globalLimit: 2, queueFactor: 4);
         var services = Services(billing);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var middleware = Create(billing, async ctx =>
@@ -421,10 +425,10 @@ public class UserConcurrencyMiddlewareTests
     }
 
     [Theory]
-    [InlineData(4, 16)]
-    [InlineData(24, 16)]
-    [InlineData(96, 64)]
-    public void Suggested_global_limit_is_the_start_hypothesis(int cpus, int expected)
+    [InlineData(1, 6)]
+    [InlineData(4, 10)]
+    [InlineData(24, 40)]
+    public void Suggested_global_limit_is_heavy_plus_raster_plus_ai(int cpus, int expected)
     {
         Assert.Equal(expected, BillingOptions.SuggestedGlobalLimit(cpus));
     }
@@ -490,5 +494,143 @@ public class UserConcurrencyMiddlewareTests
         Assert.Equal(0, gate.Held);
         // Nobody is left waiting: a fresh request gets a slot at once.
         Assert.Equal(1, await gate.WaitAsync(TimeSpan.Zero, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Queue_holds_at_most_factor_times_limit_and_the_next_gets_429_at_once()
+    {
+        var billing = Billing(userLimit: 1, queueSeconds: 30, globalLimit: 2, queueFactor: 2);
+        var services = Services(billing);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var middleware = Create(billing, async ctx => { await release.Task; ctx.Response.StatusCode = 200; });
+        var user = Guid.NewGuid();
+
+        var admitted = Enumerable.Range(0, 3).Select(_ =>
+        {
+            var ctx = Request(services, user);
+            return (ctx, task: middleware.InvokeAsync(ctx));
+        }).ToList();
+        Assert.True(await Eventually(() => UserConcurrencyMiddleware.GetInFlightCount(user) == 1));
+        await Task.Delay(50);
+
+        // One runs, two wait: the fourth is refused without waiting the 30 s.
+        var overflow = Request(services, user);
+        await middleware.InvokeAsync(overflow).WaitAsync(Bounded);
+        Assert.Equal(StatusCodes.Status429TooManyRequests, overflow.Response.StatusCode);
+        Assert.Equal("30", overflow.Response.Headers["Retry-After"].ToString());
+
+        release.SetResult();
+        await Task.WhenAll(admitted.Select(a => a.task)).WaitAsync(Bounded);
+        Assert.All(admitted, a => Assert.Equal(200, a.ctx.Response.StatusCode));
+        Assert.Equal(0, UserConcurrencyMiddleware.GetInFlightCount(user));
+        Assert.Equal(2, middleware.GlobalSlotsAvailable);
+    }
+
+    [Fact]
+    public async Task Stored_queue_wait_is_capped_and_retry_after_is_at_least_five_seconds()
+    {
+        // The account stores 600 s; the cap of 1 s ends the wait.
+        var billing = Billing(userLimit: 1, queueSeconds: 600, globalLimit: 0, queueMaxSeconds: 1);
+        var services = Services(billing);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var middleware = Create(billing, async ctx => { await release.Task; ctx.Response.StatusCode = 200; });
+        var user = Guid.NewGuid();
+
+        var held = middleware.InvokeAsync(Request(services, user));
+        Assert.True(await Eventually(() => UserConcurrencyMiddleware.GetInFlightCount(user) == 1));
+        var timedOut = Request(services, user);
+        await middleware.InvokeAsync(timedOut).WaitAsync(Bounded);
+        Assert.Equal(StatusCodes.Status429TooManyRequests, timedOut.Response.StatusCode);
+        Assert.Equal("5", timedOut.Response.Headers["Retry-After"].ToString());
+
+        release.SetResult();
+        await held.WaitAsync(Bounded);
+        Assert.Equal(0, UserConcurrencyMiddleware.GetInFlightCount(user));
+    }
+
+    [Fact]
+    public async Task Trusted_caller_keeps_its_stored_queue_beyond_the_caps()
+    {
+        var billing = Billing(userLimit: 1, queueSeconds: 30, globalLimit: 0, queueFactor: 1, queueMaxSeconds: 0);
+        var services = Services(billing);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var middleware = Create(billing, async ctx => { await release.Task; ctx.Response.StatusCode = 200; });
+        var user = Guid.NewGuid();
+
+        HttpContext Trusted()
+        {
+            var ctx = Request(services, user);
+            ctx.User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.ToString()),
+                new Claim(DotNetSigningServer.Services.PortalTrust.TrustedCallerClaim, "true"),
+            }, "test"));
+            return ctx;
+        }
+
+        // A plain user with these caps could queue nobody; the trusted caller queues three.
+        var calls = Enumerable.Range(0, 4).Select(_ =>
+        {
+            var ctx = Trusted();
+            return (ctx, task: middleware.InvokeAsync(ctx));
+        }).ToList();
+        Assert.True(await Eventually(() => UserConcurrencyMiddleware.GetInFlightCount(user) == 1));
+        await Task.Delay(50);
+        Assert.All(calls, c => Assert.False(c.task.IsCompleted));
+
+        release.SetResult();
+        await Task.WhenAll(calls.Select(c => c.task)).WaitAsync(Bounded);
+        Assert.All(calls, c => Assert.Equal(200, c.ctx.Response.StatusCode));
+    }
+
+    [Theory]
+    [InlineData(0, 5)]
+    [InlineData(1, 5)]
+    [InlineData(30, 30)]
+    [InlineData(600, 60)]
+    public void Retry_after_follows_the_queue_wait(int queueSeconds, int expected)
+    {
+        Assert.Equal(expected, BillingOptions.RetryAfterSeconds(queueSeconds));
+    }
+
+    [Theory]
+    [InlineData(600, 30, false, 30)]
+    [InlineData(10, 30, false, 10)]
+    [InlineData(600, 30, true, 600)]
+    [InlineData(-3, 30, false, 0)]
+    public void Queue_wait_is_capped_except_for_the_trusted_caller(int stored, int max, bool trusted, int expected)
+    {
+        Assert.Equal(expected, BillingOptions.EffectiveQueueSeconds(stored, max, trusted));
+    }
+
+    [Theory]
+    [InlineData(3, 2, false, 6)]
+    [InlineData(49, 2, true, int.MaxValue)]
+    [InlineData(int.MaxValue, 2, false, int.MaxValue)]
+    public void Queue_length_is_factor_times_limit(int limit, int factor, bool trusted, int expected)
+    {
+        Assert.Equal(expected, BillingOptions.MaxWaiting(limit, factor, trusted));
+    }
+
+    [Theory]
+    [InlineData(24, 12)]
+    [InlineData(12, 6)]
+    [InlineData(3, 1)]
+    [InlineData(1, 1)]
+    public void Self_service_concurrency_is_half_of_heavy(int heavy, int expected)
+    {
+        Assert.Equal(expected, DotNetSigningServer.Services.CapacityPools.SelfServiceMax(heavy));
+    }
+
+    [Fact]
+    public void Self_service_cap_follows_the_configured_heavy_pool()
+    {
+        var on = new DotNetSigningServer.Services.CapacityPools(new BillingOptions { HeavyOperationsLimit = 12 }, processorCount: 64);
+        Assert.Equal(6, on.SelfServiceMaxConcurrency);
+        var off = new DotNetSigningServer.Services.CapacityPools(new BillingOptions(), processorCount: 24);
+        Assert.Equal(12, off.SelfServiceMaxConcurrency);
+        Assert.False(off.Heavy.Enabled);
+        Assert.False(off.Ai.Enabled);
+        Assert.False(off.Global.Enabled);
     }
 }

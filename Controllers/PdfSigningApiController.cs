@@ -1,3 +1,4 @@
+using DotNetSigningServer.Filters;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
@@ -52,6 +53,7 @@ namespace DotNetSigningServer.Controllers
             _dataProtector = dataProtectionProvider.CreateProtector("SigningData.TsaCredentials");
         }
 
+        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/presign")]
         public async Task<IActionResult> PreSign([FromBody] PreSignInput input)
         {
@@ -79,6 +81,7 @@ namespace DotNetSigningServer.Controllers
         /// Tělo čte jen <see cref="ApiControllerBase.ReadBinaryPdfAsync{T}"/> — <c>Request.Form</c>
         /// se tu číst nesmí (nabufferoval by celé tělo bez limitu části).
         /// </summary>
+        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/presign")]
         [Consumes(BinaryPdfChannel.ContentType)]
         [ApiExplorerSettings(IgnoreApi = true)]
@@ -188,6 +191,7 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
+        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/sign")]
         public async Task<IActionResult> Sign([FromBody] SignInput input)
         {
@@ -341,6 +345,7 @@ namespace DotNetSigningServer.Controllers
             });
         }
 
+        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/sign-pfx")]
         public async Task<IActionResult> SignWithPfx([FromBody] PfxSignInput input)
         {
@@ -367,6 +372,7 @@ namespace DotNetSigningServer.Controllers
         /// <c>metadata</c> (PFX a heslo zůstávají v metadatech) a <c>pdf</c>. Stejné kontroly,
         /// účtování i odpověď jako JSON varianta; <c>Request.Form</c> se tu číst nesmí.
         /// </summary>
+        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/sign-pfx")]
         [Consumes(BinaryPdfChannel.ContentType)]
         [ApiExplorerSettings(IgnoreApi = true)]
@@ -430,6 +436,7 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
+        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/timestamp")]
         public async Task<IActionResult> ApplyTimestamp([FromBody] DocumentTimestampInput input)
         {
@@ -451,6 +458,7 @@ namespace DotNetSigningServer.Controllers
         }
 
         /// <summary><c>/api/timestamp</c> v interním binárním kanálu (#74), viz <see cref="SignWithPfxBinary"/>.</summary>
+        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/timestamp")]
         [Consumes(BinaryPdfChannel.ContentType)]
         [ApiExplorerSettings(IgnoreApi = true)]
@@ -511,6 +519,7 @@ namespace DotNetSigningServer.Controllers
         /// timestamp is asked for. Same call is used to enrol a document and to
         /// renew it years later.
         /// </summary>
+        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/extend-signature")]
         public async Task<IActionResult> ExtendSignature([FromBody] ExtendSignatureInput input)
         {
@@ -531,6 +540,7 @@ namespace DotNetSigningServer.Controllers
         }
 
         /// <summary><c>/api/extend-signature</c> v interním binárním kanálu (#74), viz <see cref="SignWithPfxBinary"/>.</summary>
+        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/extend-signature")]
         [Consumes(BinaryPdfChannel.ContentType)]
         [ApiExplorerSettings(IgnoreApi = true)]
@@ -834,6 +844,7 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
+        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/visual-sign")]
         public async Task<IActionResult> ApplyVisualSign([FromBody] VisualSignInput input)
         {
@@ -869,6 +880,7 @@ namespace DotNetSigningServer.Controllers
         }
 
         /// <summary><c>/api/visual-sign</c> v interním binárním kanálu (#74), viz <see cref="SignWithPfxBinary"/>.</summary>
+        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/visual-sign")]
         [Consumes(BinaryPdfChannel.ContentType)]
         [ApiExplorerSettings(IgnoreApi = true)]
@@ -927,6 +939,7 @@ namespace DotNetSigningServer.Controllers
         /// material the caller supplied, this one lends our identity. Gated on
         /// <see cref="User.SealAllowed"/>, granted per account from /Admin.
         /// </summary>
+        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/seal")]
         public async Task<IActionResult> ApplySeal([FromBody] SealInput input)
         {
@@ -961,6 +974,7 @@ namespace DotNetSigningServer.Controllers
         /// <c>/api/seal</c> v interním binárním kanálu (#74), viz <see cref="SignWithPfxBinary"/>.
         /// Oprávnění k pečeti (<see cref="User.SealAllowed"/>) se ověřuje dřív, než se přečte tělo.
         /// </summary>
+        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/seal")]
         [Consumes(BinaryPdfChannel.ContentType)]
         [ApiExplorerSettings(IgnoreApi = true)]
