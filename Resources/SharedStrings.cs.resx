@@ -632,6 +632,8 @@
   <data name="Error_PRESIGNED_NOT_FOUND" xml:space="preserve"><value>Předpřipravený PDF nebyl nalezen. Restartujte prosím proces podepisování.</value></data>
   <data name="Error_TSA_NOT_CONFIGURED" xml:space="preserve"><value>Pro aplikaci časových razítek musí být nakonfigurována autorita časových razítek.</value></data>
   <data name="Error_NO_SIGNATURE_FIELD" xml:space="preserve"><value>Šablona neobsahuje pole pro podpis.</value></data>
+  <data name="Error_SEAL_REASON_INVALID" xml:space="preserve"><value>Důvod pečeti je příliš dlouhý nebo obsahuje nepovolené znaky (zalomení řádku, řídicí nebo neviditelné znaky).</value></data>
+  <data name="Error_SEAL_LOCATION_INVALID" xml:space="preserve"><value>Místo pečeti je příliš dlouhé nebo obsahuje nepovolené znaky (zalomení řádku, řídicí nebo neviditelné znaky).</value></data>
   <data name="Error_PFX_NO_PRIVATE_KEY" xml:space="preserve"><value>V poskytnutém PFX souboru nebyl nalezen soukromý klíč.</value></data>
   <data name="Error_ENCRYPTION_NO_RECIPIENTS" xml:space="preserve"><value>Pro šifrování důkazů je vyžadován alespoň jeden certifikát příjemce.</value></data>
   <data name="Error_TSA_HTTPS_REQUIRED" xml:space="preserve"><value>URL adresa autority časových razítek musí používat HTTPS.</value></data>
