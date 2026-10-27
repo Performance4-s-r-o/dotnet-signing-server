@@ -756,6 +756,17 @@ using (var scope = app.Services.CreateScope())
         logger);
 }
 
+// Seal certificate: parsed once here, the PFX bytes zeroed. A broken one is reported
+// by the capability probe as before; it does not stop the server.
+{
+    var sealOptions = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SealOptions>>().Value;
+    if (sealOptions.Enabled)
+    {
+        try { DotNetSigningServer.Services.SealCredentialStore.Get(sealOptions); }
+        catch (Exception ex) { appLogger.LogWarning(ex, "[seal] certificate could not be loaded at start"); }
+    }
+}
+
 app.Run();
 
 string? BuildConnectionStringFromConfiguration(ConfigurationManager configuration)

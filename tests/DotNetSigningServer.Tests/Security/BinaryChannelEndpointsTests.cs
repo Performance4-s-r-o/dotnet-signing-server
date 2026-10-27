@@ -555,4 +555,25 @@ public class BinaryChannelEndpointsTests
         Assert.Equal("SEAL_NOT_PERMITTED", result.Code);
         Assert.Equal(0, body.Position);
     }
+
+    [Theory]
+    [InlineData("Reason", "Podpis\nSouhlasím", "SEAL_REASON_INVALID")]
+    [InlineData("Location", "Praha\u202Egpj", "SEAL_LOCATION_INVALID")]
+    [InlineData("Reason", "bez řádku\u200B", "SEAL_REASON_INVALID")]
+    public async Task Seal_refuses_reason_and_location_that_do_not_belong_in_a_signature_dictionary(string field, string value, string code)
+    {
+        var meta = new Dictionary<string, object> { ["signRect"] = Rect, [field.ToLowerInvariant()] = value };
+
+        var binary = new Attempt();
+        var binaryResult = Describe(await binary.Signing(Multipart(meta, Pdf())).ApplySealBinary());
+        Assert.Equal(422, binaryResult.Status);
+        Assert.Equal(code, binaryResult.Code);
+        Assert.Empty(binary.Spy.BinaryInputs);
+
+        var json = new Attempt();
+        var jsonResult = Describe(await json.Signing().ApplySeal(Body<SealInput>(meta, Convert.ToBase64String(Pdf()))));
+        Assert.Equal(422, jsonResult.Status);
+        Assert.Equal(code, jsonResult.Code);
+        Assert.Equal(0, json.Spy.JsonCalls);
+    }
 }

@@ -859,6 +859,8 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
+            if (SealTextRefused(input) is { } textRefused) return textRefused;
+
             return await SealCoreAsync(user, input, null, ApiOperationService.Fingerprint("seal", input));
         }
 
@@ -894,7 +896,23 @@ namespace DotNetSigningServer.Controllers
                 return InputRefused(ex);
             }
 
+            if (SealTextRefused(input) is { } textRefused) return textRefused;
+
             return await SealCoreAsync(user, input, pdf, BinaryFingerprint("seal", input, pdf!));
+        }
+
+        /// <summary>422 for a <c>Reason</c>/<c>Location</c> that must not go into a signature dictionary (#81).</summary>
+        private IActionResult? SealTextRefused(SealInput input)
+        {
+            try
+            {
+                SealTextGuard.EnsureSafe(input.Reason, input.Location);
+                return null;
+            }
+            catch (ApiValidationException ex)
+            {
+                return UnprocessableEntity(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
+            }
         }
 
         private IActionResult SealNotPermitted(User user)

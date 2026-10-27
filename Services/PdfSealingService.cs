@@ -162,23 +162,7 @@ namespace DotNetSigningServer.Services
                 || !string.IsNullOrWhiteSpace(input.SignerName);
         }
 
-        private (IX509Certificate[] Chain, ICipherParameters PrivateKey) LoadSealCredentials()
-        {
-            byte[] pfxBytes;
-            if (!string.IsNullOrWhiteSpace(_sealOptions.PfxBase64))
-            {
-                pfxBytes = Convert.FromBase64String(_sealOptions.PfxBase64);
-            }
-            else if (!string.IsNullOrWhiteSpace(_sealOptions.PfxPath) && File.Exists(_sealOptions.PfxPath))
-            {
-                pfxBytes = File.ReadAllBytes(_sealOptions.PfxPath);
-            }
-            else
-            {
-                throw new InvalidOperationException("Seal certificate is not configured.");
-            }
-
-            return PdfCryptoHelper.LoadFromPfxBytes(pfxBytes, _sealOptions.PfxPassword);
-        }
+        private (IX509Certificate[] Chain, ICipherParameters PrivateKey) LoadSealCredentials() =>
+            SealCredentialStore.Get(_sealOptions);
     }
 }
