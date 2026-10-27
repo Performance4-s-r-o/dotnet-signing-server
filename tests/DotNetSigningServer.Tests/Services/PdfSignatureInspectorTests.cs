@@ -56,7 +56,7 @@ public class PdfSignatureInspectorTests
         Assert.Equal("Signature1", signature.FieldName);
         Assert.Equal("ETSI.CAdES.detached", signature.SubFilter);
         // No TSA was supplied, so the signature stops at the baseline level.
-        Assert.Equal("B-B", signature.Level);
+        Assert.Equal("B-B", signature.StructuralLevel);
         Assert.False(signature.HasTimestamp);
         Assert.Null(signature.TimestampAuthority);
         Assert.False(signature.IsDocumentTimestamp);
@@ -103,8 +103,8 @@ public class PdfSignatureInspectorTests
         var signature = Assert.Single(PdfSignatureInspector.Inspect(SignWithTestCertificate()).Signatures);
 
         Assert.Equal("ETSI.CAdES.detached", signature.SubFilter);
-        Assert.NotEqual("non-PAdES", signature.Level);
-        Assert.Contains(signature.Level, new[] { "B-B", "B-T", "B-LT", "B-LTA" });
+        Assert.NotEqual("non-PAdES", signature.StructuralLevel);
+        Assert.Contains(signature.StructuralLevel, new[] { "B-B", "B-T", "B-LT", "B-LTA" });
     }
 
     /// <summary>
@@ -136,7 +136,7 @@ public class PdfSignatureInspectorTests
         var result = PdfSignatureInspector.Inspect(Convert.FromBase64String(signed));
         var signature = Assert.Single(result.Signatures);
 
-        Assert.Equal("B-T", signature.Level);
+        Assert.Equal("B-T", signature.StructuralLevel);
         Assert.True(signature.HasTimestamp);
         Assert.NotNull(signature.TimestampedAt);
 
