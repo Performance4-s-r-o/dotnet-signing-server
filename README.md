@@ -573,8 +573,20 @@ dotnet ef migrations add <Name> -p dotnet-signing-server.csproj
 dotnet ef database update
 ```
 
-Migrations run automatically at startup; a failure aborts the boot so the
-orchestrator sees a failed deploy rather than a half-migrated database.
+Migrations are a release step: `dotnet dotnet-signing-server.dll --migrate`
+(the `migrate` service in `docker-compose.yml`) applies them once before the
+new version starts. The server refuses to start while any are pending, unless
+`RUN_MIGRATIONS_ON_START=true` (single instance only).
+
+The history starts with one baseline, `InitialSchema` (2026-10-28), which
+replaced the 24 migrations written before the first release. It is not an
+upgrade path for a database built from that earlier history: such a database
+is refused by both `--migrate` and start, with a message naming the baseline.
+Drop schema `dotnet_signing` and run `--migrate` against the empty database.
+The baseline holds hand-written SQL the model does not describe (the
+`lower("Email")` unique index and the append-only triggers on
+`ConsentRecords` and `AdminAuditEntries`); keep that in mind before ever
+regenerating it.
 
 ## Contributing
 
