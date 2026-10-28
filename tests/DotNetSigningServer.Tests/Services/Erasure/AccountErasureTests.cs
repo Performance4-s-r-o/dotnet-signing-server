@@ -852,6 +852,26 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
     }
 
     [DockerFact]
+    public async Task With_billing_through_the_service_a_user_without_a_local_customer_id_is_still_detached_and_named()
+    {
+        _backoffice.Modules.Billing = "On";
+        var a = await SeedAsync($"d3n{Guid.NewGuid():N}@example.com"); // never stored a Stripe customer locally
+
+        var result = await DeleteAsync(a.UserId);
+
+        Assert.Equal(AccountErasureStatus.Erased, result.Status);
+        Assert.Equal(1, _payments.Detached);
+        using var json = JsonDocument.Parse(Payload(Assert.Single(await ErasureItemsAsync(a.UserId))));
+        Assert.Equal("user:" + a.UserId.ToString("D"), json.RootElement.GetProperty("customer_ref").GetString());
+
+        // A card the service still holds stops the erasure even without a local link.
+        var c = await SeedAsync($"d3m{Guid.NewGuid():N}@example.com");
+        _payments.CardLeft = true;
+        Assert.Equal(AccountErasureStatus.BillingFailed, (await DeleteAsync(c.UserId)).Status);
+        await AssertUntouchedAsync(c);
+    }
+
+    [DockerFact]
     public async Task A_card_failure_erases_nothing_and_a_retry_erases()
     {
         _backoffice.Modules.Billing = "On";

@@ -246,13 +246,13 @@ public sealed class AccountErasureService
     /// customer, so this must succeed first; every step can be repeated after a partial failure).
     /// The saved cards go through the billing API and are checked gone, so no off-session charge
     /// (auto-recharge) can follow; the billing service scrubs the customer itself
-    /// (<c>customer_ref</c> of the erasure request). Users without a payer have nothing there.
+    /// (<c>customer_ref</c> of the erasure request). A user the service does not know answers 404, which is nothing to remove.
     /// </summary>
     private async Task<bool> StopRecurringChargesAsync(
         IServiceProvider services, User user, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(user.StripeCustomerId)) return true;
-
+        // No test on the local Stripe customer id: the service knows the payer by customer_ref
+        // (the user's id), whether or not this product ever stored a link.
         var payments = services.GetRequiredService<IPaymentGateway>();
         try
         {
@@ -433,7 +433,7 @@ public sealed class AccountErasureService
             {
                 SubjectRef = subjectRef,
                 Emails = email is null ? null : [email],
-                CustomerRef = backoffice.ModeFor(BackofficeModule.Billing) == BackofficeMode.On && stripeCustomerId != null
+                CustomerRef = backoffice.ModeFor(BackofficeModule.Billing) == BackofficeMode.On
                     ? BillingCustomerRef.For(userId)
                     : null,
                 Origin = origin,
