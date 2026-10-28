@@ -163,6 +163,11 @@ public class AutoRechargeService : IAutoRechargeService
                 _failedAttempts[user.Id] = DateTimeOffset.UtcNow;
                 _logger.LogWarning("Auto-recharge failed for user {UserId}: {Outcome} ({Reason})", user.Id, charge.Outcome, charge.Reason);
                 await SendRechargeFailedEmailAsync(user, FailureReason(charge));
+                if (charge is { Outcome: ServiceChargeOutcome.Refused, Reason: "no_payment_method" })
+                {
+                    // Nothing to charge until a card is saved again: stop, so the e-mail is not sent at every debit.
+                    await DisableAsync(user);
+                }
                 return new AutoRechargeResult { Success = false, Error = $"Payment {charge.Outcome}: {charge.Reason}" };
         }
     }

@@ -44,6 +44,8 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
     {
         var user = TestHelpers.CreateTestUser($"{Guid.NewGuid():N}@example.com");
         user.CreditsRemaining = 0;
+        user.AutoRechargeEnabled = true; // the charge step refuses a user whose auto-recharge is off
+        user.AutoRechargeQuantity = 300;
         await using var db = _pg.CreateContext();
         db.Users.Add(user);
         await db.SaveChangesAsync();
@@ -320,11 +322,13 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
         Assert.Null(await ClaimRowAsync(user.Id));
     }
 
+    private readonly DotNetSigningServer.Tests.Services.Pricing.FakeTemplatedEmailSender _email_ForRecharge = new();
+
     private AutoRechargeService RechargeService(ApplicationDbContext db)
     {
         var pricing = new Mock<ICreditPricingProvider>();
         pricing.Setup(p => p.GetPack(300)).Returns(Pack300);
-        return new AutoRechargeService(db, new DotNetSigningServer.Tests.Services.Pricing.FakeTemplatedEmailSender(),
+        return new AutoRechargeService(db, _email_ForRecharge,
             NullLogger<AutoRechargeService>.Instance, Microsoft.Extensions.Options.Options.Create(new DotNetSigningServer.Options.AppOptions { FqdnServerName = "https://app.example.com" }),
             pricing.Object, Recharge(db));
     }
@@ -434,8 +438,44 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
 
         await using (var db = _pg.CreateContext()) await Handler(db).HandleAsync(evt, default);
 
-        Assert.Single(_email.Sent);
+        Assert.Empty(_email.Sent); // the charge itself tells an auto-recharge failure; no second e-mail
+        await using (var check = _pg.CreateContext()) Assert.Equal("failed", (await check.Payments.AsNoTracking().SingleAsync(p => p.UserId == user.Id)).Status);
         Assert.Null(await ClaimRowAsync(user.Id));
         Assert.Equal(0, await CreditsAsync(user.Id));
+    }
+
+    [DockerFact]
+    public async Task APaidChargeWithoutCredits_KeepsAnotherReplicaFromChargingTheCardAgain()
+    {
+        var user = await RechargingUserAsync();
+        var staleCopy = new User { Id = user.Id, Email = user.Email, AutoRechargeEnabled = true, AutoRechargeQuantity = 300 }; // what a second replica loaded earlier
+        _service.Responses.Enqueue(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"status":"succeeded","amount":1500,"currency":"eur"}""", Encoding.UTF8, "application/json"),
+        }));
+
+        ServiceCharge? first, second;
+        await using (var db = _pg.CreateContext()) first = await Recharge(db).ChargeAsync(user, Pack300);
+        await using (var db = _pg.CreateContext()) second = await Recharge(db).ChargeAsync(staleCopy, Pack300);
+
+        Assert.False(first!.CreditsGranted);
+        Assert.Null(second); // switched off in the database before the claim was released
+        Assert.Single(_service.Requests);
+        Assert.Null(await ClaimRowAsync(user.Id));
+    }
+
+    [DockerFact]
+    public async Task NoSavedCard_StopsAutoRecharge_SoTheFailureMailIsNotSentAtEveryDebit()
+    {
+        var user = await RechargingUserAsync();
+        _service.EnqueueProblem(HttpStatusCode.Conflict, "no_payment_method");
+
+        AutoRechargeResult result;
+        await using (var db = _pg.CreateContext()) result = await RechargeService(db).TryAutoRechargeAsync(user.Id);
+
+        Assert.False(result.Success);
+        Assert.Equal(DotNetSigningServer.Services.Email.EmailTemplateId.AutoRechargeFailed, Assert.Single(_email_ForRecharge.Sent).Template);
+        await using var check = _pg.CreateContext();
+        Assert.False((await check.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id)).AutoRechargeEnabled);
     }
 }

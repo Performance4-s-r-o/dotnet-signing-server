@@ -31,10 +31,17 @@ public sealed class BackofficeAutoRecharge
 
     /// <summary>
     /// Charges <paramref name="pack"/> to the user's saved card. Null when another charge of the
-    /// user is still running (nothing was sent).
+    /// user is still running or auto-recharge was switched off meanwhile (nothing was sent).
     /// </summary>
     public async Task<ServiceCharge?> ChargeAsync(User user, CreditPack pack, CancellationToken cancellationToken = default)
     {
+        // Another replica may have stopped auto-recharge since this user was loaded (a paid charge
+        // that granted nothing does): the database decides, not the caller's copy.
+        if (!await _db.Users.AsNoTracking().AnyAsync(u => u.Id == user.Id && u.AutoRechargeEnabled, cancellationToken))
+        {
+            _logger.LogInformation("Auto-recharge of user {UserId}: switched off meanwhile; nothing charged", user.Id);
+            return null;
+        }
         var (decision, key) = await AcquireAsync(user.Id, cancellationToken);
         if (decision == ClaimDecision.Busy) return null;
         if (decision == ClaimDecision.Expired)
@@ -61,6 +68,17 @@ public sealed class BackofficeAutoRecharge
         if (charge.Outcome == ServiceChargeOutcome.Succeeded)
         {
             charge = charge with { CreditsGranted = await GrantAsync(user, pack, charge, cancellationToken) };
+            if (!charge.CreditsGranted)
+            {
+                // Paid, nothing granted: stop auto-recharge in the database before the claim goes,
+                // or another replica would get a new claim in between and charge the card again.
+                await _db.Users.Where(u => u.Id == user.Id).ExecuteUpdateAsync(s => s
+                    .SetProperty(u => u.AutoRechargeEnabled, false)
+                    .SetProperty(u => u.AutoRechargeQuantity, 0)
+                    .SetProperty(u => u.AutoRechargePricePer100, 0m)
+                    .SetProperty(u => u.AutoRechargeCancelToken, (string?)null)
+                    .SetProperty(u => u.PriceChangeNotifiedAt, (DateTimeOffset?)null), cancellationToken);
+            }
         }
         await SettleClaimAsync(user.Id, key!, charge.Outcome, cancellationToken);
         return charge;
