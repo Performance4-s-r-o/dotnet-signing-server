@@ -171,7 +171,7 @@
   <data name="SealCertificateRequired" xml:space="preserve"><value>The server has no seal certificate of its own. Supply the certificate yourself (presign/sign with your key, or sign-pfx).</value></data>
   <data name="SealNotPermitted" xml:space="preserve"><value>Sealing is not enabled for this account.</value></data>
   <data name="SealAllowed" xml:space="preserve"><value>Sealing</value></data>
-  <data name="SealAllowedDescription" xml:space="preserve"><value>Lets this account call /api/seal, which signs with our own certificate. Off by default — a document sealed here verifies as ours in any reader.</value></data>
+  <data name="SealAllowedDescription" xml:space="preserve"><value>Lets this account reach /api/seal. The server has no certificate of its own, so the endpoint only answers 422 SEAL_CERTIFICATE_REQUIRED; seal with your own certificate via presign/sign or sign-pfx. Off by default.</value></data>
   <data name="EnableSealAllowed" xml:space="preserve"><value>Enable sealing</value></data>
   <data name="DisableSealAllowed" xml:space="preserve"><value>Disable sealing</value></data>
   <data name="ConfirmEnableSealAllowed" xml:space="preserve"><value>Allow this account to sign with our certificate?</value></data>

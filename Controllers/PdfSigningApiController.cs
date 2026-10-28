@@ -634,10 +634,6 @@ namespace DotNetSigningServer.Controllers
             var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
 
-            // A caller without the grant learns nothing about the certificate —
-            // not that one exists, not whose it is. Reporting it would hand a
-            // would-be forger the subject to aim at, and the answer is "no" for
-            // them either way.
             // No platform seal exists any more; the field stays for existing clients.
             return Ok(new ServerCapabilities { Seal = new SealCapability { Enabled = false } });
         }

@@ -8,6 +8,7 @@ namespace DotNetSigningServer.Middleware;
 
 public class BodySizeLimitMiddleware
 {
+    private const long SealBodyLimitBytes = 1024;
     private readonly RequestDelegate _next;
     private readonly LimitsOptions _options;
     private readonly ILogger<BodySizeLimitMiddleware> _logger;
@@ -33,7 +34,10 @@ public class BodySizeLimitMiddleware
         var path = context.Request.Path;
         var limit = path.StartsWithSegments("/api/webhooks", StringComparison.OrdinalIgnoreCase)
             ? Math.Min(_options.RequestBodyLimitBytes, _rate.WebhookBodyLimitBytes)
-            : path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
+            // /api/seal only answers 422 (#122) and never reads a body.
+            : path.StartsWithSegments("/api/seal", StringComparison.OrdinalIgnoreCase)
+                ? Math.Min(_options.RequestBodyLimitBytes, SealBodyLimitBytes)
+                : path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
                 ? _options.RequestBodyLimitBytes
                 : Math.Min(_options.RequestBodyLimitBytes, _rate.FormBodyLimitBytes);
         var contentLength = context.Request.ContentLength;

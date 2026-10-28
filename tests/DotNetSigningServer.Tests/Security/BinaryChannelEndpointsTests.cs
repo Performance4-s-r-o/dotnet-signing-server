@@ -599,16 +599,32 @@ public class BinaryChannelEndpointsTests
     }
 
     [Fact]
-    public async Task Seal_without_grant_is_refused_before_anything_else()
+    public async Task Capabilities_never_report_a_seal_even_for_an_account_with_the_grant()
     {
         var attempt = new Attempt();
         var controller = attempt.Signing();
+
+        var result = Assert.IsType<OkObjectResult>(await controller.Capabilities());
+
+        var seal = Assert.IsType<ServerCapabilities>(result.Value).Seal;
+        Assert.False(seal.Enabled);
+        Assert.Null(seal.Subject);
+        Assert.Null(seal.Error);
+    }
+
+    [Fact]
+    public async Task Seal_without_grant_is_refused_before_anything_else()
+    {
+        var attempt = new Attempt();
+        var controller = attempt.Signing(Multipart(new { signRect = Rect }, Pdf()));
+        var body = controller.Request.Body;
         attempt.RevokeSeal();
 
         var result = Describe(await controller.ApplySeal());
 
         Assert.Equal(403, result.Status);
         Assert.Equal("SEAL_NOT_PERMITTED", result.Code);
+        Assert.Equal(0, body.Position);
     }
 
     [Fact]
@@ -616,10 +632,12 @@ public class BinaryChannelEndpointsTests
     {
         // No platform seal (#122): never a silent fallback to another key, never a charge.
         var attempt = new Attempt();
-        var controller = attempt.Signing();
+        var controller = attempt.Signing(Multipart(new { signRect = Rect }, Pdf()));
+        var body = controller.Request.Body;
 
         var result = Describe(await controller.ApplySeal());
 
+        Assert.Equal(0, body.Position);
         Assert.Equal(422, result.Status);
         Assert.Equal("SEAL_CERTIFICATE_REQUIRED", result.Code);
         Assert.Empty(attempt.Spy.BinaryInputs);

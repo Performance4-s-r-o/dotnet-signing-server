@@ -171,7 +171,7 @@
   <data name="SealCertificateRequired" xml:space="preserve"><value>El servidor no tiene certificado de sello propio. Aporte usted el certificado (presign/sign con su clave o sign-pfx).</value></data>
   <data name="SealNotPermitted" xml:space="preserve"><value>El sellado no está habilitado para esta cuenta.</value></data>
   <data name="SealAllowed" xml:space="preserve"><value>Sellado</value></data>
-  <data name="SealAllowedDescription" xml:space="preserve"><value>Permite a esta cuenta llamar a /api/seal, que firma con nuestro propio certificado. Desactivado por defecto: un documento sellado así se verifica como nuestro en cualquier lector.</value></data>
+  <data name="SealAllowedDescription" xml:space="preserve"><value>Desbloquea /api/seal para esta cuenta. El servidor no tiene certificado propio, por lo que el endpoint solo responde 422 SEAL_CERTIFICATE_REQUIRED; selle con su propio certificado mediante presign/sign o sign-pfx. Desactivado por defecto.</value></data>
   <data name="EnableSealAllowed" xml:space="preserve"><value>Habilitar sellado</value></data>
   <data name="DisableSealAllowed" xml:space="preserve"><value>Deshabilitar sellado</value></data>
   <data name="ConfirmEnableSealAllowed" xml:space="preserve"><value>¿Permitir que esta cuenta firme con nuestro certificado?</value></data>

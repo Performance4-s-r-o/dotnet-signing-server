@@ -171,7 +171,7 @@
   <data name="SealCertificateRequired" xml:space="preserve"><value>Server nemá vlastní pečetní certifikát. Certifikát dodejte sami (presign/sign s vaším klíčem, nebo sign-pfx).</value></data>
   <data name="SealNotPermitted" xml:space="preserve"><value>Pečetění není pro tento účet povoleno.</value></data>
   <data name="SealAllowed" xml:space="preserve"><value>Pečetění</value></data>
-  <data name="SealAllowedDescription" xml:space="preserve"><value>Povolí tomuto účtu volat /api/seal, které podepisuje naším vlastním certifikátem. Ve výchozím stavu vypnuto — takto zapečetěný dokument se v každé čtečce ověří jako náš.</value></data>
+  <data name="SealAllowedDescription" xml:space="preserve"><value>Odemkne tomuto účtu /api/seal. Server vlastní certifikát nemá, endpoint proto jen odpoví 422 SEAL_CERTIFICATE_REQUIRED; pečeťte vlastním certifikátem přes presign/sign nebo sign-pfx. Ve výchozím stavu vypnuto.</value></data>
   <data name="EnableSealAllowed" xml:space="preserve"><value>Povolit pečetění</value></data>
   <data name="DisableSealAllowed" xml:space="preserve"><value>Zakázat pečetění</value></data>
   <data name="ConfirmEnableSealAllowed" xml:space="preserve"><value>Povolit tomuto účtu podepisovat naším certifikátem?</value></data>

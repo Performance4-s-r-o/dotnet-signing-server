@@ -140,6 +140,11 @@ public class MultiSignatureAccumulationTests : IDisposable
         using var reader = new PdfReader(ms);
         using var doc = new PdfDocument(reader);
         Assert.Equal(2, doc.GetNumberOfPages());
+        // The newest signer's URL must be among the document's verification entries.
+        var info = doc.GetDocumentInfo();
+        var urls = new[] { "P4PDF-Verification-URL", "P4PDF-Verification-URL-2", "P4PDF-Verification-URL-3" }
+            .Select(k => info.GetMoreInfo(k)).ToArray();
+        Assert.Contains("https://example.test/verify/round-3", urls);
     }
 
     /// <summary>

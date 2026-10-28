@@ -171,7 +171,7 @@
   <data name="SealCertificateRequired" xml:space="preserve"><value>Der Server hat kein eigenes Siegelzertifikat. Stellen Sie das Zertifikat selbst bereit (presign/sign mit Ihrem Schlüssel oder sign-pfx).</value></data>
   <data name="SealNotPermitted" xml:space="preserve"><value>Das Siegeln ist für dieses Konto nicht freigeschaltet.</value></data>
   <data name="SealAllowed" xml:space="preserve"><value>Siegeln</value></data>
-  <data name="SealAllowedDescription" xml:space="preserve"><value>Erlaubt diesem Konto den Aufruf von /api/seal, das mit unserem eigenen Zertifikat signiert. Standardmäßig aus — ein so gesiegeltes Dokument gilt in jedem Reader als unseres.</value></data>
+  <data name="SealAllowedDescription" xml:space="preserve"><value>Schaltet /api/seal für dieses Konto frei. Der Server hat kein eigenes Zertifikat, der Endpunkt antwortet daher nur mit 422 SEAL_CERTIFICATE_REQUIRED; siegeln Sie mit Ihrem eigenen Zertifikat über presign/sign oder sign-pfx. Standardmäßig aus.</value></data>
   <data name="EnableSealAllowed" xml:space="preserve"><value>Siegeln aktivieren</value></data>
   <data name="DisableSealAllowed" xml:space="preserve"><value>Siegeln deaktivieren</value></data>
   <data name="ConfirmEnableSealAllowed" xml:space="preserve"><value>Diesem Konto das Signieren mit unserem Zertifikat erlauben?</value></data>

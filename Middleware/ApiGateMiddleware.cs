@@ -35,7 +35,7 @@ public class ApiGateMiddleware
     private static readonly (string Path, string Feature)[] Heavy =
     {
         ("/api/presign", "sign"), ("/api/sign", "sign"), ("/api/sign-pfx", "sign"),
-        ("/api/timestamp", "sign"), ("/api/visual-sign", "sign"), ("/api/seal", "sign"),
+        ("/api/timestamp", "sign"), ("/api/visual-sign", "sign"),
         ("/api/attachment", "sign"), ("/api/convert/pdfa", "pdfa"), ("/api/fill-pdf", "fill"),
         ("/api/find-codes", "find-codes"), ("/api/extend-signature", "extend-signature"),
         ("/api/ai/", "ai"),
