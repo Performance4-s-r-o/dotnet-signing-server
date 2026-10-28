@@ -16,19 +16,15 @@ namespace DotNetSigningServer.Services.Backoffice.Handlers;
 /// still settling, <c>billing.payment.*</c> of an auto-recharge ends its claim, and
 /// <c>billing.payment_method.detached</c> switches auto-recharge off when no card is left.
 ///
-/// Shadow: payments still go to Stripe directly; the events are only logged and compared
-/// with what the direct path recorded.
 /// </summary>
 public sealed class BillingEventsHandler : IBackofficeEventHandler
 {
-    private readonly BackofficeMode _mode;
     private readonly ApplicationDbContext _db;
     private readonly IServiceProvider _services;
     private readonly ILogger<BillingEventsHandler> _logger;
 
-    public BillingEventsHandler(BackofficeMode mode, ApplicationDbContext db, IServiceProvider services, ILogger<BillingEventsHandler> logger)
+    public BillingEventsHandler(ApplicationDbContext db, IServiceProvider services, ILogger<BillingEventsHandler> logger)
     {
-        _mode = mode;
         _db = db;
         _services = services;
         _logger = logger;
@@ -57,14 +53,6 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
         if (purchase is null)
         {
             _logger.LogInformation("[billing] {EventType} {EventId}: nothing to grant ({Reason})", evt.Type, evt.Id, reason);
-            return;
-        }
-
-        if (_mode != BackofficeMode.On)
-        {
-            var granted = await CreditGrants.IsGrantedAsync(_db, purchase.SessionId, cancellationToken);
-            _logger.LogInformation("[billing] Shadow {EventType} {EventId}: {Documents} credits for user {UserId}; granted locally: {Granted}",
-                evt.Type, evt.Id, purchase.Documents, purchase.UserId, granted);
             return;
         }
 
@@ -117,14 +105,6 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
         }
 
         var key = CreditGrants.AutoRechargeKey(payment.PaymentIntentId);
-        if (_mode != BackofficeMode.On)
-        {
-            var granted = await CreditGrants.IsGrantedAsync(_db, key, cancellationToken);
-            _logger.LogInformation("[billing] Shadow {EventType} {EventId}: auto-recharge of user {UserId}; granted locally: {Granted}",
-                evt.Type, evt.Id, payment.UserId, granted);
-            return;
-        }
-
         if (succeeded && await _db.Users.AnyAsync(u => u.Id == payment.UserId && u.ErasedAt != null, cancellationToken))
         {
             // Charged after the account was erased (#217): nothing is granted to a tombstone.
@@ -164,12 +144,6 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
     private async Task PaymentMethodDetachedAsync(BackofficeEvent evt, CancellationToken cancellationToken)
     {
         if (BillingEventData.DetachedFrom(evt.Data) is not { } userId) return;
-        if (_mode != BackofficeMode.On)
-        {
-            _logger.LogInformation("[billing] Shadow {EventType} {EventId}: card removed for user {UserId}", evt.Type, evt.Id, userId);
-            return;
-        }
-
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
         if (user is null || !user.AutoRechargeEnabled) return;
 

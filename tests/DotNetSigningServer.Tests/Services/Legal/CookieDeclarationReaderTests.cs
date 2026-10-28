@@ -251,8 +251,7 @@ public class CookieDeclarationReaderTests
 
     [Theory]
     [InlineData("Off")]
-    [InlineData("Shadow")]
-    public async Task OffAndShadow_HaveNoDeclaration_AndNoHandler(string mode)
+    public async Task Off_HasNoDeclaration_AndNoHandler(string mode)
     {
         using var host = new LegalDocsTestHost(mode);
 

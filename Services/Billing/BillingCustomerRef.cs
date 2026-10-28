@@ -37,9 +37,9 @@ public static class BillingCustomerRef
     /// <see cref="StripeCustomerBinding"/>'s question, it needs the database.
     /// </summary>
     public static bool CheckoutBelongsTo(
-        CheckoutSessionInfo session, Guid userId, string? userStripeCustomerId, DateTimeOffset? productTagGraceUntil = null)
+        CheckoutSessionInfo session, Guid userId, string? userStripeCustomerId)
     {
-        if (!NamesUser(session, userId) || !(CarriesProductMarker(session) || InProductTagGrace(session, productTagGraceUntil)))
+        if (!NamesUser(session, userId) || !CarriesProductMarker(session))
         {
             return false;
         }
@@ -49,15 +49,6 @@ public static class BillingCustomerRef
         }
         return StripeCustomerMatches(userStripeCustomerId, session.StripeCustomerId);
     }
-
-    /// <summary>
-    /// Transition for sessions started before the marker existed (#80): Stripe keeps a session
-    /// open for up to 24 h, so one paid after the deployment has none. It passes only when it
-    /// was created before <c>Billing:ProductTagGraceUntil</c>; every other check (userId,
-    /// customer) still applies. Unset = strict, and a session of unknown age never passes.
-    /// </summary>
-    public static bool InProductTagGrace(CheckoutSessionInfo session, DateTimeOffset? graceUntil) =>
-        graceUntil is { } until && session.Created is { } created && created < until;
 
     /// <summary>Whether the session was started by this product (<see cref="ProductMarker"/>).</summary>
     public static bool CarriesProductMarker(CheckoutSessionInfo session) =>

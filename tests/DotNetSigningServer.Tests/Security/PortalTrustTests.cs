@@ -171,39 +171,6 @@ public class PortalTrustTests : IDisposable
         Assert.False(PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086"), ("TRUSTED_CALLER_USER_IDS", PortalUserId.ToString()))).TrustedOnEveryPort);
     }
 
-    [Fact]
-    public void Legacy_name_is_still_read_and_flagged()
-    {
-        var options = PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086"), ("PORTAL_USER_IDS", PortalUserId.ToString())));
-        Assert.Equal(new HashSet<Guid> { PortalUserId }, options.TrustedCallerUserIds);
-        Assert.True(options.UsesLegacyVariable);
-    }
-
-    [Fact]
-    public void New_name_alone_is_not_flagged_as_legacy()
-    {
-        var options = PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086"), ("TRUSTED_CALLER_USER_IDS", PortalUserId.ToString())));
-        Assert.False(options.UsesLegacyVariable);
-    }
-
-    [Fact]
-    public void Both_names_with_the_same_ids_are_accepted()
-    {
-        var id = PortalUserId.ToString();
-        var options = PortalTrustOptions.From(Config(
-            ("INTERNAL_API_PORT", "8086"), ("TRUSTED_CALLER_USER_IDS", id), ("PORTAL_USER_IDS", id)));
-        Assert.Equal(new HashSet<Guid> { PortalUserId }, options.TrustedCallerUserIds);
-    }
-
-    [Fact]
-    public void Both_names_with_different_ids_fail_startup()
-    {
-        Assert.Throws<InvalidOperationException>(() => PortalTrustOptions.From(Config(
-            ("INTERNAL_API_PORT", "8086"),
-            ("TRUSTED_CALLER_USER_IDS", PortalUserId.ToString()),
-            ("PORTAL_USER_IDS", Guid.NewGuid().ToString()))));
-    }
-
     [Theory]
     [InlineData("http://+:8085", "http://+:8085;http://+:8086")]
     [InlineData("http://+:8085;http://+:8086", "http://+:8085;http://+:8086")]
@@ -548,12 +515,11 @@ public class PortalTrustTests : IDisposable
         return context;
     }
 
-    [Theory]
-    [InlineData(PdfSigningApiController.AttachmentDebitBypassHeader)]
-    [InlineData(PdfSigningApiController.LegacyAttachmentDebitBypassHeader)]
-    public void Bypass_is_honoured_for_the_portal_under_both_header_names(string header)
+    [Fact]
+    public void Bypass_is_honoured_for_the_portal()
     {
-        Assert.True(PdfSigningApiController.IsAttachmentDebitBypassAuthorized(BypassContext(true, header, BypassKey), BypassKey));
+        Assert.True(PdfSigningApiController.IsAttachmentDebitBypassAuthorized(
+            BypassContext(true, PdfSigningApiController.AttachmentDebitBypassHeader, BypassKey), BypassKey));
     }
 
     [Fact]

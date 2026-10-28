@@ -134,15 +134,6 @@ public sealed class ConsentStatusCache : IDocumentChangeListener
             _cache.Remove(MetaKey);
         }
     }
-
-    /// <summary>True once per user and TTL: Shadow mode logs a would-be redirect without flooding the log.</summary>
-    public bool ShouldLogShadow(Guid userId)
-    {
-        var key = $"consents:shadow-logged:{userId:N}";
-        if (_cache.TryGetValue(key, out _)) return false;
-        _cache.Set(key, true, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = Ttl, Size = 1 });
-        return true;
-    }
 }
 
 /// <inheritdoc />

@@ -608,8 +608,6 @@ public class BinaryChannelEndpointsTests
 
         var seal = Assert.IsType<ServerCapabilities>(result.Value).Seal;
         Assert.False(seal.Enabled);
-        Assert.Null(seal.Subject);
-        Assert.Null(seal.Error);
     }
 
     [Fact]

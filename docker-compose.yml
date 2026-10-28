@@ -51,11 +51,8 @@ services:
       # Service account id(s) of the trusted caller, comma-separated. Required while
       # INTERNAL_API_PORT is set (startup fails without it). Only this account's token, on the
       # internal port, may skip the attachment debit and have its X-P4-Tenant / X-Request-Id
-      # believed. PORTAL_USER_IDS is the old name: still read, with a warning.
+      # believed.
       - TRUSTED_CALLER_USER_IDS=${TRUSTED_CALLER_USER_IDS:-{{project.DOTNET_TRUSTED_CALLER_USER_IDS}}}
-      # Old name, passed through so a deployment that still sets only it keeps working (with a
-      # warning at start). Remove once nobody sets it.
-      - PORTAL_USER_IDS=${PORTAL_USER_IDS:-{{project.DOTNET_PORTAL_USER_IDS}}}
       # #106, two lists. TRUSTED_CF_PROXIES = address / CIDR of cloudflared: CF-Connecting-IP is the
       # client only when the request came from it (directly, or through a TRUSTED_PROXIES proxy).
       # Production refuses to start while empty (every visitor would share the tunnel's IP limit);
@@ -89,9 +86,6 @@ services:
       # Sign-in and 2FA attempts per account whatever the IP (default 30 per 15 min).
       - AUTH_ACCOUNT_MAX_ATTEMPTS=${AUTH_ACCOUNT_MAX_ATTEMPTS:-{{project.DOTNET_AUTH_ACCOUNT_MAX_ATTEMPTS}}}
       - AUTH_ACCOUNT_WINDOW_MINUTES=${AUTH_ACCOUNT_WINDOW_MINUTES:-{{project.DOTNET_AUTH_ACCOUNT_WINDOW_MINUTES}}}
-      # Checkout sessions created before this UTC instant are accepted without the product
-      # marker (those open at the deploy). Empty = strict. Remove a day after the deploy.
-      - BILLING_PRODUCT_TAG_GRACE_UNTIL=${BILLING_PRODUCT_TAG_GRACE_UNTIL:-{{project.DOTNET_BILLING_PRODUCT_TAG_GRACE_UNTIL}}}
       # #69/#94: cap on concurrent operations of the whole server (G). Empty or 0 = off. A request
       # waits GLOBAL_CONCURRENCY_WAIT_MS (default 2000) for a slot of G, H or A, then 503.
       # The start hypotheses for this machine are logged at startup and shown on /internal/concurrency.
@@ -175,12 +169,12 @@ services:
       - OsTicket__Topic__account=${OSTICKET_TOPIC_ACCOUNT:-4}
       - OsTicket__Topic__other=${OSTICKET_TOPIC_OTHER:-5}
       # P4 Backoffice integration. Everything Off by default; PrivateServer forces
-      # Off. Shadow/On needs BaseUrl + a p4sk_ key or startup fails. Empty module
+      # Off. On needs BaseUrl + a p4sk_ key or startup fails. Empty module
       # overrides inherit Mode.
       - P4Backoffice__Mode=${P4_BACKOFFICE_MODE:-Off}
       - P4Backoffice__BaseUrl=${P4_BACKOFFICE_URL:-}
       - P4Backoffice__SecretKey=${P4_BACKOFFICE_SECRET_KEY:-}
-      # live | test; the key kind must match it. Required once a module is Shadow/On.
+      # live | test; the key kind must match it. Required once a module is On.
       - P4Backoffice__Environment=${P4_BACKOFFICE_ENV:-}
       - P4Backoffice__Webhook__Secret=${P4_BACKOFFICE_WEBHOOK_SECRET:-}
       - P4Backoffice__Webhook__PreviousSecret=${P4_BACKOFFICE_WEBHOOK_PREVIOUS_SECRET:-}

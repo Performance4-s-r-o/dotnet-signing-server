@@ -34,7 +34,7 @@ public class BackofficeOptionsValidatorTests
         { "Off needs no key", Options(mode: "Off"), null },
         { "Off ignores a bad URL", Options(mode: "off", baseUrl: "not a url"), null },
         { "On with url and key", Options(mode: "On", baseUrl: Url, secretKey: Key), null },
-        { "mode is case-insensitive", Options(mode: "sHaDoW", baseUrl: Url, secretKey: Key), null },
+        { "mode is case-insensitive", Options(mode: "oN", baseUrl: Url, secretKey: Key), null },
         { "live key", Options(mode: "On", baseUrl: Url, secretKey: "p4sk_live_x", environment: "live"), null },
         { "http on localhost", Options(mode: "On", baseUrl: "http://localhost:3000", secretKey: Key), null },
         { "http on 127.0.0.1", Options(mode: "On", baseUrl: "http://127.0.0.1:9", secretKey: Key), null },
@@ -49,7 +49,7 @@ public class BackofficeOptionsValidatorTests
         { "numeric mode", Options(mode: "2"), "P4Backoffice__Mode" },
         { "unknown module mode", Options(pricing: "yes"), "P4Backoffice__Modules__Pricing" },
         { "On without key", Options(mode: "On", baseUrl: Url), "P4Backoffice__SecretKey" },
-        { "Shadow without key", Options(mode: "Shadow", baseUrl: Url), "P4Backoffice__SecretKey" },
+        { "Shadow is no longer a mode", Options(mode: "Shadow", baseUrl: Url, secretKey: Key), "P4Backoffice__Mode" },
         { "module On without key", Options(pricing: "On", baseUrl: Url), "P4Backoffice__SecretKey" },
         { "key without prefix", Options(mode: "On", baseUrl: Url, secretKey: "sk_live_x"), "must start with p4sk_" },
         { "On without url", Options(mode: "On", secretKey: Key), "P4Backoffice__BaseUrl" },
@@ -162,14 +162,11 @@ public class BackofficeOptionsValidatorTests
     [InlineData("  ")]
     public void Environment_IsRequiredOnceAModuleIsSwitchedOn(string? environment)
     {
-        foreach (var mode in new[] { "Shadow", "On" })
-        {
-            var options = Options(mode: mode, baseUrl: Url, secretKey: "p4sk_test_x", environment: environment);
+        var options = Options(mode: "On", baseUrl: Url, secretKey: "p4sk_test_x", environment: environment);
 
-            var single = Assert.Single(BackofficeOptionsValidator.Validate(options));
-            Assert.Contains("P4_BACKOFFICE_ENV", single);
-            Assert.Contains("required", single);
-        }
+        var single = Assert.Single(BackofficeOptionsValidator.Validate(options));
+        Assert.Contains("P4_BACKOFFICE_ENV", single);
+        Assert.Contains("required", single);
     }
 
     [Fact]
@@ -236,11 +233,23 @@ public class P4BackofficeProductOptionsTests
     [Fact]
     public void ModuleOverride_BeatsGlobalMode()
     {
-        var options = new P4BackofficeProductOptions { Mode = "Shadow", Modules = { Pricing = "Off", Email = "on" } };
+        var options = new P4BackofficeProductOptions { Mode = "On", Modules = { Pricing = "Off", Email = "on" } };
 
         Assert.Equal(BackofficeMode.Off, options.ModeFor(BackofficeModule.Pricing));
         Assert.Equal(BackofficeMode.On, options.ModeFor(BackofficeModule.Email));
-        Assert.Equal(BackofficeMode.Shadow, options.ModeFor(BackofficeModule.Docs));
+        Assert.Equal(BackofficeMode.On, options.ModeFor(BackofficeModule.Docs));
+    }
+
+    [Fact]
+    public void UnknownMode_KeepsTheModuleOff_AndIsOnlyRejectedWhenAsked()
+    {
+        var options = new P4BackofficeProductOptions { Mode = "Shadow", Modules = { Email = "On" } };
+
+        Assert.Equal(BackofficeMode.Off, options.ModeFor(BackofficeModule.Docs));
+        Assert.Equal(BackofficeMode.On, options.ModeFor(BackofficeModule.Email));
+        Assert.Equal([("P4Backoffice:Mode (environment variable P4Backoffice__Mode)", "Shadow")], BackofficeOptionsValidator.InvalidModes(options));
+        Assert.Contains(BackofficeOptionsValidator.Validate(options, rejectInvalidModes: true), p => p.Contains("P4Backoffice__Mode"));
+        Assert.DoesNotContain(BackofficeOptionsValidator.Validate(options, rejectInvalidModes: false), p => p.Contains("P4Backoffice__Mode"));
     }
 
     [Fact]

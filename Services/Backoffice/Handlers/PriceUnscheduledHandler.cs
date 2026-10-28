@@ -6,22 +6,20 @@ using Microsoft.EntityFrameworkCore;
 namespace DotNetSigningServer.Services.Backoffice.Handlers;
 
 /// <summary>
-/// <c>price.unscheduled</c>: an announced price change was taken back. On clears
+/// <c>price.unscheduled</c>: an announced price change was taken back. It clears
 /// <c>User.PriceChangeNotifiedVersion</c> of the users told about that version, so a new
-/// schedule of it notifies them again; Shadow only logs. No e-mail about the withdrawal yet
+/// schedule of it notifies them again. No e-mail about the withdrawal yet
 /// (there is no template for it).
 /// </summary>
 public sealed class PriceUnscheduledHandler : IBackofficeEventHandler
 {
     private readonly ApplicationDbContext _db;
     private readonly ILogger<PriceUnscheduledHandler> _logger;
-    private readonly BackofficeMode _mode;
 
-    public PriceUnscheduledHandler(ApplicationDbContext db, ILogger<PriceUnscheduledHandler> logger, BackofficeMode mode)
+    public PriceUnscheduledHandler(ApplicationDbContext db, ILogger<PriceUnscheduledHandler> logger)
     {
         _db = db;
         _logger = logger;
-        _mode = mode;
     }
 
     public IReadOnlyCollection<string> Types { get; } = [BackofficeEventTypes.PriceUnscheduled];
@@ -35,13 +33,6 @@ public sealed class PriceUnscheduledHandler : IBackofficeEventHandler
         }
 
         var users = await _db.Users.Where(u => u.PriceChangeNotifiedVersion == version).ToListAsync(cancellationToken);
-        if (_mode != BackofficeMode.On)
-        {
-            _logger.LogInformation("[pricing] shadow: price list v{Version} unscheduled ({EventId}); {Count} users were notified",
-                version, evt.Id, users.Count);
-            return;
-        }
-
         foreach (var user in users)
         {
             user.PriceChangeNotifiedVersion = null;

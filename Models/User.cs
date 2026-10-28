@@ -19,9 +19,8 @@ public class User
     public byte[] PasswordSalt { get; set; } = Array.Empty<byte>();
 
     /// <summary>
-    /// PBKDF2 iteration count this hash was produced with. 0 means the row predates
-    /// per-record counts and uses <see cref="Services.AuthService.LegacyIterations"/>;
-    /// such rows are rehashed on the owner's next successful sign-in.
+    /// PBKDF2 iteration count this hash was produced with. A hash made with an older
+    /// count is rehashed on the owner's next successful sign-in.
     /// </summary>
     public int PasswordIterations { get; set; }
 

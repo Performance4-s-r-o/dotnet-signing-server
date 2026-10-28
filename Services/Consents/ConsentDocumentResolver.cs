@@ -51,7 +51,7 @@ public sealed class ConsentDocumentResolver
     {
         _db = db;
         _documents = documents;
-        // Registered only when the Docs module is Shadow or On.
+        // Registered only when the Docs module is On.
         _cache = services.GetService<BackofficeDocumentsCache>();
         _options = services.GetService<IOptions<P4BackofficeProductOptions>>();
         _logger = logger;

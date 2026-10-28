@@ -82,18 +82,13 @@ public class AuthServiceTests
         Assert.False(_sut.VerifyPassword("password", hash, salt, iterations / 2));
     }
 
-    [Fact]
-    public void VerifyPassword_ZeroIterations_FallsBackToLegacyCount()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void VerifyPassword_NonPositiveIterations_ReturnsFalseWithoutThrowing(int iterations)
     {
-        // Rows created before per-record counts existed store 0 and must keep verifying.
-        var salt = new byte[16];
-        Random.Shared.NextBytes(salt);
-        var legacyHash = System.Security.Cryptography.Rfc2898DeriveBytes.Pbkdf2(
-            "legacy-password", salt, AuthService.LegacyIterations,
-            System.Security.Cryptography.HashAlgorithmName.SHA256, 32);
-
-        Assert.True(_sut.VerifyPassword("legacy-password", legacyHash, salt, 0));
-        Assert.False(_sut.VerifyPassword("other-password", legacyHash, salt, 0));
+        var (hash, salt, _) = _sut.HashPassword("password");
+        Assert.False(_sut.VerifyPassword("password", hash, salt, iterations));
     }
 
     [Fact]

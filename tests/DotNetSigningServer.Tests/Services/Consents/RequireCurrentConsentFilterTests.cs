@@ -66,7 +66,7 @@ public class RequireCurrentConsentFilterTests
             DisabledReason = BackofficeDisabledReason.None,
         });
         var filter = new RequireCurrentConsentFilter(
-            options, new ConsentStatusCache(new MemoryCache(new MemoryCacheOptions())), NullLogger<RequireCurrentConsentFilter>.Instance);
+            options, NullLogger<RequireCurrentConsentFilter>.Instance);
 
         var actionContext = new ActionContext(http, new RouteData(), new ActionDescriptor());
         var context = new ActionExecutingContext(actionContext, [], new Dictionary<string, object?>(), controller: new object());
@@ -112,16 +112,6 @@ public class RequireCurrentConsentFilterTests
 
         Assert.True(next);
         Assert.Null(result);
-    }
-
-    [Fact]
-    public async Task Shadow_OnlyLogs()
-    {
-        var (result, next, provider) = await RunAsync("Shadow", Outstanding);
-
-        Assert.True(next);
-        Assert.Null(result);
-        Assert.Equal(1, provider.Calls);
     }
 
     [Fact]

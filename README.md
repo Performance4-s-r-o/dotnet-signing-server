@@ -172,12 +172,11 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `USER_QUEUE_MAX_SECONDS` / `USER_QUEUE_LENGTH_FACTOR` | no (30 / 2) | A user's queue (#69): the longest wait whatever the account stores (0–600), and requests that may wait per slot of the user's limit (1–100); the next one gets `429` at once. `Retry-After` after a `429` is the queue wait, at least 5 and at most 60 s. The trusted caller is exempt from both. Out of range stops the server at start |
 | `CONTAINER_MEM_LIMIT` / `CONTAINER_CPUS` / `CONTAINER_STOP_GRACE_PERIOD` | no (0 / 0 / 135s) | Read by `docker-compose.yml` itself (#69): `mem_limit`, `cpus` and `stop_grace_period` of the server container. `0` = no limit. Tune to the machine; `cpus` also sets the CPU count the pools are sized from |
 | `INTERNAL_API_PORT` | no (empty) | Second listener for a trusted internal caller (#78), added next to `ASPNETCORE_URLS`; `docker-compose.yml` only `expose`s 8086, so with the shipped file use 8086. A token of a `TRUSTED_CALLER_USER_IDS` account is accepted on it only; on the public port it gets `401`. Empty = one listener, a plain API |
-| `TRUSTED_CALLER_USER_IDS` | when `INTERNAL_API_PORT` is set (startup fails otherwise) | Service account id(s) of the trusted caller, comma-separated. The old name `PORTAL_USER_IDS` is still read, with a warning at start; both set and different = startup fails. Only that account's server token, on the internal port, is a trusted caller: it alone may skip the attachment debit (`X-P4PDF-Attachment-Billing-Bypass`, the old `X-P4SPS-…` still read) and its `X-P4-Tenant` / `X-Request-Id` are logged and stored on presigns, operations and usage records. `/api/sign` (a replay included), any keyed replay and `/api/operations/{id}` refuse another tenant's presign or operation (`403 TENANT_MISMATCH`) |
+| `TRUSTED_CALLER_USER_IDS` | when `INTERNAL_API_PORT` is set (startup fails otherwise) | Service account id(s) of the trusted caller, comma-separated. Only that account's server token, on the internal port, is a trusted caller: it alone may skip the attachment debit (`X-P4PDF-Attachment-Billing-Bypass`) and its `X-P4-Tenant` / `X-Request-Id` are logged and stored on presigns, operations and usage records. `/api/sign` (a replay included), any keyed replay and `/api/operations/{id}` refuse another tenant's presign or operation (`403 TENANT_MISMATCH`) |
 | `TRUSTED_CF_PROXIES` | in production (startup fails when empty) | Address / CIDR of cloudflared (#106). `CF-Connecting-IP` is the client (rate limits, token IP whitelist, consent evidence) only for a request that came from cloudflared — it is the TCP peer, or a `TRUSTED_PROXIES` proxy is the peer and cloudflared the forwarded address. Empty = never believed; `none` = no tunnel in front, on purpose |
 | `TRUSTED_PROXIES` | no | Reverse proxy (Traefik/Caddy) addresses / CIDRs (#106): whose `X-Forwarded-For` is applied. An explicit `ForwardedHeaders__KnownProxies` / `__KnownNetworks` wins; empty = the private ranges and loopback (as before); `none` = nobody's. A reverse proxy alone never vouches for `CF-Connecting-IP` |
 | `DataProtection__CertificateBase64` / `__CertificatePassword` (compose: `DATA_PROTECTION_CERTIFICATE_BASE64` / `_PASSWORD`) | in production, unless the next row is `true` | Base64 PFX that encrypts the Data Protection key ring, which also protects stored TSA credentials |
 | `DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS` | no | `true` = a Production start without the certificate is allowed, with a warning (single host, protected volume). Otherwise Production refuses to start with an unencrypted key ring; with `true` it starts and prints a warning. Outside Production nothing is checked or printed. Back up the certificate: adding it does not encrypt keys already written in plaintext (they are replaced when the ring rotates, about every 90 days), and a lost certificate makes the ring unreadable |
-| `BILLING_PRODUCT_TAG_GRACE_UNTIL` | no (empty = strict) | UTC instant; checkout sessions created before it are accepted without the `product` metadata marker (sessions already open at the deploy). Every other ownership check still applies. Remove it a day after the deploy |
 | `Stripe__ApiKey` / `Stripe__WebhookSecret` | for billing | Payments; the webhook secret must start with `whsec_` in production |
 | `Resend__ApiKey` / `Resend__From` | for email | Transactional email |
 | `OsTicket__Url` / `OsTicket__ApiKey` | | Support form; without them (and with `Modules:Support` not `On`) the routes 404 and the nav entry hides |
@@ -185,7 +184,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `Sentry__Dsn` | | Error monitoring; disabled when empty |
 | `Loki__Url` | | Log shipping; disabled when empty |
 | `Limits__*` | | Request/PDF/image/attachment size caps |
-| `P4Backoffice__Mode` / `P4Backoffice__Modules__*` | | P4 Backoffice integration: `Off` (default), `Shadow` or `On`, globally or per module (`Docs`, `Consents`, `Email`, `Pricing`, `Support`, `Billing`; `Billing` never follows the global mode) |
+| `P4Backoffice__Mode` / `P4Backoffice__Modules__*` | | P4 Backoffice integration: `Off` (default) or `On`, globally or per module (`Docs`, `Consents`, `Email`, `Pricing`, `Support`, `Billing`; `Billing` never follows the global mode) |
 | `P4Backoffice__BaseUrl` / `P4Backoffice__SecretKey` | when not `Off` | Service URL (https) and `p4sk_` key; startup fails without them |
 | `P4Backoffice__Webhook__Secret` | | Webhook signing secret (`whsec_` + base64 of at least 24 bytes); `…__PreviousSecret` during rotation |
 | `P4Backoffice__CookieWidget__PublishableKey` / `…__Url` | | Cookie banner of the service: publishable key `p4pk_…` (empty = no banner) and the origin of `widget.js` (default `https://legal.performance4.cz`) |
@@ -195,7 +194,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `P4Backoffice__Consents__Documents__0…` / `…__Acknowledged__0…` | | Documents consented to at sign-up (default `terms`, `dpa`) and documents only acknowledged (default `privacy`) |
 
 The `#80` variables (`CORS_ALLOWED_ORIGINS`, `AUTH_*`, `MAX_API_TOKENS_PER_USER`,
-`BILLING_PRODUCT_TAG_GRACE_UNTIL`, `GLOBAL_CONCURRENCY_*`, `HEAVY_OPERATIONS_LIMIT`, `AI_OPERATIONS_LIMIT`, `USER_QUEUE_*`) and `TRUSTED_CALLER_USER_IDS` / `TRUSTED_CF_PROXIES` / `TRUSTED_PROXIES` fall back to Coolify project variables (`DOTNET_*`) in
+`GLOBAL_CONCURRENCY_*`, `HEAVY_OPERATIONS_LIMIT`, `AI_OPERATIONS_LIMIT`, `USER_QUEUE_*`) and `TRUSTED_CALLER_USER_IDS` / `TRUSTED_CF_PROXIES` / `TRUSTED_PROXIES` fall back to Coolify project variables (`DOTNET_*`) in
 `docker-compose.yml`. An empty value or an unresolved `{{project.…}}` placeholder means the
 default; any other value that does not parse stops the server at startup.
 
@@ -216,7 +215,7 @@ switches itself off rather than failing at startup.
 
 The shared backoffice service can take over legal documents, consents, e-mail,
 pricing and support one module at a time. Nothing changes until a module is
-switched to `Shadow` or `On`; `PrivateServer__Enabled=true` forces every module
+switched to `On`; `PrivateServer__Enabled=true` forces every module
 `Off`. The integration calls the service's HTTP API directly (its own clients in
 `Services/Backoffice/`, written from the service's OpenAPI document); it needs no
 SDK or private package, so every build — forks included — can switch it on.
@@ -225,7 +224,7 @@ SDK or private package, so every build — forks included — can switch it on.
 Writes to the service never happen inside a request. They are stored in the
 `BackofficeOutboxItems` table in the same `SaveChangesAsync` as the change they
 belong to (payload encrypted with the Data Protection key ring) and sent by a
-background dispatcher, which runs only while a module is `Shadow` or `On`.
+background dispatcher, which runs only while a module is `On`.
 Each attempt sends `Idempotency-Key` = item id; failures are retried from 5 s
 up to every 6 h and given up 20 h after the first attempt
 (`P4Backoffice__Outbox__GiveUpAfter`, must stay under 24 h: the service keeps
@@ -302,9 +301,6 @@ The `/Legal/*` pages (`Controllers/LegalController.cs`) read their text through
 - `Off` — the hand-maintained `LegalDocuments` rows (`Source = manual`,
   Markdown), then the static Razor views. Exactly the behaviour before the
   integration.
-- `Shadow` — the same pages; in the background the service's version is
-  fetched and differences in version, title and effective date are logged.
-  Nothing is written.
 - `On` — the service's sanitized HTML (all eight documents, `oss` and
   `license` included; slug ↔ type map in `LegalSlugMap`). A page reads the
   in-memory copy and never waits for the service: a stale copy is shown while
@@ -386,12 +382,11 @@ and content hash of the text shown, from local data only: `docs:meta` and
 never as an e-mail address.
 
 - `Off` — records are stored locally only; no outbox item, no gate.
-- `Shadow` — the form sends the versions it showed (a previous version is
+- `On` — the form sends the versions it showed (a previous version is
   accepted for 10 minutes after a new one came into force, then the form is
   reloaded with `LegalVersionOutdated`); records plus one `consent` outbox item
   (`POST /v1/consents`, one batch) are written in the same `SaveChangesAsync`
-  as the user. The re-consent gate only logs.
-- `On` — as `Shadow`, and `RequireCurrentConsentFilter` sends signed-in users
+  as the user, and `RequireCurrentConsentFilter` sends signed-in users
   (cookie only; never `/api/*` or Bearer tokens) whose newest records do not
   reach `required_version` of `docs:meta` to `/Account/Consent`, which returns
   them to the page they asked for. Users registered before consents were
@@ -414,12 +409,6 @@ language). What happens next depends on the mode:
 
 - `Off` — sent through Resend during the call (`ResendEmailSender`), exactly as
   before, including the error messages when Resend fails.
-- `Shadow` — not supported for raw e-mail (the service has no "log only" send,
-  so every message would go out twice); treated as `Off` with a startup warning.
-  Templates listed in `P4Backoffice__Email__TemplateKeys` are additionally
-  rendered by the service in the background (`POST /v1/templates/{key}/render`,
-  key scope `templates:read`, skipped without it) and differences in subject and
-  text are logged, with variable values masked.
 - `On` — queued as outbox item `email.raw` (`POST /v1/emails` with `to`,
   `subject`, `html`, `from` = `EMAIL_FROM`, tags `template`, `locale`,
   `user_id`, `critical`, `category=transactional`). Sign-up, 2FA and password
@@ -481,9 +470,6 @@ those paths calls the service.
 
 - `P4Backoffice__Modules__Pricing=Off` (default): `Billing__PricePer100` and the
   `Billing__Discount*` volume discounts, charged inline (`price_data`) as before.
-- `Shadow`: the same prices, but the service's price list is fetched in the
-  background (at startup, hourly, after `price.effective`) and every difference
-  from the configuration is logged as a warning.
 - `On`: prices from the snapshot of `GET /v1/pricing/current` (items of kind
   `credits` with `attributes.quantity`, the one-time price in `Stripe__Currency`),
   kept in `BackofficeStates` (`pricing:current`) and in memory, refreshed hourly
@@ -498,9 +484,8 @@ those paths calls the service.
 
 Price-change notices (`price_change_notice` to users with auto-recharge):
 
-- `Off` and `Shadow`: `PriceChangeMonitorService` compares the price of 100
-  credits with each user's stored price once a day, as before. In `Shadow` the
-  `price.*` events are only logged (who would be notified).
+- `Off`: `PriceChangeMonitorService` compares the price of 100
+  credits with each user's stored price once a day, as before.
 - `On`: the monitor does not run. `price.scheduled` notifies every non-Enterprise
   user with auto-recharge on a pack whose price changes, once per price-list
   version (`Users.PriceChangeNotifiedVersion`, stored with the queued e-mail);
@@ -521,9 +506,8 @@ the monitor compares against `Billing__PricePer100` again
 The in-app form at `/support` (signed-in users). The ticket always carries the
 user's e-mail address, looked up by account id.
 
-- `P4Backoffice__Modules__Support=Off` (default) and `Shadow`: the ticket goes to
-  osTicket directly (`OsTicket__*`), as before. `Shadow` also fetches the
-  service's categories in the background and logs how they differ from the form's.
+- `P4Backoffice__Modules__Support=Off` (default): the ticket goes to
+  osTicket directly (`OsTicket__*`), as before.
 - `On`: the ticket is queued in the outbox (`support.ticket`, in the same
   transaction) and attempted right away for at most 5 seconds. The user sees the
   ticket number when the service answered in time, otherwise "received, the
@@ -545,8 +529,6 @@ Only its own setting switches it: `P4Backoffice__Mode=On` leaves payments Off.
 
 - `P4Backoffice__Modules__Billing=Off` (default): Stripe directly with
   `Stripe__*`, as before.
-- `Shadow`: the same; `billing.*` events from the service are only logged and
-  compared with what the direct path granted.
 - `On` (needs `Modules:Pricing=On`, refused at startup otherwise): checkout,
   card setup, the confirm pages, invoices, the card on file, the portal and the
   enterprise card removal go through `/v1/billing/*`; the customer is
@@ -559,7 +541,7 @@ Only its own setting switches it: `P4Backoffice__Mode=On` leaves payments Off.
   `billing.checkout.completed` / `billing.payment.succeeded`, whichever comes
   first (same keys as the Stripe webhook). The product's Stripe webhook answers
   `200` (ignored) in `On` and grants nothing: its Stripe account is no longer the one
-  taking the payments. `Stripe__*` stays configured for `Off`/`Shadow` and the
+  taking the payments. `Stripe__*` stays configured for `Off` and the
   rollback.
   `billing.payment_method.detached` switches auto-recharge off when no card is
   left. Success and failure e-mails are still sent by this app.

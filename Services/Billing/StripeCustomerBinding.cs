@@ -24,9 +24,9 @@ public static class StripeCustomerBinding
     /// </summary>
     public static async Task<bool> CheckoutOwnedByAsync(
         ApplicationDbContext db, CheckoutSessionInfo session, User user,
-        DateTimeOffset? productTagGraceUntil = null, CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
     {
-        if (!BillingCustomerRef.CheckoutBelongsTo(session, user.Id, user.StripeCustomerId, productTagGraceUntil))
+        if (!BillingCustomerRef.CheckoutBelongsTo(session, user.Id, user.StripeCustomerId))
         {
             return false;
         }

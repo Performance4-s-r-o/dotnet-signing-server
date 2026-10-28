@@ -7,7 +7,7 @@ namespace DotNetSigningServer.Services.Legal;
 /// <summary>
 /// The cookies this product sets, from the cookie audit of 2026-09-28: only strictly necessary
 /// ones, no analytics or marketing (so no cookie banner). Shown by the cookies policy when the
-/// service's declaration is not available (Docs module Off/Shadow, or no snapshot yet).
+/// service's declaration is not available (Docs module Off, or no snapshot yet).
 ///
 /// Keep in sync with the declaration in the service. Adding analytics or any other optional
 /// cookie: see "Cookie banner" in README.md first.

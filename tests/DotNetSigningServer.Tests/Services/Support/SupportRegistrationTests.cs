@@ -45,9 +45,8 @@ public class SupportRegistrationTests
     }
 
     [Theory]
-    [InlineData("Shadow")]
     [InlineData("On")]
-    public void ShadowOrOn_RefreshesCategoriesAndHandlesEvents(string mode)
+    public void On_RefreshesCategoriesAndHandlesEvents(string mode)
     {
         using var provider = Build(mode);
         using var scope = provider.CreateScope();

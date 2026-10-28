@@ -458,10 +458,6 @@ namespace DotNetSigningServer.Controllers
                         // the decoder returned no usable points; a made-up zero
                         // would read as "top-left corner of the page".
                         boundingBox = box,
-                        // Kept for callers written against the old shape. It is
-                        // the bottom-left of the box, no longer a raw raster
-                        // pixel.
-                        position = box == null ? null : new { x = box.X, y = box.Y },
                         page = pageIndex + 1
                     });
                 }

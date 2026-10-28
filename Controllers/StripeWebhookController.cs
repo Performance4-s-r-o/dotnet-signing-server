@@ -51,7 +51,7 @@ public class StripeWebhookController : ControllerBase
     }
 
     /// <summary>
-    /// Stripe events of the product's own Stripe account (<c>Modules:Billing</c> Off or Shadow).
+    /// Stripe events of the product's own Stripe account (<c>Modules:Billing</c> Off).
     ///
     /// An event is stored once, in <c>WebhookEvents</c> under its Stripe id: <c>ProcessedAt</c>
     /// set when it was handled, null with <c>Error</c> when handling failed. Only a handled event
@@ -276,10 +276,9 @@ public class StripeWebhookController : ControllerBase
             session.PaymentStatus,
             new Dictionary<string, string>(session.Metadata ?? new Dictionary<string, string>()),
             session.CustomerId,
-            CustomerRef: null,
-            Created: session.Created == default ? null : new DateTimeOffset(DateTime.SpecifyKind(session.Created, DateTimeKind.Utc)));
+            CustomerRef: null);
         var ownedDirectly = await StripeCustomerBinding.CheckoutOwnedByAsync(
-            _dbContext, sessionInfo, user, _billingOptions.ProductTagGraceUntil);
+            _dbContext, sessionInfo, user);
         // A session the billing service started uses the service's customer; when the service
         // is in use, it can vouch for the session. It never decides the user's own link.
         var confirmedByService = !ownedDirectly && await BillingRefusals.ConfirmedByBillingServiceAsync(

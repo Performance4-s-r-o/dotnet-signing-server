@@ -12,7 +12,7 @@ namespace DotNetSigningServer.Filters;
 /// <summary>
 /// Re-consent gate (Consents module): a signed-in user whose local consent records do not
 /// cover the required versions (<c>docs:meta.required_version</c>) is sent to
-/// <c>/Account/Consent?returnUrl=…</c> before any other page. Shadow only logs; Off does nothing.
+/// <c>/Account/Consent?returnUrl=…</c> before any other page. Off does nothing.
 /// <para>
 /// Never on the signing path: <c>/api/*</c>, requests with a Bearer token and anything not
 /// signed in with the cookie pass untouched. Also exempt: the consent page itself, signing
@@ -36,16 +36,13 @@ public sealed class RequireCurrentConsentFilter : IAsyncActionFilter
     ];
 
     private readonly IOptions<P4BackofficeProductOptions> _options;
-    private readonly ConsentStatusCache _cache;
     private readonly ILogger<RequireCurrentConsentFilter> _logger;
 
     public RequireCurrentConsentFilter(
         IOptions<P4BackofficeProductOptions> options,
-        ConsentStatusCache cache,
         ILogger<RequireCurrentConsentFilter> logger)
     {
         _options = options;
-        _cache = cache;
         _logger = logger;
     }
 
@@ -74,18 +71,6 @@ public sealed class RequireCurrentConsentFilter : IAsyncActionFilter
 
         if (status.IsCurrent)
         {
-            await next();
-            return;
-        }
-
-        if (mode == BackofficeMode.Shadow)
-        {
-            if (_cache.ShouldLogShadow(userId))
-            {
-                _logger.LogInformation(
-                    "[consents] shadow: user {UserId} would be asked to confirm {Documents}",
-                    userId, string.Join(",", status.Outstanding.Select(o => o.Document)));
-            }
             await next();
             return;
         }

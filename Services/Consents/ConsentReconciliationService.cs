@@ -13,7 +13,7 @@ namespace DotNetSigningServer.Services.Consents;
 public sealed record RemoteDocumentConsent(string Document, string? LastAction, int? GrantedVersion);
 
 /// <summary>
-/// Daily comparison of local consent records with the service (Consents module Shadow or On):
+/// Daily comparison of local consent records with the service (Consents module On):
 /// for every user with a record from the last <see cref="Lookback"/>, reads
 /// <c>GET /v1/subjects/{ref}/consent-status</c> and logs differences as warnings. It only
 /// reports — the gate always reads the local records — and it never runs in a request.

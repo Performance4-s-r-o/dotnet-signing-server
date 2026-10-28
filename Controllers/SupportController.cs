@@ -26,7 +26,7 @@ namespace DotNetSigningServer.Controllers;
 /// same transaction and attempted right away for at most <see cref="DispatchNowLimit"/>; the
 /// user sees the ticket number, or "received" when the service did not answer in time — never
 /// an error because the service is down (the dispatcher delivers it later, exactly once).
-/// Otherwise (Off, Shadow) the ticket goes to osTicket directly, as before; that path needs the
+/// Otherwise (Off) the ticket goes to osTicket directly, as before; that path needs the
 /// OsTicket configuration, and with neither the routes 404 and the nav entry is hidden.
 /// </summary>
 [CookieAuthorize]

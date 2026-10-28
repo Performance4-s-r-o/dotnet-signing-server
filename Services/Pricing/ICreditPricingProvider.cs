@@ -7,7 +7,7 @@ namespace DotNetSigningServer.Services.Pricing;
 /// Implementations never call the P4 Backoffice service: they answer from configuration or
 /// from the price-list snapshot kept in memory (and in <c>BackofficeState</c>), so they are
 /// safe on request paths. Chosen by <c>P4Backoffice:Modules:Pricing</c>: On uses
-/// <see cref="BackofficeCreditPricingProvider"/>, Off and Shadow <see cref="ConfigCreditPricingProvider"/>.
+/// <see cref="BackofficeCreditPricingProvider"/>, Off <see cref="ConfigCreditPricingProvider"/>.
 /// </summary>
 public interface ICreditPricingProvider
 {

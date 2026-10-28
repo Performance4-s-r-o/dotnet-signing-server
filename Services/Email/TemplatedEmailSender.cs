@@ -29,7 +29,6 @@ public sealed class TemplatedEmailSender : ITemplatedEmailSender
     private readonly ApplicationDbContext _db;
     private readonly ResendOptions _resend;
     private readonly ILogger<TemplatedEmailSender> _logger;
-    private readonly TemplateShadowComparer? _shadow;
 
     public TemplatedEmailSender(
         IEmailSender emailSender,
@@ -38,8 +37,7 @@ public sealed class TemplatedEmailSender : ITemplatedEmailSender
         IBackofficeOutbox outbox,
         ApplicationDbContext db,
         IOptions<ResendOptions> resend,
-        ILogger<TemplatedEmailSender> logger,
-        TemplateShadowComparer? shadow = null)
+        ILogger<TemplatedEmailSender> logger)
     {
         _emailSender = emailSender;
         _renderer = renderer;
@@ -48,7 +46,6 @@ public sealed class TemplatedEmailSender : ITemplatedEmailSender
         _db = db;
         _resend = resend.Value;
         _logger = logger;
-        _shadow = shadow;
     }
 
     /// <summary>
@@ -105,18 +102,7 @@ public sealed class TemplatedEmailSender : ITemplatedEmailSender
         }
 
         var rendered = _renderer.Render(templateKey, locale, variables);
-        StartShadowComparison(templateKey, locale, variables, rendered);
         await _emailSender.SendAsync(toEmail, rendered.Subject, rendered.HtmlBody, sendOptions);
-    }
-
-    /// <summary>Email=Shadow and the key listed: compare with the service's rendering in the background.</summary>
-    private void StartShadowComparison(
-        string templateKey, string locale, IReadOnlyDictionary<string, string?> variables, EmailTemplateResult rendered)
-    {
-        if (_shadow == null) return;
-        var options = _options.CurrentValue;
-        if (options.ModeFor(BackofficeModule.Email) != BackofficeMode.Shadow || !IsListed(options, templateKey)) return;
-        _shadow.Schedule(templateKey, EmailTemplateLocales.ForService(locale), variables, rendered);
     }
 
     private void EnqueueTemplate(

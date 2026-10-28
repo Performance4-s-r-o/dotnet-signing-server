@@ -230,31 +230,6 @@ public class PricingSnapshotRefresherTests
     }
 
     [Fact]
-    public async Task Shadow_ServesTheConfigurationAndReportsDifferences()
-    {
-        using var host = new PricingTestHost("Shadow");
-        host.EnqueuePriceList(PricingTestData.ImportedJson(1, new Dictionary<int, long> { [500] = 2300 }));
-
-        await host.Refresher.RefreshAsync("test", conditional: true, CancellationToken.None);
-
-        Assert.IsType<ConfigCreditPricingProvider>(host.Provider);
-        Assert.Equal(2250, host.Provider.GetPack(500)!.UnitAmountMinor);
-        var differences = host.Refresher.CompareWithConfig(host.Holder.Current!);
-        var difference = Assert.Single(differences);
-        Assert.Contains("500 credits", difference);
-        Assert.Contains("2300", difference);
-    }
-
-    [Fact]
-    public void Compare_OfTheImportedPriceList_FindsNoDifference()
-    {
-        var configured = new ConfigCreditPricingProvider(new BillingOptions()).GetPacks();
-        var service = PriceListMapper.Map(PricingTestData.Snapshot(PricingTestData.ImportedJson()).Body, "EUR");
-
-        Assert.Empty(PricingSnapshotRefresher.Compare(configured, service));
-    }
-
-    [Fact]
     public async Task NewVersion_DropsCachedStripePrices()
     {
         using var host = new PricingTestHost("On");
@@ -346,15 +321,6 @@ public class PricingRegistrationTests
         Assert.Empty(scope.ServiceProvider.GetServices<IBackofficeEventHandler>());
         Assert.Empty(scope.ServiceProvider.GetServices<IBackofficeResync>());
         Assert.Null(host.Services.GetService<PricingSnapshotRefresher>());
-    }
-
-    [Fact]
-    public void Shadow_UsesTheConfigurationAndRefreshesInTheBackground()
-    {
-        using var host = new PricingTestHost("Shadow");
-
-        Assert.IsType<ConfigCreditPricingProvider>(host.Provider);
-        Assert.Single(host.Services.GetServices<IHostedService>().OfType<PricingSnapshotWorker>());
     }
 
     [Fact]

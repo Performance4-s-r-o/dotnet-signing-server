@@ -7,7 +7,7 @@ namespace DotNetSigningServer.Services.Billing;
 /// Everything the billing pages need from the payment provider, without its types.
 ///
 /// Two implementations, chosen at startup by <c>P4Backoffice:Modules:Billing</c>:
-/// <see cref="StripePaymentGateway"/> (Off and Shadow: Stripe directly, as always) and
+/// <see cref="StripePaymentGateway"/> (Off: Stripe directly, as always) and
 /// <see cref="BackofficePaymentGateway"/> (On: through the P4 Backoffice billing API).
 /// Methods throw on failure; callers keep their own error handling.
 /// </summary>
@@ -77,10 +77,7 @@ public sealed record CheckoutSessionInfo(
     string? PaymentStatus,
     IReadOnlyDictionary<string, string> Metadata,
     string? StripeCustomerId,
-    string? CustomerRef,
-    // When the session was created; decides the transition for sessions without the product
-    // marker (Billing:ProductTagGraceUntil, #80). Null = unknown, never inside the grace.
-    DateTimeOffset? Created = null);
+    string? CustomerRef);
 
 /// <summary>One invoice row of the billing page.</summary>
 public sealed record InvoiceSummary(

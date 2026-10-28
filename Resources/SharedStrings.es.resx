@@ -19,7 +19,6 @@
   </xsd:schema>
 
   <!-- Account -->
-  <data name="EmailAlreadyRegistered" xml:space="preserve"><value>El correo electrónico ya está registrado.</value></data>
   <data name="CheckEmailVerification" xml:space="preserve"><value>Por favor, revise su correo electrónico para obtener el enlace de verificación.</value></data>
   <data name="VerificationEmailFailed" xml:space="preserve"><value>No se pudo enviar el correo de verificación. Por favor, contacte con soporte o inténtelo de nuevo más tarde.</value></data>
   <data name="TooManySignInAttempts" xml:space="preserve"><value>Demasiados intentos de inicio de sesión. Por favor, inténtelo de nuevo en un minuto.</value></data>
@@ -179,8 +178,6 @@
   <data name="SealAllowedEnabled" xml:space="preserve"><value>Sellado habilitado para esta cuenta.</value></data>
   <data name="SealAllowedDisabled" xml:space="preserve"><value>Sellado deshabilitado para esta cuenta.</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>Se produjo un error al añadir el archivo adjunto</value></data>
-  <data name="ProvidePdfOrFillPdf" xml:space="preserve"><value>Proporcione PdfContents o FillPdf.</value></data>
-  <data name="SignaturesRequired" xml:space="preserve"><value>Las firmas son obligatorias.</value></data>
   <data name="PdfaConversionError" xml:space="preserve"><value>Se produjo un error al convertir el documento a PDF/A</value></data>
   <data name="ProvideTemplateOrPdf" xml:space="preserve"><value>Proporcione TemplateId o PdfContent (pero no ambos).</value></data>
   <data name="FieldsRequiredForDirectPdf" xml:space="preserve"><value>Los campos son obligatorios cuando se utiliza PdfContent directamente.</value></data>
@@ -261,8 +258,6 @@
   <!-- Account / SignUp -->
   <data name="CreateAccountHeading" xml:space="preserve"><value>Crear una cuenta</value></data>
   <data name="ConfirmPasswordLabel" xml:space="preserve"><value>Confirmar contraseña</value></data>
-  <data name="SignUpAgreeTerms" xml:space="preserve"><value>Acepto los {0} y la {1}.</value></data>
-  <data name="TermsOfServiceLink" xml:space="preserve"><value>Condiciones de uso</value></data>
   <data name="PrivacyPolicyLink" xml:space="preserve"><value>Política de privacidad</value></data>
   <data name="SignUpButton" xml:space="preserve"><value>Registrarse</value></data>
   <data name="AlreadyHaveAccount" xml:space="preserve"><value>¿Ya tiene una cuenta?</value></data>
@@ -711,7 +706,7 @@
   <data name="AdminConsentsBackfill" xml:space="preserve"><value>Send consents recorded while the module was Off</value></data>
   <data name="AdminConsentsBackfillHint" xml:space="preserve"><value>Queues consent records that have not been sent to the backoffice service yet. Records already queued are skipped.</value></data>
   <data name="AdminConsentsBackfilled" xml:space="preserve"><value>Queued {0} consent records in {1} batches.</value></data>
-  <data name="AdminConsentsBackfillOff" xml:space="preserve"><value>Switch the Consents module to Shadow or On first.</value></data>
+  <data name="AdminConsentsBackfillOff" xml:space="preserve"><value>Switch the Consents module to On first.</value></data>
   <data name="EmailLanguage" xml:space="preserve"><value>Idioma del correo</value></data>
   <data name="EmailBounced" xml:space="preserve"><value>Correo rebotado / queja</value></data>
   <data name="CookiesPolicyIntro" xml:space="preserve"><value>This Cookies Policy explains which cookies Performance4PDF uses and why.</value></data>

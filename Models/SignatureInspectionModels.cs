@@ -30,12 +30,6 @@ public class SignatureInspectionEntry
     /// </summary>
     public string StructuralLevel { get; set; } = "unknown";
 
-    /// <summary>
-    /// Deprecated: the same value as <see cref="StructuralLevel"/>, kept for
-    /// existing callers. The name suggested a validation result it never was.
-    /// </summary>
-    [Obsolete("Use StructuralLevel. Kept in the response for existing callers.")]
-    public string Level => StructuralLevel;
     public string? SignerName { get; set; }
     public DateTime? SignedAt { get; set; }
     public string? DigestAlgorithm { get; set; }

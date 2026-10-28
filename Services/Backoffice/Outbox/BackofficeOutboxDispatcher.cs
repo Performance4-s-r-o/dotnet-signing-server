@@ -7,7 +7,7 @@ namespace DotNetSigningServer.Services.Backoffice.Outbox;
 /// after items are committed, otherwise every <see cref="PollInterval"/>. Also raises the
 /// outbox alert every <see cref="MonitorInterval"/> and deletes old finished items daily.
 ///
-/// Registered only when a backoffice module is Shadow or On (never on a PrivateServer), so a
+/// Registered only when a backoffice module is On (never on a PrivateServer), so a
 /// service outage never touches request latency: requests only add rows.
 /// </summary>
 public sealed class BackofficeOutboxDispatcher : BackgroundService

@@ -6,7 +6,7 @@ namespace DotNetSigningServer.Services.Billing;
 
 /// <summary>
 /// Stripe called directly with the product's own key — the behaviour before the billing API,
-/// and the one used while <c>Modules:Billing</c> is Off or Shadow. The code is the one that
+/// and the one used while <c>Modules:Billing</c> is Off. The code is the one that
 /// used to live in <c>BillingController</c> and <c>AdminController</c>, unchanged.
 /// </summary>
 public sealed class StripePaymentGateway : IPaymentGateway
@@ -64,8 +64,7 @@ public sealed class StripePaymentGateway : IPaymentGateway
             session.PaymentStatus,
             new Dictionary<string, string>(session.Metadata ?? new Dictionary<string, string>()),
             session.CustomerId,
-            CustomerRef: null,
-            Created: session.Created == default ? null : new DateTimeOffset(DateTime.SpecifyKind(session.Created, DateTimeKind.Utc)));
+            CustomerRef: null);
     }
 
     public async Task<IReadOnlyList<InvoiceSummary>> ListInvoicesAsync(User user, int limit, CancellationToken cancellationToken = default)

@@ -61,13 +61,4 @@ public static class EnvValues
             ? value
             : throw new InvalidOperationException($"{name} must be a whole number, got '{raw}'.");
     }
-
-    public static DateTimeOffset? Instant(IConfiguration configuration, string name)
-    {
-        var raw = configuration[name];
-        if (IsUnset(raw)) return null;
-        return DateTimeOffset.TryParse(raw!.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var value)
-            ? value.ToUniversalTime()
-            : throw new InvalidOperationException($"{name} must be an ISO 8601 instant such as 2026-10-20T12:00:00Z, got '{raw}'.");
-    }
 }
