@@ -121,4 +121,21 @@ public class BillingCheckoutTests : IDisposable
         Assert.Equal("InvalidDocumentBundle", controller.TempData["Error"]);
         _checkout.VerifyNoOtherCalls();
     }
+
+    [Fact]
+    public async Task BillingPage_ShowsTheLastCheckoutPurchase_NotAnAutoRecharge()
+    {
+        var now = DateTimeOffset.UtcNow;
+        _db.CreditGrants.AddRange(
+            new CreditGrant { GrantKey = "cs_old", UserId = _user.Id, Credits = 100, Source = "test", GrantedAt = now.AddDays(-3) },
+            new CreditGrant { GrantKey = "cs_new", UserId = _user.Id, Credits = 500, Source = "test", GrantedAt = now.AddDays(-2) },
+            new CreditGrant { GrantKey = CreditGrants.AutoRechargeKey("pi_1"), UserId = _user.Id, Credits = 300, Source = "test", GrantedAt = now.AddDays(-1) },
+            new CreditGrant { GrantKey = "cs_other", UserId = Guid.NewGuid(), Credits = 1000, Source = "test", GrantedAt = now });
+        await _db.SaveChangesAsync();
+        var controller = Controller(new ConfigCreditPricingProvider(new BillingOptions()));
+
+        var view = Assert.IsType<ViewResult>(await controller.Index());
+
+        Assert.Equal(500, Assert.IsType<BillingController.BillingViewModel>(view.Model).LastPurchaseQuantity);
+    }
 }

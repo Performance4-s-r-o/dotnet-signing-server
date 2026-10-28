@@ -72,7 +72,7 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
         }
 
         // Credits, the payment record and the auto-recharge opt-in in one transaction.
-        var grantedNow = await CreditGrants.TryGrantAsync(_db, purchase.SessionId, CreditGrants.CheckoutConfirmType, user.Id,
+        var grantedNow = await CreditGrants.TryGrantAsync(_db, purchase.SessionId, user.Id,
             purchase.Documents, "backoffice", async () =>
             {
                 // customer_ref already matched the user; still never link a customer another user holds (#82).
@@ -113,7 +113,7 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
             succeeded = false;
         }
         else if (succeeded
-            && await CreditGrants.TryGrantAsync(_db, key, CreditGrants.AutoRechargeType, payment.UserId, payment.Documents, "backoffice",
+            && await CreditGrants.TryGrantAsync(_db, key, payment.UserId, payment.Documents, "backoffice",
                 () =>
                 {
                     _db.Payments.Add(new Payment

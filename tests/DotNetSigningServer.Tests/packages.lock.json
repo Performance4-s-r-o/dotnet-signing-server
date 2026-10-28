@@ -1071,6 +1071,7 @@
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[9.0.4, )",
           "Sentry.AspNetCore": "[6.9.0, )",
           "Swashbuckle.AspNetCore": "[10.3.0, )",
+          "Testcontainers.PostgreSql": "[4.10.0, )",
           "ZXing.Net": "[0.16.11, )",
           "itext": "[9.8.0, )",
           "itext.bouncy-castle-adapter": "[9.8.0, )"

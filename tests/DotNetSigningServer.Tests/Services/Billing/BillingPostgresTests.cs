@@ -61,6 +61,13 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
         return await db.WebhookEvents.AsNoTracking().SingleOrDefaultAsync(w => w.EventId == AutoRechargeClaim.EventIdFor(userId));
     }
 
+    private async Task AddGrantAsync(Guid userId, string key)
+    {
+        await using var db = _pg.CreateContext();
+        db.CreditGrants.Add(new CreditGrant { GrantKey = key, UserId = userId, Credits = 300, Source = "test", GrantedAt = DateTimeOffset.UtcNow });
+        await db.SaveChangesAsync();
+    }
+
     private async Task AddRowAsync(WebhookEvent row)
     {
         await using var db = _pg.CreateContext();
@@ -128,20 +135,20 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
         {
             // Not a TimeoutException: NpgsqlExecutionStrategy wraps what it considers transient
             // (TimeoutException included) in an InvalidOperationException.
-            await Assert.ThrowsAsync<FormatException>(() => CreditGrants.TryGrantAsync(db, "cs_fail", CreditGrants.CheckoutConfirmType,
+            await Assert.ThrowsAsync<FormatException>(() => CreditGrants.TryGrantAsync(db, "cs_fail",
                 user.Id, 300, "test", () => throw new FormatException("bad payload"), default, "pi_fail"));
         }
         Assert.Equal(0, await CreditsAsync(user.Id));
 
         await using (var db = _pg.CreateContext())
         {
-            Assert.True(await CreditGrants.TryGrantAsync(db, "cs_fail", CreditGrants.CheckoutConfirmType,
+            Assert.True(await CreditGrants.TryGrantAsync(db, "cs_fail",
                 user.Id, 300, "test", () => Task.CompletedTask, default, "pi_fail"));
         }
         await using (var db = _pg.CreateContext())
         {
             // The same payment intent under another key (another path) grants nothing.
-            Assert.False(await CreditGrants.TryGrantAsync(db, "auto_recharge_pi_fail", CreditGrants.AutoRechargeType,
+            Assert.False(await CreditGrants.TryGrantAsync(db, "auto_recharge_pi_fail",
                 user.Id, 300, "test", () => Task.CompletedTask, default, "pi_fail"));
         }
         Assert.Equal(300, await CreditsAsync(user.Id));
@@ -154,12 +161,12 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
 
         await using (var db = _pg.CreateContext())
         {
-            Assert.True(await CreditGrants.TryGrantAsync(db, "cs_no_pi", CreditGrants.CheckoutConfirmType,
+            Assert.True(await CreditGrants.TryGrantAsync(db, "cs_no_pi",
                 user.Id, 300, "confirm-page", () => Task.CompletedTask, default));
         }
         await using (var db = _pg.CreateContext())
         {
-            Assert.False(await CreditGrants.TryGrantAsync(db, "cs_no_pi", CreditGrants.CheckoutConfirmType,
+            Assert.False(await CreditGrants.TryGrantAsync(db, "cs_no_pi",
                 user.Id, 300, "confirm-page", () => Task.CompletedTask, default));
         }
         Assert.Equal(300, await CreditsAsync(user.Id));
@@ -175,7 +182,7 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
         var results = await Task.WhenAll(Enumerable.Range(0, 5).Select(async _ =>
         {
             await using var db = _pg.CreateContext();
-            return await CreditGrants.TryGrantAsync(db, "cs_race", CreditGrants.CheckoutConfirmType,
+            return await CreditGrants.TryGrantAsync(db, "cs_race",
                 user.Id, 300, "test", () => Task.CompletedTask, default, "pi_race");
         }));
 
@@ -196,14 +203,14 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
         Assert.Equal(300, await CreditsAsync(user.Id));
         await using var check = _pg.CreateContext();
         Assert.Single(await check.Payments.Where(p => p.UserId == user.Id).ToListAsync());
-        Assert.Equal(CreditGrants.CheckoutConfirmType, (await check.WebhookEvents.SingleAsync(w => w.EventId == "cs_once")).EventType);
+        Assert.Equal("cs_once", (await check.CreditGrants.SingleAsync(g => g.UserId == user.Id)).GrantKey);
     }
 
     [DockerFact]
     public async Task CheckoutCompleted_AfterTheConfirmPage_GrantsNothing()
     {
         var user = await NewUserAsync();
-        await AddRowAsync(new WebhookEvent { EventId = "cs_confirmed", EventType = CreditGrants.CheckoutConfirmType, PayloadJson = "{}" });
+        await AddGrantAsync(user.Id, "cs_confirmed");
 
         await using (var db = _pg.CreateContext()) await Handler(db).HandleAsync(CheckoutCompleted(user.Id, "cs_confirmed"), default);
 
@@ -226,15 +233,15 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
         // Nothing was kept, so the inbox's retry grants it in full.
         Assert.Equal(0, await CreditsAsync(user.Id));
         await using var check = _pg.CreateContext();
-        Assert.False(await check.WebhookEvents.AnyAsync(w => w.EventId == "cs_rollback"));
+        Assert.False(await check.CreditGrants.AnyAsync(g => g.GrantKey == "cs_rollback"));
         Assert.False(await check.Payments.AnyAsync(p => p.UserId == user.Id));
     }
 
     [DockerFact]
-    public async Task PaymentSucceeded_AfterTheStripeWebhook_GrantsNothing_AndReleasesItsClaim()
+    public async Task PaymentSucceeded_AlreadyGranted_GrantsNothing_AndReleasesItsClaim()
     {
         var user = await NewUserAsync();
-        await AddRowAsync(new WebhookEvent { EventId = CreditGrants.AutoRechargeKey("pi_hooked"), EventType = "auto_recharge", PayloadJson = "{}" });
+        await AddGrantAsync(user.Id, CreditGrants.AutoRechargeKey("pi_hooked"));
         await AddRowAsync(Claim(user.Id, "k1", _time.Now, _time.Now, retryReady: false));
 
         await using (var db = _pg.CreateContext()) await Handler(db).HandleAsync(AutoRechargePaid(user.Id, "pi_hooked", "k1"), default);

@@ -5,24 +5,25 @@ using Microsoft.EntityFrameworkCore;
 namespace DotNetSigningServer.Services.Billing;
 
 /// <summary>
-/// Grants purchased credits exactly once, keyed like the direct Stripe path does
-/// (checkout session id, <c>auto_recharge_&lt;payment intent&gt;</c>), so the confirm page, the
-/// product's Stripe webhook and the <c>billing.*</c> events never grant the same payment twice,
-/// whichever comes first and however late a redelivery arrives.
+/// Grants purchased credits exactly once, keyed by the payment (checkout session id,
+/// <c>auto_recharge_&lt;payment intent&gt;</c>), so the confirm page and the <c>billing.*</c>
+/// events never grant the same payment twice, whichever comes first and however late a
+/// redelivery arrives.
 ///
 /// The once-only key is a <see cref="CreditGrant"/> row (#79): unique <c>GrantKey</c> and unique
 /// <c>PaymentIntentId</c>, inserted with <c>ON CONFLICT DO NOTHING</c> in the same transaction
 /// as the credits and never deleted. A failure anywhere rolls the claim back with the credits,
 /// so a retry grants them — the claim is never left behind without the credits.
-/// A <c>WebhookEvents</c> row is still written alongside for the readers of the old marker
-/// (last purchase on the billing page); grants made before #79 are recognised by it too.
+/// Grants made before #79 were copied into the table by the migration of that change.
 /// </summary>
 public static class CreditGrants
 {
-    public const string CheckoutConfirmType = "checkout.confirm";
     public const string AutoRechargeType = "auto_recharge";
 
-    public static string AutoRechargeKey(string paymentIntentId) => $"auto_recharge_{paymentIntentId}";
+    /// <summary>Prefix of the key of an auto-recharge grant; a checkout grant is keyed by the session id.</summary>
+    public const string AutoRechargeKeyPrefix = "auto_recharge_";
+
+    public static string AutoRechargeKey(string paymentIntentId) => AutoRechargeKeyPrefix + paymentIntentId;
 
     /// <summary>
     /// In one transaction: claims <paramref name="eventId"/> (and <paramref name="paymentIntentId"/>
@@ -31,10 +32,10 @@ public static class CreditGrants
     /// none. False when the payment was already granted.
     /// </summary>
     public static Task<bool> TryGrantAsync(
-        ApplicationDbContext db, string eventId, string eventType, Guid userId, int documents, string source,
+        ApplicationDbContext db, string eventId, Guid userId, int documents, string source,
         Func<Task> alongside, CancellationToken cancellationToken, string? paymentIntentId = null)
     {
-        var grant = new GrantRequest(eventId, eventType, userId, documents, source, Normalize(paymentIntentId));
+        var grant = new GrantRequest(eventId, userId, documents, source, Normalize(paymentIntentId));
         if (!db.Database.IsRelational())
         {
             // InMemory (tests): no transactions and no SQL; same rules, without the cross-instance guarantee.
@@ -57,7 +58,7 @@ public static class CreditGrants
         }, cancellationToken);
     }
 
-    private sealed record GrantRequest(string Key, string EventType, Guid UserId, int Documents, string Source, string? PaymentIntentId);
+    private sealed record GrantRequest(string Key, Guid UserId, int Documents, string Source, string? PaymentIntentId);
 
     private static async Task<bool> GrantInTransactionAsync(
         ApplicationDbContext db, GrantRequest grant, Func<Task> alongside, CancellationToken cancellationToken)
@@ -80,18 +81,6 @@ public static class CreditGrants
             : [Guid.NewGuid(), grant.Key, grant.UserId, grant.Documents, Truncate(grant.Source, 32), DateTimeOffset.UtcNow, grant.PaymentIntentId];
         var claimed = await db.Database.ExecuteSqlRawAsync(insert, values, cancellationToken);
         if (claimed == 0) return false;
-
-        db.WebhookEvents.Add(Marker(grant));
-        try
-        {
-            await db.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
-        {
-            // Claimed concurrently; the transaction is aborted and rolls back on dispose.
-            DetachAdded(db);
-            return false;
-        }
 
         await db.Database.ExecuteSqlRawAsync(
             "UPDATE \"Users\" SET \"CreditsRemaining\" = \"CreditsRemaining\" + {0} WHERE \"Id\" = {1}",
@@ -123,26 +112,15 @@ public static class CreditGrants
             Source = Truncate(grant.Source, 32),
             GrantedAt = DateTimeOffset.UtcNow,
         });
-        db.WebhookEvents.Add(Marker(grant));
         var user = await db.Users.FindAsync([grant.UserId], cancellationToken);
         if (user != null) user.CreditsRemaining += grant.Documents;
         await db.SaveChangesAsync(cancellationToken);
         return true;
     }
 
-    private static WebhookEvent Marker(GrantRequest grant) => new()
-    {
-        EventId = grant.Key,
-        EventType = grant.EventType,
-        PayloadJson = $"{{\"documents\":{grant.Documents},\"userId\":\"{grant.UserId}\",\"source\":\"{grant.Source}\"}}",
-        ReceivedAt = DateTimeOffset.UtcNow,
-        ProcessedAt = DateTimeOffset.UtcNow,
-    };
-
-    /// <summary>Whether <paramref name="eventId"/> was already granted (or claimed by a grant made before #79).</summary>
-    public static async Task<bool> IsGrantedAsync(ApplicationDbContext db, string eventId, CancellationToken cancellationToken) =>
-        await db.CreditGrants.AnyAsync(g => g.GrantKey == eventId, cancellationToken)
-        || await db.WebhookEvents.AnyAsync(w => w.EventId == eventId, cancellationToken);
+    /// <summary>Whether <paramref name="eventId"/> was already granted.</summary>
+    public static Task<bool> IsGrantedAsync(ApplicationDbContext db, string eventId, CancellationToken cancellationToken) =>
+        db.CreditGrants.AnyAsync(g => g.GrantKey == eventId, cancellationToken);
 
     private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : Truncate(value.Trim(), 128);
 

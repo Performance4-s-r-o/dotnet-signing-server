@@ -90,7 +90,7 @@ public sealed class BackofficeAutoRecharge
             return false;
         }
         var key = CreditGrants.AutoRechargeKey(charge.PaymentIntentId);
-        var granted = await CreditGrants.TryGrantAsync(_db, key, CreditGrants.AutoRechargeType, user.Id, pack.Quantity, "backoffice",
+        var granted = await CreditGrants.TryGrantAsync(_db, key, user.Id, pack.Quantity, "backoffice",
             () =>
             {
                 _db.Payments.Add(new Payment
