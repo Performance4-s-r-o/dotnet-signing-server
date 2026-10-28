@@ -181,7 +181,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `Billing__Currency` (compose: `BILLING_CURRENCY`) | no (`EUR`; empty or an unresolved placeholder = `EUR`) | Three-letter ISO 4217 code (anything else stops a production start). Currency the product sells in: selects the price list's prices and is the currency of the configured fallback prices |
 | `Resend__ApiKey` / `Resend__From` | for email | Transactional email |
 | `OsTicket__Url` / `OsTicket__ApiKey` | | Support form; without them (and with `Modules:Support` not `On`) the routes 404 and the nav entry hides |
-| `AI__Enabled` / `AI__Google__ApiKey` | | AI-assisted template field detection |
+| `AI__Enabled` / `AI__Google__ApiKey` | | AI-assisted template field detection; `AI__Enabled` is on only when exactly `true`, otherwise every `/api/ai/*` route answers 403 `AI_DISABLED` |
 | `Sentry__Dsn` | | Error monitoring; disabled when empty |
 | `Loki__Url` | | Log shipping; disabled when empty |
 | `Limits__*` | | Request/PDF/image/attachment size caps |

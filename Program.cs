@@ -251,6 +251,8 @@ builder.Services.AddScoped<AuthAttemptLimiter>();
 builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection("Resend"));
 builder.Services.Configure<LokiOptions>(builder.Configuration.GetSection("Loki"));
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("AI"));
+// The switch is read from the raw text, not bound: only exactly "true" turns AI on.
+builder.Services.PostConfigure<AiOptions>(o => o.Enabled = AiSwitch.IsOn(builder.Configuration["AI:Enabled"]));
 builder.Services.Configure<LimitsOptions>(builder.Configuration.GetSection("Limits"));
 builder.Services.Configure<RateLimitOptions>(builder.Configuration.GetSection("RateLimits"));
 DotNetSigningServer.Middleware.RateLimiting.Register(builder.Services, builder.Configuration);

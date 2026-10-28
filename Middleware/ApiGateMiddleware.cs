@@ -78,6 +78,14 @@ public class ApiGateMiddleware
             return;
         }
 
+        // AI switch (fail-closed): before the body, billing and the model.
+        if (IsAiPath(value)
+            && context.RequestServices.GetService<IOptions<AiOptions>>()?.Value.Enabled != true)
+        {
+            await WriteAsync(context, StatusCodes.Status403Forbidden, "AI_DISABLED");
+            return;
+        }
+
         // Browser tokens: the signing flow only (#80). Their Origin lock binds a browser, not curl.
         if (authenticated && SessionClaims.IsBrowserToken(context.User)
             && !BrowserTokenScope.IsAllowed(context.Request.Method, path))
@@ -189,6 +197,10 @@ public class ApiGateMiddleware
         }
         return _switches.Names;
     }
+
+    private static bool IsAiPath(string value) =>
+        value.Equals("/api/ai", StringComparison.OrdinalIgnoreCase)
+        || value.StartsWith("/api/ai/", StringComparison.OrdinalIgnoreCase);
 
     private static async Task WriteAsync(HttpContext context, int status, string code)
     {

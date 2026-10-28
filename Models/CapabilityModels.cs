@@ -12,6 +12,8 @@ public class ServerCapabilities
 {
     public SealCapability Seal { get; set; } = new();
 
+    public AiCapability Ai { get; set; } = new();
+
     /// <summary>
     /// Whether this server will time-stamp at all. It has no authority of its
     /// own by design, so the answer is always no unless the caller names one —
@@ -25,4 +27,10 @@ public class SealCapability
     /// <summary>Always false: the server has no seal certificate of its own; the caller supplies it. </summary>
     public bool Enabled { get; set; }
 
+}
+
+public class AiCapability
+{
+    /// <summary>False while the AI switch is off or the feature is not configured.</summary>
+    public bool Enabled { get; set; }
 }
