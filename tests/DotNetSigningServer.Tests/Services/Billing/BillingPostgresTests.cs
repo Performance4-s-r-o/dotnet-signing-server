@@ -316,4 +316,60 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
         Assert.Empty(_service.Requests);
         Assert.Null(await ClaimRowAsync(user.Id));
     }
+
+    private AutoRechargeService RechargeService(ApplicationDbContext db)
+    {
+        var pricing = new Mock<ICreditPricingProvider>();
+        pricing.Setup(p => p.GetPack(300)).Returns(Pack300);
+        return new AutoRechargeService(db, new DotNetSigningServer.Tests.Services.Pricing.FakeTemplatedEmailSender(),
+            NullLogger<AutoRechargeService>.Instance, Microsoft.Extensions.Options.Options.Create(new DotNetSigningServer.Options.AppOptions { FqdnServerName = "https://app.example.com" }),
+            pricing.Object, Recharge(db));
+    }
+
+    private async Task<User> RechargingUserAsync()
+    {
+        var user = await NewUserAsync(); // no local Stripe customer id: the service knows the payer by customer_ref
+        await using var db = _pg.CreateContext();
+        await db.Users.Where(u => u.Id == user.Id).ExecuteUpdateAsync(s => s
+            .SetProperty(u => u.AutoRechargeEnabled, true).SetProperty(u => u.AutoRechargeQuantity, 300));
+        return user;
+    }
+
+    [DockerFact]
+    public async Task AutoRecharge_ChargesAUserWithoutALocalStripeCustomerId()
+    {
+        var user = await RechargingUserAsync();
+        EnqueueCharge("succeeded");
+
+        AutoRechargeResult result;
+        await using (var db = _pg.CreateContext()) result = await RechargeService(db).TryAutoRechargeAsync(user.Id);
+
+        Assert.True(result.Success);
+        Assert.Equal(300, await CreditsAsync(user.Id));
+    }
+
+    [DockerFact]
+    public async Task AutoRecharge_PaidWithoutAPaymentIntent_StopsAutoRecharge_SoTheCardIsNotChargedAgain()
+    {
+        var user = await RechargingUserAsync();
+        _service.Responses.Enqueue(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"status":"succeeded","amount":1500,"currency":"eur"}""", Encoding.UTF8, "application/json"),
+        }));
+
+        AutoRechargeResult result;
+        await using (var db = _pg.CreateContext()) result = await RechargeService(db).TryAutoRechargeAsync(user.Id);
+
+        Assert.False(result.Success);
+        Assert.Equal(0, await CreditsAsync(user.Id));
+        Assert.Null(await ClaimRowAsync(user.Id)); // released, so only this stop keeps a second charge away
+        await using var check = _pg.CreateContext();
+        Assert.False((await check.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id)).AutoRechargeEnabled);
+
+        // Even switched on again by hand, the cooldown holds the next debit.
+        await check.Users.Where(u => u.Id == user.Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.AutoRechargeEnabled, true).SetProperty(u => u.AutoRechargeQuantity, 300));
+        await using (var db = _pg.CreateContext()) result = await RechargeService(db).TryAutoRechargeAsync(user.Id);
+        Assert.Contains("Cooldown", result.Error);
+        Assert.Single(_service.Requests);
+    }
 }

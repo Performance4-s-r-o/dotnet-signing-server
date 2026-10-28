@@ -76,11 +76,8 @@ public class AutoRechargeService : IAutoRechargeService
                 return new AutoRechargeResult { Success = false, Error = "Auto-recharge not enabled" };
             }
 
-            if (string.IsNullOrWhiteSpace(user.StripeCustomerId))
-            {
-                return new AutoRechargeResult { Success = false, Error = "No Stripe customer" };
-            }
-
+            // The billing service names the payer by the user's id (customer_ref), so the local
+            // Stripe customer id is not needed to charge.
             // Trigger when balance drops below the fixed threshold (10 credits)
             if (user.CreditsRemaining >= ThresholdCredits)
             {
@@ -97,6 +94,8 @@ public class AutoRechargeService : IAutoRechargeService
 
             if (_viaService == null)
             {
+                // Cooldown, so a development host does not log this on every debit.
+                _failedAttempts[userId] = DateTimeOffset.UtcNow;
                 _logger.LogWarning("Auto-recharge of user {UserId} skipped: P4Backoffice:Modules:Billing is not On", userId);
                 return new AutoRechargeResult { Success = false, Error = "Payments not available" };
             }
@@ -132,8 +131,12 @@ public class AutoRechargeService : IAutoRechargeService
         switch (charge.Outcome)
         {
             case ServiceChargeOutcome.Succeeded when !charge.CreditsGranted:
-                // Paid but not granted (logged by BackofficeAutoRecharge): no success e-mail.
-                return new AutoRechargeResult { Success = false, Error = "Paid, credits not granted" };
+                // Paid but not granted (logged by BackofficeAutoRecharge): no success e-mail. The claim
+                // is released, so the next debit would charge the card again: stop auto-recharge
+                // (and rest the cooldown) until an admin has settled the payment.
+                _failedAttempts[user.Id] = DateTimeOffset.UtcNow;
+                await DisableAsync(user);
+                return new AutoRechargeResult { Success = false, Error = "Paid, credits not granted; auto-recharge stopped" };
 
             case ServiceChargeOutcome.Abandoned:
                 // An earlier charge never finished; repeating could charge twice. An admin settles it.
