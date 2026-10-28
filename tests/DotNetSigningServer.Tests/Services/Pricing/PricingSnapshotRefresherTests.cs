@@ -15,21 +15,18 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Stripe;
 
 namespace DotNetSigningServer.Tests.Services.Pricing;
 
 /// <summary>
 /// InMemory database + the Pricing module wired by <see cref="BackofficeRegistration.AddPricing"/>,
-/// with the service replaced by <see cref="StubServiceHandler"/> and Stripe by a mock.
+/// with the service replaced by <see cref="StubServiceHandler"/>.
 /// </summary>
 internal sealed class PricingTestHost : IDisposable
 {
     public ServiceProvider Services { get; }
     public StubServiceHandler Service { get; } = new();
-    public Mock<IStripeClient> Stripe { get; } = new();
     public ManualTimeProvider Time { get; } = new(new DateTimeOffset(2026, 9, 28, 12, 0, 0, TimeSpan.Zero));
-    public int StripeLookups { get; private set; }
 
     /// <summary>Stands in for e-mail (price-change notices).</summary>
     public FakeTemplatedEmailSender Email { get; } = new();
@@ -45,11 +42,6 @@ internal sealed class PricingTestHost : IDisposable
             DisabledReason = BackofficeDisabledReason.None,
         };
 
-        Stripe.Setup(c => c.RequestAsync<StripeList<Price>>(
-                HttpMethod.Get, It.IsAny<string>(), It.IsAny<BaseOptions>(), It.IsAny<RequestOptions>(), It.IsAny<CancellationToken>()))
-            .Callback(() => StripeLookups++)
-            .ReturnsAsync(new StripeList<Price> { Data = [] });
-
         var dbName = "pricing-" + Guid.NewGuid();
         var services = new ServiceCollection();
         services.AddLogging(b => b.SetMinimumLevel(LogLevel.Warning));
@@ -61,10 +53,8 @@ internal sealed class PricingTestHost : IDisposable
             o.PricePer100 = b.PricePer100;
             o.Currency = b.Currency;
         });
-        services.Configure<StripeOptions>(_ => { });
         services.Configure<AppOptions>(o => o.FqdnServerName = "https://app.example.com");
         services.AddSingleton<DotNetSigningServer.Services.Email.ITemplatedEmailSender>(Email);
-        services.AddSingleton(sp => new StripePriceResolver(Stripe.Object, Time, sp.GetRequiredService<ILogger<StripePriceResolver>>()));
         BackofficeRegistration.AddPricing(services, options);
         services.AddSingleton<LoggingBackofficeEventHandler>();
         services.AddScoped<EventHandlerRegistry>();
@@ -76,7 +66,6 @@ internal sealed class PricingTestHost : IDisposable
     public PricingSnapshotRefresher Refresher => Services.GetRequiredService<PricingSnapshotRefresher>();
     public PricingSnapshotHolder Holder => Services.GetRequiredService<PricingSnapshotHolder>();
     public ICreditPricingProvider Provider => Services.GetRequiredService<ICreditPricingProvider>();
-    public StripePriceResolver Resolver => Services.GetRequiredService<StripePriceResolver>();
 
     public void EnqueuePriceList(string json, string etag = "\"v1\"") =>
         Service.Responses.Enqueue(_ =>
@@ -230,29 +219,11 @@ public class PricingSnapshotRefresherTests
     }
 
     [Fact]
-    public async Task NewVersion_DropsCachedStripePrices()
+    public async Task PriceEffective_RefreshesUnconditionally()
     {
         using var host = new PricingTestHost("On");
         host.EnqueuePriceList(PricingTestData.ImportedJson(1), "\"v1\"");
         await host.Refresher.RefreshAsync("test", conditional: true, CancellationToken.None);
-        await host.Resolver.ResolveAsync(host.Provider.GetPack(300)!);
-        await host.Resolver.ResolveAsync(host.Provider.GetPack(300)!);
-        Assert.Equal(1, host.StripeLookups);
-
-        host.EnqueuePriceList(PricingTestData.ImportedJson(2), "\"v2\"");
-        await host.Refresher.RefreshAsync("test", conditional: true, CancellationToken.None);
-        await host.Resolver.ResolveAsync(host.Provider.GetPack(300)!);
-
-        Assert.Equal(2, host.StripeLookups);
-    }
-
-    [Fact]
-    public async Task PriceEffective_RefreshesUnconditionallyAndDropsCachedPrices()
-    {
-        using var host = new PricingTestHost("On");
-        host.EnqueuePriceList(PricingTestData.ImportedJson(1), "\"v1\"");
-        await host.Refresher.RefreshAsync("test", conditional: true, CancellationToken.None);
-        await host.Resolver.ResolveAsync(host.Provider.GetPack(300)!);
         host.EnqueuePriceList(PricingTestData.ImportedJson(1, new Dictionary<int, long> { [300] = 1450 }), "\"v1b\"");
 
         using (var scope = host.Services.CreateScope())
@@ -262,11 +233,9 @@ public class PricingSnapshotRefresherTests
             using var data = JsonDocument.Parse("""{"version":1}""");
             await handler.HandleAsync(new BackofficeEvent("evt_1", BackofficeEventTypes.PriceEffective, data.RootElement.Clone(), "webhook", host.Time.GetUtcNow(), 1), CancellationToken.None);
         }
-        await host.Resolver.ResolveAsync(host.Provider.GetPack(300)!);
 
         Assert.Empty(host.Request(1).Headers.IfNoneMatch);
         Assert.Equal(1450, host.Provider.GetPack(300)!.UnitAmountMinor);
-        Assert.Equal(2, host.StripeLookups);
     }
 
     [Fact]
@@ -340,6 +309,5 @@ public class PricingRegistrationTests
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<ConfigCreditPricingProvider>(provider.GetRequiredService<ICreditPricingProvider>());
-        Assert.NotNull(provider.GetRequiredService<StripePriceResolver>());
     }
 }

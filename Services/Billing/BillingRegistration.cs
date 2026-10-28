@@ -8,15 +8,15 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace DotNetSigningServer.Services.Billing;
 
 /// <summary>
-/// Payments by <c>P4Backoffice:Modules:Billing</c> (Off by default, never inherited from the
-/// global mode, forced Off on a PrivateServer):
+/// Payments by <c>P4Backoffice:Modules:Billing</c> (never inherited from the global mode, forced
+/// Off on a PrivateServer). Production requires On (checked at startup,
+/// <see cref="BackofficeOptionsValidator"/>):
 /// <list type="bullet">
-/// <item>Off — Stripe directly with the product's key (<see cref="StripePaymentGateway"/>), the
-/// product's Stripe webhook grants credits; nothing here talks to the service.</item>
 /// <item>On — <see cref="BackofficePaymentGateway"/> and <see cref="BackofficeAutoRecharge"/>
 /// call <c>/v1/billing/*</c>; <c>billing.*</c> events grant credits
-/// (<see cref="BillingEventsHandler"/>). The product's Stripe webhook endpoint answers 404
-/// (#79): the product's Stripe account no longer takes the payments.</item>
+/// (<see cref="BillingEventsHandler"/>). The product holds no Stripe key.</item>
+/// <item>Anything else (a private server, development) — <see cref="DisabledPaymentGateway"/>:
+/// no payment can be started.</item>
 /// </list>
 /// </summary>
 public static class BillingRegistration
@@ -24,12 +24,11 @@ public static class BillingRegistration
     public static void AddBilling(IServiceCollection services, P4BackofficeProductOptions options)
     {
         services.TryAddSingleton(TimeProvider.System);
-        services.TryAddScoped<StripePaymentGateway>();
 
         var mode = options.ModeFor(BackofficeModule.Billing);
         if (mode == BackofficeMode.Off)
         {
-            services.TryAddScoped<IPaymentGateway>(sp => sp.GetRequiredService<StripePaymentGateway>());
+            services.TryAddScoped<IPaymentGateway, DisabledPaymentGateway>();
             return;
         }
 

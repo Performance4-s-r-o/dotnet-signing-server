@@ -53,7 +53,7 @@ public class PricingPageTests : IClassFixture<SignUpPostgresFixture>
             services.AddSingleton<ICreditPricingProvider>(sp => new BackofficeCreditPricingProvider(
                 holder,
                 new ConfigCreditPricingProvider(new BillingOptions()),
-                sp.GetRequiredService<IOptionsMonitor<StripeOptions>>(),
+                sp.GetRequiredService<IOptionsMonitor<BillingOptions>>(),
                 NullLogger<BackofficeCreditPricingProvider>.Instance));
         });
 

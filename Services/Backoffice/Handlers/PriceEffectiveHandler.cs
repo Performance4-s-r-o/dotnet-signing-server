@@ -11,7 +11,7 @@ namespace DotNetSigningServer.Services.Backoffice.Handlers;
 /// <c>price.effective</c>: a new price list is in force (the service sends it after a successful
 /// Stripe sync) and its lookup keys point to the new Stripe Prices.
 ///
-/// Fetches the price list right away and drops the cached Stripe Prices. A failed
+/// Fetches the price list right away. A failed
 /// fetch throws, so the inbox retries the event; the hourly refresh catches up in any case.
 ///
 /// Then stores the new price of 100 credits in <c>User.AutoRechargePricePer100</c> of every
@@ -23,24 +23,21 @@ public sealed class PriceEffectiveHandler : IBackofficeEventHandler
 {
     private readonly PricingSnapshotRefresher _refresher;
     private readonly PricingSnapshotHolder _holder;
-    private readonly StripePriceResolver _resolver;
     private readonly ApplicationDbContext _db;
-    private readonly IOptionsMonitor<StripeOptions> _stripe;
+    private readonly IOptionsMonitor<BillingOptions> _billing;
     private readonly ILogger<PriceEffectiveHandler> _logger;
 
     public PriceEffectiveHandler(
         PricingSnapshotRefresher refresher,
         PricingSnapshotHolder holder,
-        StripePriceResolver resolver,
         ApplicationDbContext db,
-        IOptionsMonitor<StripeOptions> stripe,
+        IOptionsMonitor<BillingOptions> billing,
         ILogger<PriceEffectiveHandler> logger)
     {
         _refresher = refresher;
         _holder = holder;
-        _resolver = resolver;
         _db = db;
-        _stripe = stripe;
+        _billing = billing;
         _logger = logger;
     }
 
@@ -48,16 +45,7 @@ public sealed class PriceEffectiveHandler : IBackofficeEventHandler
 
     public async Task HandleAsync(BackofficeEvent evt, CancellationToken cancellationToken)
     {
-        _resolver.Invalidate();
-        try
-        {
-            await _refresher.RefreshAsync(BackofficeEventTypes.PriceEffective, conditional: false, cancellationToken);
-        }
-        finally
-        {
-            // Again after the fetch: a checkout in between may have cached the old Price.
-            _resolver.Invalidate();
-        }
+        await _refresher.RefreshAsync(BackofficeEventTypes.PriceEffective, conditional: false, cancellationToken);
         _logger.LogInformation("Backoffice event {EventId}: price list refreshed after {EventType}", evt.Id, evt.Type);
 
         var version = PriceEventData.Int(evt.Data, "version");
@@ -79,7 +67,7 @@ public sealed class PriceEffectiveHandler : IBackofficeEventHandler
                 $"price.effective {eventId}: the fetched price list is v{snapshot?.Version.ToString() ?? "-"}, not v{version} yet");
         }
 
-        var currency = PriceScheduledHandler.ProductCurrency(_stripe.CurrentValue);
+        var currency = PriceScheduledHandler.ProductCurrency(_billing.CurrentValue);
         var pack100 = PriceListMapper.Map(snapshot.Body, currency).Packs.GetValueOrDefault(100);
         if (pack100 is null)
         {

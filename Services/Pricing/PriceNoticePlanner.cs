@@ -97,7 +97,7 @@ public static class PriceNoticePlanner
 {
     private static readonly Regex CreditsItem = new(@"^credits_(\d+)$", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
-    /// <param name="currency">Product currency (<c>Stripe:Currency</c>).</param>
+    /// <param name="currency">Product currency (<c>Billing:Currency</c>).</param>
     /// <param name="currentPacks">Packs in force now: the old price when <c>from</c> is null, and
     /// the lookup key of a change without an item key.</param>
     public static PriceNoticePlan Plan(

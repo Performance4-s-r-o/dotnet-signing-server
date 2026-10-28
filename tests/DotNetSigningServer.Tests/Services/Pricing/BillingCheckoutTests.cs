@@ -23,7 +23,7 @@ namespace DotNetSigningServer.Tests.Services.Pricing;
 public class BillingCheckoutTests : IDisposable
 {
     private readonly ApplicationDbContext _db = TestHelpers.CreateInMemoryDbContext();
-    private readonly Mock<IStripeCheckoutService> _checkout = new();
+    private readonly Mock<IPaymentGateway> _checkout = new();
     private readonly User _user;
 
     public BillingCheckoutTests()
@@ -49,7 +49,7 @@ public class BillingCheckoutTests : IDisposable
             _db,
             new BillingService(TestHelpers.WrapOptions(new BillingOptions())),
             pricing,
-            new StripePaymentGateway(_checkout.Object, NullLogger<StripePaymentGateway>.Instance),
+            _checkout.Object,
             Mock.Of<IAutoRechargeService>(),
             NullLogger<BillingController>.Instance,
             new StringLocalizer<SharedStrings>(new KeyEchoLocalizerFactory()));
@@ -71,7 +71,7 @@ public class BillingCheckoutTests : IDisposable
         var holder = new PricingSnapshotHolder();
         holder.Set(PricingTestData.Snapshot(json));
         return new BackofficeCreditPricingProvider(holder, new ConfigCreditPricingProvider(new BillingOptions()),
-            new Monitor<StripeOptions>(new StripeOptions()), NullLogger<BackofficeCreditPricingProvider>.Instance);
+            new Monitor<BillingOptions>(new BillingOptions()), NullLogger<BackofficeCreditPricingProvider>.Instance);
     }
 
     [Fact]
@@ -79,9 +79,9 @@ public class BillingCheckoutTests : IDisposable
     {
         CreditPack? charged = null;
         IDictionary<string, string>? metadata = null;
-        _checkout.Setup(c => c.CreateCheckoutSessionAsync(It.IsAny<User>(), It.IsAny<CreditPack>(), It.IsAny<string>(), It.IsAny<string>(),
-                It.IsAny<IDictionary<string, string>?>(), It.IsAny<bool>()))
-            .Callback<User, CreditPack, string, string, IDictionary<string, string>?, bool>((_, p, _, _, m, _) => (charged, metadata) = (p, m))
+        _checkout.Setup(c => c.StartCheckoutAsync(It.IsAny<User>(), It.IsAny<CreditPack>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<IDictionary<string, string>>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Callback<User, CreditPack, string, string, IDictionary<string, string>, bool, CancellationToken>((_, p, _, _, m, _, _) => (charged, metadata) = (p, m))
             .ReturnsAsync("https://checkout.test/1");
         var controller = Controller(PriceListProvider(PricingTestData.ImportedJson(1, new Dictionary<int, long> { [300] = 1500 })));
 
@@ -97,9 +97,9 @@ public class BillingCheckoutTests : IDisposable
     public async Task ConfiguredPrices_ChargeTheSameAmountAsBefore()
     {
         CreditPack? charged = null;
-        _checkout.Setup(c => c.CreateCheckoutSessionAsync(It.IsAny<User>(), It.IsAny<CreditPack>(), It.IsAny<string>(), It.IsAny<string>(),
-                It.IsAny<IDictionary<string, string>?>(), It.IsAny<bool>()))
-            .Callback<User, CreditPack, string, string, IDictionary<string, string>?, bool>((_, p, _, _, _, _) => charged = p)
+        _checkout.Setup(c => c.StartCheckoutAsync(It.IsAny<User>(), It.IsAny<CreditPack>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<IDictionary<string, string>>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Callback<User, CreditPack, string, string, IDictionary<string, string>, bool, CancellationToken>((_, p, _, _, _, _, _) => charged = p)
             .ReturnsAsync("https://checkout.test/2");
         var controller = Controller(new ConfigCreditPricingProvider(new BillingOptions()));
 

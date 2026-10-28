@@ -156,7 +156,6 @@ builder.Services.AddScoped<PdfLtvService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IBillingService, BillingService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<IStripeCheckoutService, StripeCheckoutService>();
 builder.Services.AddScoped<IApiAuthService, ApiAuthService>();
 // SizeLimit counts entries: every cache.Set must carry Size = 1 (#74). Without a limit the
 // token and consent caches grow with whatever a caller sends.
@@ -232,7 +231,6 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 builder.Services.Configure<BillingOptions>(builder.Configuration.GetSection("Billing"));
-builder.Services.Configure<StripeOptions>(builder.Configuration.GetSection("Stripe"));
 builder.Services.Configure<TokenOptions>(builder.Configuration.GetSection("Token"));
 builder.Services.AddOptions<SessionSecurityOptions>()
     .Bind(builder.Configuration.GetSection(SessionSecurityOptions.SectionName))

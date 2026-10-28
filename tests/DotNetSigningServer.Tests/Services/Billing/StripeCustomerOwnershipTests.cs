@@ -71,17 +71,17 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
 
     // --- Confirm pages (redirect from Stripe) ---------------------------------------------
 
-    private BillingController Billing(ApplicationDbContext db, User user, Stripe.Checkout.Session session)
+    private BillingController Billing(ApplicationDbContext db, User user, CheckoutSessionInfo session)
     {
-        var checkout = new Mock<IStripeCheckoutService>();
-        checkout.Setup(c => c.GetSessionAsync(session.Id)).ReturnsAsync(session);
+        var checkout = new Mock<IPaymentGateway>();
+        checkout.Setup(c => c.GetCheckoutAsync(session.Id, It.IsAny<CancellationToken>())).ReturnsAsync(session);
         var pricing = new Mock<ICreditPricingProvider>();
         pricing.SetupGet(p => p.PricePer100).Returns(5m);
         var controller = new BillingController(
             db,
             new BillingService(TestHelpers.WrapOptions(new BillingOptions())),
             pricing.Object,
-            new StripePaymentGateway(checkout.Object, NullLogger<StripePaymentGateway>.Instance),
+            checkout.Object,
             _autoRecharge.Object,
             NullLogger<BillingController>.Instance,
             new StringLocalizer<SharedStrings>(new KeyEchoLocalizerFactory()));
@@ -95,24 +95,16 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
         return controller;
     }
 
-    private static Stripe.Checkout.Session SetupSession(Guid userId, string? customerId) => new()
-    {
-        Id = Unique("cs"),
-        Mode = "setup",
-        Status = "complete",
-        CustomerId = customerId,
-        Metadata = new Dictionary<string, string> { ["userId"] = userId.ToString(), [BillingCustomerRef.ProductMarkerKey] = BillingCustomerRef.ProductMarker, ["autoRechargeQuantity"] = "300" },
-    };
+    // A session as the ownership guard sees one that names a Stripe customer and no customer reference.
+    private static CheckoutSessionInfo SetupSession(Guid userId, string? customerId) => new(
+        Unique("cs"), "setup", "complete", null,
+        new Dictionary<string, string> { ["userId"] = userId.ToString(), [BillingCustomerRef.ProductMarkerKey] = BillingCustomerRef.ProductMarker, ["autoRechargeQuantity"] = "300" },
+        customerId, CustomerRef: null);
 
-    private static Stripe.Checkout.Session PaidSession(Guid userId, string? customerId) => new()
-    {
-        Id = Unique("cs"),
-        Mode = "payment",
-        Status = "complete",
-        PaymentStatus = "paid",
-        CustomerId = customerId,
-        Metadata = new Dictionary<string, string> { ["userId"] = userId.ToString(), [BillingCustomerRef.ProductMarkerKey] = BillingCustomerRef.ProductMarker, ["documents"] = "300" },
-    };
+    private static CheckoutSessionInfo PaidSession(Guid userId, string? customerId) => new(
+        Unique("cs"), "payment", "complete", "paid",
+        new Dictionary<string, string> { ["userId"] = userId.ToString(), [BillingCustomerRef.ProductMarkerKey] = BillingCustomerRef.ProductMarker, ["documents"] = "300" },
+        customerId, CustomerRef: null);
 
     [Fact]
     public async Task ConfirmAutoRechargeSetup_WithAnotherUsersCustomer_DoesNotLinkIt()
@@ -175,7 +167,7 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
     {
         var user = await NewUserAsync(Unique("cus_own"));
         var session = PaidSession(user.Id, user.StripeCustomerId);
-        session.Metadata.Remove("userId");
+        ((Dictionary<string, string>)session.Metadata).Remove("userId");
 
         await using (var db = _pg.CreateContext())
         {

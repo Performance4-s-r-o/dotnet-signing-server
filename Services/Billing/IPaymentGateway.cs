@@ -6,9 +6,9 @@ namespace DotNetSigningServer.Services.Billing;
 /// <summary>
 /// Everything the billing pages need from the payment provider, without its types.
 ///
-/// Two implementations, chosen at startup by <c>P4Backoffice:Modules:Billing</c>:
-/// <see cref="StripePaymentGateway"/> (Off: Stripe directly, as always) and
-/// <see cref="BackofficePaymentGateway"/> (On: through the P4 Backoffice billing API).
+/// Chosen at startup by <c>P4Backoffice:Modules:Billing</c>: <see cref="BackofficePaymentGateway"/>
+/// (On: through the P4 Backoffice billing API) or <see cref="DisabledPaymentGateway"/> (a private
+/// server, a development host; Production requires On).
 /// Methods throw on failure; callers keep their own error handling.
 /// </summary>
 public interface IPaymentGateway
@@ -53,23 +53,14 @@ public interface IPaymentGateway
 
     /// <summary>Removes every saved card (enterprise accounts are invoiced manually).</summary>
     Task DetachPaymentMethodsAsync(User user, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Account erasure (#217, D-3), direct Stripe path only: unsets the personal fields and the
-    /// metadata of the user's Stripe customer and ends its live subscriptions at once (no invoice,
-    /// no proration); the customer and its invoices stay. <paramref name="erasureKey"/> keys the
-    /// idempotency of the cancellations. Throws on failure. Through the billing service the
-    /// service does this itself (<c>customer_ref</c> of the erasure request).
-    /// </summary>
-    Task<StripeCustomerScrubResult> ScrubCustomerForErasureAsync(User user, string erasureKey, CancellationToken cancellationToken = default);
 }
 
 /// <summary>A checkout session as the confirm pages need it.</summary>
 /// <param name="Mode"><c>payment</c> or <c>setup</c>.</param>
 /// <param name="Status"><c>open</c>, <c>complete</c> or <c>expired</c>.</param>
 /// <param name="PaymentStatus"><c>paid</c>, <c>unpaid</c> or <c>no_payment_required</c>.</param>
-/// <param name="StripeCustomerId">Known only on the direct path.</param>
-/// <param name="CustomerRef">The billing API's customer reference; null on the direct path.</param>
+/// <param name="StripeCustomerId">The Stripe customer of the session, when the billing API reports it.</param>
+/// <param name="CustomerRef">The billing API's customer reference.</param>
 public sealed record CheckoutSessionInfo(
     string Id,
     string? Mode,

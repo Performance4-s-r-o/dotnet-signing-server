@@ -68,7 +68,7 @@ public class PrivateServerConventionTests
             .ToList();
 
         Assert.Equal(expected, routes.Contains("api/webhooks/p4"));
-        Assert.Equal(expected, routes.Contains("api/webhooks/stripe"));
+        Assert.DoesNotContain("api/webhooks/stripe", routes); // no provider webhook on either build
     }
 
     [Fact]
