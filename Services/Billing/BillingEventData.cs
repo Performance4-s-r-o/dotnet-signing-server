@@ -17,6 +17,10 @@ public sealed record CheckoutPurchase(
 /// <param name="AttemptKey">Key of the auto-recharge claim that sent the charge (metadata <c>rechargeAttempt</c>).</param>
 public sealed record AutoRechargePayment(string PaymentIntentId, Guid UserId, int Documents, long? Amount, string? Currency, string? FailureCode, string? AttemptKey);
 
+/// <summary>A failed payment of this product's user read from <c>billing.payment.failed</c>.</summary>
+/// <param name="PaymentType"><c>auto_recharge</c> or <c>purchase</c> (metadata <c>type</c>, else a purchase).</param>
+public sealed record FailedPayment(string PaymentIntentId, Guid UserId, string PaymentType, long? Amount, string? Currency, string? FailureCode);
+
 /// <summary>
 /// Reads the <c>billing.*</c> event data this product acts on. Pure. Every reader refuses
 /// (null + reason) rather than guess: an event of another flow, or one whose customer is not
@@ -86,6 +90,21 @@ public static class BillingEventData
         return new AutoRechargePayment(paymentIntentId, userId, documents,
             BillingJson.Long(data, "amount"), BillingJson.String(data, "currency"), BillingJson.String(data, "failure_code"),
             metadata.GetValueOrDefault(AutoRechargeClaim.MetadataKey));
+    }
+
+    /// <summary><c>billing.payment.failed</c> of any payment that names this product's user (not only auto-recharge).</summary>
+    public static FailedPayment? Failed(JsonElement data, out string? reason)
+    {
+        reason = null;
+        var metadata = BillingJson.StringMap(data, "metadata");
+        if (BillingJson.String(data, "stripe_payment_intent_id") is not { Length: > 0 } paymentIntentId)
+        {
+            reason = "no payment intent";
+            return null;
+        }
+        if (!TryOwner(data, metadata, out var userId, out reason)) return null;
+        return new FailedPayment(paymentIntentId, userId, metadata.GetValueOrDefault("type") ?? "purchase",
+            BillingJson.Long(data, "amount"), BillingJson.String(data, "currency"), BillingJson.String(data, "failure_code"));
     }
 
     /// <summary>The user of <c>billing.payment_method.detached</c>; null for a customer this product did not create.</summary>

@@ -26,6 +26,7 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
 
     private readonly OutboxPostgresFixture _pg;
     private readonly StubServiceHandler _service = new();
+    private readonly DotNetSigningServer.Tests.Services.Pricing.FakeTemplatedEmailSender _email = new();
     private readonly ManualTimeProvider _time = new(DateTimeOffset.UtcNow);
 
     public BillingPostgresTests(OutboxPostgresFixture pg)
@@ -91,6 +92,8 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
         var services = new ServiceCollection()
             .AddSingleton(autoRecharge ?? Mock.Of<IAutoRechargeService>())
             .AddSingleton(pricing.Object)
+            .AddSingleton<DotNetSigningServer.Services.Email.ITemplatedEmailSender>(_email)
+            .AddSingleton(Microsoft.Extensions.Options.Options.Create(new DotNetSigningServer.Options.AppOptions { FqdnServerName = "https://app.example.com" }))
             .BuildServiceProvider();
         return new BillingEventsHandler(db, services, NullLogger<BillingEventsHandler>.Instance);
     }
@@ -371,5 +374,68 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
         await using (var db = _pg.CreateContext()) result = await RechargeService(db).TryAutoRechargeAsync(user.Id);
         Assert.Contains("Cooldown", result.Error);
         Assert.Single(_service.Requests);
+    }
+
+    private static BackofficeEvent PaymentFailedEvent(Guid userId, string paymentIntent, string type = "purchase") =>
+        Event(BackofficeEventTypes.BillingPaymentFailed, $$$"""
+            {"customer_ref":"{{{BillingCustomerRef.For(userId)}}}","stripe_payment_intent_id":"{{{paymentIntent}}}","status":"failed",
+             "amount":1500,"currency":"eur","failure_code":"card_declined","metadata":{"type":"{{{type}}}","userId":"{{{userId}}}"}}
+            """);
+
+    [DockerFact]
+    public async Task PaymentFailed_TellsTheUserOnce_AndGrantsNothing()
+    {
+        var user = await NewUserAsync();
+        var evt = PaymentFailedEvent(user.Id, "pi_declined");
+
+        await using (var db = _pg.CreateContext()) await Handler(db).HandleAsync(evt, default);
+        await using (var db = _pg.CreateContext()) await Handler(db).HandleAsync(evt, default); // a redelivery or retry
+
+        var sent = Assert.Single(_email.Sent);
+        Assert.Equal(DotNetSigningServer.Services.Email.EmailTemplateId.PaymentFailed, sent.Template);
+        Assert.Equal(user.Email, sent.To);
+        Assert.Equal("15.00", sent.Variables["amount"]);
+        Assert.Equal("EUR", sent.Variables["currency"]);
+        Assert.Equal("card_declined", sent.Variables["failureReason"]);
+        Assert.Equal("https://app.example.com/Billing", sent.Variables["billingUrl"]);
+        Assert.Equal(0, await CreditsAsync(user.Id));
+        await using var check = _pg.CreateContext();
+        var payment = await check.Payments.AsNoTracking().SingleAsync(p => p.UserId == user.Id);
+        Assert.Equal(("pi_declined", "failed", 1500), (payment.StripePaymentIntentId, payment.Status, payment.AmountCents));
+        Assert.False(await check.CreditGrants.AnyAsync(g => g.UserId == user.Id));
+    }
+
+    [DockerFact]
+    public async Task PaymentFailed_OfAnotherCustomer_SendsNothing()
+    {
+        var user = await NewUserAsync();
+        var other = Guid.NewGuid();
+        var evt = Event(BackofficeEventTypes.BillingPaymentFailed, $$$"""
+            {"customer_ref":"{{{BillingCustomerRef.For(other)}}}","stripe_payment_intent_id":"pi_x","amount":1500,"currency":"eur",
+             "metadata":{"userId":"{{{user.Id}}}"}}
+            """);
+
+        await using (var db = _pg.CreateContext()) await Handler(db).HandleAsync(evt, default);
+
+        Assert.Empty(_email.Sent);
+        await using var check = _pg.CreateContext();
+        Assert.False(await check.Payments.AnyAsync(p => p.UserId == user.Id));
+    }
+
+    [DockerFact]
+    public async Task PaymentFailed_OfAnAutoRecharge_StillReleasesItsClaim()
+    {
+        var user = await NewUserAsync();
+        await AddRowAsync(Claim(user.Id, "k_fail", _time.Now, _time.Now, retryReady: false));
+        var evt = Event(BackofficeEventTypes.BillingPaymentFailed, $$$"""
+            {"customer_ref":"{{{BillingCustomerRef.For(user.Id)}}}","stripe_payment_intent_id":"pi_ar","amount":1500,"currency":"eur",
+             "failure_code":"card_declined","metadata":{"type":"auto_recharge","userId":"{{{user.Id}}}","documents":"300","rechargeAttempt":"k_fail"}}
+            """);
+
+        await using (var db = _pg.CreateContext()) await Handler(db).HandleAsync(evt, default);
+
+        Assert.Single(_email.Sent);
+        Assert.Null(await ClaimRowAsync(user.Id));
+        Assert.Equal(0, await CreditsAsync(user.Id));
     }
 }
