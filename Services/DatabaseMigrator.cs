@@ -5,8 +5,8 @@ namespace DotNetSigningServer.Services;
 
 /// <summary>
 /// Schema migrations as a release step rather than a side effect of every start (#85).
-/// EF Core 8 has no migration lock, so two replicas starting together could migrate at the
-/// same time, and the runtime role would need DDL rights.
+/// Migrating on start would let two replicas starting together race on the same DDL, and the
+/// runtime role would need DDL rights.
 /// </summary>
 public static class DatabaseMigrator
 {
@@ -70,9 +70,9 @@ public static class DatabaseMigrator
             return;
         }
 
-        // EF Core 8 takes no migration lock, so two concurrent steps would race on the same
-        // DDL, CREATE SCHEMA included. A session advisory lock on the connection EF itself
-        // uses serialises them; the second one waits, then finds nothing pending.
+        // Our own session advisory lock, taken before CREATE SCHEMA and the history check,
+        // which run outside whatever lock EF Core 9 takes inside Migrate(). The second
+        // concurrent step waits, then finds nothing pending.
         var conn = dbContext.Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open)
         {
