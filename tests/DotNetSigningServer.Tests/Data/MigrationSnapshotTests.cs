@@ -1,4 +1,5 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -36,6 +37,7 @@ public class MigrationSnapshotTests
 
         var migrations = db.Database.GetMigrations().ToList();
         Assert.Single(migrations);
+        Assert.Equal(DatabaseMigrator.BaselineMigrationId, migrations[0]);
         var sql = db.GetService<IMigrator>().GenerateScript(Migration.InitialDatabase, migrations[0]);
 
         Assert.Contains("CREATE UNIQUE INDEX \"IX_Users_Email_Lower\" ON dotnet_signing.\"Users\" (lower(\"Email\"))", sql);
@@ -49,5 +51,20 @@ public class MigrationSnapshotTests
         Assert.Contains("CREATE UNIQUE INDEX \"IX_CreditGrants_GrantKey\"", sql);
         Assert.Contains("WHERE \"PaymentIntentId\" IS NOT NULL", sql);
         Assert.Contains("\"PasswordIterations\" integer NOT NULL DEFAULT 0", sql);
+    }
+
+    /// <summary>
+    /// The old-history guard compares against this constant; a migration with an older ID
+    /// would come first and silently become the "baseline" if the guard used the order.
+    /// </summary>
+    [Fact]
+    public void Baseline_IsTheFirstMigrationOfTheBuild()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseNpgsql("Host=localhost;Database=unused")
+            .Options;
+        using var db = new ApplicationDbContext(options);
+
+        Assert.Equal(DatabaseMigrator.BaselineMigrationId, db.Database.GetMigrations().First());
     }
 }

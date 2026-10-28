@@ -12,6 +12,9 @@ public static class DatabaseMigrator
 {
     public const string Schema = "dotnet_signing";
 
+    /// <summary>The first migration of the history; every database built since carries it.</summary>
+    public const string BaselineMigrationId = "20261028234306_InitialSchema";
+
     /// <summary>Command-line switch: migrate and exit, never start serving.</summary>
     public const string MigrateArgument = "--migrate";
 
@@ -218,7 +221,7 @@ public static class DatabaseMigrator
             return;
         }
 
-        var baseline = dbContext.Database.GetMigrations().First();
+        const string baseline = BaselineMigrationId;
         if (applied.Contains(baseline, StringComparer.Ordinal))
         {
             return;
