@@ -378,92 +378,6 @@ public class PdfSigningServiceTests : IDisposable
     }
 
     [Fact]
-    public void ApplySeal_WithConfiguredCertificate_ProducesValidPdf()
-    {
-        var pdfBase64 = TestHelpers.CreateMinimalPdfBase64();
-        var (_, pfxBase64, password) = TestHelpers.CreateTestCertificate();
-        var sut = CreateSealingService(
-            sealOptions: new SealOptions
-            {
-                Enabled = true,
-                PfxBase64 = pfxBase64,
-                PfxPassword = password,
-                Reason = "Corporate seal",
-                Location = "Unit Tests",
-                Visible = false
-            });
-
-        var result = sut.ApplySeal(new SealInput
-        {
-            PdfContent = pdfBase64,
-            Reason = "Corporate seal",
-            Location = "Unit Tests"
-        });
-
-        Assert.False(string.IsNullOrWhiteSpace(result));
-        var bytes = Convert.FromBase64String(result);
-        using var ms = new MemoryStream(bytes);
-        using var reader = new PdfReader(ms);
-        using var pdfDoc = new PdfDocument(reader);
-        Assert.True(pdfDoc.GetNumberOfPages() >= 1);
-        Assert.NotEmpty(new SignatureUtil(pdfDoc).GetSignatureNames());
-    }
-
-    /// <summary>
-    /// Multi-signer regression: sealing a document a second time used to rewrite it
-    /// in full while adding the verification page, which re-serialized the first
-    /// signature's /Contents and killed it ("SigDict /Contents illegal data" in
-    /// Adobe). Every seal round must leave the earlier signatures verifiable, and
-    /// only the first one may add a QR page.
-    /// </summary>
-    [Fact]
-    public void ApplySeal_TwiceWithVerification_KeepsEarlierSignatureIntact()
-    {
-        var (_, pfxBase64, password) = TestHelpers.CreateTestCertificate();
-        var sut = CreateSealingService(
-            sealOptions: new SealOptions
-            {
-                Enabled = true,
-                PfxBase64 = pfxBase64,
-                PfxPassword = password,
-                Visible = false
-            });
-
-        string Seal(string pdfContent, string verificationId) => sut.ApplySeal(new SealInput
-        {
-            PdfContent = pdfContent,
-            VerificationUrl = $"https://example.test/verify/{verificationId}",
-            VerificationMode = "qr",
-            Reason = "Corporate seal",
-            Location = "Unit Tests"
-        });
-
-        var firstSeal = Seal(TestHelpers.CreateMinimalPdfBase64(), "first");
-        var secondSeal = Seal(firstSeal, "second");
-
-        var bytes = Convert.FromBase64String(secondSeal);
-        using var ms = new MemoryStream(bytes);
-        using var reader = new PdfReader(ms);
-        using var doc = new PdfDocument(reader);
-
-        var names = new SignatureUtil(doc).GetSignatureNames();
-        Assert.Equal(2, names.Count);
-
-        // Both containers still parse and verify -- the first one especially.
-        foreach (var name in names)
-        {
-            AssertPadesSignature(bytes, name);
-        }
-
-        // One QR page for the first seal, none for the second.
-        Assert.Equal(2, doc.GetNumberOfPages());
-
-        // The second signer's URL is not lost, it just becomes invisible metadata.
-        var info = doc.GetDocumentInfo();
-        Assert.Equal("https://example.test/verify/second", info.GetMoreInfo("P4PDF-Verification-URL"));
-    }
-
-    [Fact]
     public void ApplyDocumentTimestamp_NoTsa_Throws()
     {
         var pdfBase64 = TestHelpers.CreateMinimalPdfBase64();
@@ -592,22 +506,10 @@ public class PdfSigningServiceTests : IDisposable
     }
 
     private static PdfSigningService CreateSigningService(
-        EvidenceOptions? evidenceOptions = null,
-        SealOptions? sealOptions = null)
+        EvidenceOptions? evidenceOptions = null)
     {
         return new PdfSigningService(
-            TestHelpers.WrapOptions(sealOptions ?? new SealOptions()),
             TestHelpers.WrapOptions(evidenceOptions ?? new EvidenceOptions()),
-            new PdfVisualSigningService());
-    }
-
-    private static PdfSealingService CreateSealingService(
-        SealOptions? sealOptions = null)
-    {
-        var signingService = CreateSigningService(sealOptions: sealOptions);
-        return new PdfSealingService(
-            TestHelpers.WrapOptions(sealOptions ?? new SealOptions()),
-            signingService,
             new PdfVisualSigningService());
     }
 

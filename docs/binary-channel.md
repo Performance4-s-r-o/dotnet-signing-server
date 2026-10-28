@@ -21,7 +21,7 @@ Měření (`LoadProfileTests.BinaryChannelProfile`, PDF 18 MB, viz PR):
 (68 MB = zdvojování bufferu od 256 KB a kopie na přesnou délku. Předalokace podle
 `Content-Length` by dala 36 MB, ale velikost alokace by pak určovala hlavička volajícího.)
 
-Timestamp a pečeť (`LoadProfileTests.BinaryChannelProfile_TimestampAndSeal`, PDF 18,1 MB, medián ze tří
+Timestamp (`LoadProfileTests.BinaryChannelProfile_TimestampOnly`; řádky o pečeti jsou historické, pečeť od #122 neexistuje, PDF 18,1 MB, medián ze tří
 běhů, 14 jader, .NET 8; spouští se s `P4_LOAD_PROFILE=1`, test ověřuje jen „multipart alokuje méně“):
 
 | | JSON base64 | multipart |
@@ -95,7 +95,6 @@ Bez té hlavičky je odpověď JSON jako dosud. Platí i pro opakování z ulož
 | `POST /api/extend-signature` | ✅ multipart | ✅ |
 | `POST /api/inspect-signatures` | ✅ multipart | — (odpověď je zpráva o podpisech) |
 | `POST /api/visual-sign` | ✅ multipart | ✅ |
-| `POST /api/seal` | ✅ multipart (oprávnění k pečeti se ověřuje před čtením těla) | ✅ |
 | `POST /api/attachment` | ✅ multipart (`attachmentContent` zůstává v `metadata` v base64; strop metadat roste o `Limits:AttachmentMaxBytes`) | ✅ |
 | `POST /api/convert/pdfa` | ✅ multipart | ✅ (+ `X-PDF-Conformance`) |
 
@@ -108,7 +107,7 @@ výstupem je pole souborů; `FillAsync` čte `input.PdfContent` uvnitř a jeho p
 ## Co platí v obou kanálech stejně
 
 Oba kanály končí ve stejném kódu (`PreSignCoreAsync`, `FindCodesCoreAsync`, `TimestampCoreAsync`,
-`SealCoreAsync`…; služby mají přetížení přijímající `byte[]`, verze s base64 volá totéž s dekódovanými
+…; služby mají přetížení přijímající `byte[]`, verze s base64 volá totéž s dekódovanými
 bajty) a projdou:
 
 - ověřením tokenu a kontrolou kreditů (401/402) — binární tělo se navíc čte až **po** ověření;

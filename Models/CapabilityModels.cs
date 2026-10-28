@@ -22,7 +22,7 @@ public class ServerCapabilities
 
 public class SealCapability
 {
-    /// <summary>True only when a certificate is configured and could be loaded.</summary>
+    /// <summary>Always false: the server has no seal certificate of its own; the caller supplies it. Kept so clients reading this field keep working.</summary>
     public bool Enabled { get; set; }
 
     /// <summary>Subject DN of the sealing certificate — who a reader will see.</summary>

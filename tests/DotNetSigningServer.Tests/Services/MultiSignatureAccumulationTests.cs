@@ -171,38 +171,30 @@ public class MultiSignatureAccumulationTests : IDisposable
         }
     }
 
+    /// <summary>Test fixture: verification page, then a PFX signature, the way a customer-supplied seal is applied.</summary>
     private static string Seal(
         string pdfContent,
         string pfxBase64,
         string password,
         string verificationId = "first")
     {
-        var options = new SealOptions
-        {
-            Enabled = true,
-            PfxBase64 = pfxBase64,
-            PfxPassword = password,
-            Visible = false,
-        };
+        var withVerification = PdfVerificationService.AddVerification(
+            Convert.FromBase64String(pdfContent), $"https://example.test/verify/{verificationId}", "qr");
 
-        var service = new PdfSealingService(
-            TestHelpers.WrapOptions(options),
-            CreateSigningService(options),
-            new PdfVisualSigningService());
-
-        return service.ApplySeal(new SealInput
-        {
-            PdfContent = pdfContent,
-            VerificationUrl = $"https://example.test/verify/{verificationId}",
-            VerificationMode = "qr",
-            Reason = "Corporate seal",
-            Location = "Unit Tests",
-        });
+        return CreateSigningService().SignWithPfx(
+            new PfxSignInput
+            {
+                PfxContent = pfxBase64,
+                PfxPassword = password,
+                Reason = "Corporate seal",
+                Location = "Unit Tests",
+                SignRect = new SignRect { X = 10, Y = 10, Width = 200, Height = 50 },
+            },
+            withVerification);
     }
 
-    private static PdfSigningService CreateSigningService(SealOptions? sealOptions = null) =>
+    private static PdfSigningService CreateSigningService() =>
         new(
-            TestHelpers.WrapOptions(sealOptions ?? new SealOptions()),
             TestHelpers.WrapOptions(new EvidenceOptions()),
             new PdfVisualSigningService());
 

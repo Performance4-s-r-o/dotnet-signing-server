@@ -28,7 +28,6 @@ namespace DotNetSigningServer.Tests.Services;
 public class ClientSignatureVerificationTests : IDisposable
 {
     private readonly PdfSigningService _sut = new(
-        TestHelpers.WrapOptions(new SealOptions()),
         TestHelpers.WrapOptions(new EvidenceOptions()),
         new PdfVisualSigningService());
 

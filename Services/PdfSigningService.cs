@@ -22,7 +22,6 @@ namespace DotNetSigningServer.Services
         private readonly PdfVisualSigningService _visualSigningService;
 
         public PdfSigningService(
-            IOptions<SealOptions>? sealOptions = null,
             IOptions<EvidenceOptions>? evidenceOptions = null,
             PdfVisualSigningService? visualSigningService = null)
         {

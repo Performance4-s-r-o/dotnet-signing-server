@@ -13,8 +13,7 @@ namespace DotNetSigningServer.Options;
 /// What this does not do is relax authentication. All the authorisation of who
 /// may sign what lives in the portal; this server only ever knew that a caller
 /// was allowed to use it. Reaching it directly still skips every one of those
-/// checks — and <c>/api/seal</c> is the endpoint that would then seal any
-/// document with the customer's own certificate.
+/// checks.
 /// </summary>
 public class PrivateServerOptions
 {

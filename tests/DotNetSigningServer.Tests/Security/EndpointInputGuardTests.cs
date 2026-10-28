@@ -70,7 +70,7 @@ public class EndpointInputGuardTests
         {
             "/api/ai/detect-fields", "/api/ai/extract-data", "/api/attachment", "/api/convert/pdfa",
             "/api/extend-signature", "/api/fill-pdf", "/api/find-codes", "/api/inspect-signatures",
-            "/api/pdf-template", "/api/pdf-template/{templateId:guid}", "/api/presign", "/api/seal",
+            "/api/pdf-template", "/api/pdf-template/{templateId:guid}", "/api/presign",
             "/api/sign-pfx", "/api/timestamp", "/api/visual-sign",
         };
         Assert.Equal(expected, withPdf);

@@ -66,7 +66,7 @@ from the portal under **API Tokens**. Interactive documentation is served at
 | `POST /api/sign` | Complete the flow with an externally produced signature |
 | `POST /api/sign-pfx` | Sign with a PKCS#12 certificate in one call |
 | `POST /api/visual-sign` | Apply a visible signature appearance |
-| `POST /api/seal` | Server-side seal using the configured PFX |
+| `POST /api/seal` | Removed (#122): the server has no certificate of its own, answers `422 SEAL_CERTIFICATE_REQUIRED`. Seal with your own certificate via `presign`/`sign` or `sign-pfx` |
 | `POST /api/timestamp` | Apply an RFC 3161 timestamp |
 | `POST /api/tsa-probe` | Check that a TSA is reachable and RFC 3161 compliant |
 | `POST /api/timestamp-digest` | RFC 3161 token over a SHA-256 digest you supply |
@@ -79,7 +79,7 @@ the server injects the resulting PKCS#7 container into the prepared placeholder.
 ### Retries, operation state and credits
 
 Every paid call (`sign`, `sign-pfx`, `timestamp`, `extend-signature`,
-`visual-sign`, `seal`, `attachment`, `convert/pdfa`, `fill-pdf`, `find-codes`,
+`visual-sign`, `attachment`, `convert/pdfa`, `fill-pdf`, `find-codes`,
 `ai/detect-fields`, `ai/extract-data`) is a durable operation:
 
 - **Credits are reserved before the work** and returned when it fails. `402`
@@ -99,7 +99,7 @@ Every paid call (`sign`, `sign-pfx`, `timestamp`, `extend-signature`,
   charged, `failed` = nothing irreversible happened, `failed_uncertain` = an
   external step (TSA, model) may have happened, but nothing was delivered or
   charged. `404` = the request never arrived. States are kept for 7 days.
-- **Deadlines** (under Cloudflare's 100 s; the portal's post-sign wait is 30 s, see docs/operations.md): 45 s sign/timestamp/seal/…, 60 s
+- **Deadlines** (under Cloudflare's 100 s; the portal's post-sign wait is 30 s, see docs/operations.md): 45 s sign/timestamp/…, 60 s
   fill-pdf and PDF/A, 75 s find-codes/extend-signature/AI. Expiry cancels the work
   and answers `504 OPERATION_DEADLINE_EXCEEDED` (`failed`, or `failed_uncertain`
   when a TSA or model call had started).
@@ -168,7 +168,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `AUTH_ACCOUNT_MAX_ATTEMPTS` / `AUTH_ACCOUNT_WINDOW_MINUTES` | no (30 / 15) | Sign-in and 2FA attempts per account whatever the IP (on top of the per-IP+address limit), counted in PostgreSQL |
 | `MAX_API_TOKENS_PER_USER` | no (100) | Live API tokens per account; 0 = no limit |
 | `GLOBAL_CONCURRENCY_LIMIT` / `GLOBAL_CONCURRENCY_WAIT_MS` | no (off / 2000) | Cap on concurrent operations of the whole server (#69), taken after the user's own slot. Empty or `0` = off; a start hypothesis is H + R + A (logged at startup), to be set only once every caller's own limit is below it (otherwise the caller gets `503`). A request waits up to the given milliseconds for a slot of the global, heavy or AI pool, then gets `503` + `Retry-After`. Negative values stop the server at start; this variable wins over `Billing__GlobalConcurrencyLimit` |
-| `HEAVY_OPERATIONS_LIMIT` / `AI_OPERATIONS_LIMIT` | no (off / off) | Pools H and A (#69): presign, sign, sign-pfx, seal, visual-sign, timestamp, extend-signature, fill-pdf and PDF/A at once, and AI calls at once. Empty or `0` = off. Start hypotheses: H = the CPU count, A = 4. Full after `GLOBAL_CONCURRENCY_WAIT_MS` = `503` + `Retry-After: 10`. Negative or above 10000 stops the server at start |
+| `HEAVY_OPERATIONS_LIMIT` / `AI_OPERATIONS_LIMIT` | no (off / off) | Pools H and A (#69): presign, sign, sign-pfx, visual-sign, timestamp, extend-signature, fill-pdf and PDF/A at once, and AI calls at once. Empty or `0` = off. Start hypotheses: H = the CPU count, A = 4. Full after `GLOBAL_CONCURRENCY_WAIT_MS` = `503` + `Retry-After: 10`. Negative or above 10000 stops the server at start |
 | `USER_QUEUE_MAX_SECONDS` / `USER_QUEUE_LENGTH_FACTOR` | no (30 / 2) | A user's queue (#69): the longest wait whatever the account stores (0–600), and requests that may wait per slot of the user's limit (1–100); the next one gets `429` at once. `Retry-After` after a `429` is the queue wait, at least 5 and at most 60 s. The trusted caller is exempt from both. Out of range stops the server at start |
 | `CONTAINER_MEM_LIMIT` / `CONTAINER_CPUS` / `CONTAINER_STOP_GRACE_PERIOD` | no (0 / 0 / 135s) | Read by `docker-compose.yml` itself (#69): `mem_limit`, `cpus` and `stop_grace_period` of the server container. `0` = no limit. Tune to the machine; `cpus` also sets the CPU count the pools are sized from |
 | `INTERNAL_API_PORT` | no (empty) | Second listener for a trusted internal caller (#78), added next to `ASPNETCORE_URLS`; `docker-compose.yml` only `expose`s 8086, so with the shipped file use 8086. A token of a `TRUSTED_CALLER_USER_IDS` account is accepted on it only; on the public port it gets `401`. Empty = one listener, a plain API |
@@ -178,7 +178,6 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `DataProtection__CertificateBase64` / `__CertificatePassword` (compose: `DATA_PROTECTION_CERTIFICATE_BASE64` / `_PASSWORD`) | in production, unless the next row is `true` | Base64 PFX that encrypts the Data Protection key ring, which also protects stored TSA credentials |
 | `DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS` | no | `true` = a Production start without the certificate is allowed, with a warning (single host, protected volume). Otherwise Production refuses to start with an unencrypted key ring; with `true` it starts and prints a warning. Outside Production nothing is checked or printed. Back up the certificate: adding it does not encrypt keys already written in plaintext (they are replaced when the ring rotates, about every 90 days), and a lost certificate makes the ring unreadable |
 | `BILLING_PRODUCT_TAG_GRACE_UNTIL` | no (empty = strict) | UTC instant; checkout sessions created before it are accepted without the `product` metadata marker (sessions already open at the deploy). Every other ownership check still applies. Remove it a day after the deploy |
-| `Seal__Enabled` | | Server-side sealing; needs `Seal__PfxBase64` + `Seal__PfxPassword` |
 | `Stripe__ApiKey` / `Stripe__WebhookSecret` | for billing | Payments; the webhook secret must start with `whsec_` in production |
 | `Resend__ApiKey` / `Resend__From` | for email | Transactional email |
 | `OsTicket__Url` / `OsTicket__ApiKey` | | Support form; without them (and with `Modules:Support` not `On`) the routes 404 and the nav entry hides |

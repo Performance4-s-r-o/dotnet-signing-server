@@ -56,9 +56,9 @@ public class BinaryChannelEndpointsTests
         public readonly List<Call> Calls = new();
 
         public SigningHarness(
-            ApplicationDbContext db, PdfSigningService signing, PdfSealingService sealing, PdfLtvService ltv,
+            ApplicationDbContext db, PdfSigningService signing, PdfLtvService ltv,
             ContentLimitGuard limits, PdfTemplateService templates, IStringLocalizer<SharedStrings> localizer)
-            : base(db, signing, sealing, ltv, new Mock<IApiAuthService>().Object, NullLogger<PdfSigningApiController>.Instance,
+            : base(db, signing, ltv, new Mock<IApiAuthService>().Object, NullLogger<PdfSigningApiController>.Instance,
                 limits, TestHelpers.WrapOptions(new BillingOptions()), TestHelpers.CreateMockEnvironment(), templates,
                 new Mock<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>().Object, localizer)
         {
@@ -110,7 +110,6 @@ public class BinaryChannelEndpointsTests
         private readonly ApplicationDbContext _db = TestHelpers.CreateInMemoryDbContext();
         private readonly User _user;
         private readonly PdfSigningService _signing;
-        private readonly PdfSealingService _sealing;
         private readonly PdfConversionService _conversion;
         private readonly ContentLimitGuard _limits;
         private readonly PdfTemplateService _templates;
@@ -142,7 +141,7 @@ public class BinaryChannelEndpointsTests
             _templates = new PdfTemplateService(_db, NullLogger<PdfTemplateService>.Instance, _limits, factory.Object);
 
             // PdfSigningService: oba přetížení vrací otisk dokumentu, který dostala; počítá, které bylo voláno.
-            var signing = new Mock<PdfSigningService>(null, null, null);
+            var signing = new Mock<PdfSigningService>(null, null);
             signing.Setup(s => s.SignWithPfx(It.IsAny<PfxSignInput>())).Returns((PfxSignInput i) => Json(i.PdfContent));
             signing.Setup(s => s.SignWithPfx(It.IsAny<PfxSignInput>(), It.IsAny<byte[]>())).Returns((PfxSignInput _, byte[] p) => Bin(p));
             signing.Setup(s => s.ApplyDocumentTimestamp(It.IsAny<DocumentTimestampInput>())).Returns((DocumentTimestampInput i) => Json(i.PdfContent));
@@ -152,11 +151,6 @@ public class BinaryChannelEndpointsTests
             signing.Setup(s => s.AddAttachment(It.IsAny<AddAttachmentInput>())).Returns((AddAttachmentInput i) => Json(i.PdfContent));
             signing.Setup(s => s.AddAttachment(It.IsAny<AddAttachmentInput>(), It.IsAny<byte[]?>())).Returns((AddAttachmentInput _, byte[]? p) => Bin(p!));
             _signing = signing.Object;
-
-            var sealing = new Mock<PdfSealingService>(TestHelpers.WrapOptions(new SealOptions()), _signing, new PdfVisualSigningService(), null);
-            sealing.Setup(s => s.ApplySeal(It.IsAny<SealInput>())).Returns((SealInput i) => Json(i.PdfContent));
-            sealing.Setup(s => s.ApplySeal(It.IsAny<SealInput>(), It.IsAny<byte[]>())).Returns((SealInput _, byte[] p) => Bin(p));
-            _sealing = sealing.Object;
 
             var conversion = new Mock<PdfConversionService>(NullLogger<PdfConversionService>.Instance);
             conversion.Setup(s => s.ConvertToPdfA(It.IsAny<ConvertToPdfAInput>())).Returns((ConvertToPdfAInput i) => Json(i.PdfContent));
@@ -202,7 +196,7 @@ public class BinaryChannelEndpointsTests
 
         public SigningHarness Signing(HttpContent? multipart = null)
         {
-            var c = new SigningHarness(_db, _signing, _sealing, new PdfLtvService(), _limits, _templates, _localizer)
+            var c = new SigningHarness(_db, _signing, new PdfLtvService(), _limits, _templates, _localizer)
             {
                 ControllerContext = Context(multipart, null),
             };
@@ -281,9 +275,6 @@ public class BinaryChannelEndpointsTests
         new("visual-sign", "visual-sign", new { signRect = Rect },
             (a, m) => a.Signing(m).ApplyVisualSignBinary(),
             (a, pdf) => a.Signing().ApplyVisualSign(Body<VisualSignInput>(new { signRect = Rect }, pdf))),
-        new("seal", "seal", new { signRect = Rect },
-            (a, m) => a.Signing(m).ApplySealBinary(),
-            (a, pdf) => a.Signing().ApplySeal(Body<SealInput>(new { signRect = Rect }, pdf))),
         new("attachment", "attachment",
             new { attachmentContent = Convert.ToBase64String("příloha"u8.ToArray()), fileName = "a.txt" },
             (a, m) => a.Signing(m).AddAttachmentBinary(),
@@ -596,52 +587,42 @@ public class BinaryChannelEndpointsTests
     public void Binary_fingerprint_never_depends_on_the_empty_PdfContent_alone()
     {
         // Metadata se liší jen dokumentem; PdfContent je v obou prázdný.
-        var input = new SealInput();
-        var a = ApiControllerBase.BinaryFingerprint("seal", input, new byte[] { 1, 2, 3 });
-        var b = ApiControllerBase.BinaryFingerprint("seal", input, new byte[] { 1, 2, 4 });
+        var input = new VisualSignInput();
+        var a = ApiControllerBase.BinaryFingerprint("visual-sign", input, new byte[] { 1, 2, 3 });
+        var b = ApiControllerBase.BinaryFingerprint("visual-sign", input, new byte[] { 1, 2, 4 });
         Assert.NotEqual(a, b);
-        Assert.Equal(a, ApiControllerBase.BinaryFingerprint("seal", input, new byte[] { 1, 2, 3 }));
+        Assert.Equal(a, ApiControllerBase.BinaryFingerprint("visual-sign", input, new byte[] { 1, 2, 3 }));
         // Jiná operace nad týmž dokumentem je jiná operace.
         Assert.NotEqual(a, ApiControllerBase.BinaryFingerprint("timestamp", input, new byte[] { 1, 2, 3 }));
         // Jiná metadata nad týmž dokumentem také.
-        Assert.NotEqual(a, ApiControllerBase.BinaryFingerprint("seal", new SealInput { Reason = "x" }, new byte[] { 1, 2, 3 }));
+        Assert.NotEqual(a, ApiControllerBase.BinaryFingerprint("visual-sign", new VisualSignInput { Reason = "x" }, new byte[] { 1, 2, 3 }));
     }
 
     [Fact]
-    public async Task Seal_binary_checks_the_grant_before_reading_the_body()
+    public async Task Seal_without_grant_is_refused_before_anything_else()
     {
         var attempt = new Attempt();
-        var controller = attempt.Signing(Multipart(All.Single(e => e.Name == "seal").Metadata, Pdf()));
-        // Účet bez oprávnění: 403 a tělo zůstalo nepřečtené.
-        var body = controller.Request.Body;
+        var controller = attempt.Signing();
         attempt.RevokeSeal();
 
-        var result = Describe(await controller.ApplySealBinary());
+        var result = Describe(await controller.ApplySeal());
 
         Assert.Equal(403, result.Status);
         Assert.Equal("SEAL_NOT_PERMITTED", result.Code);
-        Assert.Equal(0, body.Position);
     }
 
-    [Theory]
-    [InlineData("Reason", "Podpis\nSouhlasím", "SEAL_REASON_INVALID")]
-    [InlineData("Location", "Praha\u202Egpj", "SEAL_LOCATION_INVALID")]
-    [InlineData("Reason", "bez řádku\u200B", "SEAL_REASON_INVALID")]
-    [InlineData("Location", "Praha\uFE0F", "SEAL_LOCATION_INVALID")]
-    public async Task Seal_refuses_reason_and_location_that_do_not_belong_in_a_signature_dictionary(string field, string value, string code)
+    [Fact]
+    public async Task Seal_with_grant_answers_that_the_caller_must_supply_the_certificate()
     {
-        var meta = new Dictionary<string, object> { ["signRect"] = Rect, [field.ToLowerInvariant()] = value };
+        // No platform seal (#122): never a silent fallback to another key, never a charge.
+        var attempt = new Attempt();
+        var controller = attempt.Signing();
 
-        var binary = new Attempt();
-        var binaryResult = Describe(await binary.Signing(Multipart(meta, Pdf())).ApplySealBinary());
-        Assert.Equal(400, binaryResult.Status);
-        Assert.Equal(code, binaryResult.Code);
-        Assert.Empty(binary.Spy.BinaryInputs);
+        var result = Describe(await controller.ApplySeal());
 
-        var json = new Attempt();
-        var jsonResult = Describe(await json.Signing().ApplySeal(Body<SealInput>(meta, Convert.ToBase64String(Pdf()))));
-        Assert.Equal(400, jsonResult.Status);
-        Assert.Equal(code, jsonResult.Code);
-        Assert.Equal(0, json.Spy.JsonCalls);
+        Assert.Equal(422, result.Status);
+        Assert.Equal("SEAL_CERTIFICATE_REQUIRED", result.Code);
+        Assert.Empty(attempt.Spy.BinaryInputs);
+        Assert.Equal(0, attempt.Spy.JsonCalls);
     }
 }

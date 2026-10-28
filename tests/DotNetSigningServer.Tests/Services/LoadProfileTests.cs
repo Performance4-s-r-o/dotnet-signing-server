@@ -381,17 +381,14 @@ public class LoadProfileTests
     /// Jediný assert: multipart alokuje méně než JSON (čísla závisejí na stroji, práh není).
     /// </summary>
     [Fact]
-    public async Task BinaryChannelProfile_TimestampAndSeal()
+    public async Task BinaryChannelProfile_TimestampOnly()
     {
         if (!Enabled) return;
         var limits = new LimitsOptions();
         var guard = new PdfSafetyGuard(TestHelpers.WrapOptions(limits));
         var limitGuard = new ContentLimitGuard(TestHelpers.WrapOptions(limits));
         var json = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
-        var (_, pfx, password) = TestHelpers.CreateTestCertificate();
-        var sealOptions = new SealOptions { Enabled = true, PfxBase64 = pfx, PfxPassword = password, Reason = "profil", Location = "l" };
-        var signing = new PdfSigningService(TestHelpers.WrapOptions(sealOptions), null, new PdfVisualSigningService());
-        var sealing = new PdfSealingService(TestHelpers.WrapOptions(sealOptions), signing, new PdfVisualSigningService());
+        var signing = new PdfSigningService(null, new PdfVisualSigningService());
         var rect = new Models.SignRect { X = 50, Y = 50, Width = 200, Height = 60 };
 
         var rng = new Random(74);
@@ -427,8 +424,6 @@ public class LoadProfileTests
         var tsa = new LocalTsaClient();
         var tsJson = Body(new Models.DocumentTimestampInput { PdfContent = base64, SignRect = rect, Visible = false });
         var tsMulti = Multipart(new Models.DocumentTimestampInput { SignRect = rect, Visible = false }, boundary);
-        var sealJson = Body(new Models.SealInput { PdfContent = base64, SignRect = rect, Reason = "profil", Location = "l" });
-        var sealMulti = Multipart(new Models.SealInput { SignRect = rect, Reason = "profil", Location = "l" }, boundary);
         base64 = null!;
 
         async Task TsJson()
@@ -445,27 +440,10 @@ public class LoadProfileTests
             guard.EnsureSafePdf(bytes, "p");
             GC.KeepAlive(signing.ApplyDocumentTimestamp(input, tsa, bytes));
         }
-        async Task SealJson()
-        {
-            var input = await System.Text.Json.JsonSerializer.DeserializeAsync<Models.SealInput>(new MemoryStream(sealJson), json);
-            limitGuard.EnsurePdfWithinLimit(input!.PdfContent, "p");
-            guard.EnsureSafePdf(input.PdfContent, "p");
-            GC.KeepAlive(sealing.ApplySeal(input));
-        }
-        async Task SealBinary()
-        {
-            var (input, bytes) = await BinaryPdfChannel.ReadAsync<Models.SealInput>(
-                contentType, new MemoryStream(sealMulti), sealMulti.LongLength, json, limits.PdfMaxBytes, 8 * 1024 * 1024, CancellationToken.None);
-            guard.EnsureSafePdf(bytes, "p");
-            GC.KeepAlive(sealing.ApplySeal(input, bytes));
-        }
-
         var scenarios = new (string Name, Func<Task> Work)[]
         {
             ("timestamp: JSON base64", TsJson),
             ("timestamp: multipart", TsBinary),
-            ("seal: JSON base64", SealJson),
-            ("seal: multipart", SealBinary),
         };
         var rows = new List<MemoryRow>();
         foreach (var (name, work) in scenarios)
@@ -488,6 +466,5 @@ public class LoadProfileTests
         File.WriteAllText(path, sb.ToString());
 
         Assert.True(rows[1].AllocatedMb < rows[0].AllocatedMb, "timestamp: multipart should allocate less than JSON");
-        Assert.True(rows[3].AllocatedMb < rows[2].AllocatedMb, "seal: multipart should allocate less than JSON");
     }
 }

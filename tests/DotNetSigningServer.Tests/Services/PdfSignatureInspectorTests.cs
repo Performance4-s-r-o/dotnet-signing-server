@@ -15,7 +15,6 @@ public class PdfSignatureInspectorTests
 {
     private static PdfSigningService CreateSigningService() =>
         new(
-            TestHelpers.WrapOptions(new SealOptions()),
             TestHelpers.WrapOptions(new EvidenceOptions()),
             new PdfVisualSigningService());
 
