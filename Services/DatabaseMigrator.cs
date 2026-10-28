@@ -230,10 +230,13 @@ public static class DatabaseMigrator
         logger.LogCritical(
             "Schema {Schema} holds a migration history from before the baseline {Baseline} ({Count} entries, first {First}). " +
             "It cannot be upgraded in place. Back up what you need, drop the schema (DROP SCHEMA {Schema} CASCADE) " +
-            "and run the {Switch} step against the empty database.",
-            Schema, baseline, applied.Count, applied[0], Schema, MigrateArgument);
+            "and run the {Switch} step against the empty database. If a database administrator created the schema, " +
+            "re-create it with the same owner (CREATE SCHEMA {Schema} AUTHORIZATION <migration role>) and restore the " +
+            "runtime role's default privileges before running {Switch}.",
+            Schema, baseline, applied.Count, applied[0], Schema, MigrateArgument, Schema, MigrateArgument);
         throw new InvalidOperationException(
             $"Schema {Schema} holds a migration history from before the baseline {baseline} ({applied.Count} entries, first {applied[0]}). " +
-            $"It cannot be upgraded in place: drop schema {Schema} and run the {MigrateArgument} step against the empty database.");
+            $"It cannot be upgraded in place: drop schema {Schema} and run the {MigrateArgument} step against the empty database. " +
+            $"If a database administrator created the schema, re-create it with the same owner and restore the runtime role's default privileges first.");
     }
 }

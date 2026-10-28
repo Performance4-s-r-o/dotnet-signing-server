@@ -583,6 +583,10 @@ replaced the 24 migrations written before the first release. It is not an
 upgrade path for a database built from that earlier history: such a database
 is refused by both `--migrate` and start, with a message naming the baseline.
 Drop schema `dotnet_signing` and run `--migrate` against the empty database.
+If a database administrator created the schema in the first place, re-create
+it after the drop with the same owner
+(`CREATE SCHEMA dotnet_signing AUTHORIZATION <migration role>`) and restore
+the default privileges for the runtime role before running `--migrate`.
 The baseline holds hand-written SQL the model does not describe (the
 `lower("Email")` unique index and the append-only triggers on
 `ConsentRecords` and `AdminAuditEntries`); keep that in mind before ever
