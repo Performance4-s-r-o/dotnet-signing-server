@@ -1,4 +1,7 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Options;
+using DotNetSigningServer.Services.Email;
+using Microsoft.Extensions.Options;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services.Backoffice.Inbox;
 using DotNetSigningServer.Services.Billing;
@@ -42,7 +45,7 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
     {
         BackofficeEventTypes.BillingCheckoutCompleted => CheckoutCompletedAsync(evt, cancellationToken),
         BackofficeEventTypes.BillingPaymentSucceeded => PaymentAsync(evt, succeeded: true, cancellationToken),
-        BackofficeEventTypes.BillingPaymentFailed => PaymentAsync(evt, succeeded: false, cancellationToken),
+        BackofficeEventTypes.BillingPaymentFailed => FailedAsync(evt, cancellationToken),
         BackofficeEventTypes.BillingPaymentMethodDetached => PaymentMethodDetachedAsync(evt, cancellationToken),
         _ => Task.CompletedTask,
     };
@@ -72,7 +75,7 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
         }
 
         // Credits, the payment record and the auto-recharge opt-in in one transaction.
-        var grantedNow = await CreditGrants.TryGrantAsync(_db, purchase.SessionId, CreditGrants.CheckoutConfirmType, user.Id,
+        var grantedNow = await CreditGrants.TryGrantAsync(_db, purchase.SessionId, user.Id,
             purchase.Documents, "backoffice", async () =>
             {
                 // customer_ref already matched the user; still never link a customer another user holds (#82).
@@ -95,6 +98,70 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
         _logger.LogInformation("[billing] {EventId}: granted {Credits} credits to user {UserId}", evt.Id, purchase.Documents, user.Id);
     }
 
+    private async Task FailedAsync(BackofficeEvent evt, CancellationToken cancellationToken)
+    {
+        await NotifyPaymentFailedAsync(evt, cancellationToken);
+        await PaymentAsync(evt, succeeded: false, cancellationToken);
+    }
+
+    /// <summary>
+    /// Records the failed payment and tells the user (template <c>payment_failed</c>), once per
+    /// payment intent: a redelivery or a retry of the event finds the record and sends nothing.
+    /// No credits are touched. A direct send that fails is logged, not retried (the record
+    /// stays, so no second e-mail follows).
+    /// </summary>
+    private async Task NotifyPaymentFailedAsync(BackofficeEvent evt, CancellationToken cancellationToken)
+    {
+        var failed = BillingEventData.Failed(evt.Data, out var reason);
+        if (failed is null)
+        {
+            _logger.LogDebug("[billing] {EventId}: no failure notice ({Reason})", evt.Id, reason);
+            return;
+        }
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == failed.UserId, cancellationToken);
+        if (user is null || user.ErasedAt != null) return;
+        // An auto-recharge failure is already told to the user by the charge itself.
+        var notify = failed.PaymentType != CreditGrants.AutoRechargeType;
+        if (await _db.Payments.AnyAsync(p => p.StripePaymentIntentId == failed.PaymentIntentId && p.Status == "failed", cancellationToken)) return;
+
+        var currency = (failed.Currency ?? "").ToUpperInvariant();
+        _db.Payments.Add(new Payment
+        {
+            UserId = user.Id,
+            StripePaymentIntentId = failed.PaymentIntentId,
+            AmountCents = (int)(failed.Amount ?? 0),
+            Currency = currency,
+            Status = "failed",
+        });
+
+        var email = notify ? _services.GetService<ITemplatedEmailSender>() : null;
+        if (email is null)
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+            return;
+        }
+        var locale = user.EmailLocale;
+        var variables = EmailTemplateVariables.PaymentFailed(
+            paymentType: failed.PaymentType.Replace("_", " "),
+            amount: ((failed.Amount ?? 0) / 100.0m).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+            currency: currency,
+            failureReason: failed.FailureCode ?? "Unknown error",
+            billingUrl: $"{_services.GetRequiredService<IOptions<AppOptions>>().Value.BaseUrl}/Billing");
+        var options = new EmailSendOptions(EmailTemplateId.PaymentFailed, locale, user.Id);
+        // Email module On: queued in the same save as the failed payment.
+        var queued = email.TryEnqueue(EmailTemplateId.PaymentFailed, user.Email, locale, variables, options);
+        await _db.SaveChangesAsync(cancellationToken);
+        if (queued) return;
+        try
+        {
+            await email.SendAsync(EmailTemplateId.PaymentFailed, user.Email, locale, variables, options);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "[billing] {EventId}: the payment failure e-mail could not be sent", evt.Id);
+        }
+    }
+
     private async Task PaymentAsync(BackofficeEvent evt, bool succeeded, CancellationToken cancellationToken)
     {
         var payment = BillingEventData.AutoRecharge(evt.Data, out var reason);
@@ -113,7 +180,7 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
             succeeded = false;
         }
         else if (succeeded
-            && await CreditGrants.TryGrantAsync(_db, key, CreditGrants.AutoRechargeType, payment.UserId, payment.Documents, "backoffice",
+            && await CreditGrants.TryGrantAsync(_db, key, payment.UserId, payment.Documents, "backoffice",
                 () =>
                 {
                     _db.Payments.Add(new Payment

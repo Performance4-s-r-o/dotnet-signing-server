@@ -31,7 +31,12 @@ public static class BackofficeOptionsValidator
     /// True (Production): a mode that is not Off or On stops the start. False: the module stays
     /// Off and the start report warns (see <see cref="InvalidModes"/>).
     /// </param>
-    public static IReadOnlyList<string> Validate(P4BackofficeProductOptions options, bool rejectInvalidModes = true)
+    /// <param name="requireBilling">
+    /// True (Production): payments go through the billing service only, so a hosted installation
+    /// without <c>Modules:Billing=On</c> would start with no way to take a payment. A private
+    /// server (no billing at all) is exempt.
+    /// </param>
+    public static IReadOnlyList<string> Validate(P4BackofficeProductOptions options, bool rejectInvalidModes = true, bool requireBilling = false)
     {
         var problems = new List<string>();
 
@@ -65,6 +70,7 @@ public static class BackofficeOptionsValidator
         }
         CheckConsentDocuments(problems, options.Consents, options.RequestedModeFor(BackofficeModule.Docs));
         CheckBilling(problems, options);
+        if (requireBilling) RequireBilling(problems, options);
 
         // A self-hosted installation is forced Off whatever it asks for, so a key or URL
         // left over there is not a reason to refuse to start (it is logged instead). A build
@@ -92,6 +98,15 @@ public static class BackofficeOptionsValidator
             && options.RequestedModeFor(BackofficeModule.Pricing) != BackofficeMode.On)
         {
             problems.Add($"{Setting("Modules:Billing")} is On, which needs {Setting("Modules:Pricing")} On (payments use the price list's lookup keys).");
+        }
+    }
+
+    private static void RequireBilling(List<string> problems, P4BackofficeProductOptions options)
+    {
+        if (options.DisabledReason != BackofficeDisabledReason.PrivateServer
+            && options.RequestedModeFor(BackofficeModule.Billing) != BackofficeMode.On)
+        {
+            problems.Add($"{Setting("Modules:Billing")} must be On in production: payments go through the billing service, this product has no payment provider of its own.");
         }
     }
 
@@ -266,7 +281,7 @@ internal sealed class BackofficeOptionsValidation(IHostEnvironment environment) 
 {
     public ValidateOptionsResult Validate(string? name, P4BackofficeProductOptions options)
     {
-        var problems = BackofficeOptionsValidator.Validate(options, rejectInvalidModes: environment.IsProduction());
+        var problems = BackofficeOptionsValidator.Validate(options, rejectInvalidModes: environment.IsProduction(), requireBilling: environment.IsProduction());
         return problems.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(problems);
     }
 }

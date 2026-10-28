@@ -125,13 +125,8 @@ services:
       # Evidence encryption certificate (for SES evidence attachment encryption)
       - EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64=${EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64:-}
       - EVIDENCE_ENCRYPTION_CERTIFICATE_PEM=${EVIDENCE_ENCRYPTION_CERTIFICATE_PEM:-}
-      # Stripe configuration
-      - Stripe__ApiKey=${STRIPE_API_KEY:-}
-      - Stripe__WebhookSecret=${STRIPE_WEBHOOK_SECRET:-}
-      - Stripe__Currency=${STRIPE_CURRENCY:-EUR}
-      - Stripe__EnableTaxIdCollection=${STRIPE_ENABLE_TAX_ID_COLLECTION:-true}
-      - Stripe__RequireBillingAddress=${STRIPE_REQUIRE_BILLING_ADDRESS:-true}
-      - Stripe__EnableAutomaticTax=${STRIPE_ENABLE_AUTOMATIC_TAX:-true}
+      # Currency the product sells in (price list and configured fallback prices).
+      - Billing__Currency=${BILLING_CURRENCY:-{{project.DOTNET_BILLING_CURRENCY}}}
       # Resend (transactional email) — replaces legacy SMTP.
       # No default sender on purpose: EMAIL_FROM must name a domain verified in
       # Resend. Empty RESEND_API_KEY disables e-mail; a key without EMAIL_FROM

@@ -85,27 +85,13 @@ public class BillingController : Controller
             }
         }
 
-        // Find last purchase quantity from this user's webhook events
-        int lastPurchaseQuantity = 0;
-        var userIdString = userId.Value.ToString();
-        var lastCheckout = await _dbContext.WebhookEvents
-            .Where(w => w.EventType == "checkout.confirm" && w.PayloadJson.Contains(userIdString))
-            .OrderByDescending(w => w.ReceivedAt)
+        // The last purchase (not an auto-recharge) of this user: credits of their latest checkout grant.
+        var lastPurchaseQuantity = await _dbContext.CreditGrants
+            .AsNoTracking()
+            .Where(g => g.UserId == userId.Value && !g.GrantKey.StartsWith(CreditGrants.AutoRechargeKeyPrefix))
+            .OrderByDescending(g => g.GrantedAt)
+            .Select(g => g.Credits)
             .FirstOrDefaultAsync();
-        if (lastCheckout != null)
-        {
-            // PayloadJson format: {"documents":100,"userId":"..."}
-            try
-            {
-                var match = System.Text.RegularExpressions.Regex.Match(
-                    lastCheckout.PayloadJson, @"""documents""\s*:\s*(\d+)");
-                if (match.Success)
-                {
-                    lastPurchaseQuantity = int.Parse(match.Groups[1].Value);
-                }
-            }
-            catch { }
-        }
 
         SavedPaymentMethod? savedPm = null;
         if (!string.IsNullOrWhiteSpace(user.StripeCustomerId))
@@ -379,9 +365,9 @@ public class BillingController : Controller
             }
 
             // Credits, the customer link and the auto-recharge opt-in in one transaction under the
-            // permanent grant key the Stripe webhook and the billing events share (#79): whichever
+            // permanent grant key the billing events share (#79): whichever
             // comes second grants nothing, and a failure here leaves the payment for them to grant.
-            var granted = await CreditGrants.TryGrantAsync(_dbContext, sessionId, CreditGrants.CheckoutConfirmType, user.Id,
+            var granted = await CreditGrants.TryGrantAsync(_dbContext, sessionId, user.Id,
                 documents, "confirm-page", async () =>
                 {
                     await StripeCustomerBinding.TryBindAsync(_dbContext, user, session.StripeCustomerId, _logger);

@@ -216,25 +216,16 @@ public static class BackofficeRegistration
 
     /// <summary>
     /// Credit prices by <c>Modules:Pricing</c>: Off serves <c>Billing:*</c> as before; On serves the snapshot (configured prices as the
-    /// fallback) and Checkout charges the Stripe Price of the pack's lookup key.
+    /// fallback) and the billing service charges the Stripe Price of the pack's lookup key.
     /// Price-change notices: <see cref="PriceChangeMonitorService"/> while Off; On replaces it by
     /// <see cref="PriceScheduledHandler"/> / <see cref="PriceEffectiveHandler"/> and the daily
     /// <see cref="PricingUpcomingCheck"/>. <c>price.sync_failed</c> is logged as an error.
-    /// <see cref="ICreditPricingProvider"/> and <see cref="StripePriceResolver"/> are always
-    /// registered; the resolver only acts on packs with a lookup key, which Off never has.
+    /// <see cref="ICreditPricingProvider"/> is always registered.
     /// </summary>
     internal static void AddPricing(IServiceCollection services, P4BackofficeProductOptions options)
     {
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(sp => new ConfigCreditPricingProvider(sp.GetRequiredService<IOptionsMonitor<BillingOptions>>()));
-        services.TryAddSingleton(sp =>
-        {
-            var apiKey = sp.GetService<IOptions<StripeOptions>>()?.Value.ApiKey;
-            return new StripePriceResolver(
-                string.IsNullOrWhiteSpace(apiKey) ? null : new Stripe.StripeClient(apiKey),
-                sp.GetRequiredService<TimeProvider>(),
-                sp.GetRequiredService<ILogger<StripePriceResolver>>());
-        });
 
         var mode = options.ModeFor(BackofficeModule.Pricing);
         // Price-change notices: the local monitor while Pricing is Off, the price.* events when On.
@@ -259,7 +250,6 @@ public static class BackofficeRegistration
         services.TryAddSingleton(sp => new PricingSnapshotRefresher(
             sp.GetRequiredService<BackofficePricingClient>(),
             sp.GetRequiredService<PricingSnapshotHolder>(),
-            sp.GetRequiredService<StripePriceResolver>(),
             sp.GetRequiredService<IServiceScopeFactory>(),
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<ILogger<PricingSnapshotRefresher>>()));

@@ -43,31 +43,6 @@ public class BillingDomainTests
     }
 
     [Theory]
-    [InlineData("cus_A", "cus_A", true)]
-    [InlineData("cus_A", "cus_B", false)] // another customer's session never acts on the user (#82)
-    [InlineData("cus_A", null, false)]
-    [InlineData(null, "cus_B", true)] // user without a customer: binding is checked against the database
-    [InlineData(null, null, true)]
-    public void Checkout_DirectPath_SessionCustomerMustBeTheUsers(string? userCustomer, string? sessionCustomer, bool expected)
-    {
-        var metadata = new Dictionary<string, string> { ["userId"] = UserId.ToString(), [BillingCustomerRef.ProductMarkerKey] = BillingCustomerRef.ProductMarker };
-        var session = new CheckoutSessionInfo("cs_1", "payment", "complete", "paid", metadata, sessionCustomer, CustomerRef: null);
-
-        Assert.Equal(expected, BillingCustomerRef.CheckoutBelongsTo(session, UserId, userCustomer));
-    }
-
-    [Theory]
-    [InlineData("cus_A", "cus_A", true)]
-    [InlineData("cus_A", "cus_B", false)]
-    [InlineData("cus_A", null, false)]
-    [InlineData(null, "cus_B", false)]
-    [InlineData(null, null, false)]
-    public void Charge_BelongsOnlyToTheUsersOwnCustomer(string? userCustomer, string? chargeCustomer, bool expected)
-    {
-        Assert.Equal(expected, BillingCustomerRef.ChargeBelongsTo(userCustomer, chargeCustomer));
-    }
-
-    [Theory]
     [InlineData(null, null, true)]
     [InlineData(500, null, true)]
     [InlineData(502, "stripe_error", true)]
@@ -326,6 +301,50 @@ public class BillingDomainTests
         options.DisabledReason = BackofficeDisabledReason.PrivateServer;
         Assert.Empty(BackofficeOptionsValidator.Validate(options));
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Off")]
+    public void Production_RefusesToStartWithoutBillingOn(string? billing)
+    {
+        var options = new P4BackofficeProductOptions
+        {
+            BaseUrl = "https://backoffice.example.com",
+            SecretKey = "p4sk_test_abc",
+            Environment = "test",
+            Modules = { Billing = billing, Pricing = "On" },
+        };
+
+        Assert.Empty(BackofficeOptionsValidator.Validate(options)); // outside production nothing is required
+        Assert.Contains(BackofficeOptionsValidator.Validate(options, requireBilling: true), p => p.Contains("Modules__Billing") && p.Contains("production"));
+
+        options.Modules.Billing = "On";
+        Assert.Empty(BackofficeOptionsValidator.Validate(options, requireBilling: true));
+    }
+
+    [Fact]
+    public void Production_ExemptsAPrivateServer()
+    {
+        var options = new P4BackofficeProductOptions { DisabledReason = BackofficeDisabledReason.PrivateServer };
+
+        Assert.Empty(BackofficeOptionsValidator.Validate(options, requireBilling: true));
+    }
+
+    [Fact]
+    public async Task DisabledGateway_StartsNoPayment_AndFindsNothingOnFile()
+    {
+        var gateway = new DisabledPaymentGateway();
+        var user = new User();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => gateway.EnsureCustomerAsync(user));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => gateway.StartCardSetupAsync(user, "s", "c", new Dictionary<string, string>()));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => gateway.GetCheckoutAsync("cs_1"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => gateway.CreatePortalSessionAsync(user, "r"));
+        Assert.False(await gateway.HasSavedCardAsync(user));
+        Assert.Null(await gateway.GetSavedPaymentMethodAsync(user));
+        Assert.Empty(await gateway.ListInvoicesAsync(user, 10));
+        await gateway.DetachPaymentMethodsAsync(user);
+    }
 }
 
 /// <summary>Which payment path is wired, by <c>Modules:Billing</c>.</summary>
@@ -347,12 +366,12 @@ public class BillingRegistrationTests
     [Theory]
     [InlineData(null)]
     [InlineData("Off")]
-    public void NotOn_PaysThroughStripeDirectly(string? billing)
+    public void NotOn_HasNoWayToTakeAPayment(string? billing)
     {
         var services = Register(billing);
 
-        Assert.True(Has<StripePaymentGateway>(services));
         Assert.True(Has<IPaymentGateway>(services));
+        Assert.Equal(typeof(DisabledPaymentGateway), services.Last(d => d.ServiceType == typeof(IPaymentGateway)).ImplementationType);
         Assert.False(Has<BackofficePaymentGateway>(services));
         Assert.False(Has<BackofficeAutoRecharge>(services));
     }
@@ -371,5 +390,40 @@ public class BillingRegistrationTests
     public void PrivateServer_IsForcedOff()
     {
         Assert.False(Has<BackofficePaymentGateway>(Register("On", privateServer: true)));
+    }
+}
+
+/// <summary>The product currency and the text of payment e-mails that comes from events.</summary>
+public class BillingTextAndCurrencyTests
+{
+    [Theory]
+    [InlineData(null, "EUR")]
+    [InlineData("", "EUR")]
+    [InlineData("  ", "EUR")]
+    [InlineData("{{project.DOTNET_BILLING_CURRENCY}}", "EUR")]
+    [InlineData(" czk ", "CZK")]
+    public void Currency_IsUpperCase_AndUnsetOrAPlaceholderIsEur(string? raw, string expected)
+    {
+        Assert.Equal(expected, DotNetSigningServer.Services.Pricing.ConfigCreditPricingProvider.NormalizeCurrency(raw));
+        Assert.Null(DotNetSigningServer.Services.Pricing.ConfigCreditPricingProvider.CurrencyProblem(raw));
+    }
+
+    [Theory]
+    [InlineData("EURO")]
+    [InlineData("12")]
+    [InlineData("E<")]
+    public void ACurrencyThatIsNotACode_IsAProblem(string raw) =>
+        Assert.NotNull(DotNetSigningServer.Services.Pricing.ConfigCreditPricingProvider.CurrencyProblem(raw));
+
+    [Fact]
+    public void FailureText_FromAnEvent_KeepsNoMarkup()
+    {
+        var vars = DotNetSigningServer.Services.Email.EmailTemplateVariables.PaymentFailed(
+            "auto recharge<script>", "15.00", "EUR", "card_declined <img src=x onerror=alert(1)> & \"x\"", "https://app.example.com/Billing");
+
+        Assert.Equal("auto rechargescript", vars["paymentType"]);
+        Assert.Equal("card_declined img srcx onerroralert(1)  x", vars["failureReason"]);
+        Assert.Equal("Payment failed: card_declined.", DotNetSigningServer.Services.Email.EmailTemplateVariables
+            .AutoRechargeFailed("300", "Payment failed: card_declined.", "0", "u")["failureReason"]);
     }
 }

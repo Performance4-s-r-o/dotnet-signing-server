@@ -25,14 +25,12 @@ using Moq;
 namespace DotNetSigningServer.Tests.Services.Billing;
 
 /// <summary>
-/// #82: a Stripe object naming a user in its metadata acts on that user only when its customer
+/// #82: a checkout naming a user in its metadata acts on that user only when its customer
 /// is theirs, and a user is never linked to a customer another user holds.
 /// </summary>
 [Trait("Category", "Db")]
 public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
 {
-    private const string WebhookSecret = "whsec_test_ownership";
-
     private readonly OutboxPostgresFixture _pg;
     private readonly Mock<IAutoRechargeService> _autoRecharge = new();
 
@@ -60,71 +58,6 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
 
     private static string Unique(string prefix) => $"{prefix}_{Guid.NewGuid():N}";
 
-    // --- Stripe webhook ---------------------------------------------------------------
-
-    private async Task PostWebhookAsync(string dataObjectJson, string type, IServiceProvider? requestServices = null)
-    {
-        var payload = $$$"""
-            {"id":"{{{Unique("evt")}}}","object":"event","api_version":"2024-06-20","created":{{{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}}},
-             "livemode":false,"pending_webhooks":1,"type":"{{{type}}}","data":{"object":{{{dataObjectJson}}}}}
-            """;
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(WebhookSecret));
-        var signature = Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes($"{timestamp}.{payload}"))).ToLowerInvariant();
-
-        await using var db = _pg.CreateContext();
-        var pricing = new Mock<ICreditPricingProvider>();
-        pricing.SetupGet(p => p.PricePer100).Returns(5m);
-        var controller = new StripeWebhookController(
-            db,
-            TestHelpers.WrapOptions(new StripeOptions { WebhookSecret = WebhookSecret }),
-            TestHelpers.WrapOptions(new BillingOptions()),
-            _autoRecharge.Object,
-            Mock.Of<ITemplatedEmailSender>(),
-            TestHelpers.WrapOptions(new AppOptions()),
-            NullLogger<StripeWebhookController>.Instance,
-            pricing.Object);
-        var http = new DefaultHttpContext();
-        if (requestServices != null) http.RequestServices = requestServices;
-        http.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(payload));
-        http.Request.Headers["Stripe-Signature"] = $"t={timestamp},v1={signature}";
-        controller.ControllerContext = new ControllerContext { HttpContext = http };
-
-        var result = await controller.HandleWebhook();
-        Assert.IsType<OkResult>(result);
-    }
-
-    private static string CheckoutSession(Guid userId, string? customerId, bool autoRecharge = false, string? id = null) => $$$"""
-        {"id":"{{{id ?? Unique("cs")}}}","object":"checkout.session","mode":"payment","status":"complete","payment_status":"paid",
-         "customer":{{{(customerId is null ? "null" : $"\"{customerId}\"")}}},"amount_total":1500,"currency":"eur",
-         "payment_intent":"{{{Unique("pi")}}}",
-         "metadata":{"product":"dotnet-signing-server","userId":"{{{userId}}}","documents":"300","autoRecharge":"{{{autoRecharge}}}"}}
-        """;
-
-    private static string AutoRechargeIntent(Guid userId, string customerId, string? id = null) => $$$"""
-        {"id":"{{{id ?? Unique("pi")}}}","object":"payment_intent","status":"succeeded","amount":1500,"currency":"eur",
-         "customer":"{{{customerId}}}","metadata":{"type":"auto_recharge","userId":"{{{userId}}}","documents":"300"}}
-        """;
-
-    [Fact]
-    public async Task Webhook_CheckoutOfAnotherCustomer_GrantsNothing_AndDoesNotRelink()
-    {
-        var victim = await NewUserAsync(Unique("cus_victim"));
-        var attackerCustomer = Unique("cus_other");
-
-        var sessionId = Unique("cs");
-        await PostWebhookAsync(CheckoutSession(victim.Id, attackerCustomer, autoRecharge: true, sessionId), "checkout.session.completed");
-
-        var after = await ReloadAsync(victim.Id);
-        Assert.Equal(0, after.CreditsRemaining);
-        Assert.Equal(victim.StripeCustomerId, after.StripeCustomerId);
-        _autoRecharge.Verify(a => a.EnableAsync(It.IsAny<User>(), It.IsAny<int>(), It.IsAny<decimal>()), Times.Never);
-        var refusal = await RefusalAsync(BillingRefusals.CheckoutRefused, sessionId);
-        Assert.Contains(attackerCustomer, refusal.PayloadJson);
-        Assert.Contains("1500", refusal.PayloadJson);
-        Assert.Null(refusal.ProcessedAt);
-    }
-
     private async Task<WebhookEvent> RefusalAsync(string type, string stripeObjectId)
     {
         await using var db = _pg.CreateContext();
@@ -136,117 +69,19 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
         return row;
     }
 
-    private sealed class Factory(HttpMessageHandler handler) : IHttpClientFactory
-    {
-        public HttpClient CreateClient(string name) =>
-            new(handler, disposeHandler: false) { BaseAddress = new Uri("https://backoffice.example.com/") };
-    }
-
-    [Fact]
-    public async Task Webhook_CheckoutTheBillingServiceVouchesFor_Grants_WithoutRelinkingTheCustomer()
-    {
-        var user = await NewUserAsync(Unique("cus_old"));
-        var serviceCustomer = Unique("cus_service");
-        var sessionId = Unique("cs");
-        var stub = new StubServiceHandler();
-        stub.Enqueue(System.Net.HttpStatusCode.OK, $$$"""
-            {"id":"{{{sessionId}}}","customer_ref":"{{{BillingCustomerRef.For(user.Id)}}}","status":"complete","payment_status":"paid",
-             "mode":"payment","metadata":{"product":"dotnet-signing-server","userId":"{{{user.Id}}}","documents":"300"}}
-            """);
-        var services = new ServiceCollection()
-            .AddSingleton(new BackofficeBillingClient(new Factory(stub), NullLogger<BackofficeBillingClient>.Instance, _ => TimeSpan.Zero))
-            .BuildServiceProvider();
-
-        await PostWebhookAsync(CheckoutSession(user.Id, serviceCustomer, id: sessionId), "checkout.session.completed", services);
-
-        var after = await ReloadAsync(user.Id);
-        Assert.Equal(300, after.CreditsRemaining);
-        Assert.Equal(user.StripeCustomerId, after.StripeCustomerId);
-    }
-
-    [Fact]
-    public async Task Webhook_CheckoutTheBillingServiceDoesNotVouchFor_IsRefusedAndRecorded()
-    {
-        var user = await NewUserAsync(Unique("cus_old"));
-        var sessionId = Unique("cs");
-        var stub = new StubServiceHandler();
-        stub.Enqueue(System.Net.HttpStatusCode.OK, $$$"""
-            {"id":"{{{sessionId}}}","customer_ref":"user:00000000-0000-0000-0000-000000000001","status":"complete","payment_status":"paid",
-             "mode":"payment","metadata":{"product":"dotnet-signing-server","userId":"{{{user.Id}}}","documents":"300"}}
-            """);
-        var services = new ServiceCollection()
-            .AddSingleton(new BackofficeBillingClient(new Factory(stub), NullLogger<BackofficeBillingClient>.Instance, _ => TimeSpan.Zero))
-            .BuildServiceProvider();
-
-        await PostWebhookAsync(CheckoutSession(user.Id, Unique("cus_other"), id: sessionId), "checkout.session.completed", services);
-
-        Assert.Equal(0, (await ReloadAsync(user.Id)).CreditsRemaining);
-        await RefusalAsync(BillingRefusals.CheckoutRefused, sessionId);
-    }
-
-    [Fact]
-    public async Task Webhook_CheckoutOfTheUsersCustomer_Grants()
-    {
-        var user = await NewUserAsync(Unique("cus_own"));
-
-        await PostWebhookAsync(CheckoutSession(user.Id, user.StripeCustomerId), "checkout.session.completed");
-
-        Assert.Equal(300, (await ReloadAsync(user.Id)).CreditsRemaining);
-    }
-
-    [Fact]
-    public async Task Webhook_CheckoutWithACustomerHeldByAnotherUser_IsNotLinkedNorGranted()
-    {
-        var holder = await NewUserAsync(Unique("cus_held"));
-        var user = await NewUserAsync(stripeCustomerId: null);
-
-        await PostWebhookAsync(CheckoutSession(user.Id, holder.StripeCustomerId), "checkout.session.completed");
-
-        var after = await ReloadAsync(user.Id);
-        Assert.Equal(0, after.CreditsRemaining);
-        Assert.Null(after.StripeCustomerId);
-    }
-
-    [Fact]
-    public async Task Webhook_CheckoutOfAFreshCustomer_LinksItToAUserWithoutOne()
-    {
-        var user = await NewUserAsync(stripeCustomerId: null);
-        var fresh = Unique("cus_fresh");
-
-        await PostWebhookAsync(CheckoutSession(user.Id, fresh), "checkout.session.completed");
-
-        var after = await ReloadAsync(user.Id);
-        Assert.Equal(300, after.CreditsRemaining);
-        Assert.Equal(fresh, after.StripeCustomerId);
-    }
-
-    [Fact]
-    public async Task Webhook_AutoRechargeOfAnotherCustomer_GrantsNothing()
-    {
-        var user = await NewUserAsync(Unique("cus_own"));
-
-        var intentId = Unique("pi");
-        await PostWebhookAsync(AutoRechargeIntent(user.Id, Unique("cus_other"), intentId), "payment_intent.succeeded");
-        Assert.Equal(0, (await ReloadAsync(user.Id)).CreditsRemaining);
-        await RefusalAsync(BillingRefusals.PaymentRefused, intentId);
-
-        await PostWebhookAsync(AutoRechargeIntent(user.Id, user.StripeCustomerId!), "payment_intent.succeeded");
-        Assert.Equal(300, (await ReloadAsync(user.Id)).CreditsRemaining);
-    }
-
     // --- Confirm pages (redirect from Stripe) ---------------------------------------------
 
-    private BillingController Billing(ApplicationDbContext db, User user, Stripe.Checkout.Session session)
+    private BillingController Billing(ApplicationDbContext db, User user, CheckoutSessionInfo session)
     {
-        var checkout = new Mock<IStripeCheckoutService>();
-        checkout.Setup(c => c.GetSessionAsync(session.Id)).ReturnsAsync(session);
+        var checkout = new Mock<IPaymentGateway>();
+        checkout.Setup(c => c.GetCheckoutAsync(session.Id, It.IsAny<CancellationToken>())).ReturnsAsync(session);
         var pricing = new Mock<ICreditPricingProvider>();
         pricing.SetupGet(p => p.PricePer100).Returns(5m);
         var controller = new BillingController(
             db,
             new BillingService(TestHelpers.WrapOptions(new BillingOptions())),
             pricing.Object,
-            new StripePaymentGateway(checkout.Object, NullLogger<StripePaymentGateway>.Instance),
+            checkout.Object,
             _autoRecharge.Object,
             NullLogger<BillingController>.Instance,
             new StringLocalizer<SharedStrings>(new KeyEchoLocalizerFactory()));
@@ -260,24 +95,16 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
         return controller;
     }
 
-    private static Stripe.Checkout.Session SetupSession(Guid userId, string? customerId) => new()
-    {
-        Id = Unique("cs"),
-        Mode = "setup",
-        Status = "complete",
-        CustomerId = customerId,
-        Metadata = new Dictionary<string, string> { ["userId"] = userId.ToString(), [BillingCustomerRef.ProductMarkerKey] = BillingCustomerRef.ProductMarker, ["autoRechargeQuantity"] = "300" },
-    };
+    // A session as the ownership guard sees one that names a Stripe customer and no customer reference.
+    private static CheckoutSessionInfo SetupSession(Guid userId, string? customerId) => new(
+        Unique("cs"), "setup", "complete", null,
+        new Dictionary<string, string> { ["userId"] = userId.ToString(), [BillingCustomerRef.ProductMarkerKey] = BillingCustomerRef.ProductMarker, ["autoRechargeQuantity"] = "300" },
+        customerId, CustomerRef: null);
 
-    private static Stripe.Checkout.Session PaidSession(Guid userId, string? customerId) => new()
-    {
-        Id = Unique("cs"),
-        Mode = "payment",
-        Status = "complete",
-        PaymentStatus = "paid",
-        CustomerId = customerId,
-        Metadata = new Dictionary<string, string> { ["userId"] = userId.ToString(), [BillingCustomerRef.ProductMarkerKey] = BillingCustomerRef.ProductMarker, ["documents"] = "300" },
-    };
+    private static CheckoutSessionInfo PaidSession(Guid userId, string? customerId) => new(
+        Unique("cs"), "payment", "complete", "paid",
+        new Dictionary<string, string> { ["userId"] = userId.ToString(), [BillingCustomerRef.ProductMarkerKey] = BillingCustomerRef.ProductMarker, ["documents"] = "300" },
+        customerId, CustomerRef: null);
 
     [Fact]
     public async Task ConfirmAutoRechargeSetup_WithAnotherUsersCustomer_DoesNotLinkIt()
@@ -340,7 +167,7 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
     {
         var user = await NewUserAsync(Unique("cus_own"));
         var session = PaidSession(user.Id, user.StripeCustomerId);
-        session.Metadata.Remove("userId");
+        ((Dictionary<string, string>)session.Metadata).Remove("userId");
 
         await using (var db = _pg.CreateContext())
         {

@@ -21,7 +21,6 @@ public class PrivateServerConvention : IApplicationModelConvention
     private static readonly HashSet<string> RemovedControllers = new(StringComparer.Ordinal)
     {
         "Billing",
-        "StripeWebhook",
         "BackofficeWebhook",
         "Home",
         "Seo",

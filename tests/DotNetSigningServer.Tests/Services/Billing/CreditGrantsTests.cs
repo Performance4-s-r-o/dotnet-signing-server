@@ -33,7 +33,7 @@ public class CreditGrantsTests
     private async Task<bool> GrantAsync(Guid userId, string key, string? paymentIntent, Func<Task>? alongside = null)
     {
         await using var db = Db();
-        return await CreditGrants.TryGrantAsync(db, key, CreditGrants.CheckoutConfirmType, userId, 300, "test",
+        return await CreditGrants.TryGrantAsync(db, key, userId, 300, "test",
             alongside ?? (() => Task.CompletedTask), default, paymentIntent);
     }
 
@@ -49,8 +49,7 @@ public class CreditGrantsTests
         await using var db = Db();
         var grant = await db.CreditGrants.AsNoTracking().SingleAsync();
         Assert.Equal(("cs_1", "pi_1", userId, 300, "test"), (grant.GrantKey, grant.PaymentIntentId, grant.UserId, grant.Credits, grant.Source));
-        // The old marker is still written for its readers (last purchase on the billing page).
-        Assert.Equal(CreditGrants.CheckoutConfirmType, (await db.WebhookEvents.AsNoTracking().SingleAsync(w => w.EventId == "cs_1")).EventType);
+        Assert.Empty(db.WebhookEvents); // the grant key lives in CreditGrants alone
     }
 
     [Fact]
@@ -63,20 +62,6 @@ public class CreditGrantsTests
         Assert.True(await GrantAsync(userId, "cs_2", null)); // unknown payment intent: the key alone decides
 
         Assert.Equal(610, await CreditsAsync(userId));
-    }
-
-    [Fact]
-    public async Task AGrantMadeBeforeTheTable_IsRecognisedByItsOldMarker()
-    {
-        var userId = await NewUserAsync();
-        await using (var db = Db())
-        {
-            db.WebhookEvents.Add(new WebhookEvent { EventId = "cs_old", EventType = CreditGrants.CheckoutConfirmType, PayloadJson = "{}" });
-            await db.SaveChangesAsync();
-        }
-
-        Assert.False(await GrantAsync(userId, "cs_old", "pi_old"));
-        Assert.Equal(10, await CreditsAsync(userId));
     }
 
     [Fact]

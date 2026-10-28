@@ -177,7 +177,8 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `TRUSTED_PROXIES` | no | Reverse proxy (Traefik/Caddy) addresses / CIDRs (#106): whose `X-Forwarded-For` is applied. An explicit `ForwardedHeaders__KnownProxies` / `__KnownNetworks` wins; empty = the private ranges and loopback (as before); `none` = nobody's. A reverse proxy alone never vouches for `CF-Connecting-IP` |
 | `DataProtection__CertificateBase64` / `__CertificatePassword` (compose: `DATA_PROTECTION_CERTIFICATE_BASE64` / `_PASSWORD`) | in production, unless the next row is `true` | Base64 PFX that encrypts the Data Protection key ring, which also protects stored TSA credentials |
 | `DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS` | no | `true` = a Production start without the certificate is allowed, with a warning (single host, protected volume). Otherwise Production refuses to start with an unencrypted key ring; with `true` it starts and prints a warning. Outside Production nothing is checked or printed. Back up the certificate: adding it does not encrypt keys already written in plaintext (they are replaced when the ring rotates, about every 90 days), and a lost certificate makes the ring unreadable |
-| `Stripe__ApiKey` / `Stripe__WebhookSecret` | for billing | Payments; the webhook secret must start with `whsec_` in production |
+| `P4Backoffice__Modules__Billing` | in production (startup fails otherwise) | `On`: payments go through the billing service; this product holds no payment provider key. See *Payments* below |
+| `Billing__Currency` (compose: `BILLING_CURRENCY`) | no (`EUR`; empty or an unresolved placeholder = `EUR`) | Three-letter ISO 4217 code (anything else stops a production start). Currency the product sells in: selects the price list's prices and is the currency of the configured fallback prices |
 | `Resend__ApiKey` / `Resend__From` | for email | Transactional email |
 | `OsTicket__Url` / `OsTicket__ApiKey` | | Support form; without them (and with `Modules:Support` not `On`) the routes 404 and the nav entry hides |
 | `AI__Enabled` / `AI__Google__ApiKey` | | AI-assisted template field detection |
@@ -469,18 +470,15 @@ monitor) comes from `ICreditPricingProvider` (`Services/Pricing/`); nothing on
 those paths calls the service.
 
 - `P4Backoffice__Modules__Pricing=Off` (default): `Billing__PricePer100` and the
-  `Billing__Discount*` volume discounts, charged inline (`price_data`) as before.
+  `Billing__Discount*` volume discounts, in `Billing__Currency`. They are what a private
+  server shows; a payment is taken only with `Modules:Billing=On`, which needs this module `On`.
 - `On`: prices from the snapshot of `GET /v1/pricing/current` (items of kind
-  `credits` with `attributes.quantity`, the one-time price in `Stripe__Currency`),
+  `credits` with `attributes.quantity`, the one-time price in `Billing__Currency`),
   kept in `BackofficeStates` (`pricing:current`) and in memory, refreshed hourly
   (with `ETag`), right after `price.effective` and on `window_clamped`. Without a
   snapshot, or for a pack missing from it, the configured price is used and a
-  warning logged. Checkout charges the pack's Stripe Price, found by its
-  `lookup_key` (cached for 10 minutes) and used only when it is active, one-time
-  and its amount and currency match the price list; otherwise, and when Stripe
-  refuses the session with that Price (e.g. no default tax behaviour on the
-  account while automatic tax is on), the amount is sent inline and a warning
-  logged. Checkout metadata (`documents`) and the Stripe webhook are unchanged.
+  warning logged. The billing service charges the pack's Stripe Price by its
+  `lookup_key` (see *Payments* below); checkout metadata (`documents`) is unchanged.
 
 Price-change notices (`price_change_notice` to users with auto-recharge):
 
@@ -527,60 +525,31 @@ Tickets already queued are still delivered.
 
 Only its own setting switches it: `P4Backoffice__Mode=On` leaves payments Off.
 
-- `P4Backoffice__Modules__Billing=Off` (default): Stripe directly with
-  `Stripe__*`, as before.
-- `On` (needs `Modules:Pricing=On`, refused at startup otherwise): checkout,
-  card setup, the confirm pages, invoices, the card on file, the portal and the
-  enterprise card removal go through `/v1/billing/*`; the customer is
+- `P4Backoffice__Modules__Billing=On` is required in production (a hosted
+  installation without it refuses to start; a private server has no billing
+  pages and is exempt). It needs `Modules:Pricing=On`, refused at startup
+  otherwise. Without it (development) every action that would start a payment
+  fails with an error and nothing is ever charged: the product holds no payment
+  provider key and exposes no provider webhook.
+- Checkout, card setup, the confirm pages, invoices, the card on file, the portal
+  and the enterprise card removal go through `/v1/billing/*`; the customer is
   `user:<id>`. Checkout charges the pack's lookup key from the price list in
-  force (no inline prices). Auto-recharge uses `POST /v1/billing/charges` with
+  force (no inline prices; tax and address collection are the billing service's
+  settings). Auto-recharge uses `POST /v1/billing/charges` with
   an `Idempotency-Key` kept in `WebhookEvents` (`auto_recharge_claim_<user>`),
   so replicas never charge twice and a charge without an answer is repeated
   with the same key — never after 23 hours (the service keeps answers for 24):
   such a charge stops auto-recharge and is logged as an error for an admin. Credits are granted by the confirm page or by
   `billing.checkout.completed` / `billing.payment.succeeded`, whichever comes
-  first (same keys as the Stripe webhook). The product's Stripe webhook answers
-  `200` (ignored) in `On` and grants nothing: its Stripe account is no longer the one
-  taking the payments. `Stripe__*` stays configured for `Off` and the
-  rollback.
+  first, exactly once per payment: a `CreditGrants` row — unique key = checkout
+  session id (or `auto_recharge_<payment intent>`), unique payment intent — is
+  inserted with `ON CONFLICT DO NOTHING` in the same transaction as the credits
+  and never deleted, so a late, repeated or concurrent delivery grants nothing
+  more and a failed one leaves nothing behind for the retry to trip on.
   `billing.payment_method.detached` switches auto-recharge off when no card is
-  left. Success and failure e-mails are still sent by this app.
-  Existing Stripe customers must be linked in the service before `On`;
+  left. Success and failure e-mails of auto-recharge are sent by this app.
+  Existing Stripe customers must be linked in the service first;
   otherwise the service creates a new customer without the saved card.
-
-Rollback: `P4Backoffice__Modules__Billing=Off`.
-
-## Stripe webhooks
-
-Endpoint: `POST /api/webhooks/stripe` (`Controllers/StripeWebhookController.cs`).
-Subscribe exactly these event types in the Stripe Dashboard — local development
-via `stripe listen --forward-to localhost:5000/api/webhooks/stripe` forwards
-everything, production must opt in explicitly.
-
-| Event | Purpose |
-|---|---|
-| `checkout.session.completed` | Safety net for crediting a one-time credit-pack purchase when the user closes the browser before the confirm redirect |
-| `payment_intent.succeeded` | Credits off-session auto-recharge purchases (`metadata.type = "auto_recharge"`) |
-| `payment_intent.payment_failed` | Emails the user when an off-session auto-recharge is declined |
-| `payment_method.detached` | Disables auto-recharge when the user's last saved card is removed |
-
-Every delivery is recorded in the `WebhookEvents` table (schema
-`dotnet_signing`) keyed on the Stripe event id. Only an event that was handled
-(`ProcessedAt` set) is skipped as a redelivery. An event whose handling failed
-is kept with `ProcessedAt` empty and the error, and answered `500`, so Stripe
-delivers it again (for up to three days; it can also be resent from the
-Stripe Dashboard) and the next delivery handles it anew.
-
-Credits are granted once per payment by a `CreditGrants` row — unique key =
-checkout session id (or `auto_recharge_<payment intent>`), unique payment
-intent — inserted with `ON CONFLICT DO NOTHING` in the same transaction as the
-credits and never deleted. The confirm redirect, this webhook and the
-`billing.*` events share it, so a late, repeated or concurrent delivery grants
-nothing more, and a failed one leaves nothing behind for the retry to trip on.
-With `P4Backoffice__Modules__Billing=On` the endpoint answers `404`.
-
-The platform sells usage credits rather than subscriptions, so invoice and
-charge events are deliberately ignored. Revisit that if subscriptions are added.
 
 ## Project layout
 

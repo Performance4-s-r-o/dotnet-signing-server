@@ -37,14 +37,22 @@ public static class EmailTemplateVariables
             ["expiryMinutes"] = expiryMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture),
         };
 
+    /// <summary>
+    /// Text that came from a payment event (a decline code, a payment type) reduced to letters,
+    /// digits, spaces and <c>_ . , : ; ( ) -</c>: it lands in an HTML body (and may pass through a
+    /// service template that escapes on its own), so nothing that could be markup survives.
+    /// </summary>
+    public static string PlainText(string? value) =>
+        System.Text.RegularExpressions.Regex.Replace(value ?? "", @"[^\p{L}\p{N} _.,:;()\-]", "");
+
     public static IReadOnlyDictionary<string, string?> PaymentFailed(
         string paymentType, string amount, string currency, string failureReason, string billingUrl) =>
         new Dictionary<string, string?>
         {
-            ["paymentType"] = paymentType,
+            ["paymentType"] = PlainText(paymentType),
             ["amount"] = amount,
             ["currency"] = currency,
-            ["failureReason"] = failureReason,
+            ["failureReason"] = PlainText(failureReason),
             ["billingUrl"] = billingUrl,
         };
 
@@ -64,7 +72,7 @@ public static class EmailTemplateVariables
         new Dictionary<string, string?>
         {
             ["quantity"] = quantity,
-            ["failureReason"] = failureReason,
+            ["failureReason"] = PlainText(failureReason),
             ["currentBalance"] = currentBalance,
             ["billingUrl"] = billingUrl,
         };

@@ -15,13 +15,15 @@ public class BackofficeCreditPricingProviderTests
     }
 
     private static (BackofficeCreditPricingProvider Sut, PricingSnapshotHolder Holder) Create(
-        BillingOptions? billing = null, string stripeCurrency = "EUR")
+        BillingOptions? billing = null, string currency = "EUR")
     {
+        billing ??= new BillingOptions();
+        billing.Currency = currency;
         var holder = new PricingSnapshotHolder();
         var sut = new BackofficeCreditPricingProvider(
             holder,
-            new ConfigCreditPricingProvider(billing ?? new BillingOptions()),
-            new Monitor<StripeOptions>(new StripeOptions { Currency = stripeCurrency }),
+            new ConfigCreditPricingProvider(billing),
+            new Monitor<BillingOptions>(billing),
             NullLogger<BackofficeCreditPricingProvider>.Instance);
         return (sut, holder);
     }
@@ -74,7 +76,7 @@ public class BackofficeCreditPricingProviderTests
     [Fact]
     public void OtherCurrency_UsesTheConfiguredPrices()
     {
-        var (sut, holder) = Create(stripeCurrency: "EUR");
+        var (sut, holder) = Create(currency: "EUR");
         holder.Set(PricingTestData.Snapshot(PricingTestData.Json(1,
             PricingTestData.Imported.Select(p => PricingTestData.Item(p.Quantity, p.Cents * 25, currency: "czk")).ToArray())));
 
@@ -84,9 +86,9 @@ public class BackofficeCreditPricingProviderTests
     }
 
     [Fact]
-    public void StripeCurrency_SelectsThePrice()
+    public void ProductCurrency_SelectsThePrice()
     {
-        var (sut, holder) = Create(stripeCurrency: "czk");
+        var (sut, holder) = Create(currency: "czk");
         holder.Set(PricingTestData.Snapshot(PricingTestData.Json(1,
             PricingTestData.Imported.Select(p => PricingTestData.Item(p.Quantity, p.Cents * 25, currency: "czk")).ToArray())));
 

@@ -6,7 +6,6 @@ using DotNetSigningServer.Services.Email;
 using DotNetSigningServer.Services.Pricing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using Stripe;
 
 namespace DotNetSigningServer.Services;
 
@@ -15,27 +14,24 @@ public class AutoRechargeService : IAutoRechargeService
     public const int ThresholdCredits = 10;
 
     private readonly ApplicationDbContext _dbContext;
-    private readonly IBillingService _billingService;
-    private readonly BillingOptions _billingOptions;
     private readonly ICreditPricingProvider _pricing;
     private readonly ITemplatedEmailSender _email;
     private readonly ILogger<AutoRechargeService> _logger;
     private readonly AppOptions _appOptions;
-    // Modules:Billing=On: the charge goes through the billing API instead of Stripe directly.
+    // Modules:Billing=On: the charge goes through the billing API. Null = no billing service
+    // (private server, development): nothing is ever charged.
     private readonly BackofficeAutoRecharge? _viaService;
 
     /// <summary>Tracks last failed auto-recharge attempt per user to implement cooldown.</summary>
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, DateTimeOffset> _failedAttempts = new();
     // Per-user in-flight guard: stops two concurrent debits that both crossed the
-    // threshold from each creating a Stripe charge (per-PaymentIntent idempotency
-    // doesn't cover two distinct intents). In-process only — a multi-replica
+    // threshold from each creating a charge (the service's idempotency
+    // key does not cover two distinct charges). In-process only — a multi-replica
     // deployment would additionally need a DB/distributed lock.
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte> _inFlight = new();
 
     public AutoRechargeService(
         ApplicationDbContext dbContext,
-        IBillingService billingService,
-        IOptions<BillingOptions> billingOptions,
         ITemplatedEmailSender email,
         ILogger<AutoRechargeService> logger,
         IOptions<AppOptions> appOptions,
@@ -45,8 +41,6 @@ public class AutoRechargeService : IAutoRechargeService
         _viaService = viaService;
         _pricing = pricing;
         _dbContext = dbContext;
-        _billingService = billingService;
-        _billingOptions = billingOptions.Value;
         _email = email;
         _logger = logger;
         _appOptions = appOptions.Value;
@@ -82,11 +76,8 @@ public class AutoRechargeService : IAutoRechargeService
                 return new AutoRechargeResult { Success = false, Error = "Auto-recharge not enabled" };
             }
 
-            if (string.IsNullOrWhiteSpace(user.StripeCustomerId))
-            {
-                return new AutoRechargeResult { Success = false, Error = "No Stripe customer" };
-            }
-
+            // The billing service names the payer by the user's id (customer_ref), so the local
+            // Stripe customer id is not needed to charge.
             // Trigger when balance drops below the fixed threshold (10 credits)
             if (user.CreditsRemaining >= ThresholdCredits)
             {
@@ -101,96 +92,15 @@ public class AutoRechargeService : IAutoRechargeService
                 return new AutoRechargeResult { Success = false, Error = "Cooldown active after previous failure" };
             }
 
-            if (_viaService != null)
+            if (_viaService == null)
             {
-                return await ChargeViaServiceAsync(user);
-            }
-
-            // Find a saved payment method
-            var paymentMethodId = await ResolvePaymentMethodAsync(user.StripeCustomerId);
-            if (string.IsNullOrWhiteSpace(paymentMethodId))
-            {
-                _logger.LogWarning("Auto-recharge failed for user {UserId}: no saved payment method", userId);
-                await SendRechargeFailedEmailAsync(user, "No saved payment method found. Please update your payment method.");
-                return new AutoRechargeResult { Success = false, Error = "No saved payment method" };
-            }
-
-            // The CURRENT price of the pack (not the stored one), from the price list in force
-            // (Modules:Pricing) — the same amount Checkout charges. A quantity that is not a sold
-            // pack keeps the configured formula.
-            var pack = _pricing.GetPack(user.AutoRechargeQuantity);
-            var amount = pack?.Amount
-                ?? _billingService.CalculateAmountForDocuments(user.AutoRechargeQuantity, _billingOptions.PricePer100);
-            var amountCents = pack?.UnitAmountMinor ?? CreditPricing.ToMinorUnits(amount);
-            var currency = pack?.Currency ?? _billingOptions.Currency;
-
-            try
-            {
-                var paymentIntentService = new PaymentIntentService();
-                var paymentIntent = await paymentIntentService.CreateAsync(new PaymentIntentCreateOptions
-                {
-                    Amount = amountCents,
-                    Currency = currency.ToLower(),
-                    Customer = user.StripeCustomerId,
-                    PaymentMethod = paymentMethodId,
-                    OffSession = true,
-                    Confirm = true,
-                    Metadata = new Dictionary<string, string>
-                {
-                    { "type", "auto_recharge" },
-                    { "userId", userId.ToString() },
-                    { "documents", user.AutoRechargeQuantity.ToString() }
-                }
-                });
-
-                if (paymentIntent.Status != "succeeded")
-                {
-                    _logger.LogWarning("Auto-recharge payment not succeeded for user {UserId}, status: {Status}",
-                        userId, paymentIntent.Status);
-                    await SendRechargeFailedEmailAsync(user, "Payment was not completed. Please check your payment method.");
-                    return new AutoRechargeResult { Success = false, Error = $"Payment status: {paymentIntent.Status}" };
-                }
-
-                // Credits, the payment record and the grant key in one transaction (#79): the
-                // payment_intent.succeeded webhook claims the same key, so whichever is second grants nothing.
-                var granted = await CreditGrants.TryGrantAsync(_dbContext, CreditGrants.AutoRechargeKey(paymentIntent.Id),
-                    CreditGrants.AutoRechargeType, user.Id, user.AutoRechargeQuantity, "auto-recharge", () =>
-                    {
-                        _dbContext.Payments.Add(new Payment
-                        {
-                            UserId = user.Id,
-                            StripePaymentIntentId = paymentIntent.Id,
-                            AmountCents = (int)amountCents,
-                            Currency = currency,
-                            Status = "succeeded"
-                        });
-                        return Task.CompletedTask;
-                    }, CancellationToken.None, paymentIntent.Id);
-                if (!granted)
-                {
-                    _logger.LogInformation("Auto-recharge {PaymentIntentId} for user {UserId} was already granted by the webhook",
-                        paymentIntent.Id, userId);
-                }
-
-                // Clear cooldown on success
-                _failedAttempts.TryRemove(userId, out _);
-
-                _logger.LogInformation("Auto-recharge succeeded for user {UserId}: +{Credits} credits",
-                    userId, user.AutoRechargeQuantity);
-
-                await SendRechargeSuccessEmailAsync(user, user.AutoRechargeQuantity, amount, currency);
-
-                return new AutoRechargeResult { Success = true, CreditsAdded = user.AutoRechargeQuantity };
-            }
-            catch (StripeException ex)
-            {
-                // Record failure timestamp for cooldown
+                // Cooldown, so a development host does not log this on every debit.
                 _failedAttempts[userId] = DateTimeOffset.UtcNow;
-
-                _logger.LogError(ex, "Auto-recharge Stripe error for user {UserId}", userId);
-                await SendRechargeFailedEmailAsync(user, $"Payment failed: {ex.Message}");
-                return new AutoRechargeResult { Success = false, Error = ex.Message };
+                _logger.LogWarning("Auto-recharge of user {UserId} skipped: P4Backoffice:Modules:Billing is not On", userId);
+                return new AutoRechargeResult { Success = false, Error = "Payments not available" };
             }
+
+            return await ChargeViaServiceAsync(user);
         }
         finally
         {
@@ -199,8 +109,8 @@ public class AutoRechargeService : IAutoRechargeService
     }
 
     /// <summary>
-    /// Modules:Billing=On. Only a pack of the price list in force can be charged (catalog
-    /// prices only); the service picks the card and refuses without one.
+    /// Only a pack of the price list in force can be charged (catalog prices only); the
+    /// service picks the card and refuses without one.
     /// </summary>
     private async Task<AutoRechargeResult> ChargeViaServiceAsync(User user)
     {
@@ -221,8 +131,12 @@ public class AutoRechargeService : IAutoRechargeService
         switch (charge.Outcome)
         {
             case ServiceChargeOutcome.Succeeded when !charge.CreditsGranted:
-                // Paid but not granted (logged by BackofficeAutoRecharge): no success e-mail.
-                return new AutoRechargeResult { Success = false, Error = "Paid, credits not granted" };
+                // Paid but not granted (logged by BackofficeAutoRecharge): no success e-mail. The claim
+                // is released, so the next debit would charge the card again: stop auto-recharge
+                // (and rest the cooldown) until an admin has settled the payment.
+                _failedAttempts[user.Id] = DateTimeOffset.UtcNow;
+                await DisableAsync(user);
+                return new AutoRechargeResult { Success = false, Error = "Paid, credits not granted; auto-recharge stopped" };
 
             case ServiceChargeOutcome.Abandoned:
                 // An earlier charge never finished; repeating could charge twice. An admin settles it.
@@ -249,11 +163,16 @@ public class AutoRechargeService : IAutoRechargeService
                 _failedAttempts[user.Id] = DateTimeOffset.UtcNow;
                 _logger.LogWarning("Auto-recharge failed for user {UserId}: {Outcome} ({Reason})", user.Id, charge.Outcome, charge.Reason);
                 await SendRechargeFailedEmailAsync(user, FailureReason(charge));
+                if (charge is { Outcome: ServiceChargeOutcome.Refused, Reason: "no_payment_method" })
+                {
+                    // Nothing to charge until a card is saved again: stop, so the e-mail is not sent at every debit.
+                    await DisableAsync(user);
+                }
                 return new AutoRechargeResult { Success = false, Error = $"Payment {charge.Outcome}: {charge.Reason}" };
         }
     }
 
-    /// <summary>The reason in the failure e-mail, worded like the direct path's.</summary>
+    /// <summary>The reason in the failure e-mail.</summary>
     internal static string FailureReason(ServiceCharge charge) => charge switch
     {
         { Outcome: ServiceChargeOutcome.RequiresAction } => "Your bank asked for a confirmation we could not request automatically. Please buy credits on the billing page.",
@@ -303,42 +222,6 @@ public class AutoRechargeService : IAutoRechargeService
         }
 
         await DisableAsync(user);
-    }
-
-    private async Task<string?> ResolvePaymentMethodAsync(string customerId)
-    {
-        try
-        {
-            // Try customer's default payment method
-            var customerService = new CustomerService();
-            var customer = await customerService.GetAsync(customerId);
-
-            if (!string.IsNullOrWhiteSpace(customer.InvoiceSettings?.DefaultPaymentMethodId))
-            {
-                return customer.InvoiceSettings.DefaultPaymentMethodId;
-            }
-
-            if (!string.IsNullOrWhiteSpace(customer.DefaultSourceId))
-            {
-                return customer.DefaultSourceId;
-            }
-
-            // Fallback: first saved card
-            var pmService = new PaymentMethodService();
-            var methods = await pmService.ListAsync(new PaymentMethodListOptions
-            {
-                Customer = customerId,
-                Type = "card",
-                Limit = 1
-            });
-
-            return methods.Data.FirstOrDefault()?.Id;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to resolve payment method for customer {CustomerId}", customerId);
-            return null;
-        }
     }
 
     private async Task SendRechargeSuccessEmailAsync(User user, int creditsAdded, decimal amount, string currency)

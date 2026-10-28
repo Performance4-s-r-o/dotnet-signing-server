@@ -53,7 +53,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 ```
 feat(templates): support right-aligned table columns
 fix(signing): honour DisableTsa when a default TSA is configured
-chore(deps): bump Stripe.net to 46.1.0
+chore(deps): bump Markdig to 1.3.2
 docs(readme): document the seal configuration
 ```
 

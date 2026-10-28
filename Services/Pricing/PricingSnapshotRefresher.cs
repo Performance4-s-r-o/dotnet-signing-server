@@ -29,7 +29,6 @@ public sealed class PricingSnapshotRefresher
 {
     private readonly BackofficePricingClient _client;
     private readonly PricingSnapshotHolder _holder;
-    private readonly StripePriceResolver _resolver;
     private readonly IServiceScopeFactory _scopes;
     private readonly TimeProvider _time;
     private readonly ILogger<PricingSnapshotRefresher> _logger;
@@ -38,14 +37,12 @@ public sealed class PricingSnapshotRefresher
     public PricingSnapshotRefresher(
         BackofficePricingClient client,
         PricingSnapshotHolder holder,
-        StripePriceResolver resolver,
         IServiceScopeFactory scopes,
         TimeProvider time,
         ILogger<PricingSnapshotRefresher> logger)
     {
         _client = client;
         _holder = holder;
-        _resolver = resolver;
         _scopes = scopes;
         _time = time;
         _logger = logger;
@@ -106,8 +103,6 @@ public sealed class PricingSnapshotRefresher
 
             if (previous is null || previous.Version != snapshot.Version)
             {
-                // Stripe Prices cached for the old version must not be compared with new amounts.
-                _resolver.Invalidate();
                 _logger.LogInformation("[pricing] price list v{Version} stored ({Reason})", snapshot.Version, reason);
             }
             return PricingRefreshOutcome.Updated;

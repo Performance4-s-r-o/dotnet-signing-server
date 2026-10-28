@@ -33,7 +33,7 @@ public class PrivateServerConventionTests
     [Fact]
     public void Removes_TheControllersThatOnlyServeTheHostedService()
     {
-        var application = BuildModel("Billing", "StripeWebhook", "BackofficeWebhook", "Home", "Seo", "Legal", "Support", "Requests");
+        var application = BuildModel("Billing", "BackofficeWebhook", "Home", "Seo", "Legal", "Support", "Requests");
 
         new PrivateServerConvention().Apply(application);
 
@@ -68,7 +68,7 @@ public class PrivateServerConventionTests
             .ToList();
 
         Assert.Equal(expected, routes.Contains("api/webhooks/p4"));
-        Assert.Equal(expected, routes.Contains("api/webhooks/stripe"));
+        Assert.DoesNotContain("api/webhooks/stripe", routes); // no provider webhook on either build
     }
 
     [Fact]

@@ -28,7 +28,7 @@ public sealed class PriceScheduledHandler : IBackofficeEventHandler
     private readonly ApplicationDbContext _db;
     private readonly ITemplatedEmailSender _email;
     private readonly ICreditPricingProvider _pricing;
-    private readonly IOptionsMonitor<StripeOptions> _stripe;
+    private readonly IOptionsMonitor<BillingOptions> _billing;
     private readonly IOptions<AppOptions> _app;
     private readonly TimeProvider _time;
     private readonly ILogger<PriceScheduledHandler> _logger;
@@ -37,7 +37,7 @@ public sealed class PriceScheduledHandler : IBackofficeEventHandler
         ApplicationDbContext db,
         ITemplatedEmailSender email,
         ICreditPricingProvider pricing,
-        IOptionsMonitor<StripeOptions> stripe,
+        IOptionsMonitor<BillingOptions> billing,
         IOptions<AppOptions> app,
         TimeProvider time,
         ILogger<PriceScheduledHandler> logger)
@@ -45,7 +45,7 @@ public sealed class PriceScheduledHandler : IBackofficeEventHandler
         _db = db;
         _email = email;
         _pricing = pricing;
-        _stripe = stripe;
+        _billing = billing;
         _app = app;
         _time = time;
         _logger = logger;
@@ -68,7 +68,7 @@ public sealed class PriceScheduledHandler : IBackofficeEventHandler
     /// <summary>Plans and sends the notices of <paramref name="data"/>.</summary>
     public async Task<PriceNoticeResult> NotifyAsync(PriceChangeEvent data, string eventId, CancellationToken cancellationToken)
     {
-        var currency = ProductCurrency(_stripe.CurrentValue);
+        var currency = ProductCurrency(_billing.CurrentValue);
         var currentPacks = _pricing.GetPacks();
         var changes = PriceNoticePlanner.CreditChanges(data, currency, currentPacks);
         if (changes.Count == 0)
@@ -150,5 +150,5 @@ public sealed class PriceScheduledHandler : IBackofficeEventHandler
     }
 
     /// <summary>The currency the product sells in, as the price-list provider maps it.</summary>
-    internal static string ProductCurrency(StripeOptions stripe) => ConfigCreditPricingProvider.NormalizeCurrency(stripe.Currency);
+    internal static string ProductCurrency(BillingOptions billing) => ConfigCreditPricingProvider.NormalizeCurrency(billing.Currency);
 }

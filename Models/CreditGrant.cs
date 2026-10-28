@@ -6,8 +6,8 @@ namespace DotNetSigningServer.Models;
 /// One payment turned into credits, kept forever (#79). <see cref="GrantKey"/> is unique — the
 /// checkout session id, or <c>auto_recharge_&lt;payment intent&gt;</c> — and so is
 /// <see cref="PaymentIntentId"/> when known. The row is inserted with
-/// <c>ON CONFLICT DO NOTHING</c> in the same transaction as the credits, so the confirm page,
-/// the product's Stripe webhook and the <c>billing.*</c> events grant one payment exactly once,
+/// <c>ON CONFLICT DO NOTHING</c> in the same transaction as the credits, so the confirm page
+/// and the <c>billing.*</c> events grant one payment exactly once,
 /// however late or often they are redelivered. Unlike an idempotency key of the backoffice
 /// (kept 24 h) or a webhook log, nothing ever expires or deletes these rows.
 /// </summary>
@@ -28,7 +28,7 @@ public class CreditGrant
 
     public int Credits { get; set; }
 
-    /// <summary><c>confirm-page</c>, <c>stripe-webhook</c>, <c>backoffice</c>, <c>auto-recharge</c>, <c>legacy</c>.</summary>
+    /// <summary><c>confirm-page</c>, <c>backoffice</c>, and in older rows <c>stripe-webhook</c>, <c>auto-recharge</c>, <c>legacy</c>.</summary>
     [Required]
     [MaxLength(32)]
     public string Source { get; set; } = string.Empty;

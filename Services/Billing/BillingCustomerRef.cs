@@ -70,12 +70,4 @@ public static class BillingCustomerRef
     public static bool StripeCustomerMatches(string? userStripeCustomerId, string? objectStripeCustomerId) =>
         string.IsNullOrWhiteSpace(userStripeCustomerId)
         || string.Equals(userStripeCustomerId, objectStripeCustomerId, StringComparison.Ordinal);
-
-    /// <summary>
-    /// For an off-session charge the product sent itself (auto-recharge): the user must have a
-    /// customer and it must be the charge's. Nothing to bind here, so a user without one fails.
-    /// </summary>
-    public static bool ChargeBelongsTo(string? userStripeCustomerId, string? chargeStripeCustomerId) =>
-        !string.IsNullOrWhiteSpace(userStripeCustomerId)
-        && string.Equals(userStripeCustomerId, chargeStripeCustomerId, StringComparison.Ordinal);
 }

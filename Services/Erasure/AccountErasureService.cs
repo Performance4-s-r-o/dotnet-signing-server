@@ -164,7 +164,6 @@ public sealed class AccountErasureService
 
         var backoffice = services.GetRequiredService<IOptions<P4BackofficeProductOptions>>().Value;
         var chargesStopped = false;
-        StripeCustomerScrubResult? stripe = null;
         if (existing.ErasedAt == null)
         {
             var refusal = await RefusalAsync(services, db, existing, cancellationToken);
@@ -178,11 +177,7 @@ public sealed class AccountErasureService
             await db.Users.Where(u => u.Id == userId && u.AutoRechargeEnabled)
                 .ExecuteUpdateAsync(s => s.SetProperty(u => u.AutoRechargeEnabled, false), cancellationToken);
             chargesStopped = true;
-            var directStripe = backoffice.ModeFor(BackofficeModule.Billing) != BackofficeMode.On;
-            // Keyed by the service's request when there is one, else by the account: a retry
-            // repeats the same cancellations under the same Stripe idempotency keys.
-            var erasureKey = (ack?.ErasureId ?? userId).ToString("D");
-            (var stopped, stripe) = await StopRecurringChargesAsync(services, existing, directStripe, erasureKey, cancellationToken);
+            var stopped = await StopRecurringChargesAsync(services, existing, cancellationToken);
             if (!stopped)
             {
                 return new AccountErasureResult(AccountErasureStatus.BillingFailed, new Dictionary<string, int>(), null, ChargesStopped: true);
@@ -191,7 +186,7 @@ public sealed class AccountErasureService
 
         var strategy = db.Database.CreateExecutionStrategy();
         var (result, files, tokenIds) = await strategy.ExecuteAsync(
-            ct => EraseLocallyAsync(services, db, userId, origin, ack, backoffice, stripe, ct), cancellationToken);
+            ct => EraseLocallyAsync(services, db, userId, origin, ack, backoffice, ct), cancellationToken);
         if (result.Status == AccountErasureStatus.Refused)
         {
             LogRefusal(origin, userId, result.Refusal);
@@ -224,7 +219,7 @@ public sealed class AccountErasureService
             return AccountErasureRefusal.LastAdmin;
         }
 
-        // In this process (direct Stripe path) or in the shared claim (billing API path, every replica).
+        // In this process, or in the shared claim (every replica).
         var claimId = AutoRechargeClaim.EventIdFor(user.Id);
         if (AutoRechargeService.IsInFlight(user.Id)
             || await db.WebhookEvents.AnyAsync(w => w.EventId == claimId, cancellationToken))
@@ -249,45 +244,32 @@ public sealed class AccountErasureService
     /// <summary>
     /// The payment provider's side, before anything local (the tombstone forgets the Stripe
     /// customer, so this must succeed first; every step can be repeated after a partial failure).
-    /// On the direct Stripe path (<paramref name="directStripe"/>: <c>Modules:Billing</c> not On) the
-    /// customer is scrubbed and its live subscriptions end first (D-3); then the saved cards are
-    /// removed and checked gone, so no off-session charge (auto-recharge) can follow. Through the
-    /// billing service the cards go through its API and the service scrubs the customer itself
-    /// (<c>customer_ref</c>). Users without a payer at the provider have nothing there.
+    /// The saved cards go through the billing API and are checked gone, so no off-session charge
+    /// (auto-recharge) can follow; the billing service scrubs the customer itself
+    /// (<c>customer_ref</c> of the erasure request). A user the service does not know answers 404, which is nothing to remove.
     /// </summary>
-    private async Task<(bool Stopped, StripeCustomerScrubResult? Stripe)> StopRecurringChargesAsync(
-        IServiceProvider services, User user, bool directStripe, string erasureKey, CancellationToken cancellationToken)
+    private async Task<bool> StopRecurringChargesAsync(
+        IServiceProvider services, User user, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(user.StripeCustomerId)) return (true, null);
-
+        // No test on the local Stripe customer id: the service knows the payer by customer_ref
+        // (the user's id), whether or not this product ever stored a link.
         var payments = services.GetRequiredService<IPaymentGateway>();
-        StripeCustomerScrubResult? scrub = null;
         try
         {
-            if (directStripe)
-            {
-                scrub = await payments.ScrubCustomerForErasureAsync(user, erasureKey, cancellationToken);
-                if (!scrub.CustomerFound) return (true, scrub); // gone in Stripe: no card, nothing to scrub
-            }
             await payments.DetachPaymentMethodsAsync(user, cancellationToken);
             if (await payments.HasSavedCardAsync(user, cancellationToken))
             {
                 _logger.LogError("Account erasure of user {UserId}: a saved card is still attached after detaching; the account is not erased", user.Id);
-                return (false, scrub);
+                return false;
             }
-            return (true, scrub);
-        }
-        catch (Stripe.StripeException ex) when (ex.StripeError?.Code == "resource_missing")
-        {
-            // The customer is gone at Stripe: no card can be charged any more.
-            return (true, scrub ?? (directStripe ? StripeCustomerScrubResult.NoCustomer : null));
+            return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Only the type: a provider's message may quote the customer's address.
             _logger.LogError("Account erasure of user {UserId}: the payment provider step failed ({Error}); the account is not erased",
                 user.Id, ex.GetType().Name);
-            return (false, scrub);
+            return false;
         }
     }
 
@@ -298,7 +280,6 @@ public sealed class AccountErasureService
         string origin,
         ErasureAckTarget? ack,
         P4BackofficeProductOptions backoffice,
-        StripeCustomerScrubResult? stripe,
         CancellationToken ct)
     {
         db.ChangeTracker.Clear(); // a retried attempt starts clean (this context is ours alone)
@@ -408,12 +389,6 @@ public sealed class AccountErasureService
         var invoicesKept = await db.Invoices.CountAsync(i => i.UserId == userId, ct);
         var paymentsKept = await db.Payments.CountAsync(p => p.UserId == userId, ct);
         counts["invoices_kept"] = invoicesKept;
-        if (stripe != null)
-        {
-            // The Stripe customer stays, scrubbed, for its invoices (direct Stripe path, D-3).
-            counts["stripe_customer_kept"] = stripe.CustomerFound ? 1 : 0;
-            counts["subscriptions_canceled"] = stripe.SubscriptionsCanceled;
-        }
         counts["payments_kept"] = paymentsKept;
         counts["usage_records_kept"] = await db.UsageRecords.CountAsync(r => r.UserId == userId, ct);
         counts["consents_kept"] = consentsKept;
@@ -441,7 +416,7 @@ public sealed class AccountErasureService
 
         var retainedReasons = new List<string>();
         if (auditRowsKept > 0) retainedReasons.Add(AccountErasure.RetainedReasons.LegalClaims);
-        if (invoicesKept + paymentsKept > 0 || stripe?.CustomerFound == true) retainedReasons.Add(AccountErasure.RetainedReasons.Accounting);
+        if (invoicesKept + paymentsKept > 0) retainedReasons.Add(AccountErasure.RetainedReasons.Accounting);
         if (consentsKept > 0) retainedReasons.Add(AccountErasure.RetainedReasons.ConsentEvidence);
         var retainedReason = retainedReasons.FirstOrDefault();
 
@@ -458,7 +433,7 @@ public sealed class AccountErasureService
             {
                 SubjectRef = subjectRef,
                 Emails = email is null ? null : [email],
-                CustomerRef = backoffice.ModeFor(BackofficeModule.Billing) == BackofficeMode.On && stripeCustomerId != null
+                CustomerRef = backoffice.ModeFor(BackofficeModule.Billing) == BackofficeMode.On
                     ? BillingCustomerRef.For(userId)
                     : null,
                 Origin = origin,

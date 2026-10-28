@@ -86,6 +86,16 @@ public sealed class ConfigCreditPricingProvider : ICreditPricingProvider
         return Math.Round(amount, 2, MidpointRounding.AwayFromZero);
     }
 
+    /// <summary>
+    /// Upper-case currency code; empty and an unresolved <c>{{…}}</c> placeholder (as
+    /// <see cref="DotNetSigningServer.Options.EnvValues"/> reads them) mean EUR.
+    /// </summary>
     internal static string NormalizeCurrency(string? currency) =>
-        string.IsNullOrWhiteSpace(currency) ? "EUR" : currency.Trim().ToUpperInvariant();
+        DotNetSigningServer.Options.EnvValues.IsUnset(currency) ? "EUR" : currency!.Trim().ToUpperInvariant();
+
+    /// <summary>Why <paramref name="currency"/> is not an ISO 4217 code (three letters); null when it is, or unset (EUR).</summary>
+    internal static string? CurrencyProblem(string? currency) =>
+        DotNetSigningServer.Options.EnvValues.IsUnset(currency) || System.Text.RegularExpressions.Regex.IsMatch(currency!.Trim(), "^[A-Za-z]{3}$")
+            ? null
+            : "Billing:Currency (BILLING_CURRENCY) must be a three-letter ISO 4217 code such as EUR.";
 }

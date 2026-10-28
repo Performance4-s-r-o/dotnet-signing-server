@@ -6,7 +6,7 @@ namespace DotNetSigningServer.Services.Pricing;
 /// <summary>
 /// Prices from the service's price list (<c>Modules:Pricing=On</c>): the snapshot of
 /// <c>GET /v1/pricing/current</c> held in memory by <see cref="PricingSnapshotHolder"/>, mapped
-/// by <see cref="PriceListMapper"/> in <c>Stripe:Currency</c>. Never calls the service.
+/// by <see cref="PriceListMapper"/> in <c>Billing:Currency</c>. Never calls the service.
 ///
 /// Without a snapshot every pack comes from <see cref="ConfigCreditPricingProvider"/>; a pack
 /// missing from the snapshot (or priced in another currency) falls back to its configured
@@ -16,7 +16,7 @@ public sealed class BackofficeCreditPricingProvider : ICreditPricingProvider
 {
     private readonly PricingSnapshotHolder _holder;
     private readonly ConfigCreditPricingProvider _config;
-    private readonly IOptionsMonitor<StripeOptions> _stripe;
+    private readonly IOptionsMonitor<BillingOptions> _billing;
     private readonly ILogger<BackofficeCreditPricingProvider> _logger;
     private readonly object _lock = new();
     private Resolved? _resolved;
@@ -25,12 +25,12 @@ public sealed class BackofficeCreditPricingProvider : ICreditPricingProvider
     public BackofficeCreditPricingProvider(
         PricingSnapshotHolder holder,
         ConfigCreditPricingProvider config,
-        IOptionsMonitor<StripeOptions> stripe,
+        IOptionsMonitor<BillingOptions> billing,
         ILogger<BackofficeCreditPricingProvider> logger)
     {
         _holder = holder;
         _config = config;
-        _stripe = stripe;
+        _billing = billing;
         _logger = logger;
     }
 
@@ -49,7 +49,7 @@ public sealed class BackofficeCreditPricingProvider : ICreditPricingProvider
     private Resolved Current()
     {
         var snapshot = _holder.Current;
-        var currency = ConfigCreditPricingProvider.NormalizeCurrency(_stripe.CurrentValue.Currency);
+        var currency = ConfigCreditPricingProvider.NormalizeCurrency(_billing.CurrentValue.Currency);
         var resolved = _resolved;
         if (resolved != null && ReferenceEquals(resolved.Snapshot, snapshot) && resolved.CurrencyKey == currency)
         {
