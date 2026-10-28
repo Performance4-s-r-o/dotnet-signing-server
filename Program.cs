@@ -404,10 +404,18 @@ builder.Services.AddOptions<EvidenceOptions>()
         }
     });
 
+// A currency that is not a code would reach the price list and the payment: stop in production,
+// fall back to EUR with a warning elsewhere.
+var currencyProblem = DotNetSigningServer.Services.Pricing.ConfigCreditPricingProvider.CurrencyProblem(builder.Configuration["Billing:Currency"]);
+if (currencyProblem != null && builder.Environment.IsProduction())
+{
+    throw new InvalidOperationException(currencyProblem);
+}
 builder.Services.AddOptions<BillingOptions>()
     .Bind(builder.Configuration.GetSection("Billing"))
     .PostConfigure(options =>
     {
+        if (currencyProblem != null) options.Currency = "EUR";
         options.AttachmentDebitBypassKey = builder.Configuration["ATTACHMENT_DEBIT_BYPASS_KEY"] ?? options.AttachmentDebitBypassKey;
         options.GlobalConcurrencyLimit = EnvValues.Int(builder.Configuration, "GLOBAL_CONCURRENCY_LIMIT") ?? options.GlobalConcurrencyLimit;
         options.GlobalConcurrencyWaitMilliseconds = EnvValues.Int(builder.Configuration, "GLOBAL_CONCURRENCY_WAIT_MS") ?? options.GlobalConcurrencyWaitMilliseconds;
@@ -479,6 +487,7 @@ if (!migrateOnly)
 }
 
 var appLogger = app.Services.GetRequiredService<ILogger<Program>>();
+if (currencyProblem != null) appLogger.LogWarning("{Problem} Using EUR.", currencyProblem);
 
 // #80: in Production the CORS list no longer falls back to the origins of every user's
 // browser tokens. Without Cors:AllowedOrigins only the server's own origin passes.
