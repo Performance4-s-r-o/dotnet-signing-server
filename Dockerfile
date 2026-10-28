@@ -16,7 +16,7 @@ COPY . .
 # the file empty and Sentry falls back to its default release detection.
 ARG SENTRY_RELEASE_SHA=
 RUN if [ -n "$SENTRY_RELEASE_SHA" ]; then \
-        printf '%s-%s' "$(date -u +%Y-%m-%d)" "$SENTRY_RELEASE_SHA" > /sentry-release; \
+        printf '%s-%s' "$(date -u +%Y-%m-%d)" "$(printf '%.7s' "$SENTRY_RELEASE_SHA")" > /sentry-release; \
         echo "[sentry] release = $(cat /sentry-release)"; \
     else \
         : > /sentry-release; \

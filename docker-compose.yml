@@ -11,7 +11,9 @@ services:
         # Dockerfile with the build date (UTC) to form the release name
         # YYYY-MM-DD-<sha>. Empty
         # disables it and Sentry falls back to its default detection.
-        SENTRY_RELEASE_SHA: ${SENTRY_RELEASE_SHA:-}
+        # Commit hash from the deploy platform (SOURCE_COMMIT); the Dockerfile
+        # shortens it. Fallback: an explicit SENTRY_RELEASE_SHA. Empty = off.
+        SENTRY_RELEASE_SHA: ${SOURCE_COMMIT:-${SENTRY_RELEASE_SHA:-}}
         # true builds with the P4 Backoffice SDK (needs registry access at
         # restore time); false leaves it out and the integration stays Off.
     restart: unless-stopped
