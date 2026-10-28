@@ -174,7 +174,7 @@ builder.Services.AddSingleton<ContentLimitGuard>();
 builder.Services.AddSingleton<PdfSafetyGuard>();
 builder.Services.AddScoped<IAutoRechargeService, AutoRechargeService>();
 builder.Services.AddHostedService<PresignCleanupService>();
-// Retention of Stripe webhook payloads and document metadata (#217).
+// Retention of billing event payloads and document metadata (#217).
 Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton(builder.Services, TimeProvider.System);
 builder.Services.AddHostedService<DataRetentionService>();
 // Paid API operations: state, reservation, idempotent retries (#77, #82).
@@ -232,19 +232,7 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 builder.Services.Configure<BillingOptions>(builder.Configuration.GetSection("Billing"));
-// /api/webhooks/stripe is [AllowAnonymous]; the signature check is its only gate.
-// The tracked appsettings.json ships WebhookSecret: "", and an empty HMAC key means
-// an attacker can compute a valid Stripe-Signature and mint credits via a forged
-// checkout.session.completed. Fail the deploy instead of serving unauthenticated.
-builder.Services.AddOptions<StripeOptions>()
-    .Bind(builder.Configuration.GetSection("Stripe"))
-    .Validate(
-        options => !builder.Environment.IsProduction()
-                   || (!string.IsNullOrWhiteSpace(options.WebhookSecret)
-                       && options.WebhookSecret.StartsWith("whsec_", StringComparison.Ordinal)),
-        "Stripe:WebhookSecret must be configured with the signing secret (whsec_...) in production. "
-        + "Set the Stripe__WebhookSecret environment variable.")
-    .ValidateOnStart();
+builder.Services.Configure<StripeOptions>(builder.Configuration.GetSection("Stripe"));
 builder.Services.Configure<TokenOptions>(builder.Configuration.GetSection("Token"));
 builder.Services.AddOptions<SessionSecurityOptions>()
     .Bind(builder.Configuration.GetSection(SessionSecurityOptions.SectionName))

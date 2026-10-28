@@ -102,7 +102,7 @@ public class ApiGateMiddlewareTests : IDisposable
 
         await gate.InvokeAsync(Context(services, "/api/presign", Guid.NewGuid()));
         await gate.InvokeAsync(Context(services, "/api/code-formats"));
-        await gate.InvokeAsync(Context(services, "/api/webhooks/stripe"));
+        await gate.InvokeAsync(Context(services, "/api/webhooks/p4"));
         await gate.InvokeAsync(Context(services, "/Account/SignIn"));
 
         Assert.Equal(4, calls);

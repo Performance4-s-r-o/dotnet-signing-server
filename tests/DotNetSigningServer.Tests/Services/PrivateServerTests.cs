@@ -33,7 +33,7 @@ public class PrivateServerConventionTests
     [Fact]
     public void Removes_TheControllersThatOnlyServeTheHostedService()
     {
-        var application = BuildModel("Billing", "StripeWebhook", "BackofficeWebhook", "Home", "Seo", "Legal", "Support", "Requests");
+        var application = BuildModel("Billing", "BackofficeWebhook", "Home", "Seo", "Legal", "Support", "Requests");
 
         new PrivateServerConvention().Apply(application);
 

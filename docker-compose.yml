@@ -127,7 +127,6 @@ services:
       - EVIDENCE_ENCRYPTION_CERTIFICATE_PEM=${EVIDENCE_ENCRYPTION_CERTIFICATE_PEM:-}
       # Stripe configuration
       - Stripe__ApiKey=${STRIPE_API_KEY:-}
-      - Stripe__WebhookSecret=${STRIPE_WEBHOOK_SECRET:-}
       - Stripe__Currency=${STRIPE_CURRENCY:-EUR}
       - Stripe__EnableTaxIdCollection=${STRIPE_ENABLE_TAX_ID_COLLECTION:-true}
       - Stripe__RequireBillingAddress=${STRIPE_REQUIRE_BILLING_ADDRESS:-true}

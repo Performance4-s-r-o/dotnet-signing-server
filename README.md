@@ -177,7 +177,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `TRUSTED_PROXIES` | no | Reverse proxy (Traefik/Caddy) addresses / CIDRs (#106): whose `X-Forwarded-For` is applied. An explicit `ForwardedHeaders__KnownProxies` / `__KnownNetworks` wins; empty = the private ranges and loopback (as before); `none` = nobody's. A reverse proxy alone never vouches for `CF-Connecting-IP` |
 | `DataProtection__CertificateBase64` / `__CertificatePassword` (compose: `DATA_PROTECTION_CERTIFICATE_BASE64` / `_PASSWORD`) | in production, unless the next row is `true` | Base64 PFX that encrypts the Data Protection key ring, which also protects stored TSA credentials |
 | `DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS` | no | `true` = a Production start without the certificate is allowed, with a warning (single host, protected volume). Otherwise Production refuses to start with an unencrypted key ring; with `true` it starts and prints a warning. Outside Production nothing is checked or printed. Back up the certificate: adding it does not encrypt keys already written in plaintext (they are replaced when the ring rotates, about every 90 days), and a lost certificate makes the ring unreadable |
-| `Stripe__ApiKey` / `Stripe__WebhookSecret` | for billing | Payments; the webhook secret must start with `whsec_` in production |
+| `Stripe__ApiKey` | for billing | Payments |
 | `Resend__ApiKey` / `Resend__From` | for email | Transactional email |
 | `OsTicket__Url` / `OsTicket__ApiKey` | | Support form; without them (and with `Modules:Support` not `On`) the routes 404 and the nav entry hides |
 | `AI__Enabled` / `AI__Google__ApiKey` | | AI-assisted template field detection |
@@ -480,7 +480,7 @@ those paths calls the service.
   and its amount and currency match the price list; otherwise, and when Stripe
   refuses the session with that Price (e.g. no default tax behaviour on the
   account while automatic tax is on), the amount is sent inline and a warning
-  logged. Checkout metadata (`documents`) and the Stripe webhook are unchanged.
+  logged. Checkout metadata (`documents`) is unchanged.
 
 Price-change notices (`price_change_notice` to users with auto-recharge):
 
@@ -539,48 +539,14 @@ Only its own setting switches it: `P4Backoffice__Mode=On` leaves payments Off.
   with the same key — never after 23 hours (the service keeps answers for 24):
   such a charge stops auto-recharge and is logged as an error for an admin. Credits are granted by the confirm page or by
   `billing.checkout.completed` / `billing.payment.succeeded`, whichever comes
-  first (same keys as the Stripe webhook). The product's Stripe webhook answers
-  `200` (ignored) in `On` and grants nothing: its Stripe account is no longer the one
-  taking the payments. `Stripe__*` stays configured for `Off` and the
-  rollback.
+  first (same keys on both paths: the checkout session id, or
+  `auto_recharge_<payment intent>`).
   `billing.payment_method.detached` switches auto-recharge off when no card is
   left. Success and failure e-mails are still sent by this app.
   Existing Stripe customers must be linked in the service before `On`;
   otherwise the service creates a new customer without the saved card.
 
 Rollback: `P4Backoffice__Modules__Billing=Off`.
-
-## Stripe webhooks
-
-Endpoint: `POST /api/webhooks/stripe` (`Controllers/StripeWebhookController.cs`).
-Subscribe exactly these event types in the Stripe Dashboard — local development
-via `stripe listen --forward-to localhost:5000/api/webhooks/stripe` forwards
-everything, production must opt in explicitly.
-
-| Event | Purpose |
-|---|---|
-| `checkout.session.completed` | Safety net for crediting a one-time credit-pack purchase when the user closes the browser before the confirm redirect |
-| `payment_intent.succeeded` | Credits off-session auto-recharge purchases (`metadata.type = "auto_recharge"`) |
-| `payment_intent.payment_failed` | Emails the user when an off-session auto-recharge is declined |
-| `payment_method.detached` | Disables auto-recharge when the user's last saved card is removed |
-
-Every delivery is recorded in the `WebhookEvents` table (schema
-`dotnet_signing`) keyed on the Stripe event id. Only an event that was handled
-(`ProcessedAt` set) is skipped as a redelivery. An event whose handling failed
-is kept with `ProcessedAt` empty and the error, and answered `500`, so Stripe
-delivers it again (for up to three days; it can also be resent from the
-Stripe Dashboard) and the next delivery handles it anew.
-
-Credits are granted once per payment by a `CreditGrants` row — unique key =
-checkout session id (or `auto_recharge_<payment intent>`), unique payment
-intent — inserted with `ON CONFLICT DO NOTHING` in the same transaction as the
-credits and never deleted. The confirm redirect, this webhook and the
-`billing.*` events share it, so a late, repeated or concurrent delivery grants
-nothing more, and a failed one leaves nothing behind for the retry to trip on.
-With `P4Backoffice__Modules__Billing=On` the endpoint answers `404`.
-
-The platform sells usage credits rather than subscriptions, so invoice and
-charge events are deliberately ignored. Revisit that if subscriptions are added.
 
 ## Project layout
 
