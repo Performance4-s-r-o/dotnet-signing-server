@@ -168,10 +168,10 @@
   <data name="Error_NO_SIGNATURE_TO_EXTEND" xml:space="preserve"><value>El documento no contiene ninguna firma que ampliar.</value></data>
   <data name="Error_NO_REVOCATION_DATA_AVAILABLE" xml:space="preserve"><value>No se pudieron obtener datos de revocación para los certificados de firma, por lo que no se incrustó información de validación a largo plazo.</value></data>
   <data name="VisualSignError" xml:space="preserve"><value>Se produjo un error al aplicar la firma visual</value></data>
-  <data name="SealError" xml:space="preserve"><value>Se produjo un error al aplicar el sello</value></data>
+  <data name="SealCertificateRequired" xml:space="preserve"><value>El servidor no tiene certificado de sello propio. Aporte usted el certificado (presign/sign con su clave o sign-pfx).</value></data>
   <data name="SealNotPermitted" xml:space="preserve"><value>El sellado no está habilitado para esta cuenta.</value></data>
   <data name="SealAllowed" xml:space="preserve"><value>Sellado</value></data>
-  <data name="SealAllowedDescription" xml:space="preserve"><value>Permite a esta cuenta llamar a /api/seal, que firma con nuestro propio certificado. Desactivado por defecto: un documento sellado así se verifica como nuestro en cualquier lector.</value></data>
+  <data name="SealAllowedDescription" xml:space="preserve"><value>Desbloquea /api/seal para esta cuenta. El servidor no tiene certificado propio, por lo que el endpoint solo responde 422 SEAL_CERTIFICATE_REQUIRED; selle con su propio certificado mediante presign/sign o sign-pfx. Desactivado por defecto.</value></data>
   <data name="EnableSealAllowed" xml:space="preserve"><value>Habilitar sellado</value></data>
   <data name="DisableSealAllowed" xml:space="preserve"><value>Deshabilitar sellado</value></data>
   <data name="ConfirmEnableSealAllowed" xml:space="preserve"><value>¿Permitir que esta cuenta firme con nuestro certificado?</value></data>
@@ -640,8 +640,6 @@
   <data name="Error_PRESIGNED_NOT_FOUND" xml:space="preserve"><value>PDF prefirmado no encontrado. Por favor, reinicie el proceso de firma.</value></data>
   <data name="Error_TSA_NOT_CONFIGURED" xml:space="preserve"><value>Se debe configurar una autoridad de sellado de tiempo para aplicar marcas de tiempo.</value></data>
   <data name="Error_NO_SIGNATURE_FIELD" xml:space="preserve"><value>La plantilla no contiene un campo de firma.</value></data>
-  <data name="Error_SEAL_REASON_INVALID" xml:space="preserve"><value>El motivo del sello es demasiado largo o contiene caracteres no permitidos (saltos de línea, caracteres de control o invisibles).</value></data>
-  <data name="Error_SEAL_LOCATION_INVALID" xml:space="preserve"><value>La ubicación del sello es demasiado larga o contiene caracteres no permitidos (saltos de línea, caracteres de control o invisibles).</value></data>
   <data name="Error_PFX_NO_PRIVATE_KEY" xml:space="preserve"><value>No se encontró ninguna entrada de clave privada en el archivo PFX proporcionado.</value></data>
   <data name="Error_ENCRYPTION_NO_RECIPIENTS" xml:space="preserve"><value>Se requiere al menos un certificado de destinatario para el cifrado de evidencias.</value></data>
   <data name="Error_TSA_HTTPS_REQUIRED" xml:space="preserve"><value>La URL de la autoridad de sellado de tiempo debe usar HTTPS.</value></data>

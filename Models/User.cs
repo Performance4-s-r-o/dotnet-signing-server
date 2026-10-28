@@ -114,8 +114,10 @@ public class User
     public bool IsEnterprise { get; set; } = false;
 
     /// <summary>
-    /// Whether this account may call <c>/api/seal</c>, which signs with the
-    /// operator's OWN certificate rather than one the caller supplied.
+    /// Whether this account may call <c>/api/seal</c>. Since #122 that endpoint has no
+    /// certificate to lend (always <c>422 SEAL_CERTIFICATE_REQUIRED</c> once the grant passes);
+    /// the flag is kept until the owner decides whether to drop it. It used to gate
+    /// signing with the operator's OWN certificate rather than one the caller supplied.
     ///
     /// Off by default, and deliberately not tied to credits: every other endpoint
     /// signs with something the caller brought, so paying for it is the whole

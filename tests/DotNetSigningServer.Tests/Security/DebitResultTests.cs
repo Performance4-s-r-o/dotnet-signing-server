@@ -148,18 +148,13 @@ public sealed class DebitRaceFixture : IAsyncLifetime
 
                 // The work itself succeeds and returns a PDF; only the charge decides.
                 var pdf = TestHelpers.CreateMinimalPdfBase64();
-                var signing = new Mock<PdfSigningService>(null, null, null);
+                var signing = new Mock<PdfSigningService>(null, null);
                 signing.Setup(s => s.SignWithPfx(It.IsAny<PfxSignInput>())).Returns(pdf);
                 signing.Setup(s => s.ApplyDocumentTimestamp(It.IsAny<DocumentTimestampInput>())).Returns(pdf);
                 signing.Setup(s => s.ApplyVisualSign(It.IsAny<VisualSignInput>())).Returns(pdf);
                 signing.Setup(s => s.AddAttachment(It.IsAny<AddAttachmentInput>())).Returns(pdf);
                 services.RemoveAll<PdfSigningService>();
                 services.AddScoped(_ => signing.Object);
-
-                var sealing = new Mock<PdfSealingService>(null, signing.Object, null, null);
-                sealing.Setup(s => s.ApplySeal(It.IsAny<SealInput>())).Returns(pdf);
-                services.RemoveAll<PdfSealingService>();
-                services.AddScoped(_ => sealing.Object);
 
                 var conversion = new Mock<PdfConversionService>(NullLogger<PdfConversionService>.Instance);
                 conversion.Setup(s => s.ConvertToPdfA(It.IsAny<ConvertToPdfAInput>())).Returns(pdf);
@@ -270,7 +265,6 @@ public class DebitResultTests : IClassFixture<DebitRaceFixture>
         yield return ("/api/sign-pfx", new PfxSignInput { PdfContent = Pdf, PfxContent = "AAAA", PfxPassword = "x", SignRect = Rect });
         yield return ("/api/timestamp", new DocumentTimestampInput { PdfContent = Pdf, SignRect = Rect });
         yield return ("/api/visual-sign", new VisualSignInput { PdfContent = Pdf, SignRect = Rect });
-        yield return ("/api/seal", new SealInput { PdfContent = Pdf, SignRect = Rect });
         yield return ("/api/attachment", new AddAttachmentInput { PdfContent = Pdf, AttachmentContent = "AAAA", FileName = "a.txt" });
         yield return ("/api/convert/pdfa", new ConvertToPdfAInput { PdfContent = Pdf });
         yield return ("/api/fill-pdf", new FillPdfInput

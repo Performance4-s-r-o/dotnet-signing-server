@@ -304,8 +304,8 @@ public class AdminController : Controller
 
     /// <summary>
     /// Grants or withdraws access to /api/seal. Kept separate from the enterprise
-    /// toggle on purpose: that one is about how an account is billed, this one is
-    /// about whether it may sign with our certificate.
+    /// toggle on purpose: that one is about how an account is billed. Since #122
+    /// the endpoint only answers 422 SEAL_CERTIFICATE_REQUIRED.
     /// </summary>
     [HttpPost("/Admin/Users/{id:guid}/ToggleSealAllowed")]
     [ValidateAntiForgeryToken]
@@ -320,7 +320,7 @@ public class AdminController : Controller
 
         user.SealAllowed = !user.SealAllowed;
         user.UpdatedAt = DateTimeOffset.UtcNow;
-        // The seal lends the operator's certificate: who granted it matters as much as to whom.
+        // Permission changes stay audited: who granted it matters as much as to whom.
         AdminAudit.Record(_dbContext, User, user.Id, AdminAudit.Actions.SealAllowed,
             new { from = !user.SealAllowed, to = user.SealAllowed }, _time.GetUtcNow());
         await _dbContext.SaveChangesAsync();

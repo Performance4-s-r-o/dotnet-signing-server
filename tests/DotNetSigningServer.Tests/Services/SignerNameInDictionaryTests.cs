@@ -49,7 +49,6 @@ public class SignerNameInDictionaryTests
     {
         var (_, pfxBase64, password) = TestHelpers.CreateTestCertificate();
         var service = new PdfSigningService(
-            TestHelpers.WrapOptions(new SealOptions()),
             TestHelpers.WrapOptions(new EvidenceOptions()),
             new PdfVisualSigningService());
 

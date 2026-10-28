@@ -156,7 +156,6 @@ builder.Services.AddControllersWithViews(options =>
     .AddDataAnnotationsLocalization();
 builder.Services.AddScoped<DotNetSigningServer.Filters.ConsentVersionUnknownFilter>();
 builder.Services.AddScoped<PdfVisualSigningService>();
-builder.Services.AddScoped<PdfSealingService>();
 builder.Services.AddScoped<PdfSigningService>();
 builder.Services.AddScoped<PdfLtvService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
@@ -284,7 +283,6 @@ builder.WebHost.ConfigureKestrel(kestrel =>
         bytesPerSecond: builder.Configuration.GetValue<int?>("Limits:MinRequestBodyBytesPerSecond") ?? 20 * 1024,
         gracePeriod: TimeSpan.FromSeconds(10));
 });
-builder.Services.Configure<SealOptions>(builder.Configuration.GetSection("Seal"));
 builder.Services.Configure<EvidenceOptions>(builder.Configuration.GetSection("Evidence"));
 builder.Services.Configure<OsTicketOptions>(builder.Configuration.GetSection("OsTicket"));
 builder.Services.Configure<AppOptions>(builder.Configuration);
@@ -405,16 +403,6 @@ else
             npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "dotnet_signing");
         }));
 }
-
-builder.Services.AddOptions<SealOptions>()
-    .Bind(builder.Configuration.GetSection("Seal"))
-    .PostConfigure(options =>
-    {
-        options.PfxPath = builder.Configuration["SEAL_PFX_PATH"] ?? options.PfxPath;
-        var pfx = builder.Configuration["SEAL_PFX_BASE64"] ?? options.PfxBase64;
-        options.PfxBase64 = string.IsNullOrEmpty(pfx) ? pfx : new string(pfx.Where(c => !char.IsWhiteSpace(c)).ToArray());
-        options.PfxPassword = builder.Configuration["SEAL_PFX_PASSWORD"] ?? options.PfxPassword;
-    });
 
 builder.Services.AddOptions<EvidenceOptions>()
     .Bind(builder.Configuration.GetSection("Evidence"))
@@ -807,17 +795,6 @@ using (var scope = app.Services.CreateScope())
         dbContext,
         scope.ServiceProvider.GetRequiredService<DotNetSigningServer.Services.IAuthService>(),
         logger);
-}
-
-// Seal certificate: parsed once here, the PFX bytes zeroed. A broken one is reported
-// by the capability probe as before; it does not stop the server.
-{
-    var sealOptions = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SealOptions>>().Value;
-    if (sealOptions.Enabled)
-    {
-        try { DotNetSigningServer.Services.SealCredentialStore.Get(sealOptions); }
-        catch (Exception ex) { appLogger.LogWarning(ex, "[seal] certificate could not be loaded at start"); }
-    }
 }
 
 app.Run();

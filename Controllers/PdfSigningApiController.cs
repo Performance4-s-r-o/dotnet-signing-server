@@ -20,7 +20,6 @@ namespace DotNetSigningServer.Controllers
     public class PdfSigningApiController : ApiControllerBase
     {
         private readonly PdfSigningService _signingService;
-        private readonly PdfSealingService _sealingService;
         private readonly PdfLtvService _ltvService;
         private readonly IDataProtector _dataProtector;
         internal const string AttachmentDebitBypassHeader = "X-P4PDF-Attachment-Billing-Bypass";
@@ -35,7 +34,6 @@ namespace DotNetSigningServer.Controllers
         public PdfSigningApiController(
             ApplicationDbContext dbContext,
             PdfSigningService signingService,
-            PdfSealingService sealingService,
             PdfLtvService ltvService,
             IApiAuthService apiAuthService,
             ILogger<PdfSigningApiController> logger,
@@ -48,7 +46,6 @@ namespace DotNetSigningServer.Controllers
             : base(dbContext, apiAuthService, logger, limitGuard, billingOptions, env, pdfTemplateService, localizer)
         {
             _signingService = signingService;
-            _sealingService = sealingService;
             _ltvService = ltvService;
             _dataProtector = dataProtectionProvider.CreateProtector("SigningData.TsaCredentials");
         }
@@ -637,15 +634,8 @@ namespace DotNetSigningServer.Controllers
             var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
 
-            // A caller without the grant learns nothing about the certificate —
-            // not that one exists, not whose it is. Reporting it would hand a
-            // would-be forger the subject to aim at, and the answer is "no" for
-            // them either way.
-            var seal = user.SealAllowed
-                ? _sealingService.DescribeCapability()
-                : new SealCapability { Enabled = false };
-
-            return Ok(new ServerCapabilities { Seal = seal });
+            // No platform seal exists any more; the field stays for existing clients.
+            return Ok(new ServerCapabilities { Seal = new SealCapability { Enabled = false } });
         }
 
         [HttpPost("/api/inspect-signatures")]
@@ -934,14 +924,13 @@ namespace DotNetSigningServer.Controllers
         }
 
         /// <summary>
-        /// Signs with the operator's own certificate, so a valid token and a
-        /// credit balance are not enough — every other endpoint signs with
-        /// material the caller supplied, this one lends our identity. Gated on
-        /// <see cref="User.SealAllowed"/>, granted per account from /Admin.
+        /// The server has no seal certificate of its own (#122): the caller supplies
+        /// the certificate (presign/sign with its key, or sign-pfx). This endpoint
+        /// stays only to answer with an explicit error instead of a 404 and never
+        /// falls back to another key. The body is not read.
         /// </summary>
-        [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/seal")]
-        public async Task<IActionResult> ApplySeal([FromBody] SealInput input)
+        public async Task<IActionResult> ApplySeal()
         {
             var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
@@ -951,75 +940,9 @@ namespace DotNetSigningServer.Controllers
                 return SealNotPermitted(user);
             }
 
-            try
-            {
-                LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Seal");
-                SafetyGuard.EnsureSafePdf(input.PdfContent, "Seal");
-                LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature");
-                LimitGuard.EnsureImageWithinLimit(input.StampImageContent, "Stamp");
-                LimitGuard.EnsureImageWithinLimit(input.CompanyLogoContent, "Company logo");
-                LimitGuard.EnsureImageWithinLimit(input.BackgroundImageContent, "Background");
-            }
-            catch (ApiValidationException ex)
-            {
-                return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
-            }
-
-            if (SealTextRefused(input) is { } textRefused) return textRefused;
-
-            return await SealCoreAsync(user, input, null, ApiOperationService.Fingerprint("seal", input));
-        }
-
-        /// <summary>
-        /// <c>/api/seal</c> v interním binárním kanálu (#74), viz <see cref="SignWithPfxBinary"/>.
-        /// Oprávnění k pečeti (<see cref="User.SealAllowed"/>) se ověřuje dřív, než se přečte tělo.
-        /// </summary>
-        [CapacityPool(CapacityPoolKind.Heavy)]
-        [HttpPost("/api/seal")]
-        [Consumes(BinaryPdfChannel.ContentType)]
-        [ApiExplorerSettings(IgnoreApi = true)]
-        public async Task<IActionResult> ApplySealBinary()
-        {
-            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
-            if (error != null || user == null) return error!;
-
-            if (!user.SealAllowed)
-            {
-                return SealNotPermitted(user);
-            }
-
-            var (input, pdf, refused) = await ReadBinaryPdfAsync<SealInput>("Seal", i => i.PdfContent);
-            if (refused != null) return refused;
-            try
-            {
-                SafetyGuard.EnsureSafePdf(pdf!, "Seal");
-                LimitGuard.EnsureImageWithinLimit(input!.SignImageContent, "Signature");
-                LimitGuard.EnsureImageWithinLimit(input.StampImageContent, "Stamp");
-                LimitGuard.EnsureImageWithinLimit(input.CompanyLogoContent, "Company logo");
-                LimitGuard.EnsureImageWithinLimit(input.BackgroundImageContent, "Background");
-            }
-            catch (ApiValidationException ex)
-            {
-                return InputRefused(ex);
-            }
-
-            if (SealTextRefused(input) is { } textRefused) return textRefused;
-
-            return await SealCoreAsync(user, input, pdf, BinaryFingerprint("seal", input, pdf!));
-        }
-
-        /// <summary>400 for a <c>Reason</c>/<c>Location</c> that must not go into a signature dictionary (#81); tab and no-break space become a space.</summary>
-        private IActionResult? SealTextRefused(SealInput input)
-        {
-            try
-            {
-                (input.Reason, input.Location) = SealTextGuard.EnsureSafe(input.Reason, input.Location);
-                return null;
-            }
-            catch (ApiValidationException ex)
-            {
-                return InputRefused(ex);
-            }
+            return StatusCode(
+                StatusCodes.Status422UnprocessableEntity,
+                new { code = "SEAL_CERTIFICATE_REQUIRED", message = Localizer["SealCertificateRequired"].Value });
         }
 
         private IActionResult SealNotPermitted(User user)
@@ -1031,31 +954,6 @@ namespace DotNetSigningServer.Controllers
             return StatusCode(
                 StatusCodes.Status403Forbidden,
                 new { code = "SEAL_NOT_PERMITTED", message = Localizer["SealNotPermitted"].Value });
-        }
-
-        /// <summary>seal po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
-        private async Task<IActionResult> SealCoreAsync(User user, SealInput input, byte[]? pdf, string fingerprint)
-        {
-            try
-            {
-                return await RunOperationAsync(user, "seal", fingerprint, baseCost: 1, async _ =>
-                {
-                    if (input.TemplateId.HasValue)
-                    {
-                        var signatureField = await GetSignatureFieldAsync(input.TemplateId.Value, user.Id);
-                        input.SignRect = signatureField.Rect;
-                        input.SignPageNumber = signatureField.Page <= 0 ? 1 : signatureField.Page;
-                    }
-
-                    var result = pdf == null ? _sealingService.ApplySeal(input) : _sealingService.ApplySeal(input, pdf);
-                    return new PaidResult(new { result }, result);
-                });
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Seal failed");
-                return SafeProblem(Localizer["SealError"], ex);
-            }
         }
 
         [HttpPost("/api/attachment")]

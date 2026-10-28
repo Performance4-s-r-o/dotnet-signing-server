@@ -22,22 +22,21 @@ public class ServerCapabilities
 
 public class SealCapability
 {
-    /// <summary>True only when a certificate is configured and could be loaded.</summary>
+    /// <summary>Always false: the server has no seal certificate of its own; the caller supplies it. Kept so clients reading this field keep working.</summary>
     public bool Enabled { get; set; }
 
-    /// <summary>Subject DN of the sealing certificate — who a reader will see.</summary>
+    /// <summary>Always null since #122 (no platform seal); kept for existing clients.</summary>
     public string? Subject { get; set; }
 
+    /// <summary>Always null since #122.</summary>
     public string? Issuer { get; set; }
 
+    /// <summary>Always null since #122.</summary>
     public DateTimeOffset? NotBefore { get; set; }
 
-    /// <summary>
-    /// When sealing stops working. Nobody is watching this on a self-hosted
-    /// install, so it is reported rather than left to be discovered.
-    /// </summary>
+    /// <summary>Always null since #122.</summary>
     public DateTimeOffset? NotAfter { get; set; }
 
-    /// <summary>Set when sealing is switched on but the certificate is unusable.</summary>
+    /// <summary>Always null since #122.</summary>
     public string? Error { get; set; }
 }

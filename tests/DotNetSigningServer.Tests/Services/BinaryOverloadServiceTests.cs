@@ -19,8 +19,7 @@ public class BinaryOverloadServiceTests
     private static readonly byte[] Pdf = Convert.FromBase64String(TestHelpers.CreateMinimalPdfBase64());
     private static readonly string PdfBase64 = Convert.ToBase64String(Pdf);
 
-    private static PdfSigningService Signing(SealOptions? seal = null) => new(
-        TestHelpers.WrapOptions(seal ?? new SealOptions()),
+    private static PdfSigningService Signing() => new(
         TestHelpers.WrapOptions(new EvidenceOptions()),
         new PdfVisualSigningService());
 
@@ -109,50 +108,6 @@ public class BinaryOverloadServiceTests
         using var doc = new PdfDocument(new PdfReader(ms));
         var entry = doc.GetCatalog().GetNameTree(PdfName.EmbeddedFiles).GetNames()[new PdfString("a.txt")];
         return ((PdfDictionary)entry).GetAsDictionary(PdfName.EF)!.GetAsStream(PdfName.F).GetBytes();
-    }
-
-    [Fact]
-    public void ApplySeal_bytes_overload_matches_base64_and_ignores_PdfContent()
-    {
-        var (_, pfx, password) = TestHelpers.CreateTestCertificate();
-        var options = new SealOptions { Enabled = true, PfxBase64 = pfx, PfxPassword = password, Reason = "seal", Location = "l" };
-        PdfSealingService Sealing() => new(TestHelpers.WrapOptions(options), Signing(options), new PdfVisualSigningService());
-        SealInput Input(string pdf) => new() { PdfContent = pdf, Reason = "seal", Location = "l" };
-
-        var viaJson = Sealing().ApplySeal(Input(PdfBase64));
-        var viaBytes = Sealing().ApplySeal(Input(string.Empty), Pdf);
-
-        Assert.Equal(Shape(viaJson), Shape(viaBytes));
-        Assert.Single(PdfSignatureInspector.Inspect(Convert.FromBase64String(viaBytes)).Signatures);
-    }
-
-    [Fact]
-    public void ApplySeal_bytes_overload_with_verification_page_matches_base64()
-    {
-        var (_, pfx, password) = TestHelpers.CreateTestCertificate();
-        var options = new SealOptions { Enabled = true, PfxBase64 = pfx, PfxPassword = password, Reason = "seal", Location = "l" };
-        PdfSealingService Sealing() => new(TestHelpers.WrapOptions(options), Signing(options), new PdfVisualSigningService());
-        SealInput Input(string pdf) => new()
-        {
-            PdfContent = pdf,
-            Reason = "seal",
-            Location = "l",
-            VerificationUrl = "https://verify.example/abc",
-            VerificationMode = "qr",
-        };
-
-        var viaJson = Sealing().ApplySeal(Input(PdfBase64));
-        var viaBytes = Sealing().ApplySeal(Input(string.Empty), Pdf);
-
-        Assert.Equal(2, Shape(viaBytes).Pages); // QR stránka
-        Assert.Equal(Shape(viaJson), Shape(viaBytes));
-    }
-
-    [Fact]
-    public void ApplySeal_bytes_overload_still_refuses_when_sealing_is_off()
-    {
-        var sealing = new PdfSealingService(TestHelpers.WrapOptions(new SealOptions { Enabled = false }), Signing(), new PdfVisualSigningService());
-        Assert.Throws<InvalidOperationException>(() => sealing.ApplySeal(new SealInput(), Pdf));
     }
 
     [Fact]

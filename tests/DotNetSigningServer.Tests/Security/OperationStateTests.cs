@@ -117,7 +117,7 @@ public sealed class OperationStateFixture : IAsyncLifetime
                     o.AddInterceptors(failStore);
                 });
 
-                var signing = new Mock<PdfSigningService>(null, null, null);
+                var signing = new Mock<PdfSigningService>(null, null);
                 signing.Setup(s => s.HandleSign(
                         It.IsAny<SignInput>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
                         It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<TsaEndpoint?>()))

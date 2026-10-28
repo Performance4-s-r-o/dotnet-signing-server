@@ -112,7 +112,7 @@ public class DeadlinesAndGatesTests
     private sealed class Inspector : PdfSigningApiController
     {
         public Inspector(HttpContext context, IStringLocalizer<SharedStrings> localizer)
-            : base(null!, null!, null!, null!, new Mock<IApiAuthService>().Object, NullLogger<PdfSigningApiController>.Instance,
+            : base(null!, null!, null!, new Mock<IApiAuthService>().Object, NullLogger<PdfSigningApiController>.Instance,
                 new ContentLimitGuard(TestHelpers.WrapOptions(new LimitsOptions())), TestHelpers.WrapOptions(new BillingOptions()),
                 TestHelpers.CreateMockEnvironment(), null!,
                 new Mock<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>().Object, localizer)

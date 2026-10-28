@@ -38,7 +38,6 @@ public class PdfLtvServiceTests
 
     private static PdfSigningService CreateSigningService() =>
         new(
-            TestHelpers.WrapOptions(new SealOptions()),
             TestHelpers.WrapOptions(new EvidenceOptions()),
             new PdfVisualSigningService());
 
@@ -66,29 +65,20 @@ public class PdfLtvServiceTests
     private static (byte[] Pdf, byte[] Crl) SealedAndSignedPdfWithCrl()
     {
         var (_, pfxBase64, password) = TestHelpers.CreateTestCertificate();
-        var sealOptions = new SealOptions
-        {
-            Enabled = true,
-            PfxBase64 = pfxBase64,
-            PfxPassword = password,
-            Visible = false,
-        };
         var signingService = new PdfSigningService(
-            TestHelpers.WrapOptions(sealOptions),
             TestHelpers.WrapOptions(new EvidenceOptions()),
             new PdfVisualSigningService());
 
-        var sealingService = new PdfSealingService(
-            TestHelpers.WrapOptions(sealOptions),
-            signingService,
-            new PdfVisualSigningService());
-
-        var sealed_ = sealingService.ApplySeal(new SealInput
-        {
-            PdfContent = TestHelpers.CreateMinimalPdfBase64(),
-            VerificationUrl = "https://example.test/verify/seal",
-            VerificationMode = "qr",
-        });
+        var sealed_ = signingService.SignWithPfx(
+            new PfxSignInput
+            {
+                PfxContent = pfxBase64,
+                PfxPassword = password,
+                FieldName = "Seal1",
+                SignRect = new SignRect { X = 10, Y = 80, Width = 200, Height = 50 },
+            },
+            PdfVerificationService.AddVerification(
+                Convert.FromBase64String(TestHelpers.CreateMinimalPdfBase64()), "https://example.test/verify/seal", "qr"));
 
         var signed = signingService.SignWithPfx(new PfxSignInput
         {

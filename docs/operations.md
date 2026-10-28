@@ -3,7 +3,7 @@
 Every paid call is a durable operation (table `ApiOperations`, migration
 `AddApiOperations`): `pending → running → completed | failed | failed_uncertain`.
 Endpoints: `sign`, `sign-pfx`, `timestamp`, `extend-signature`, `visual-sign`,
-`seal`, `attachment`, `convert/pdfa`, `fill-pdf`, `find-codes`,
+`attachment`, `convert/pdfa`, `fill-pdf`, `find-codes`,
 `ai/detect-fields`, `ai/extract-data`.
 
 ## Contract
@@ -90,7 +90,7 @@ of `Lease`, `ResultRetention` > 0, `MaxStoredResultBytes` ≥ 0.
 
 | Operations | Deadline | Env |
 |---|---|---|
-| sign, sign-pfx, timestamp, visual-sign, seal, attachment | 45 s | `OPERATION_DEADLINE_SIGN_SECONDS` |
+| sign, sign-pfx, timestamp, visual-sign, attachment | 45 s | `OPERATION_DEADLINE_SIGN_SECONDS` |
 | fill-pdf, pdfa | 60 s | `OPERATION_DEADLINE_DOCUMENT_SECONDS` |
 | find-codes, extend-signature, ai-detect-fields, ai-extract-data | 75 s | `OPERATION_DEADLINE_HEAVY_SECONDS` |
 

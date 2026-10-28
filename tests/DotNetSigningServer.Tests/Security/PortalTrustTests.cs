@@ -298,7 +298,7 @@ public class PortalTrustTests : IDisposable
         var localizer = new Mock<IStringLocalizer<SharedStrings>>();
         localizer.Setup(l => l[It.IsAny<string>()]).Returns((string name) => new LocalizedString(name, name));
         return new PdfSigningApiController(
-            _db, new PdfSigningService(), null!, null!, Mock.Of<IApiAuthService>(),
+            _db, new PdfSigningService(), null!, Mock.Of<IApiAuthService>(),
             NullLogger<PdfSigningApiController>.Instance,
             new ContentLimitGuard(Microsoft.Extensions.Options.Options.Create(new LimitsOptions())),
             Microsoft.Extensions.Options.Options.Create(new BillingOptions()),

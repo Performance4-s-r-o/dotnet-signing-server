@@ -110,7 +110,7 @@ public sealed class BinaryChannelFixture : IAsyncLifetime
                 services.AddDbContext<ApplicationDbContext>(o => fx.Postgres.Configure(o));
 
                 // HandlePreSign není virtuální: běží skutečný kód, jen HandleSign je podvržený.
-                var signing = new Mock<PdfSigningService>(null, null, null);
+                var signing = new Mock<PdfSigningService>(null, null);
                 signing.Setup(s => s.HandleSign(
                         It.IsAny<SignInput>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
                         It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<TsaEndpoint?>()))
