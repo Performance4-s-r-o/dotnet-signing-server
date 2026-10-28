@@ -120,6 +120,8 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
         }
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == failed.UserId, cancellationToken);
         if (user is null || user.ErasedAt != null) return;
+        // An auto-recharge failure is already told to the user by the charge itself.
+        var notify = failed.PaymentType != CreditGrants.AutoRechargeType;
         if (await _db.Payments.AnyAsync(p => p.StripePaymentIntentId == failed.PaymentIntentId && p.Status == "failed", cancellationToken)) return;
 
         var currency = (failed.Currency ?? "").ToUpperInvariant();
@@ -132,7 +134,7 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
             Status = "failed",
         });
 
-        var email = _services.GetService<ITemplatedEmailSender>();
+        var email = notify ? _services.GetService<ITemplatedEmailSender>() : null;
         if (email is null)
         {
             await _db.SaveChangesAsync(cancellationToken);

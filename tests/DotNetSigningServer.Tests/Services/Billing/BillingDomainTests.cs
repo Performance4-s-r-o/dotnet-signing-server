@@ -392,3 +392,38 @@ public class BillingRegistrationTests
         Assert.False(Has<BackofficePaymentGateway>(Register("On", privateServer: true)));
     }
 }
+
+/// <summary>The product currency and the text of payment e-mails that comes from events.</summary>
+public class BillingTextAndCurrencyTests
+{
+    [Theory]
+    [InlineData(null, "EUR")]
+    [InlineData("", "EUR")]
+    [InlineData("  ", "EUR")]
+    [InlineData("{{project.DOTNET_BILLING_CURRENCY}}", "EUR")]
+    [InlineData(" czk ", "CZK")]
+    public void Currency_IsUpperCase_AndUnsetOrAPlaceholderIsEur(string? raw, string expected)
+    {
+        Assert.Equal(expected, DotNetSigningServer.Services.Pricing.ConfigCreditPricingProvider.NormalizeCurrency(raw));
+        Assert.Null(DotNetSigningServer.Services.Pricing.ConfigCreditPricingProvider.CurrencyProblem(raw));
+    }
+
+    [Theory]
+    [InlineData("EURO")]
+    [InlineData("12")]
+    [InlineData("E<")]
+    public void ACurrencyThatIsNotACode_IsAProblem(string raw) =>
+        Assert.NotNull(DotNetSigningServer.Services.Pricing.ConfigCreditPricingProvider.CurrencyProblem(raw));
+
+    [Fact]
+    public void FailureText_FromAnEvent_KeepsNoMarkup()
+    {
+        var vars = DotNetSigningServer.Services.Email.EmailTemplateVariables.PaymentFailed(
+            "auto recharge<script>", "15.00", "EUR", "card_declined <img src=x onerror=alert(1)> & \"x\"", "https://app.example.com/Billing");
+
+        Assert.Equal("auto rechargescript", vars["paymentType"]);
+        Assert.Equal("card_declined img srcx onerroralert(1)  x", vars["failureReason"]);
+        Assert.Equal("Payment failed: card_declined.", DotNetSigningServer.Services.Email.EmailTemplateVariables
+            .AutoRechargeFailed("300", "Payment failed: card_declined.", "0", "u")["failureReason"]);
+    }
+}
