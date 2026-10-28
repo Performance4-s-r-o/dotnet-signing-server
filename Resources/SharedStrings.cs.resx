@@ -628,6 +628,7 @@
   <data name="Error_TOO_MANY_FAILURES" xml:space="preserve"><value>Příliš mnoho neúspěšných požadavků. Tento klíč je na chvíli pozastaven.</value></data>
   <data name="Error_ACCOUNT_BLOCKED" xml:space="preserve"><value>Tento účet je zablokován. Kontaktujte podporu.</value></data>
   <data name="Error_FEATURE_DISABLED" xml:space="preserve"><value>Tato funkce je dočasně nedostupná.</value></data>
+  <data name="Error_AI_DISABLED" xml:space="preserve"><value>Funkce AI je na tomto serveru vypnutá.</value></data>
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Příliš mnoho požadavků. Zkuste to později.</value></data>
   <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Příliš mnoho dokumentů čeká na podpis. Dokončete je, nebo počkejte, až vyprší.</value></data>
   <data name="Error_TENANT_MISMATCH" xml:space="preserve"><value>Dokument byl připraven k podpisu pro jinou organizaci.</value></data>

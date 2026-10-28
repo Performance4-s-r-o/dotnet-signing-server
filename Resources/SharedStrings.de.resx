@@ -618,6 +618,7 @@
   <data name="Error_TOO_MANY_FAILURES" xml:space="preserve"><value>Zu viele fehlgeschlagene Anfragen. Dieser Schlüssel ist vorübergehend pausiert.</value></data>
   <data name="Error_ACCOUNT_BLOCKED" xml:space="preserve"><value>Dieses Konto ist gesperrt. Wenden Sie sich an den Support.</value></data>
   <data name="Error_FEATURE_DISABLED" xml:space="preserve"><value>Diese Funktion ist vorübergehend nicht verfügbar.</value></data>
+  <data name="Error_AI_DISABLED" xml:space="preserve"><value>Die KI-Funktionen sind auf diesem Server deaktiviert.</value></data>
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Zu viele Anfragen. Bitte später erneut versuchen.</value></data>
   <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Zu viele Dokumente warten auf die Signatur. Schließen Sie sie ab oder warten Sie, bis sie ablaufen.</value></data>
   <data name="Error_TENANT_MISMATCH" xml:space="preserve"><value>Dieses Dokument wurde für eine andere Organisation zur Signatur vorbereitet.</value></data>

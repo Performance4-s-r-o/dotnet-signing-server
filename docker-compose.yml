@@ -148,8 +148,8 @@ services:
       # Environment tag — set per deployment (e.g. test / production).
       # Defaults to "production" when unset.
       - Sentry__Environment=${SENTRY_ENVIRONMENT:-production}
-      # AI (Google)
-      - AI__Enabled=${AI_ENABLED:-false}
+      # AI (Google). Off unless AI_ENABLED is exactly "true"; empty = off.
+      - AI__Enabled=${AI_ENABLED:-{{project.DOTNET_AI_ENABLED}}}
       - AI__Provider=${AI_PROVIDER:-google}
       - AI__Google__ApiKey=${AI_GOOGLE_API_KEY:-}
       - AI__Google__Model=${AI_GOOGLE_MODEL:-gemini-1.5-flash}

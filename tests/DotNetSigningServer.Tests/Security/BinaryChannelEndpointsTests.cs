@@ -608,6 +608,8 @@ public class BinaryChannelEndpointsTests
 
         var seal = Assert.IsType<ServerCapabilities>(result.Value).Seal;
         Assert.False(seal.Enabled);
+        // Switch off (nothing configured): AI is reported as off.
+        Assert.False(Assert.IsType<ServerCapabilities>(result.Value).Ai.Enabled);
     }
 
     [Fact]

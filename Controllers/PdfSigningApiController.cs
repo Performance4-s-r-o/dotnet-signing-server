@@ -633,7 +633,9 @@ namespace DotNetSigningServer.Controllers
             if (error != null || user == null) return error!;
 
             // No platform seal exists; the field only reports that.
-            return Ok(new ServerCapabilities { Seal = new SealCapability { Enabled = false } });
+            var ai = HttpContext.RequestServices.GetService<Microsoft.Extensions.Options.IOptions<DotNetSigningServer.Options.AiOptions>>()?.Value;
+            var aiOn = ai is { Enabled: true } && !string.IsNullOrWhiteSpace(ai.Google?.ApiKey);
+            return Ok(new ServerCapabilities { Seal = new SealCapability { Enabled = false }, Ai = new AiCapability { Enabled = aiOn } });
         }
 
         [HttpPost("/api/inspect-signatures")]
