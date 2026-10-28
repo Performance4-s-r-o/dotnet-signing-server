@@ -1,5 +1,6 @@
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Tests.Helpers;
 using DotNetSigningServer.Tests.Services.Backoffice.Outbox;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -186,6 +187,29 @@ public class DatabaseMigratorTests : IClassFixture<EmptyDatabaseFixture>
         await using var count = check.CreateCommand();
         count.CommandText = "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'dotnet_signing'";
         Assert.Equal(1L, (long)(await count.ExecuteScalarAsync())!);
+    }
+
+    [DockerFact]
+    public async Task Baseline_refuses_a_second_account_differing_only_by_letter_case()
+    {
+        var connectionString = await _fixture.NewDatabaseAsync();
+        await using (var db = DatabaseMigrator.CreateContext(connectionString))
+        {
+            DatabaseMigrator.EnsureSchemaAndMigrate(db, NullLogger.Instance);
+        }
+
+        await using (var db = DatabaseMigrator.CreateContext(connectionString))
+        {
+            db.Users.Add(TestHelpers.CreateTestUser("a@x.cz"));
+            await db.SaveChangesAsync();
+        }
+
+        await using var second = DatabaseMigrator.CreateContext(connectionString);
+        second.Users.Add(TestHelpers.CreateTestUser("A@x.cz"));
+        var ex = await Assert.ThrowsAsync<DbUpdateException>(() => second.SaveChangesAsync());
+        var pg = Assert.IsType<PostgresException>(ex.InnerException);
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, pg.SqlState);
+        Assert.Equal("IX_Users_Email_Lower", pg.ConstraintName);
     }
 
     [Fact]
