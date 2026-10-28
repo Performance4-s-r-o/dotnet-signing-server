@@ -45,17 +45,4 @@ public class OutboxRegistrationTests
         Assert.True(HasDispatcher(services));
     }
 
-    [Fact]
-    public void Shadow_OnOneModule_IsEnoughForTheDispatcher()
-    {
-        var services = BackofficeRegistrationTests.Register(new()
-        {
-            ["P4Backoffice:Modules:Consents"] = "Shadow",
-            ["P4Backoffice:BaseUrl"] = "https://backoffice.example.com",
-            ["P4Backoffice:SecretKey"] = "p4sk_test_abc",
-            ["P4Backoffice:Environment"] = "test",
-        });
-
-        Assert.True(HasDispatcher(services));
-    }
 }

@@ -2,7 +2,7 @@ namespace DotNetSigningServer.Options;
 
 /// <summary>
 /// Who the portal is, and where it may call from (#78). docker-compose passes the raw names
-/// (<c>INTERNAL_API_PORT</c>, <c>TRUSTED_CALLER_USER_IDS</c>; the old <c>PORTAL_USER_IDS</c> is still read); see <see cref="EnvValues"/>.
+/// (<c>INTERNAL_API_PORT</c>, <c>TRUSTED_CALLER_USER_IDS</c>); see <see cref="EnvValues"/>.
 ///
 /// <list type="bullet">
 /// <item><see cref="InternalPort"/> opens a second listener meant for the Docker network only.
@@ -18,9 +18,6 @@ public class PortalTrustOptions
     public const string InternalPortVariable = "INTERNAL_API_PORT";
     public const string TrustedCallerUserIdsVariable = "TRUSTED_CALLER_USER_IDS";
 
-    /// <summary>The name before #130; still read, with a warning at start.</summary>
-    public const string LegacyUserIdsVariable = "PORTAL_USER_IDS";
-
     /// <summary>The internal listener's port; null = no internal listener.</summary>
     public int? InternalPort { get; set; }
 
@@ -29,9 +26,6 @@ public class PortalTrustOptions
 
     /// <summary>True when ids are set without an internal port: the trusted token then works on every port.</summary>
     public bool TrustedOnEveryPort => InternalPort == null && TrustedCallerUserIds.Count > 0;
-
-    /// <summary>True when the ids came from the deprecated <c>PORTAL_USER_IDS</c> only.</summary>
-    public bool UsesLegacyVariable { get; set; }
 
     /// <summary>
     /// The listen URLs with the internal port added (once). Empty <paramref name="urls"/> means
@@ -58,15 +52,6 @@ public class PortalTrustOptions
         }
 
         var ids = ParseIds(TrustedCallerUserIdsVariable, configuration[TrustedCallerUserIdsVariable]);
-        var legacyIds = ParseIds(LegacyUserIdsVariable, configuration[LegacyUserIdsVariable]);
-        if (ids.Count > 0 && legacyIds.Count > 0 && !ids.SetEquals(legacyIds))
-        {
-            throw new InvalidOperationException(
-                $"{TrustedCallerUserIdsVariable} and the deprecated {LegacyUserIdsVariable} are both set and differ. "
-                + $"Remove {LegacyUserIdsVariable}.");
-        }
-        var legacyOnly = ids.Count == 0 && legacyIds.Count > 0;
-        if (legacyOnly) ids = legacyIds;
 
         // An internal port without knowing whose token it is for would restrict nothing and
         // trust nobody — a protection that looks switched on and is not.
@@ -77,7 +62,7 @@ public class PortalTrustOptions
                 + "trusted caller's service account id(s), or unset the port.");
         }
 
-        return new PortalTrustOptions { InternalPort = port, TrustedCallerUserIds = ids, UsesLegacyVariable = legacyOnly };
+        return new PortalTrustOptions { InternalPort = port, TrustedCallerUserIds = ids };
     }
 
     private static HashSet<Guid> ParseIds(string name, string? raw)

@@ -126,7 +126,7 @@ public interface ICookieDeclarationSource
     Task<CookieDeclarationSnapshot?> GetAsync(string locale, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Docs module Off or Shadow: no declaration; the cookies page shows its own table.</summary>
+/// <summary>Docs module Off: no declaration; the cookies page shows its own table.</summary>
 public sealed class NoCookieDeclarationSource : ICookieDeclarationSource
 {
     public Task<CookieDeclarationSnapshot?> GetAsync(string locale, CancellationToken cancellationToken = default) =>

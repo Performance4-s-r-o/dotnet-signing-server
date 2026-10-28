@@ -24,43 +24,31 @@ public enum PricingRefreshOutcome
 /// <c>If-None-Match</c>. Runs in the background only: at startup, hourly
 /// (<see cref="PricingSnapshotWorker"/>), after <c>price.effective</c>
 /// (<see cref="Backoffice.Handlers.PriceEffectiveHandler"/>) and on <c>window_clamped</c> (<see cref="PricingResync"/>).
-///
-/// Pricing=Shadow: after every refresh the configured prices are compared with the service's
-/// and differences are logged; nothing a customer sees changes.
 /// </summary>
 public sealed class PricingSnapshotRefresher
 {
     private readonly BackofficePricingClient _client;
     private readonly PricingSnapshotHolder _holder;
     private readonly StripePriceResolver _resolver;
-    private readonly ConfigCreditPricingProvider _config;
-    private readonly IOptionsMonitor<StripeOptions> _stripe;
     private readonly IServiceScopeFactory _scopes;
     private readonly TimeProvider _time;
     private readonly ILogger<PricingSnapshotRefresher> _logger;
-    private readonly bool _shadow;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public PricingSnapshotRefresher(
         BackofficePricingClient client,
         PricingSnapshotHolder holder,
         StripePriceResolver resolver,
-        ConfigCreditPricingProvider config,
-        IOptionsMonitor<StripeOptions> stripe,
         IServiceScopeFactory scopes,
         TimeProvider time,
-        ILogger<PricingSnapshotRefresher> logger,
-        BackofficeMode mode)
+        ILogger<PricingSnapshotRefresher> logger)
     {
         _client = client;
         _holder = holder;
         _resolver = resolver;
-        _config = config;
-        _stripe = stripe;
         _scopes = scopes;
         _time = time;
         _logger = logger;
-        _shadow = mode == BackofficeMode.Shadow;
     }
 
     /// <summary>Loads the stored snapshot into memory unless one is there already. Local database only.</summary>
@@ -95,7 +83,6 @@ public sealed class PricingSnapshotRefresher
             if (fetch.NotModified && previous != null)
             {
                 _logger.LogDebug("[pricing] price list v{Version} unchanged ({Reason})", previous.Version, reason);
-                if (_shadow) CompareWithConfig(previous);
                 return PricingRefreshOutcome.NotModified;
             }
 
@@ -123,7 +110,6 @@ public sealed class PricingSnapshotRefresher
                 _resolver.Invalidate();
                 _logger.LogInformation("[pricing] price list v{Version} stored ({Reason})", snapshot.Version, reason);
             }
-            if (_shadow) CompareWithConfig(snapshot);
             return PricingRefreshOutcome.Updated;
         }
         finally
@@ -131,46 +117,10 @@ public sealed class PricingSnapshotRefresher
             _gate.Release();
         }
     }
-
-    /// <summary>Shadow: logs every pack whose service price differs from the configured one.</summary>
-    internal IReadOnlyList<string> CompareWithConfig(PricingSnapshot snapshot)
-    {
-        var currency = ConfigCreditPricingProvider.NormalizeCurrency(_stripe.CurrentValue.Currency);
-        var differences = Compare(_config.GetPacks(), PriceListMapper.Map(snapshot.Body, currency));
-        if (differences.Count == 0)
-        {
-            _logger.LogInformation("[pricing] shadow: price list v{Version} matches the configured prices", snapshot.Version);
-        }
-        else
-        {
-            _logger.LogWarning("[pricing] shadow: price list v{Version} differs from the configured prices: {Differences}",
-                snapshot.Version, string.Join("; ", differences));
-        }
-        return differences;
-    }
-
-    /// <summary>Differences between configured packs and the packs of a price list. Pure.</summary>
-    public static IReadOnlyList<string> Compare(IReadOnlyList<CreditPack> configured, PriceListMapping service)
-    {
-        var differences = new List<string>();
-        foreach (var local in configured)
-        {
-            if (!service.Packs.TryGetValue(local.Quantity, out var remote))
-            {
-                differences.Add($"{local.Quantity} credits: missing in the service");
-                continue;
-            }
-            if (remote.UnitAmountMinor != local.UnitAmountMinor || remote.Currency != local.Currency)
-            {
-                differences.Add($"{local.Quantity} credits: config {local.UnitAmountMinor} {local.Currency}, service {remote.UnitAmountMinor} {remote.Currency}");
-            }
-        }
-        return differences;
-    }
 }
 
 /// <summary>
-/// Pricing Shadow/On: loads the stored snapshot before the app serves requests (local database
+/// Pricing On: loads the stored snapshot before the app serves requests (local database
 /// only), then refreshes it from the service in the background — right away and every
 /// <see cref="Interval"/>, sooner after a failure. Never blocks startup on the service.
 /// </summary>

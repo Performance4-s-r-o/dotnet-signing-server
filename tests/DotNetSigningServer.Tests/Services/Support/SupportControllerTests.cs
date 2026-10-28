@@ -133,15 +133,6 @@ public class SupportControllerTests : IDisposable
     }
 
     [Fact]
-    public async Task Shadow_StillSendsToOsTicket()
-    {
-        await Controller("Shadow").SubmitTicket("Subject", "Body", "billing", "normal");
-
-        Assert.Single(_osTicket.Bodies);
-        Assert.Empty(await ItemsAsync());
-    }
-
-    [Fact]
     public async Task NeitherOnNorOsTicket_Is404()
     {
         var controller = Controller("Off", osTicketConfigured: false);

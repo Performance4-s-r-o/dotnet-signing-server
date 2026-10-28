@@ -10,18 +10,17 @@ namespace DotNetSigningServer.Services.Backoffice.Handlers;
 
 /// <summary>Outcome of one <c>price.scheduled</c>.</summary>
 /// <param name="Planned">Users that were due a notice.</param>
-/// <param name="Notified">Notices queued or sent (0 in Shadow).</param>
+/// <param name="Notified">Notices queued or sent.</param>
 public sealed record PriceNoticeResult(int Planned, int Notified);
 
 /// <summary>
 /// <c>price.scheduled</c>: sends <c>price_change_notice</c> to every user with auto-recharge on a
 /// credit pack whose price changes (<see cref="PriceNoticePlanner"/>) and stores the version in
 /// <c>User.PriceChangeNotifiedVersion</c> in the same <c>SaveChanges</c> as the queued e-mail
-/// (Email=On), or right after the direct send (Email Off/Shadow). One notice per version and user,
+/// (Email=On), or right after the direct send (Email Off). One notice per version and user,
 /// whether the event came by webhook, polling or <see cref="PricingUpcomingCheck"/>.
 ///
-/// Pricing=Shadow only logs whom it would notify: <see cref="PriceChangeMonitorService"/> still
-/// sends the notices then. A failed send throws after the others went out, so the inbox retries
+/// A failed send throws after the others went out, so the inbox retries
 /// just the rest.
 /// </summary>
 public sealed class PriceScheduledHandler : IBackofficeEventHandler
@@ -33,7 +32,6 @@ public sealed class PriceScheduledHandler : IBackofficeEventHandler
     private readonly IOptions<AppOptions> _app;
     private readonly TimeProvider _time;
     private readonly ILogger<PriceScheduledHandler> _logger;
-    private readonly BackofficeMode _mode;
 
     public PriceScheduledHandler(
         ApplicationDbContext db,
@@ -42,8 +40,7 @@ public sealed class PriceScheduledHandler : IBackofficeEventHandler
         IOptionsMonitor<StripeOptions> stripe,
         IOptions<AppOptions> app,
         TimeProvider time,
-        ILogger<PriceScheduledHandler> logger,
-        BackofficeMode mode)
+        ILogger<PriceScheduledHandler> logger)
     {
         _db = db;
         _email = email;
@@ -52,7 +49,6 @@ public sealed class PriceScheduledHandler : IBackofficeEventHandler
         _app = app;
         _time = time;
         _logger = logger;
-        _mode = mode;
     }
 
     public IReadOnlyCollection<string> Types { get; } = [BackofficeEventTypes.PriceScheduled];
@@ -91,14 +87,6 @@ public sealed class PriceScheduledHandler : IBackofficeEventHandler
         if (plan.Problems.Count > 0)
         {
             _logger.LogWarning("[pricing] price list v{Version} ({EventId}): {Problems}", data.Version, eventId, string.Join("; ", plan.Problems));
-        }
-
-        if (_mode != BackofficeMode.On)
-        {
-            _logger.LogInformation(
-                "[pricing] shadow: price list v{Version} ({EventId}) would notify {Count} users (packs {Packs}); the price-change monitor sends the notices",
-                data.Version, eventId, plan.Notices.Count, string.Join(", ", quantities));
-            return new PriceNoticeResult(plan.Notices.Count, 0);
         }
 
         var now = _time.GetUtcNow();

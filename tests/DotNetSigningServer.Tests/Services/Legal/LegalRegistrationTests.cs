@@ -28,18 +28,6 @@ public class LegalRegistrationTests
     }
 
     [Fact]
-    public void Shadow_RendersFromTheDatabaseWithoutSnapshots()
-    {
-        using var host = new LegalDocsTestHost("Shadow");
-        using var scope = host.Services.CreateScope();
-
-        Assert.IsType<ShadowLegalDocumentSource>(scope.ServiceProvider.GetRequiredService<ILegalDocumentSource>());
-        Assert.False(scope.ServiceProvider.GetRequiredService<DbLegalDocumentSource>().IncludeSnapshots);
-        Assert.Empty(scope.ServiceProvider.GetServices<IBackofficeEventHandler>());
-        Assert.Empty(scope.ServiceProvider.GetServices<IBackofficeResync>());
-    }
-
-    [Fact]
     public void On_UsesTheServiceWithTheSnapshotAsFallback()
     {
         using var host = new LegalDocsTestHost("On");

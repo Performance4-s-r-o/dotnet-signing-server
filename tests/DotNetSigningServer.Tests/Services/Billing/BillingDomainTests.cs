@@ -303,8 +303,8 @@ public class BillingDomainTests
         Assert.Equal(BackofficeMode.On, options.RequestedModeFor(BackofficeModule.Pricing));
         Assert.Equal(BackofficeMode.Off, options.RequestedModeFor(BackofficeModule.Billing));
 
-        options.Modules.Billing = "Shadow";
-        Assert.Equal(BackofficeMode.Shadow, options.ModeFor(BackofficeModule.Billing));
+        options.Modules.Billing = "On";
+        Assert.Equal(BackofficeMode.On, options.ModeFor(BackofficeModule.Billing));
     }
 
     [Fact]
@@ -315,7 +315,7 @@ public class BillingDomainTests
             BaseUrl = "https://backoffice.example.com",
             SecretKey = "p4sk_test_abc",
             Environment = "test",
-            Modules = { Billing = "On", Pricing = "Shadow" },
+            Modules = { Billing = "On", Pricing = "Off" },
         };
         Assert.Contains(BackofficeOptionsValidator.Validate(options), p => p.Contains("Modules__Billing"));
 
@@ -347,7 +347,6 @@ public class BillingRegistrationTests
     [Theory]
     [InlineData(null)]
     [InlineData("Off")]
-    [InlineData("Shadow")]
     public void NotOn_PaysThroughStripeDirectly(string? billing)
     {
         var services = Register(billing);

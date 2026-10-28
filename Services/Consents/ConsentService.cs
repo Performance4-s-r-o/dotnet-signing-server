@@ -54,7 +54,7 @@ public sealed record ConsentEventPayload(
 
 /// <summary>
 /// Records consent decisions: one <see cref="ConsentRecord"/> per document and — with the
-/// Consents module Shadow or On — one outbox item <c>consent</c> carrying all of them as a
+/// Consents module On — one outbox item <c>consent</c> carrying all of them as a
 /// single batch. Only adds to the scoped <see cref="ApplicationDbContext"/>; the caller's own
 /// <c>SaveChangesAsync</c> writes the records, the outbox item and the domain change (the new
 /// user) in one transaction. Never calls the service.

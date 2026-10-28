@@ -17,22 +17,18 @@ public class EnvValuesTests
     public void Unset_GivesNull(string? raw)
     {
         Assert.Null(EnvValues.Int(Config(raw), "X"));
-        Assert.Null(EnvValues.Instant(Config(raw), "X"));
     }
 
     [Fact]
     public void Values_Parse()
     {
         Assert.Equal(20, EnvValues.Int(Config(" 20 "), "X"));
-        Assert.Equal(new DateTimeOffset(2026, 10, 20, 12, 0, 0, TimeSpan.Zero), EnvValues.Instant(Config("2026-10-20T12:00:00Z"), "X"));
-        Assert.Equal(new DateTimeOffset(2026, 10, 20, 12, 0, 0, TimeSpan.Zero), EnvValues.Instant(Config("2026-10-20T12:00:00"), "X")); // no zone = UTC
     }
 
     [Fact]
     public void Garbage_FailsLoudly()
     {
         Assert.Throws<InvalidOperationException>(() => EnvValues.Int(Config("fifteen"), "X"));
-        Assert.Throws<InvalidOperationException>(() => EnvValues.Instant(Config("tomorrow"), "X"));
     }
 
     [Theory]

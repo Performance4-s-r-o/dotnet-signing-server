@@ -85,7 +85,7 @@ public class BillingPostgresTests : IClassFixture<OutboxPostgresFixture>
             .AddSingleton(autoRecharge ?? Mock.Of<IAutoRechargeService>())
             .AddSingleton(pricing.Object)
             .BuildServiceProvider();
-        return new BillingEventsHandler(BackofficeMode.On, db, services, NullLogger<BillingEventsHandler>.Instance);
+        return new BillingEventsHandler(db, services, NullLogger<BillingEventsHandler>.Instance);
     }
 
     private BackofficeAutoRecharge Recharge(ApplicationDbContext db) =>

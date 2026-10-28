@@ -22,21 +22,7 @@ public class ServerCapabilities
 
 public class SealCapability
 {
-    /// <summary>Always false: the server has no seal certificate of its own; the caller supplies it. Kept so clients reading this field keep working.</summary>
+    /// <summary>Always false: the server has no seal certificate of its own; the caller supplies it. </summary>
     public bool Enabled { get; set; }
 
-    /// <summary>Always null since #122 (no platform seal); kept for existing clients.</summary>
-    public string? Subject { get; set; }
-
-    /// <summary>Always null since #122.</summary>
-    public string? Issuer { get; set; }
-
-    /// <summary>Always null since #122.</summary>
-    public DateTimeOffset? NotBefore { get; set; }
-
-    /// <summary>Always null since #122.</summary>
-    public DateTimeOffset? NotAfter { get; set; }
-
-    /// <summary>Always null since #122.</summary>
-    public string? Error { get; set; }
 }

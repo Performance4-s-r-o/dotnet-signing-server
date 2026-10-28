@@ -107,11 +107,6 @@ if (portalTrust.TrustedOnEveryPort)
         $"WARN: {PortalTrustOptions.TrustedCallerUserIdsVariable} is set but {PortalTrustOptions.InternalPortVariable} is empty: "
         + "the trusted token is accepted on every port, the public one included.");
 }
-if (portalTrust.UsesLegacyVariable)
-{
-    Console.Error.WriteLine(
-        $"WARN: {PortalTrustOptions.LegacyUserIdsVariable} is deprecated, rename it to {PortalTrustOptions.TrustedCallerUserIdsVariable}.");
-}
 if (portalTrust.InternalPort is int internalPort)
 {
     // A second listener next to whatever ASPNETCORE_URLS names (Kestrel's default otherwise).
@@ -464,7 +459,6 @@ builder.Services.AddOptions<BillingOptions>()
         {
             throw new InvalidOperationException($"Billing:ConcurrencyQueueTimeoutSeconds must be 0-{BillingOptions.MaxQueueSeconds}.");
         }
-        options.ProductTagGraceUntil = EnvValues.Instant(builder.Configuration, "BILLING_PRODUCT_TAG_GRACE_UNTIL") ?? options.ProductTagGraceUntil;
     })
     .ValidateOnStart();
 builder.Services.AddSingleton<CapacityPools>();

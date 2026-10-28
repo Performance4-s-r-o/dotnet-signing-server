@@ -191,8 +191,7 @@ public class StripeWebhookRetryTests
 
     [Theory]
     [InlineData("Off")]
-    [InlineData("Shadow")]
-    public async Task BillingOffOrShadow_TheEndpointGrants(string mode)
+    public async Task BillingOff_TheEndpointGrants(string mode)
     {
         var userId = await NewUserAsync();
         _autoRecharge.Setup(a => a.EnableAsync(It.IsAny<User>(), It.IsAny<int>(), It.IsAny<decimal>())).Returns(Task.CompletedTask);

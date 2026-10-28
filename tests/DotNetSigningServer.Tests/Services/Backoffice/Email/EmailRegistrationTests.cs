@@ -38,7 +38,6 @@ public class EmailRegistrationTests
     [Theory]
     [InlineData(null)]
     [InlineData("Off")]
-    [InlineData("Shadow")]
     public void NotOn_SendsThroughResendAndPausesEmailItems(string? mode)
     {
         using var provider = Build(mode);
@@ -68,7 +67,6 @@ public class EmailRegistrationTests
     [Theory]
     [InlineData(null)]
     [InlineData("Off")]
-    [InlineData("Shadow")]
     [InlineData("On")]
     public void TemplatedSender_IsAlwaysRegistered(string? mode)
     {
@@ -77,23 +75,6 @@ public class EmailRegistrationTests
         Assert.Contains(BuildDescriptors(mode), d => d.ServiceType == typeof(ITemplatedEmailSender)
                                                      && d.ImplementationType == typeof(TemplatedEmailSender));
         Assert.Equal(mode == "On", provider.GetServices<IOutboxHandler>().Any(h => h is EmailTemplateOutboxHandler));
-    }
-
-    [Fact]
-    public void Shadow_ComparesTemplatesInTheBackground()
-    {
-        using var provider = Build("Shadow");
-
-        var comparer = provider.GetRequiredService<TemplateShadowComparer>();
-        Assert.Contains(provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>(), h => ReferenceEquals(h, comparer));
-    }
-
-    [Theory]
-    [InlineData("Off")]
-    [InlineData("On")]
-    public void NotShadow_HasNoComparer(string mode)
-    {
-        Assert.DoesNotContain(BuildDescriptors(mode), d => d.ServiceType == typeof(TemplateShadowComparer));
     }
 
     private static ServiceCollection BuildDescriptors(string? emailMode)

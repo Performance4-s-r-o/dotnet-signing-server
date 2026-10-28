@@ -45,10 +45,10 @@ public class SupportCategoriesTests : IDisposable
 
     public void Dispose() => _services.Dispose();
 
-    private SupportCategoriesWorker Worker(SupportCategoriesHolder holder, BackofficeMode mode = BackofficeMode.On, ILogger<SupportCategoriesWorker>? logger = null) =>
+    private SupportCategoriesWorker Worker(SupportCategoriesHolder holder, ILogger<SupportCategoriesWorker>? logger = null) =>
         new(new SupportCategoriesClient(_services.GetRequiredService<IHttpClientFactory>()), holder,
             _services.GetRequiredService<IServiceScopeFactory>(), _time,
-            logger ?? NullLogger<SupportCategoriesWorker>.Instance, mode);
+            logger ?? NullLogger<SupportCategoriesWorker>.Instance);
 
     private void AnswerAll(string body)
     {
@@ -115,21 +115,8 @@ public class SupportCategoriesTests : IDisposable
         Assert.Same(previous, holder.Get("en"));
     }
 
-    [Fact]
-    public async Task Shadow_LogsTheDifferenceToTheForm()
-    {
-        AnswerAll(Body);
-        var logs = new ListLoggerProvider();
-
-        await Worker(new SupportCategoriesHolder(), BackofficeMode.Shadow, logs.CreateLogger<SupportCategoriesWorker>())
-            .RefreshAsync(CancellationToken.None);
-
-        Assert.Contains(logs.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("billing"));
-    }
-
     [Theory]
     [InlineData("Off")]
-    [InlineData("Shadow")]
     public void Provider_NotOn_OffersTheFormsList(string mode)
     {
         var holder = new SupportCategoriesHolder();

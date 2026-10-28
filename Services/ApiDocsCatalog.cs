@@ -398,7 +398,7 @@ codeType: qr | datamatrix | pdf417 | aztec | any
 Response:
 {
   "results": [
-    { "value": "INV-2024-001", "codeType": "QR_CODE", "position": { "x": 212.5, "y": 412.0 }, "page": 2 }
+    { "value": "INV-2024-001", "codeType": "QR_CODE", "boundingBox": { "x": 212.5, "y": 412.0, "width": 60.0, "height": 60.0 }, "page": 2 }
   ],
   "pages": 42,
   "pagesProcessed": 30,

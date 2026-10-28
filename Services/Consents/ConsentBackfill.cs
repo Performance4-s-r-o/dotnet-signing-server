@@ -41,7 +41,7 @@ public sealed class ConsentBackfill
     {
         if (_options.Value.ModeFor(BackofficeModule.Consents) == BackofficeMode.Off)
         {
-            throw new InvalidOperationException("The Consents module is Off; switch it to Shadow or On before the backfill.");
+            throw new InvalidOperationException("The Consents module is Off; switch it to On before the backfill.");
         }
 
         if (!_db.Database.IsNpgsql())

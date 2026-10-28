@@ -28,7 +28,7 @@ public class SignUpViewModel
     [Range(typeof(bool), "true", "true")]
     public bool AcceptTerms { get; set; }
 
-    /// <summary>Version of each consent document the form showed (hidden fields; Consents module Shadow or On).</summary>
+    /// <summary>Version of each consent document the form showed (hidden fields; Consents module On).</summary>
     public Dictionary<string, int> ShownVersions { get; set; } = new();
 
     /// <summary>Content hash of each document the form showed (hidden fields); only compared, the server's hash is recorded.</summary>
@@ -38,7 +38,7 @@ public class SignUpViewModel
     [BindNever]
     public IReadOnlyList<ConsentDocumentVersion> Documents { get; set; } = [];
 
-    /// <summary>Whether versions are shown and sent (Consents module Shadow or On).</summary>
+    /// <summary>Whether versions are shown and sent (Consents module On).</summary>
     [BindNever]
     public bool ShowVersions { get; set; }
 

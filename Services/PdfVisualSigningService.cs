@@ -546,28 +546,5 @@ namespace DotNetSigningServer.Services
                 return null;
             }
         }
-
-        // Kept for any external callers that still build text lines the old way.
-        // Internal signing pipeline now routes everything through the shared layout module.
-        public static List<string> BuildVisualSignTextLines(VisualSignInput input, SignatureAppearanceOptions appearance)
-        {
-            var layoutInput = BuildLayoutInput(
-                signRect: input.SignRect,
-                designWidth: input.DesignWidth,
-                designHeight: input.DesignHeight,
-                autoHeight: input.AutoHeight,
-                appearance: appearance,
-                signImage: input.SignImageContent,
-                logoImage: input.CompanyLogoContent,
-                stampImage: input.StampImageContent,
-                reason: input.Reason,
-                location: input.Location,
-                signerName: input.SignerName,
-                companyName: null,
-                description: appearance.DescriptionText,
-                dateUtcNow: DateTime.UtcNow);
-            var rows = SignatureLayoutCalculator.BuildRows(layoutInput.Appearance, layoutInput.Labels, layoutInput.Values);
-            return rows.Select(r => r.Text).ToList();
-        }
     }
 }

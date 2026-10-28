@@ -11,10 +11,10 @@ namespace DotNetSigningServer.Services.Backoffice.Handlers;
 /// <c>price.effective</c>: a new price list is in force (the service sends it after a successful
 /// Stripe sync) and its lookup keys point to the new Stripe Prices.
 ///
-/// Shadow and On: fetches the price list right away and drops the cached Stripe Prices. A failed
+/// Fetches the price list right away and drops the cached Stripe Prices. A failed
 /// fetch throws, so the inbox retries the event; the hourly refresh catches up in any case.
 ///
-/// On only: stores the new price of 100 credits in <c>User.AutoRechargePricePer100</c> of every
+/// Then stores the new price of 100 credits in <c>User.AutoRechargePricePer100</c> of every
 /// user with auto-recharge (auto-recharge itself always charges the pack's current price) and
 /// clears the notice markers (<c>PriceChangeNotifiedAt</c>, and <c>PriceChangeNotifiedVersion</c>
 /// up to this version). Throws while the fetched price list is older than the event's version.
@@ -27,7 +27,6 @@ public sealed class PriceEffectiveHandler : IBackofficeEventHandler
     private readonly ApplicationDbContext _db;
     private readonly IOptionsMonitor<StripeOptions> _stripe;
     private readonly ILogger<PriceEffectiveHandler> _logger;
-    private readonly BackofficeMode _mode;
 
     public PriceEffectiveHandler(
         PricingSnapshotRefresher refresher,
@@ -35,8 +34,7 @@ public sealed class PriceEffectiveHandler : IBackofficeEventHandler
         StripePriceResolver resolver,
         ApplicationDbContext db,
         IOptionsMonitor<StripeOptions> stripe,
-        ILogger<PriceEffectiveHandler> logger,
-        BackofficeMode mode)
+        ILogger<PriceEffectiveHandler> logger)
     {
         _refresher = refresher;
         _holder = holder;
@@ -44,7 +42,6 @@ public sealed class PriceEffectiveHandler : IBackofficeEventHandler
         _db = db;
         _stripe = stripe;
         _logger = logger;
-        _mode = mode;
     }
 
     public IReadOnlyCollection<string> Types { get; } = [BackofficeEventTypes.PriceEffective];
@@ -62,11 +59,6 @@ public sealed class PriceEffectiveHandler : IBackofficeEventHandler
             _resolver.Invalidate();
         }
         _logger.LogInformation("Backoffice event {EventId}: price list refreshed after {EventType}", evt.Id, evt.Type);
-
-        if (_mode != BackofficeMode.On)
-        {
-            return;
-        }
 
         var version = PriceEventData.Int(evt.Data, "version");
         if (version is null)

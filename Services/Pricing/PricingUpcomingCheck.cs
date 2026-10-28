@@ -8,7 +8,7 @@ using Microsoft.Extensions.Options;
 namespace DotNetSigningServer.Services.Pricing;
 
 /// <summary>
-/// Safety net for a lost <c>price.scheduled</c> (Pricing Shadow/On): once a day asks
+/// Safety net for a lost <c>price.scheduled</c> (Pricing On): once a day asks
 /// <c>GET /v1/pricing/upcoming</c> for the next scheduled price-list version. When no user has the
 /// notice of that version yet although it takes effect in less than its <c>notice_days</c> (so
 /// the event should have arrived), it runs <see cref="PriceScheduledHandler"/> with a synthetic

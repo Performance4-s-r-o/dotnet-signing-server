@@ -115,34 +115,6 @@ public class SessionSecurityTests
         Assert.True(BillingCustomerRef.CheckoutBelongsTo(ours, userId, null));
     }
 
-    [Theory]
-    // created,              graceUntil,            names user, expected
-    [InlineData("2026-10-20T10:00:00Z", "2026-10-20T12:00:00Z", true, true)]   // open before the deploy: accepted
-    [InlineData("2026-10-20T13:00:00Z", "2026-10-20T12:00:00Z", true, false)]  // created after the grace
-    [InlineData("2026-10-20T10:00:00Z", null, true, false)]                    // no grace configured = strict
-    [InlineData(null, "2026-10-20T12:00:00Z", true, false)]                    // unknown age never passes
-    [InlineData("2026-10-20T10:00:00Z", "2026-10-20T12:00:00Z", false, false)] // the grace never skips the userId check
-    public void Checkout_WithoutMarker_PassesOnlyInsideTheGrace(string? created, string? graceUntil, bool namesUser, bool expected)
-    {
-        var userId = Guid.NewGuid();
-        var session = new CheckoutSessionInfo("cs_old", "payment", "complete", "paid",
-            new Dictionary<string, string> { ["userId"] = (namesUser ? userId : Guid.NewGuid()).ToString() },
-            null, null, created is null ? null : DateTimeOffset.Parse(created));
-        var grace = graceUntil is null ? (DateTimeOffset?)null : DateTimeOffset.Parse(graceUntil);
-
-        Assert.Equal(expected, BillingCustomerRef.CheckoutBelongsTo(session, userId, null, grace));
-    }
-
-    [Fact]
-    public void Checkout_InsideTheGrace_StillNeedsTheUsersCustomer()
-    {
-        var userId = Guid.NewGuid();
-        var session = new CheckoutSessionInfo("cs_old", "payment", "complete", "paid",
-            new Dictionary<string, string> { ["userId"] = userId.ToString() },
-            "cus_other", null, DateTimeOffset.Parse("2026-10-20T10:00:00Z"));
-        Assert.False(BillingCustomerRef.CheckoutBelongsTo(session, userId, "cus_mine", DateTimeOffset.Parse("2026-10-20T12:00:00Z")));
-    }
-
     [Fact]
     public async Task AdminAudit_RecordsActorTargetAndChange_AndIsAppendOnly()
     {

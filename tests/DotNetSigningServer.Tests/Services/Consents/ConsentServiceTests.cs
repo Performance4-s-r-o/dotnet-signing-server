@@ -65,15 +65,6 @@ public class ConsentServiceTests
     }
 
     [Fact]
-    public async Task Shadow_SendsToTheServiceToo()
-    {
-        using var host = ConsentTestHost.Create("Shadow");
-        await ConsentTestHost.SignUpAsync(host, "shadow@example.com");
-
-        Assert.Equal(1, await host.WithDbAsync(d => d.BackofficeOutboxItems.CountAsync()));
-    }
-
-    [Fact]
     public async Task Payload_IsOneBatchWithThreeEvents_IpOnlyForTheDpa()
     {
         using var host = ConsentTestHost.Create("On");

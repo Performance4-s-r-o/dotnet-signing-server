@@ -128,7 +128,7 @@ public class InboxDeadLetterTests
         public Task HandleAsync(BackofficeEvent evt, CancellationToken cancellationToken)
         {
             if (_switch.Failing) throw new InvalidOperationException("database timeout");
-            return new BillingEventsHandler(BackofficeMode.On, _db, _services, NullLogger<BillingEventsHandler>.Instance)
+            return new BillingEventsHandler(_db, _services, NullLogger<BillingEventsHandler>.Instance)
                 .HandleAsync(evt, cancellationToken);
         }
     }

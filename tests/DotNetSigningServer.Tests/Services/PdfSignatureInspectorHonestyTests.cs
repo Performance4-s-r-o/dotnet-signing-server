@@ -211,16 +211,16 @@ public class PdfSignatureInspectorHonestyTests
 
     // ---- contract ----------------------------------------------------------
 
-    /// <summary>Existing callers read `level`; it stays in the response next to `structuralLevel`.</summary>
+    /// <summary>The response carries `structuralLevel` only; the old `level` alias is gone.</summary>
     [Fact]
-    public void Response_KeepsTheDeprecatedLevelNextToStructuralLevel()
+    public void Response_CarriesStructuralLevelWithoutTheOldLevelAlias()
     {
         var result = PdfSignatureInspector.Inspect(Sign(UnsignedPdf(), "Signature1", tsa: null));
 
         using var json = JsonDocument.Parse(JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
         var signature = json.RootElement.GetProperty("signatures")[0];
         Assert.Equal("B-B", signature.GetProperty("structuralLevel").GetString());
-        Assert.Equal("B-B", signature.GetProperty("level").GetString());
+        Assert.False(signature.TryGetProperty("level", out _));
         Assert.Equal(2, json.RootElement.GetProperty("revisions").GetArrayLength());
         Assert.Equal(64, json.RootElement.GetProperty("documentSha256").GetString()!.Length);
     }

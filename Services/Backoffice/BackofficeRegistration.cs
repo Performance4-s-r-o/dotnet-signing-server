@@ -72,9 +72,8 @@ public static class BackofficeRegistration
     /// E-mail by <c>Modules:Email</c>: On queues every message into the outbox — as a service
     /// template (<c>email.template</c>) when its key is in <c>Email:TemplateKeys</c>, otherwise
     /// rendered locally (<c>email.raw</c>) — with the break-glass fallback and handles
-    /// <c>email.*</c> events; Off and Shadow send through Resend directly, as before (Shadow only
-    /// compares the listed templates with the service's rendering in the background: the
-    /// service has no "log only" send, so it would deliver every message twice). <see cref="ResendEmailSender"/> is always registered as its own type too.
+    /// <c>email.*</c> events; Off sends through Resend directly, as before.
+    /// <see cref="ResendEmailSender"/> is always registered as its own type too.
     /// While not On, queued e-mail items stay Pending and are sent once the module is On again.
     /// </summary>
     internal static void AddEmail(IServiceCollection services, P4BackofficeProductOptions options)
@@ -89,7 +88,6 @@ public static class BackofficeRegistration
         {
             services.TryAddSingleton(new OutboxKindFilter([EmailKindPrefix]));
             services.AddScoped<IEmailSender>(sp => sp.GetRequiredService<ResendEmailSender>());
-            if (mode == BackofficeMode.Shadow) AddTemplateShadow(services, options);
             return;
         }
 
@@ -104,28 +102,9 @@ public static class BackofficeRegistration
     }
 
     /// <summary>
-    /// Email=Shadow: templates listed in <c>TemplateKeys</c> are sent locally and compared with
-    /// the service's rendering in the background (<see cref="TemplateShadowComparer"/>).
-    /// </summary>
-    private static void AddTemplateShadow(IServiceCollection services, P4BackofficeProductOptions options)
-    {
-        var baseUrl = options.BaseUrl?.Trim() ?? "";
-        var secretKey = options.SecretKey?.Trim() ?? "";
-        services.AddHttpClient(TemplateShadowComparer.HttpClientName, client =>
-        {
-            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
-            client.Timeout = TemplateShadowComparer.RequestTimeout;
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretKey);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-templates");
-        });
-        services.TryAddSingleton<TemplateShadowComparer>();
-        services.AddHostedService(sp => sp.GetRequiredService<TemplateShadowComparer>());
-    }
-
-    /// <summary>
     /// Consents: always registered, because sign-up records a local <c>ConsentRecord</c> in every
     /// mode (Off only skips the outbox and the gate); the mode is read per call. The daily
-    /// reconciliation with the service runs only when <c>Modules:Consents</c> is Shadow or On.
+    /// reconciliation with the service runs only when <c>Modules:Consents</c> is On.
     /// The gate itself (<c>RequireCurrentConsentFilter</c>) is added to MVC by <c>Program.cs</c>,
     /// outside a PrivateServer.
     /// </summary>
@@ -174,8 +153,7 @@ public static class BackofficeRegistration
     }
 
     /// <summary>
-    /// Legal documents by <c>Modules:Docs</c>: Off reads the hand-maintained rows (as before),
-    /// Shadow does the same and compares with the service in the background, On serves the
+    /// Legal documents by <c>Modules:Docs</c>: Off reads the hand-maintained rows (as before), On serves the
     /// service's texts with the <c>LegalDocuments</c> snapshot and Razor as fallbacks, and the
     /// cookie declaration under the cookies policy (<see cref="CookieDeclarationReader"/>).
     /// </summary>
@@ -216,13 +194,6 @@ public static class BackofficeRegistration
             options.DocumentsTtl));
         services.TryAddSingleton<LegalDocumentRefresher>();
 
-        if (mode == BackofficeMode.Shadow)
-        {
-            services.TryAddScoped<ILegalDocumentSource, ShadowLegalDocumentSource>();
-            services.TryAddSingleton<ICookieDeclarationSource, NoCookieDeclarationSource>();
-            return;
-        }
-
         services.TryAddScoped<ILegalDocumentSource, BackofficeLegalDocumentSource>();
         services.TryAddScoped<DocumentsMetaUpdater>();
         services.TryAddScoped<DocumentsResync>();
@@ -244,12 +215,9 @@ public static class BackofficeRegistration
     }
 
     /// <summary>
-    /// Credit prices by <c>Modules:Pricing</c>: Off serves <c>Billing:*</c> as before; Shadow does
-    /// the same, keeps the price-list snapshot up to date in the background and logs how it
-    /// differs from the configuration; On serves the snapshot (configured prices as the
+    /// Credit prices by <c>Modules:Pricing</c>: Off serves <c>Billing:*</c> as before; On serves the snapshot (configured prices as the
     /// fallback) and Checkout charges the Stripe Price of the pack's lookup key.
-    /// Price-change notices: <see cref="PriceChangeMonitorService"/> while Off or Shadow (Shadow
-    /// handlers of <c>price.*</c> only log what they would do); On replaces it by
+    /// Price-change notices: <see cref="PriceChangeMonitorService"/> while Off; On replaces it by
     /// <see cref="PriceScheduledHandler"/> / <see cref="PriceEffectiveHandler"/> and the daily
     /// <see cref="PricingUpcomingCheck"/>. <c>price.sync_failed</c> is logged as an error.
     /// <see cref="ICreditPricingProvider"/> and <see cref="StripePriceResolver"/> are always
@@ -269,14 +237,10 @@ public static class BackofficeRegistration
         });
 
         var mode = options.ModeFor(BackofficeModule.Pricing);
-        // Price-change notices: the local monitor unless Pricing is On, then the price.* events.
-        // Never both (Shadow handlers only log).
-        if (mode != BackofficeMode.On)
-        {
-            services.AddHostedService<PriceChangeMonitorService>();
-        }
+        // Price-change notices: the local monitor while Pricing is Off, the price.* events when On.
         if (mode == BackofficeMode.Off)
         {
+            services.AddHostedService<PriceChangeMonitorService>();
             services.TryAddSingleton<ICreditPricingProvider>(sp => sp.GetRequiredService<ConfigCreditPricingProvider>());
             return;
         }
@@ -296,37 +260,27 @@ public static class BackofficeRegistration
             sp.GetRequiredService<BackofficePricingClient>(),
             sp.GetRequiredService<PricingSnapshotHolder>(),
             sp.GetRequiredService<StripePriceResolver>(),
-            sp.GetRequiredService<ConfigCreditPricingProvider>(),
-            sp.GetRequiredService<IOptionsMonitor<StripeOptions>>(),
             sp.GetRequiredService<IServiceScopeFactory>(),
             sp.GetRequiredService<TimeProvider>(),
-            sp.GetRequiredService<ILogger<PricingSnapshotRefresher>>(),
-            mode));
+            sp.GetRequiredService<ILogger<PricingSnapshotRefresher>>()));
         services.AddHostedService<PricingSnapshotWorker>();
         services.TryAddScoped<PricingResync>();
         services.AddScoped<IBackofficeResync>(sp => sp.GetRequiredService<PricingResync>());
-        AddPriceEventHandler<PriceScheduledHandler>(services, mode);
-        AddPriceEventHandler<PriceEffectiveHandler>(services, mode);
-        AddPriceEventHandler<PriceUnscheduledHandler>(services, mode);
+        AddPriceEventHandler<PriceScheduledHandler>(services);
+        AddPriceEventHandler<PriceEffectiveHandler>(services);
+        AddPriceEventHandler<PriceUnscheduledHandler>(services);
         services.AddScoped<IBackofficeEventHandler, PriceSyncFailedHandler>();
         services.AddHostedService<PricingUpcomingCheck>();
-
-        if (mode == BackofficeMode.Shadow)
-        {
-            services.TryAddSingleton<ICreditPricingProvider>(sp => sp.GetRequiredService<ConfigCreditPricingProvider>());
-            return;
-        }
 
         services.TryAddSingleton<BackofficeCreditPricingProvider>();
         services.TryAddSingleton<ICreditPricingProvider>(sp => sp.GetRequiredService<BackofficeCreditPricingProvider>());
     }
 
     /// <summary>
-    /// Support form by <c>Modules:Support</c>: Off and Shadow send tickets to osTicket directly
-    /// (as before; Shadow only keeps the service's categories up to date and logs how they
-    /// differ from the form's). On queues every ticket into the outbox (<c>support.ticket</c>),
+    /// Support form by <c>Modules:Support</c>: Off sends tickets to osTicket directly
+    /// (as before). On queues every ticket into the outbox (<c>support.ticket</c>),
     /// attempts it right away with a short limit, and offers the service's categories.
-    /// <c>support.ticket_failed</c> is logged as an error while Shadow or On. The ticket handler is
+    /// <c>support.ticket_failed</c> is logged as an error while On. The ticket handler is
     /// registered with the dispatcher (<see cref="AddOutboxDispatcher"/>), so tickets queued while
     /// On are still delivered after a switch back to Off.
     /// </summary>
@@ -352,14 +306,14 @@ public static class BackofficeRegistration
             client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-support");
         });
         services.TryAddSingleton<SupportCategoriesClient>();
-        services.TryAddSingleton(sp => ActivatorUtilities.CreateInstance<SupportCategoriesWorker>(sp, mode));
+        services.TryAddSingleton(sp => ActivatorUtilities.CreateInstance<SupportCategoriesWorker>(sp));
         services.AddHostedService(sp => sp.GetRequiredService<SupportCategoriesWorker>());
         services.AddScoped<IBackofficeEventHandler, SupportEventsHandler>();
     }
 
     /// <summary>
     /// Account erasure (#217): the service behind the account page is always there (the local
-    /// erasure does not need the backoffice). While any module is Shadow or On it also answers
+    /// erasure does not need the backoffice). While any module is On it also answers
     /// <c>subject.erasure.requested</c>; the outbox kinds <c>subject.erase</c> and
     /// <c>subject.erasure.ack</c> are sent by the dispatcher (<see cref="AddOutboxDispatcher"/>).
     /// </summary>
@@ -371,11 +325,11 @@ public static class BackofficeRegistration
         services.AddScoped<IBackofficeEventHandler, ErasureRequestedHandler>();
     }
 
-    /// <summary>A <c>price.*</c> handler that acts by the Pricing mode, also resolvable as itself.</summary>
-    private static void AddPriceEventHandler<T>(IServiceCollection services, BackofficeMode mode)
+    /// <summary>A <c>price.*</c> handler, also resolvable as itself.</summary>
+    private static void AddPriceEventHandler<T>(IServiceCollection services)
         where T : class, IBackofficeEventHandler
     {
-        services.TryAddScoped(sp => ActivatorUtilities.CreateInstance<T>(sp, mode));
+        services.TryAddScoped<T>();
         services.AddScoped<IBackofficeEventHandler>(sp => sp.GetRequiredService<T>());
     }
 
@@ -393,7 +347,7 @@ public static class BackofficeRegistration
     }
 
     /// <summary>
-    /// Sending: only when a module is Shadow or On (and so never on a PrivateServer or in a
+    /// Sending: only when a module is On (and so never on a PrivateServer or in a
     /// build without the SDK). Its own client, separate from the SDK's 3 s one.
     /// </summary>
     private static void AddOutboxDispatcher(IServiceCollection services, P4BackofficeProductOptions options)
@@ -430,7 +384,7 @@ public static class BackofficeRegistration
     }
 
     /// <summary>
-    /// Processing and polling: only when a module is Shadow or On. Modules add their
+    /// Processing and polling: only when a module is On. Modules add their
     /// <see cref="IBackofficeEventHandler"/> and <see cref="IBackofficeResync"/> as scoped services.
     /// </summary>
     private static void AddInboxProcessing(IServiceCollection services, P4BackofficeProductOptions options)
@@ -481,18 +435,12 @@ internal sealed class BackofficeStartupReport(
                 break;
         }
 
+        foreach (var (setting, value) in BackofficeOptionsValidator.InvalidModes(o))
+        {
+            logger.LogWarning("Backoffice: {Setting} is \"{Value}\"; expected Off or On. The module stays Off", setting, value);
+        }
+
         var emailMode = o.ModeFor(BackofficeModule.Email);
-        if (emailMode == BackofficeMode.Shadow)
-        {
-            logger.LogWarning(
-                "Backoffice: Modules:Email=Shadow sends e-mail through Resend as with Off (the service would send every "
-                + "message twice); templates in Email:TemplateKeys are only compared with the service's rendering");
-        }
-        if (o.ModeFor(BackofficeModule.Support) == BackofficeMode.Shadow)
-        {
-            logger.LogInformation(
-                "Backoffice: Modules:Support=Shadow sends tickets to osTicket as with Off; the service's categories are only compared");
-        }
         var unknownKeys = o.Email.TemplateKeys
             .Where(k => !EmailTemplateVariables.Names.ContainsKey(k?.Trim() ?? ""))
             .ToList();

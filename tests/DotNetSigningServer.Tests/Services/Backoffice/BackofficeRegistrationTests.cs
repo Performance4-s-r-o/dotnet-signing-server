@@ -12,12 +12,12 @@ namespace DotNetSigningServer.Tests.Services.Backoffice;
 
 public class BackofficeRegistrationTests
 {
-    internal static ServiceCollection Register(Dictionary<string, string?> settings, bool privateServer = false)
+    internal static ServiceCollection Register(Dictionary<string, string?> settings, bool privateServer = false, string? environment = null)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddSingleton<IHostEnvironment>(new TestHostEnvironment { EnvironmentName = Environments.Development });
+        services.AddSingleton<IHostEnvironment>(new TestHostEnvironment { EnvironmentName = environment ?? Environments.Development });
         services.AddP4BackofficeIntegration(configuration, new PrivateServerOptions { Enabled = privateServer });
         return services;
     }
@@ -78,11 +78,22 @@ public class BackofficeRegistrationTests
     }
 
     [Fact]
-    public void UnknownMode_Fails()
+    public void UnknownMode_FailsInProduction()
     {
-        var services = Register(new() { ["P4Backoffice:Mode"] = "maybe" });
+        var services = Register(new() { ["P4Backoffice:Mode"] = "maybe" }, environment: Environments.Production);
 
         Assert.Throws<OptionsValidationException>(() => Resolve(services));
+    }
+
+    [Theory]
+    [InlineData("maybe")]
+    [InlineData("Shadow")]
+    public void UnknownMode_OutsideProduction_KeepsTheModulesOff(string mode)
+    {
+        var services = Register(new() { ["P4Backoffice:Mode"] = mode });
+
+        var options = Resolve(services);
+        Assert.All(Enum.GetValues<BackofficeModule>(), m => Assert.Equal(BackofficeMode.Off, options.ModeFor(m)));
     }
 
     [Fact]
@@ -90,7 +101,7 @@ public class BackofficeRegistrationTests
     {
         var services = Register(new()
         {
-            ["P4Backoffice:Mode"] = "Shadow",
+            ["P4Backoffice:Mode"] = "On",
             ["P4Backoffice:Modules:Pricing"] = "Off",
             ["P4Backoffice:BaseUrl"] = "https://backoffice.example.com",
             ["P4Backoffice:SecretKey"] = "p4sk_test_abc",
@@ -99,7 +110,7 @@ public class BackofficeRegistrationTests
 
         var options = Resolve(services);
         Assert.Equal(BackofficeMode.Off, options.RequestedModeFor(BackofficeModule.Pricing));
-        Assert.Equal(BackofficeMode.Shadow, options.RequestedModeFor(BackofficeModule.Docs));
+        Assert.Equal(BackofficeMode.On, options.RequestedModeFor(BackofficeModule.Docs));
     }
 
     [Fact]

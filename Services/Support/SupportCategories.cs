@@ -131,9 +131,9 @@ public sealed class SupportCategoriesClient
 }
 
 /// <summary>
-/// Support Shadow/On: loads the stored categories (<c>BackofficeState["support:categories:{locale}"]</c>)
+/// Support On: loads the stored categories (<c>BackofficeState["support:categories:{locale}"]</c>)
 /// at startup (local database only), then fetches them for every site language right away and
-/// every <see cref="Interval"/>, sooner after a failure. Shadow only logs how the service's keys
+/// every <see cref="Interval"/>, sooner after a failure.
 /// differ from the form's. Never blocks startup or a request on the service.
 /// </summary>
 public sealed class SupportCategoriesWorker : BackgroundService
@@ -148,22 +148,19 @@ public sealed class SupportCategoriesWorker : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly TimeProvider _time;
     private readonly ILogger<SupportCategoriesWorker> _logger;
-    private readonly bool _shadow;
 
     public SupportCategoriesWorker(
         SupportCategoriesClient client,
         SupportCategoriesHolder holder,
         IServiceScopeFactory scopes,
         TimeProvider time,
-        ILogger<SupportCategoriesWorker> logger,
-        BackofficeMode mode)
+        ILogger<SupportCategoriesWorker> logger)
     {
         _client = client;
         _holder = holder;
         _scopes = scopes;
         _time = time;
         _logger = logger;
-        _shadow = mode == BackofficeMode.Shadow;
     }
 
     public static string StateKey(string locale) => StateKeyPrefix + locale;
@@ -228,24 +225,6 @@ public sealed class SupportCategoriesWorker : BackgroundService
                 await BackofficeStateStore.SetAsync(db, StateKey(locale), snapshot.Serialize(), snapshot.FetchedAt, cancellationToken);
             }
             _holder.Set(snapshot);
-
-            if (_shadow) Compare(snapshot);
-        }
-    }
-
-    private void Compare(SupportCategoriesSnapshot snapshot)
-    {
-        var service = snapshot.Categories.Select(c => c.Key).ToHashSet();
-        var missing = SupportTicketRequest.DefaultCategories.Where(k => !service.Contains(k)).ToList();
-        var extra = service.Where(k => !SupportTicketRequest.DefaultCategories.Contains(k)).ToList();
-        if (missing.Count == 0 && extra.Count == 0)
-        {
-            _logger.LogInformation("[support] shadow: categories ({Locale}) match the form", snapshot.Locale);
-        }
-        else
-        {
-            _logger.LogWarning("[support] shadow: categories ({Locale}) differ from the form: missing {Missing}, extra {Extra}",
-                snapshot.Locale, string.Join(", ", missing), string.Join(", ", extra));
         }
     }
 

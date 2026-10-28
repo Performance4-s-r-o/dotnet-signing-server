@@ -27,14 +27,20 @@ public static class BackofficeOptionsValidator
     public const string TestEnvironment = "test";
 
     /// <param name="options">The <c>P4Backoffice</c> section.</param>
-    public static IReadOnlyList<string> Validate(P4BackofficeProductOptions options)
+    /// <param name="rejectInvalidModes">
+    /// True (Production): a mode that is not Off or On stops the start. False: the module stays
+    /// Off and the start report warns (see <see cref="InvalidModes"/>).
+    /// </param>
+    public static IReadOnlyList<string> Validate(P4BackofficeProductOptions options, bool rejectInvalidModes = true)
     {
         var problems = new List<string>();
 
-        CheckMode(problems, options.Mode, "Mode");
-        foreach (var module in Enum.GetValues<BackofficeModule>())
+        if (rejectInvalidModes)
         {
-            CheckMode(problems, options.Modules.Get(module), $"Modules:{module}");
+            foreach (var (setting, value) in InvalidModes(options))
+            {
+                problems.Add($"{setting} is \"{value}\"; expected Off or On.");
+            }
         }
 
         CheckWebhookSecret(problems, options.Webhook.Secret, "Webhook:Secret");
@@ -135,7 +141,7 @@ public static class BackofficeOptionsValidator
         var target = environment?.Trim().ToLowerInvariant();
         if (string.IsNullOrEmpty(target))
         {
-            problems.Add($"{setting} is required when any backoffice module is Shadow or On; set it to {LiveEnvironment} (production) or {TestEnvironment}.");
+            problems.Add($"{setting} is required when any backoffice module is On; set it to {LiveEnvironment} (production) or {TestEnvironment}.");
             return;
         }
         if (target != LiveEnvironment && target != TestEnvironment)
@@ -178,12 +184,17 @@ public static class BackofficeOptionsValidator
         return $"{path} (environment variable {path.Replace(":", "__")})";
     }
 
-    private static void CheckMode(List<string> problems, string? value, string key)
+    /// <summary>The global and per-module settings whose value is neither Off nor On.</summary>
+    public static IReadOnlyList<(string Setting, string? Value)> InvalidModes(P4BackofficeProductOptions options)
     {
-        if (!P4BackofficeProductOptions.TryParseMode(value, out _))
+        var invalid = new List<(string, string?)>();
+        if (!P4BackofficeProductOptions.TryParseMode(options.Mode, out _)) invalid.Add((Setting("Mode"), options.Mode));
+        foreach (var module in Enum.GetValues<BackofficeModule>())
         {
-            problems.Add($"{Setting(key)} is \"{value}\"; expected Off, Shadow or On.");
+            var value = options.Modules.Get(module);
+            if (!P4BackofficeProductOptions.TryParseMode(value, out _)) invalid.Add((Setting($"Modules:{module}"), value));
         }
+        return invalid;
     }
 
     private static void CheckWebhookSecret(List<string> problems, string? value, string key)
@@ -217,7 +228,7 @@ public static class BackofficeOptionsValidator
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            problems.Add($"{Setting("BaseUrl")} is required when any backoffice module is Shadow or On.");
+            problems.Add($"{Setting("BaseUrl")} is required when any backoffice module is On.");
             return;
         }
         if (!Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri)
@@ -241,7 +252,7 @@ public static class BackofficeOptionsValidator
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            problems.Add($"{Setting("SecretKey")} is required when any backoffice module is Shadow or On.");
+            problems.Add($"{Setting("SecretKey")} is required when any backoffice module is On.");
         }
         else if (!value.Trim().StartsWith(SecretKeyPrefix, StringComparison.Ordinal))
         {
@@ -251,11 +262,11 @@ public static class BackofficeOptionsValidator
 }
 
 /// <summary>Adapter that runs <see cref="BackofficeOptionsValidator"/> through the options pipeline (ValidateOnStart).</summary>
-internal sealed class BackofficeOptionsValidation : IValidateOptions<P4BackofficeProductOptions>
+internal sealed class BackofficeOptionsValidation(IHostEnvironment environment) : IValidateOptions<P4BackofficeProductOptions>
 {
     public ValidateOptionsResult Validate(string? name, P4BackofficeProductOptions options)
     {
-        var problems = BackofficeOptionsValidator.Validate(options);
+        var problems = BackofficeOptionsValidator.Validate(options, rejectInvalidModes: environment.IsProduction());
         return problems.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(problems);
     }
 }

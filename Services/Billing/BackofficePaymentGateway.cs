@@ -114,10 +114,7 @@ public sealed class BackofficePaymentGateway : IPaymentGateway
             BillingJson.StringMap(root, "metadata"),
             StripeCustomerId: null,
             // Null would skip the ownership check; a session without a customer belongs to nobody.
-            BillingJson.String(root, "customer_ref") ?? "",
-            Created: BillingJson.Date(root, "created_at") is DateTime created
-                ? new DateTimeOffset(DateTime.SpecifyKind(created, DateTimeKind.Utc))
-                : null);
+            BillingJson.String(root, "customer_ref") ?? "");
     }
 
     public async Task<IReadOnlyList<InvoiceSummary>> ListInvoicesAsync(User user, int limit, CancellationToken cancellationToken = default)

@@ -31,7 +31,7 @@ public sealed record BackofficePollResult(int Pages, int Events, int Added, bool
 /// <see cref="LeaseDuration"/>) stops instead of writing back an older cursor. Unlike the
 /// session advisory lock used before (#79), it works through a transaction pooler.
 ///
-/// Registered only when a backoffice module is Shadow or On (never on a PrivateServer).
+/// Registered only when a backoffice module is On (never on a PrivateServer).
 /// </summary>
 public sealed class BackofficePollingService : BackgroundService
 {

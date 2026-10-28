@@ -13,7 +13,6 @@ namespace DotNetSigningServer.Services.Billing;
 /// <list type="bullet">
 /// <item>Off — Stripe directly with the product's key (<see cref="StripePaymentGateway"/>), the
 /// product's Stripe webhook grants credits; nothing here talks to the service.</item>
-/// <item>Shadow — the same, and <c>billing.*</c> events are only logged and compared.</item>
 /// <item>On — <see cref="BackofficePaymentGateway"/> and <see cref="BackofficeAutoRecharge"/>
 /// call <c>/v1/billing/*</c>; <c>billing.*</c> events grant credits
 /// (<see cref="BillingEventsHandler"/>). The product's Stripe webhook endpoint answers 404
@@ -34,12 +33,7 @@ public static class BillingRegistration
             return;
         }
 
-        services.AddScoped<IBackofficeEventHandler>(sp => ActivatorUtilities.CreateInstance<BillingEventsHandler>(sp, mode));
-        if (mode == BackofficeMode.Shadow)
-        {
-            services.TryAddScoped<IPaymentGateway>(sp => sp.GetRequiredService<StripePaymentGateway>());
-            return;
-        }
+        services.AddScoped<IBackofficeEventHandler, BillingEventsHandler>();
 
         var baseUrl = options.BaseUrl?.Trim() ?? "";
         var secretKey = options.SecretKey?.Trim() ?? "";

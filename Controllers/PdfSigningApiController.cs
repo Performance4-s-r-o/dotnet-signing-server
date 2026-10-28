@@ -23,8 +23,6 @@ namespace DotNetSigningServer.Controllers
         private readonly PdfLtvService _ltvService;
         private readonly IDataProtector _dataProtector;
         internal const string AttachmentDebitBypassHeader = "X-P4PDF-Attachment-Billing-Bypass";
-        /// <summary>The name the portal sent before #78; accepted until every portal sends the one above.</summary>
-        internal const string LegacyAttachmentDebitBypassHeader = "X-P4SPS-Attachment-Billing-Bypass";
         private const string SigningDataNotFoundCode = "SIGNING_DATA_NOT_FOUND";
         /// <summary>Set on a raw PDF answer of <c>/api/sign</c>; the JSON answer carries <c>signatureVerified</c>.</summary>
         public const string SignatureVerifiedHeader = "X-Signature-Verified";
@@ -634,7 +632,7 @@ namespace DotNetSigningServer.Controllers
             var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
 
-            // No platform seal exists any more; the field stays for existing clients.
+            // No platform seal exists; the field only reports that.
             return Ok(new ServerCapabilities { Seal = new SealCapability { Enabled = false } });
         }
 
@@ -1020,8 +1018,7 @@ namespace DotNetSigningServer.Controllers
         }
 
         private bool BypassDebitRequested() =>
-            Request.Headers.ContainsKey(AttachmentDebitBypassHeader)
-            || Request.Headers.ContainsKey(LegacyAttachmentDebitBypassHeader);
+            Request.Headers.ContainsKey(AttachmentDebitBypassHeader);
 
         private bool AttachmentBypassAllowed(User user, bool bypassDebitRequested)
         {
@@ -1083,10 +1080,6 @@ namespace DotNetSigningServer.Controllers
             }
 
             var providedKey = context.Request.Headers[AttachmentDebitBypassHeader].ToString().Trim();
-            if (string.IsNullOrWhiteSpace(providedKey))
-            {
-                providedKey = context.Request.Headers[LegacyAttachmentDebitBypassHeader].ToString().Trim();
-            }
             if (string.IsNullOrWhiteSpace(providedKey))
             {
                 return false;

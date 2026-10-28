@@ -20,7 +20,7 @@ namespace DotNetSigningServer.Services.Backoffice.Inbox;
 /// <c>FOR UPDATE SKIP LOCKED</c>, so each item runs on one instance (#79). A batch stops after
 /// <see cref="BatchBudget"/> and gives back what it did not reach.
 ///
-/// Registered only when a backoffice module is Shadow or On (never on a PrivateServer).
+/// Registered only when a backoffice module is On (never on a PrivateServer).
 /// </summary>
 public sealed class BackofficeInboxProcessor : BackgroundService
 {

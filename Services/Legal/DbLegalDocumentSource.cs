@@ -12,7 +12,7 @@ namespace DotNetSigningServer.Services.Legal;
 /// Hand-maintained rows (<c>Source = manual</c>) hold Markdown, rendered with Markdig. With
 /// <c>includeSnapshots</c> (Docs module On, this class is then the fallback of the service)
 /// the service's snapshot is read too: rows with <c>Source = backoffice</c>, and the service
-/// HTML stored next to a manual row of the same version. Without it (Off, Shadow) only the
+/// HTML stored next to a manual row of the same version. Without it (Off) only the
 /// manual rows and their Markdown are used — exactly the behaviour before the integration.
 ///
 /// Rows are edited by hand directly in the database, so results are not cached — an edit

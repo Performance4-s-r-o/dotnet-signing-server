@@ -12,7 +12,7 @@ public class P4BackofficeProductOptions
 {
     public const string SectionName = "P4Backoffice";
 
-    /// <summary>Global mode (<c>Off</c>, <c>Shadow</c>, <c>On</c>); empty means <c>Off</c>.</summary>
+    /// <summary>Global mode (<c>Off</c>, <c>On</c>); empty means <c>Off</c>.</summary>
     public string? Mode { get; set; }
 
     /// <summary>Per-module overrides; an empty value inherits <see cref="Mode"/>.</summary>
@@ -27,7 +27,7 @@ public class P4BackofficeProductOptions
     /// <summary>
     /// Which service environment this installation belongs to: <c>live</c> or <c>test</c>
     /// (<c>P4_BACKOFFICE_ENV</c>). The kind of <see cref="SecretKey"/> must match it; required
-    /// once any module is Shadow or On (p4-backoffice #212).
+    /// once any module is On (p4-backoffice #212).
     /// </summary>
     public string? Environment { get; set; }
 
@@ -70,7 +70,7 @@ public class P4BackofficeProductOptions
 
     /// <summary>
     /// Mode the configuration asks for, ignoring <see cref="DisabledReason"/>. An unparsable
-    /// value counts as Off here; the validator refuses to start with it.
+    /// value counts as Off here; in Production the validator refuses to start with it.
     /// </summary>
     public BackofficeMode RequestedModeFor(BackofficeModule module)
     {
@@ -80,10 +80,10 @@ public class P4BackofficeProductOptions
         return TryParseMode(raw, out var mode) ? mode : BackofficeMode.Off;
     }
 
-    /// <summary>True when at least one module is effectively Shadow or On.</summary>
+    /// <summary>True when at least one module is effectively On.</summary>
     public bool AnyEnabled => Enum.GetValues<BackofficeModule>().Any(m => ModeFor(m) != BackofficeMode.Off);
 
-    /// <summary>True when the configuration asks for at least one module to be Shadow or On.</summary>
+    /// <summary>True when the configuration asks for at least one module to be On.</summary>
     public bool AnyRequested => Enum.GetValues<BackofficeModule>().Any(m => RequestedModeFor(m) != BackofficeMode.Off);
 
     /// <summary>Empty/whitespace parses as Off; otherwise one of the enum names, any case.</summary>

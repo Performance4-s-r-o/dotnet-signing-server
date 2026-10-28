@@ -241,18 +241,6 @@ public class PriceScheduledHandlerTests
     }
 
     [Fact]
-    public async Task Shadow_SendsNothing()
-    {
-        using var host = new PricingTestHost("Shadow");
-        var user = await host.AddUserAsync(u => { u.AutoRechargeEnabled = true; u.AutoRechargeQuantity = 300; });
-
-        await host.HandleAsync(BackofficeEventTypes.PriceScheduled, PriceEvents.Scheduled());
-
-        Assert.Empty(host.Email.Sent);
-        Assert.Null((await host.UserAsync(user.Id)).PriceChangeNotifiedVersion);
-    }
-
-    [Fact]
     public async Task Unscheduled_ResetsTheVersion_SoANewScheduleNotifiesAgain()
     {
         using var host = new PricingTestHost("On");
@@ -324,18 +312,6 @@ public class PriceEffectiveHandlerTests
         Assert.Equal(5m, (await host.UserAsync(user.Id)).AutoRechargePricePer100);
     }
 
-    [Fact]
-    public async Task Shadow_OnlyRefreshesThePriceList()
-    {
-        using var host = new PricingTestHost("Shadow");
-        var user = await host.AddUserAsync(u => { u.AutoRechargeEnabled = true; u.AutoRechargeQuantity = 100; u.AutoRechargePricePer100 = 5m; });
-        host.EnqueuePriceList(PricingTestData.ImportedJson(2, new Dictionary<int, long> { [100] = 600 }), "\"v2\"");
-
-        await host.HandleAsync(BackofficeEventTypes.PriceEffective, """{"version":2}""");
-
-        Assert.Equal(2, host.Holder.Current!.Version);
-        Assert.Equal(5m, (await host.UserAsync(user.Id)).AutoRechargePricePer100);
-    }
 }
 
 public class PricingUpcomingCheckTests
@@ -430,15 +406,6 @@ public class PriceNoticeRegistrationTests
     }
 
     [Fact]
-    public void Shadow_RunsTheMonitorAndLogOnlyHandlers()
-    {
-        using var host = new PricingTestHost("Shadow");
-
-        Assert.True(Monitor(host));
-        Assert.Contains(typeof(PriceScheduledHandler), Handlers(host));
-    }
-
-    [Fact]
     public void On_ReplacesTheMonitorWithTheHandlers()
     {
         using var host = new PricingTestHost("On");
@@ -457,7 +424,6 @@ public class PriceNoticeRegistrationTests
 
     [Theory]
     [InlineData(false, "Off")]
-    [InlineData(false, "Shadow")]
     [InlineData(false, "On")]
     [InlineData(true, "On")] // PrivateServer forces Off
     public void Integration_RegistersTheMonitorWhenPricingIsNotOn(bool privateServer, string pricing)

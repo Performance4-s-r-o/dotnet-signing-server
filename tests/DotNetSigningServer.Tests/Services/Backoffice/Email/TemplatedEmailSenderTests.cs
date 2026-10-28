@@ -119,7 +119,6 @@ public class TemplatedEmailSenderTests
 
     [Theory]
     [InlineData("Off")]
-    [InlineData("Shadow")]
     public async Task EmailNotOn_SendsLocallyEvenForListedKeys(string mode)
     {
         using var host = new TemplatedEmailTestHost(mode, EmailTemplateId.AutoRechargeSuccess);
