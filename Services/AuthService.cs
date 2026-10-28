@@ -21,6 +21,8 @@ public class AuthService : IAuthService
 
     public bool VerifyPassword(string password, byte[] hash, byte[] salt, int iterations)
     {
+        // A row without a valid count cannot be verified; refuse quietly.
+        if (iterations <= 0) return false;
         var computed = PBKDF2(password, salt, iterations);
         return CryptographicOperations.FixedTimeEquals(hash, computed);
     }

@@ -82,6 +82,15 @@ public class AuthServiceTests
         Assert.False(_sut.VerifyPassword("password", hash, salt, iterations / 2));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void VerifyPassword_NonPositiveIterations_ReturnsFalseWithoutThrowing(int iterations)
+    {
+        var (hash, salt, _) = _sut.HashPassword("password");
+        Assert.False(_sut.VerifyPassword("password", hash, salt, iterations));
+    }
+
     [Fact]
     public void HashPassword_WorksWithEmptyPassword()
     {

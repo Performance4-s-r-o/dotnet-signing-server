@@ -1062,7 +1062,7 @@ namespace DotNetSigningServer.Controllers
         }
 
         /// <summary>
-        /// The portal's token (#78) with the shared key, under either header name. Any other token
+        /// The portal's token (#78) with the shared key, in the X-P4PDF-Attachment-Billing-Bypass header. Any other token
         /// is refused even with the right key: the key alone is a secret that can leak, the token
         /// on the internal listener is the portal.
         /// </summary>
