@@ -147,6 +147,47 @@ public class DatabaseMigratorTests : IClassFixture<EmptyDatabaseFixture>
         using var client = factory.CreateClient();
     }
 
+    [DockerFact]
+    public async Task History_from_before_the_baseline_is_refused_by_migrate_and_by_start()
+    {
+        var connectionString = await _fixture.NewDatabaseAsync();
+        await using (var conn = new NpgsqlConnection(connectionString))
+        {
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                CREATE SCHEMA dotnet_signing;
+                CREATE TABLE dotnet_signing."__EFMigrationsHistory" (
+                    "MigrationId" character varying(150) PRIMARY KEY,
+                    "ProductVersion" character varying(32) NOT NULL);
+                INSERT INTO dotnet_signing."__EFMigrationsHistory"
+                VALUES ('20260419085537_InitialSchema', '9.0.19'), ('20261016123805_AccountErasure217', '9.0.19');
+                """;
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        await using var db = DatabaseMigrator.CreateContext(connectionString);
+        var migrate = Assert.Throws<InvalidOperationException>(
+            () => DatabaseMigrator.EnsureSchemaAndMigrate(db, NullLogger.Instance));
+        Assert.Contains("before the baseline", migrate.Message);
+        Assert.Contains("DROP SCHEMA", migrate.Message, StringComparison.OrdinalIgnoreCase);
+
+        var start = Assert.Throws<InvalidOperationException>(
+            () => DatabaseMigrator.RequireNoPendingMigrations(db, NullLogger.Instance));
+        Assert.Contains("before the baseline", start.Message);
+
+        using var factory = new StartupFactory(connectionString, runMigrationsOnStart: "true");
+        var onStart = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+        Assert.Contains("before the baseline", onStart.ToString());
+
+        // Refused before anything ran: no table was created next to the old history.
+        await using var check = new NpgsqlConnection(connectionString);
+        await check.OpenAsync();
+        await using var count = check.CreateCommand();
+        count.CommandText = "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'dotnet_signing'";
+        Assert.Equal(1L, (long)(await count.ExecuteScalarAsync())!);
+    }
+
     [Fact]
     public void Migration_connection_swaps_only_the_credentials()
     {

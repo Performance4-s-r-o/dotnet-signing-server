@@ -62,6 +62,7 @@ public static class DatabaseMigrator
         if (!dbContext.Database.IsNpgsql())
         {
             CreateSchemaIfAllowed(dbContext, logger);
+            RequireCurrentHistory(dbContext, logger);
             dbContext.Database.Migrate();
             return;
         }
@@ -79,6 +80,7 @@ public static class DatabaseMigrator
         try
         {
             CreateSchemaIfAllowed(dbContext, logger);
+            RequireCurrentHistory(dbContext, logger);
             dbContext.Database.Migrate();
         }
         finally
@@ -185,6 +187,8 @@ public static class DatabaseMigrator
     /// </summary>
     public static void RequireNoPendingMigrations(ApplicationDbContext dbContext, ILogger logger)
     {
+        RequireCurrentHistory(dbContext, logger);
+
         var pending = dbContext.Database.GetPendingMigrations().ToList();
         if (pending.Count == 0)
         {
@@ -199,5 +203,34 @@ public static class DatabaseMigrator
             pending.Count, names, MigrateArgument);
         throw new InvalidOperationException(
             $"{pending.Count} database migration(s) are pending ({names}). Run the {MigrateArgument} step before starting the server.");
+    }
+
+    /// <summary>
+    /// The history was squashed into one baseline migration before the first release. A database
+    /// that still carries the old history would see the baseline as pending and fail half-way
+    /// through its CREATE TABLE, so it is refused up front, with what to do instead.
+    /// </summary>
+    public static void RequireCurrentHistory(ApplicationDbContext dbContext, ILogger logger)
+    {
+        var applied = dbContext.Database.GetAppliedMigrations().ToList();
+        if (applied.Count == 0)
+        {
+            return;
+        }
+
+        var baseline = dbContext.Database.GetMigrations().First();
+        if (applied.Contains(baseline, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        logger.LogCritical(
+            "Schema {Schema} holds a migration history from before the baseline {Baseline} ({Count} entries, first {First}). " +
+            "It cannot be upgraded in place. Back up what you need, drop the schema (DROP SCHEMA {Schema} CASCADE) " +
+            "and run the {Switch} step against the empty database.",
+            Schema, baseline, applied.Count, applied[0], Schema, MigrateArgument);
+        throw new InvalidOperationException(
+            $"Schema {Schema} holds a migration history from before the baseline {baseline} ({applied.Count} entries, first {applied[0]}). " +
+            $"It cannot be upgraded in place: drop schema {Schema} and run the {MigrateArgument} step against the empty database.");
     }
 }
