@@ -259,15 +259,9 @@ builder.Services.Configure<LimitsOptions>(builder.Configuration.GetSection("Limi
 builder.Services.Configure<RateLimitOptions>(builder.Configuration.GetSection("RateLimits"));
 DotNetSigningServer.Middleware.RateLimiting.Register(builder.Services, builder.Configuration);
 // Slow-body protection (#72). Kestrel's defaults are 30 s for headers and 240 B/s for the
-// body: a 40 MB upload may take days. 20 KB/s after a 10 s grace, headers within 15 s.
-builder.WebHost.ConfigureKestrel(kestrel =>
-{
-    kestrel.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(
-        builder.Configuration.GetValue<int?>("Limits:RequestHeadersTimeoutSeconds") ?? 15);
-    kestrel.Limits.MinRequestBodyDataRate = new Microsoft.AspNetCore.Server.Kestrel.Core.MinDataRate(
-        bytesPerSecond: builder.Configuration.GetValue<int?>("Limits:MinRequestBodyBytesPerSecond") ?? 20 * 1024,
-        gracePeriod: TimeSpan.FromSeconds(10));
-});
+// body: a 40 MB upload may take days. 20 KB/s after a 10 s grace, headers within 15 s
+// (see RequestLimits).
+builder.WebHost.ConfigureKestrel(kestrel => RequestLimits.Apply(kestrel.Limits, builder.Configuration));
 builder.Services.Configure<EvidenceOptions>(builder.Configuration.GetSection("Evidence"));
 builder.Services.Configure<OsTicketOptions>(builder.Configuration.GetSection("OsTicket"));
 builder.Services.Configure<AppOptions>(builder.Configuration);
