@@ -109,8 +109,19 @@ public static class PortalBootstrap
         var activeMatch = sameHash.FirstOrDefault(t => t.RevokedAt == null);
         if (activeMatch != null && (existing == null || activeMatch.UserId != existing.Id))
         {
-            logger.LogInformation(
-                "[portal-bootstrap] the token already belongs to account {UserId}; bootstrap not performed", activeMatch.UserId);
+            var hasOwnActive = existing != null && await db.ApiTokens.AnyAsync(
+                t => t.UserId == existing.Id && t.Label == TokenLabel && t.RevokedAt == null, cancellationToken);
+            if (hasOwnActive)
+            {
+                logger.LogWarning(
+                    "[portal-bootstrap] the new value belongs to another account {UserId}; rotation not performed, the previous bootstrap token stays active",
+                    activeMatch.UserId);
+            }
+            else
+            {
+                logger.LogInformation(
+                    "[portal-bootstrap] the token already belongs to account {UserId}; bootstrap not performed", activeMatch.UserId);
+            }
             return;
         }
         if (activeMatch == null && sameHash.Count > 0)
@@ -163,6 +174,14 @@ public static class PortalBootstrap
                 user = await db.Users.FindByEmailAsync(email, cancellationToken);
                 if (user is not { IsServiceAccount: true }) throw;
             }
+        }
+
+        if (activeMatch != null && activeMatch.Label != TokenLabel)
+        {
+            // The service account holds this value under another label: no second row with one hash.
+            logger.LogInformation(
+                "[portal-bootstrap] the token already exists on the service account as '{Label}'; nothing added", activeMatch.Label);
+            return;
         }
 
         var active = await db.ApiTokens

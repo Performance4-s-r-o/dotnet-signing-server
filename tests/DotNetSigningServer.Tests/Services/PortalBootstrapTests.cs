@@ -288,4 +288,63 @@ public class PortalBootstrapPostgresTests : IClassFixture<OutboxPostgresFixture>
         await RunAsync(TokenA);
         Assert.Null(Assert.Single((await StateAsync()).Tokens).TokenPrefix);
     }
+
+    [DockerFact]
+    public async Task A_new_value_owned_by_another_account_keeps_the_old_token_and_warns()
+    {
+        await ResetAsync();
+        await RunAsync(TokenA);
+        var hashB = TestHelpers.CreateTokenService(SecretOne).HashToken(TokenB);
+        Guid manualId;
+        await using (var db = _pg.CreateContext())
+        {
+            var manual = new User { Email = $"manual-{Guid.NewGuid():N}@example.com", IsActive = true };
+            db.Users.Add(manual);
+            db.ApiTokens.Add(new ApiToken { UserId = manual.Id, Label = "hand", TokenHash = hashB });
+            await db.SaveChangesAsync();
+            manualId = manual.Id;
+        }
+
+        var log = new CapturingLogger();
+        await using (var db = _pg.CreateContext())
+        {
+            await PortalBootstrap.EnsureAsync(new PortalBootstrapOptions { Token = TokenB }, new PrivateServerOptions(),
+                TestHelpers.CreateTokenService(SecretOne), db, log);
+        }
+
+        Assert.Contains(log.Warnings, w => w.Contains("rotation not performed"));
+        var token = Assert.Single((await StateAsync()).Tokens);
+        Assert.Null(token.RevokedAt);
+        await using var cleanup = _pg.CreateContext();
+        await cleanup.ApiTokens.Where(t => t.UserId == manualId).ExecuteDeleteAsync();
+        await cleanup.Users.Where(u => u.Id == manualId).ExecuteDeleteAsync();
+    }
+
+    [DockerFact]
+    public async Task The_value_under_another_label_on_the_service_account_adds_no_second_row()
+    {
+        await ResetAsync();
+        await RunAsync(TokenA);
+        await using (var db = _pg.CreateContext())
+        {
+            await db.ApiTokens.Where(t => t.User!.Email == PortalBootstrap.AccountEmail)
+                .ExecuteUpdateAsync(x => x.SetProperty(t => t.Label, "manual"));
+        }
+
+        await RunAsync(TokenA);
+
+        Assert.Single((await StateAsync()).Tokens);
+    }
+
+    private sealed class CapturingLogger : Microsoft.Extensions.Logging.ILogger
+    {
+        public List<string> Warnings { get; } = new();
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+            TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == Microsoft.Extensions.Logging.LogLevel.Warning) Warnings.Add(formatter(state, exception));
+        }
+    }
 }
