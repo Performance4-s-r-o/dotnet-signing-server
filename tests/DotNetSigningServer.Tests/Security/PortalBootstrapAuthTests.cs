@@ -108,7 +108,9 @@ public class PortalBootstrapAuthTests : IClassFixture<WebUiAuthFixture>
         var before = (await check.Users.AsNoTracking().SingleAsync(u => u.Id == id)).PasswordHash;
         await PostFormAsync("/Account/ResetPassword", new()
         {
-            ["Token"] = planted, ["Password"] = "Another-password-123", ["ConfirmPassword"] = "Another-password-123",
+            ["Token"] = planted,
+            ["Password"] = "Another-password-123",
+            ["ConfirmPassword"] = "Another-password-123",
         }, formPage: "/Account/ResetPassword?token=" + planted);
         Assert.Equal(before, (await check.Users.AsNoTracking().SingleAsync(u => u.Id == id)).PasswordHash);
     }
@@ -152,7 +154,8 @@ public class PortalBootstrapAuthTests : IClassFixture<WebUiAuthFixture>
         {
             Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
-                ["code"] = "123456", ["__RequestVerificationToken"] = Antiforgery(html),
+                ["code"] = "123456",
+                ["__RequestVerificationToken"] = Antiforgery(html),
             }),
         };
         post.Headers.Add("Cookie", $"{af}; {AccountController.LoginChallengeCookie}={challenge}");
@@ -166,7 +169,9 @@ public class PortalBootstrapAuthTests : IClassFixture<WebUiAuthFixture>
         var ok = $"ctl-{Guid.NewGuid():N}@example.com";
         await PostFormAsync("/Account/SignUp", new()
         {
-            ["Email"] = ok, ["Password"] = "Long-enough-password-123", ["ConfirmPassword"] = "Long-enough-password-123",
+            ["Email"] = ok,
+            ["Password"] = "Long-enough-password-123",
+            ["ConfirmPassword"] = "Long-enough-password-123",
             ["AcceptTerms"] = "true",
         });
         await using (var db0 = _fx.Postgres.CreateContext())
@@ -180,7 +185,9 @@ public class PortalBootstrapAuthTests : IClassFixture<WebUiAuthFixture>
             var count = await before.Users.CountAsync(u => u.Email.ToLower() == email.ToLower());
             var response = await PostFormAsync("/Account/SignUp", new()
             {
-                ["Email"] = email, ["Password"] = "Long-enough-password-123", ["ConfirmPassword"] = "Long-enough-password-123",
+                ["Email"] = email,
+                ["Password"] = "Long-enough-password-123",
+                ["ConfirmPassword"] = "Long-enough-password-123",
                 ["AcceptTerms"] = "true",
             });
             Assert.True((int)response.StatusCode < 500);
