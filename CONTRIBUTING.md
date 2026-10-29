@@ -86,9 +86,14 @@ dotnet ef migrations add DescriptiveName -p dotnet-signing-server.csproj
 ```
 
 Commit the generated migration together with the code that needs it. Migrations
-run automatically at startup, so they must be safe to apply to a live database:
-prefer additive changes, and avoid destructive operations in the same release
-that stops using a column.
+run as a release step (`--migrate`) while the previous version may still be
+serving, so they must be safe to apply to a live database: prefer additive
+changes, and avoid destructive operations in the same release that stops using
+a column.
+
+Never edit or delete a migration once it has been released. The history was
+squashed into one baseline (`InitialSchema`) before the first release; that was
+a one-off, and a database from before it has to be rebuilt.
 
 ## Code style
 

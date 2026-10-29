@@ -3,7 +3,6 @@ using DotNetSigningServer.Services;
 using DotNetSigningServer.Tests.Helpers;
 using DotNetSigningServer.Tests.Services.Backoffice.Outbox;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace DotNetSigningServer.Tests.Services;
 
@@ -85,32 +84,6 @@ public class UserEmailsPostgresTests : IClassFixture<OutboxPostgresFixture>
             Assert.NotNull(found);
             Assert.Equal($"{local}@example.cz", found.Email);
         }
-    }
-
-    [Fact]
-    public async Task Migration_WithExistingAccountsDifferingOnlyByCase_StopsInsteadOfGuessing()
-    {
-        await using var db = _pg.CreateContext();
-        var migrator = db.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>();
-        await migrator.MigrateAsync("AddApiOperations");
-        // The current model maps columns that later migrations add (#80); give the old schema
-        // those columns just for the insert, and drop them again before migrating on.
-        await db.Database.ExecuteSqlRawAsync(
-            "ALTER TABLE \"Users\" ADD COLUMN \"EmailOtpFailedAttempts\" integer NOT NULL DEFAULT 0, " +
-            "ADD COLUMN \"LoginChallengeHash\" text, ADD COLUMN \"ErasedAt\" timestamp with time zone");
-        var local = Guid.NewGuid().ToString("N");
-        var lower = TestHelpers.CreateTestUser($"{local}@example.cz");
-        db.Users.AddRange(lower, TestHelpers.CreateTestUser($"{local.ToUpperInvariant()}@example.cz"));
-        await db.SaveChangesAsync();
-        await db.Database.ExecuteSqlRawAsync(
-            "ALTER TABLE \"Users\" DROP COLUMN \"EmailOtpFailedAttempts\", DROP COLUMN \"LoginChallengeHash\", DROP COLUMN \"ErasedAt\"");
-
-        var ex = await Assert.ThrowsAsync<Npgsql.PostgresException>(() => migrator.MigrateAsync());
-        Assert.Contains("differing only by letter case", ex.MessageText);
-
-        // Resolved by a person (here: the second account removed), the migration goes through.
-        await db.Users.Where(u => u.Email != lower.Email && u.Email.ToLower() == lower.Email).ExecuteDeleteAsync();
-        await migrator.MigrateAsync();
     }
 
     /// <summary>

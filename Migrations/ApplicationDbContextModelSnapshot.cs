@@ -18,7 +18,7 @@ namespace dotnetsigningserver.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("dotnet_signing")
-                .HasAnnotation("ProductVersion", "9.0.19")
+                .HasAnnotation("ProductVersion", "9.0.21")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);

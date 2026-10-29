@@ -1,4 +1,5 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -22,20 +23,48 @@ public class MigrationSnapshotTests
         Assert.False(db.Database.HasPendingModelChanges());
     }
 
+    /// <summary>
+    /// The baseline carries what the model generator cannot see; losing any of it would only
+    /// show in a schema diff, never in a failing query.
+    /// </summary>
     [Fact]
-    public void Migration79_CreatesGrantsAndKeepsOldGrantKeys()
+    public void Baseline_CarriesTheHandWrittenObjects()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseNpgsql("Host=localhost;Database=unused")
             .Options;
         using var db = new ApplicationDbContext(options);
 
-        var sql = db.GetService<IMigrator>().GenerateScript("20261016065736_PortalTenantAndRequestId", "20261016120000_BackofficeReliability79");
+        var migrations = db.Database.GetMigrations().ToList();
+        Assert.Single(migrations);
+        Assert.Equal(DatabaseMigrator.BaselineMigrationId, migrations[0]);
+        var sql = db.GetService<IMigrator>().GenerateScript(Migration.InitialDatabase, migrations[0]);
 
-        Assert.Contains("CREATE TABLE dotnet_signing.\"CreditGrants\"", sql);
+        Assert.Contains("CREATE UNIQUE INDEX \"IX_Users_Email_Lower\" ON dotnet_signing.\"Users\" (lower(\"Email\"))", sql);
+        Assert.Contains("CREATE FUNCTION dotnet_signing.consent_records_append_only()", sql);
+        Assert.Contains("current_setting('dotnet_signing.erasure', true) = 'on'", sql);
+        Assert.Contains("CREATE TRIGGER consent_records_append_only", sql);
+        Assert.Contains("CREATE TRIGGER consent_records_no_truncate", sql);
+        Assert.Contains("CREATE FUNCTION dotnet_signing.admin_audit_append_only()", sql);
+        Assert.Contains("CREATE TRIGGER \"AdminAuditEntries_append_only\"", sql);
+        Assert.Contains("CREATE TRIGGER \"AdminAuditEntries_no_truncate\"", sql);
         Assert.Contains("CREATE UNIQUE INDEX \"IX_CreditGrants_GrantKey\"", sql);
         Assert.Contains("WHERE \"PaymentIntentId\" IS NOT NULL", sql);
-        Assert.Contains("FROM dotnet_signing.\"WebhookEvents\" w", sql);
-        Assert.Contains("ADD \"DeadAt\" timestamp with time zone", sql);
+        Assert.Contains("\"PasswordIterations\" integer NOT NULL DEFAULT 0", sql);
+    }
+
+    /// <summary>
+    /// The old-history guard compares against this constant; a migration with an older ID
+    /// would come first and silently become the "baseline" if the guard used the order.
+    /// </summary>
+    [Fact]
+    public void Baseline_IsTheFirstMigrationOfTheBuild()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseNpgsql("Host=localhost;Database=unused")
+            .Options;
+        using var db = new ApplicationDbContext(options);
+
+        Assert.Equal(DatabaseMigrator.BaselineMigrationId, db.Database.GetMigrations().First());
     }
 }

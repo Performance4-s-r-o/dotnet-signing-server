@@ -1,7 +1,7 @@
 # Paid operations: state, reservation, retries (#77, #82)
 
-Every paid call is a durable operation (table `ApiOperations`, migration
-`AddApiOperations`): `pending → running → completed | failed | failed_uncertain`.
+Every paid call is a durable operation (table `ApiOperations`, part of the
+baseline migration `InitialSchema`): `pending → running → completed | failed | failed_uncertain`.
 Endpoints: `sign`, `sign-pfx`, `timestamp`, `extend-signature`, `visual-sign`,
 `attachment`, `convert/pdfa`, `fill-pdf`, `find-codes`,
 `ai/detect-fields`, `ai/extract-data`.

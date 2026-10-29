@@ -5,12 +5,15 @@ namespace DotNetSigningServer.Services;
 
 /// <summary>
 /// Schema migrations as a release step rather than a side effect of every start (#85).
-/// EF Core 8 has no migration lock, so two replicas starting together could migrate at the
-/// same time, and the runtime role would need DDL rights.
+/// Migrating on start would let two replicas starting together race on the same DDL, and the
+/// runtime role would need DDL rights.
 /// </summary>
 public static class DatabaseMigrator
 {
     public const string Schema = "dotnet_signing";
+
+    /// <summary>The first migration of the history; every database built since carries it.</summary>
+    public const string BaselineMigrationId = "20261028234306_InitialSchema";
 
     /// <summary>Command-line switch: migrate and exit, never start serving.</summary>
     public const string MigrateArgument = "--migrate";
@@ -62,13 +65,14 @@ public static class DatabaseMigrator
         if (!dbContext.Database.IsNpgsql())
         {
             CreateSchemaIfAllowed(dbContext, logger);
+            RequireCurrentHistory(dbContext, logger);
             dbContext.Database.Migrate();
             return;
         }
 
-        // EF Core 8 takes no migration lock, so two concurrent steps would race on the same
-        // DDL, CREATE SCHEMA included. A session advisory lock on the connection EF itself
-        // uses serialises them; the second one waits, then finds nothing pending.
+        // Our own session advisory lock, taken before CREATE SCHEMA and the history check,
+        // which run outside whatever lock EF Core 9 takes inside Migrate(). The second
+        // concurrent step waits, then finds nothing pending.
         var conn = dbContext.Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open)
         {
@@ -79,6 +83,7 @@ public static class DatabaseMigrator
         try
         {
             CreateSchemaIfAllowed(dbContext, logger);
+            RequireCurrentHistory(dbContext, logger);
             dbContext.Database.Migrate();
         }
         finally
@@ -185,6 +190,8 @@ public static class DatabaseMigrator
     /// </summary>
     public static void RequireNoPendingMigrations(ApplicationDbContext dbContext, ILogger logger)
     {
+        RequireCurrentHistory(dbContext, logger);
+
         var pending = dbContext.Database.GetPendingMigrations().ToList();
         if (pending.Count == 0)
         {
@@ -199,5 +206,37 @@ public static class DatabaseMigrator
             pending.Count, names, MigrateArgument);
         throw new InvalidOperationException(
             $"{pending.Count} database migration(s) are pending ({names}). Run the {MigrateArgument} step before starting the server.");
+    }
+
+    /// <summary>
+    /// The history was squashed into one baseline migration before the first release. A database
+    /// that still carries the old history would see the baseline as pending and fail half-way
+    /// through its CREATE TABLE, so it is refused up front, with what to do instead.
+    /// </summary>
+    public static void RequireCurrentHistory(ApplicationDbContext dbContext, ILogger logger)
+    {
+        var applied = dbContext.Database.GetAppliedMigrations().ToList();
+        if (applied.Count == 0)
+        {
+            return;
+        }
+
+        const string baseline = BaselineMigrationId;
+        if (applied.Contains(baseline, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        logger.LogCritical(
+            "Schema {Schema} holds a migration history from before the baseline {Baseline} ({Count} entries, first {First}). " +
+            "It cannot be upgraded in place. Back up what you need, drop the schema (DROP SCHEMA {Schema} CASCADE) " +
+            "and run the {Switch} step against the empty database. If a database administrator created the schema, " +
+            "re-create it with the same owner (CREATE SCHEMA {Schema} AUTHORIZATION <migration role>) and restore the " +
+            "runtime role's default privileges before running {Switch}.",
+            Schema, baseline, applied.Count, applied[0], Schema, MigrateArgument, Schema, MigrateArgument);
+        throw new InvalidOperationException(
+            $"Schema {Schema} holds a migration history from before the baseline {baseline} ({applied.Count} entries, first {applied[0]}). " +
+            $"It cannot be upgraded in place: drop schema {Schema} and run the {MigrateArgument} step against the empty database. " +
+            $"If a database administrator created the schema, re-create it with the same owner and restore the runtime role's default privileges first.");
     }
 }
