@@ -105,7 +105,6 @@ public class RetryPolicyTests
         Assert.Equal(OutboxOutcome.Retry, outcome);
         Assert.Equal(BackofficeOutboxStatus.Pending, item.Status);
         Assert.Equal(Now.AddSeconds(5), item.NextAttemptAt);
-        Assert.True(RetryPolicy.IsServiceFailure(result));
     }
 
     [Fact]
@@ -184,7 +183,6 @@ public class RetryPolicyTests
     {
         var noHandler = OutboxAttemptResult.LocalFailure("No handler for kind 'x'");
         Assert.Equal(OutboxOutcome.Retry, RetryPolicy.Classify(noHandler));
-        Assert.False(RetryPolicy.IsServiceFailure(noHandler));
 
         Assert.Equal(OutboxOutcome.Dead, RetryPolicy.Classify(OutboxAttemptResult.Fatal("Payload cannot be decrypted")));
     }

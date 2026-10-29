@@ -50,7 +50,7 @@ public class BackofficeWebhookController : ControllerBase
     public async Task<IActionResult> Receive(CancellationToken cancellationToken)
     {
         var options = _options.Value;
-        if (!options.AnyEnabled || !options.Webhook.Configured)
+        if (!options.EventsEnabled || !options.Webhook.Configured)
         {
             return NotFound();
         }

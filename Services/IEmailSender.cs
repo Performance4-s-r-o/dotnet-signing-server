@@ -8,7 +8,7 @@ public interface IEmailSender
 
     /// <summary>
     /// Sends a message with its metadata (template, language, user, critical). Senders that do
-    /// not use the metadata (Resend) send it like the three-argument overload.
+    /// not use the metadata send it like the three-argument overload.
     /// </summary>
     Task SendAsync(string toEmail, string subject, string htmlBody, EmailSendOptions? options) =>
         SendAsync(toEmail, subject, htmlBody);

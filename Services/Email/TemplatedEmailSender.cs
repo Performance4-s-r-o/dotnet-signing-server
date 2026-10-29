@@ -27,7 +27,6 @@ public sealed class TemplatedEmailSender : ITemplatedEmailSender
     private readonly IOptionsMonitor<P4BackofficeProductOptions> _options;
     private readonly IBackofficeOutbox _outbox;
     private readonly ApplicationDbContext _db;
-    private readonly ResendOptions _resend;
     private readonly ILogger<TemplatedEmailSender> _logger;
 
     public TemplatedEmailSender(
@@ -36,7 +35,6 @@ public sealed class TemplatedEmailSender : ITemplatedEmailSender
         IOptionsMonitor<P4BackofficeProductOptions> options,
         IBackofficeOutbox outbox,
         ApplicationDbContext db,
-        IOptions<ResendOptions> resend,
         ILogger<TemplatedEmailSender> logger)
     {
         _emailSender = emailSender;
@@ -44,7 +42,6 @@ public sealed class TemplatedEmailSender : ITemplatedEmailSender
         _options = options;
         _outbox = outbox;
         _db = db;
-        _resend = resend.Value;
         _logger = logger;
     }
 
@@ -55,7 +52,9 @@ public sealed class TemplatedEmailSender : ITemplatedEmailSender
     public TemplatedEmailRoute RouteFor(string templateKey)
     {
         var options = _options.CurrentValue;
+        // A gateway knows no service templates: everything is rendered locally.
         return options.ModeFor(BackofficeModule.Email) == BackofficeMode.On
+               && !options.GatewayOnly
                && IsListed(options, templateKey)
                && _emailSender is ITransactionalEmailSender
             ? TemplatedEmailRoute.ServiceTemplate
@@ -109,25 +108,8 @@ public sealed class TemplatedEmailSender : ITemplatedEmailSender
         string templateKey, string toEmail, string locale,
         IReadOnlyDictionary<string, string?> variables, EmailSendOptions options)
     {
-        EmailFallbackContent? fallback = null;
-        if (options.IsCritical)
-        {
-            // Break-glass must not need the service: keep the local rendering in the
-            // (encrypted) payload. It is never sent to the service.
-            try
-            {
-                var rendered = _renderer.Render(templateKey, locale, variables);
-                fallback = new EmailFallbackContent { Subject = rendered.Subject, Html = rendered.HtmlBody };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    "E-mail template {TemplateKey} could not be rendered locally; queued without a break-glass copy",
-                    templateKey);
-            }
-        }
-
-        var payload = BuildPayload(templateKey, toEmail, locale, variables, options, fallback, _resend);
+        var email = _options.CurrentValue.Email;
+        var payload = BuildPayload(templateKey, toEmail, locale, variables, options, email.EffectiveFrom, email.EffectiveReplyTo);
         _outbox.Enqueue(
             OutboxKind,
             payload,
@@ -137,17 +119,16 @@ public sealed class TemplatedEmailSender : ITemplatedEmailSender
 
     public static EmailTemplatePayload BuildPayload(
         string templateKey, string toEmail, string locale, IReadOnlyDictionary<string, string?> variables,
-        EmailSendOptions? options, EmailFallbackContent? fallback = null, ResendOptions? resend = null) => new()
+        EmailSendOptions? options, string? from = null, string? replyTo = null) => new()
         {
             To = toEmail,
             Template = templateKey,
             // Every variable of the service's templates is a required string.
             Variables = variables.ToDictionary(v => v.Key, v => v.Value ?? "", StringComparer.Ordinal),
             Locale = EmailTemplateLocales.ForService(locale),
-            From = string.IsNullOrWhiteSpace(resend?.From) ? null : resend!.From,
-            ReplyTo = string.IsNullOrWhiteSpace(resend?.ReplyTo) ? null : resend!.ReplyTo,
+            From = string.IsNullOrWhiteSpace(from) ? null : from,
+            ReplyTo = string.IsNullOrWhiteSpace(replyTo) ? null : replyTo,
             Tags = BackofficeOutboxEmailSender.Tags(options),
-            Fallback = fallback,
         };
 
     private static EmailSendOptions OptionsFor(string templateKey, string locale, EmailSendOptions? options) =>
@@ -177,13 +158,10 @@ public static class EmailTemplateLocales
 
 /// <summary>
 /// Body of <c>POST /v1/emails</c> in template mode, stored encrypted in the outbox.
-/// <see cref="Fallback"/> stays local: the handler removes it before sending.
 /// Category and <c>critical</c> come from the service's template.
 /// </summary>
 public sealed class EmailTemplatePayload
 {
-    public const string FallbackProperty = "fallback";
-
     public string To { get; init; } = "";
 
     public string Template { get; init; } = "";
@@ -199,16 +177,4 @@ public sealed class EmailTemplatePayload
     public string? ReplyTo { get; init; }
 
     public Dictionary<string, string> Tags { get; init; } = new();
-
-    /// <summary>Local rendering of a critical message, for break-glass only.</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public EmailFallbackContent? Fallback { get; init; }
-}
-
-/// <summary>Locally rendered subject and HTML kept with a critical <c>email.template</c> item.</summary>
-public sealed class EmailFallbackContent
-{
-    public string Subject { get; init; } = "";
-
-    public string Html { get; init; } = "";
 }

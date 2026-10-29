@@ -224,7 +224,7 @@ public class OutboxPostgresTests : IClassFixture<OutboxPostgresFixture>
         Assert.Equal("em_1", item.RemoteId);
         Assert.Null(item.PayloadProtected);
         Assert.Null(item.LockedUntil);
-        Assert.Equal(0, await OutboxHealth.CleanupAsync(check, DateTimeOffset.UtcNow));
-        Assert.Equal(1, await OutboxHealth.CleanupAsync(check, DateTimeOffset.UtcNow.AddDays(31)));
+        Assert.Equal(0, await OutboxHealth.CleanupAsync(check, host.Time.Now));
+        Assert.Equal(1, await OutboxHealth.CleanupAsync(check, host.Time.Now.AddDays(31)));
     }
 }

@@ -32,7 +32,7 @@ public class BackofficeOptionsValidatorTests
         // name, options, expected fragment of the (single) problem; null = valid
         { "nothing configured", Options(), null },
         { "Off needs no key", Options(mode: "Off"), null },
-        { "Off ignores a bad URL", Options(mode: "off", baseUrl: "not a url"), null },
+        { "Off still checks a URL: e-mail uses it", Options(mode: "off", baseUrl: "not a url", secretKey: Key), "absolute https URL" },
         { "On with url and key", Options(mode: "On", baseUrl: Url, secretKey: Key), null },
         { "mode is case-insensitive", Options(mode: "oN", baseUrl: Url, secretKey: Key), null },
         { "live key", Options(mode: "On", baseUrl: Url, secretKey: "p4sk_live_x", environment: "live"), null },
@@ -187,16 +187,6 @@ public class BackofficeOptionsValidatorTests
         Assert.Contains(BackofficeOptionsValidator.Validate(options), p => p.Contains("P4_BACKOFFICE_ENV"));
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("live")]
-    public void KeyKind_IsNotCheckedWhenNothingIsSwitchedOn(string? environment)
-    {
-        var options = Options(mode: "Off", secretKey: "p4sk_test_x", environment: environment);
-
-        Assert.Empty(BackofficeOptionsValidator.Validate(options));
-    }
-
     [Fact]
     public void KeyKind_IsNotCheckedOnAPrivateServer()
     {
@@ -233,7 +223,7 @@ public class P4BackofficeProductOptionsTests
     [Fact]
     public void ModuleOverride_BeatsGlobalMode()
     {
-        var options = new P4BackofficeProductOptions { Mode = "On", Modules = { Pricing = "Off", Email = "on" } };
+        var options = new P4BackofficeProductOptions { Mode = "On", Modules = { Pricing = "Off" }, BaseUrl = "https://backoffice.example.com", SecretKey = "p4sk_test_abc" };
 
         Assert.Equal(BackofficeMode.Off, options.ModeFor(BackofficeModule.Pricing));
         Assert.Equal(BackofficeMode.On, options.ModeFor(BackofficeModule.Email));
@@ -243,7 +233,7 @@ public class P4BackofficeProductOptionsTests
     [Fact]
     public void UnknownMode_KeepsTheModuleOff_AndIsOnlyRejectedWhenAsked()
     {
-        var options = new P4BackofficeProductOptions { Mode = "Shadow", Modules = { Email = "On" } };
+        var options = new P4BackofficeProductOptions { Mode = "Shadow", BaseUrl = "https://backoffice.example.com", SecretKey = "p4sk_test_abc" };
 
         Assert.Equal(BackofficeMode.Off, options.ModeFor(BackofficeModule.Docs));
         Assert.Equal(BackofficeMode.On, options.ModeFor(BackofficeModule.Email));

@@ -36,7 +36,12 @@ public static class BackofficeOptionsValidator
     /// without <c>Modules:Billing=On</c> would start with no way to take a payment. A private
     /// server (no billing at all) is exempt.
     /// </param>
-    public static IReadOnlyList<string> Validate(P4BackofficeProductOptions options, bool rejectInvalidModes = true, bool requireBilling = false)
+    /// <param name="requireEmail">
+    /// True (Production): every e-mail goes through the service and there is no other provider,
+    /// so a missing address or key stops the start instead of losing 2FA codes and resets quietly.
+    /// A private server (e-mail off) is exempt.
+    /// </param>
+    public static IReadOnlyList<string> Validate(P4BackofficeProductOptions options, bool rejectInvalidModes = true, bool requireBilling = false, bool requireEmail = false)
     {
         var problems = new List<string>();
 
@@ -51,10 +56,6 @@ public static class BackofficeOptionsValidator
         CheckWebhookSecret(problems, options.Webhook.Secret, "Webhook:Secret");
         CheckWebhookSecret(problems, options.Webhook.PreviousSecret, "Webhook:PreviousSecret");
 
-        if (options.Email.FallbackAfter < TimeSpan.Zero)
-        {
-            problems.Add($"{Setting("Email:FallbackAfter")} must not be negative.");
-        }
         if (options.DocumentsTtl is { } ttl && ttl <= TimeSpan.Zero)
         {
             problems.Add($"{Setting("DocumentsTtl")} must be positive.");
@@ -71,10 +72,13 @@ public static class BackofficeOptionsValidator
         CheckConsentDocuments(problems, options.Consents, options.RequestedModeFor(BackofficeModule.Docs));
         CheckBilling(problems, options);
         if (requireBilling) RequireBilling(problems, options);
+        if (requireEmail) RequireEmail(problems, options);
 
         // A self-hosted installation is forced Off whatever it asks for, so a key or URL
         // left over there is not a reason to refuse to start (it is logged instead). A build
         // without the SDK is validated as configured: the configuration is wrong either way.
+        CheckSender(problems, options);
+        if (options.GatewayOnly) CheckGateway(problems, options);
         var connectionNeeded = options.DisabledReason != BackofficeDisabledReason.PrivateServer
                                && options.AnyRequested;
         if (connectionNeeded)
@@ -104,6 +108,52 @@ public static class BackofficeOptionsValidator
             && options.RequestedModeFor(BackofficeModule.Pricing) != BackofficeMode.On)
         {
             problems.Add($"{Setting("Modules:Billing")} is On, which needs {Setting("Modules:Pricing")} On (payments use the price list's lookup keys).");
+        }
+    }
+
+    private static void RequireEmail(List<string> problems, P4BackofficeProductOptions options)
+    {
+        // A private server without a gateway has no e-mail at all; with one, CheckGateway asks for its address.
+        if (options.DisabledReason == BackofficeDisabledReason.PrivateServer && !options.GatewayOnly) return;
+        if (options.GatewayOnly && !string.IsNullOrWhiteSpace(options.BaseUrl) && !string.IsNullOrWhiteSpace(options.SecretKey)) return;
+        if (string.IsNullOrWhiteSpace(options.BaseUrl) || string.IsNullOrWhiteSpace(options.KeyFor(BackofficeModule.Email)))
+        {
+            problems.Add($"{Setting("BaseUrl")} and {Setting("SecretKey")} are required in production: all e-mail (2FA, password reset) goes through the service, this product has no mail provider of its own.");
+        }
+    }
+
+    /// <summary>From / Reply-To, when given, must be addresses (<c>Name &lt;a@b&gt;</c> or <c>a@b</c>).</summary>
+    private static void CheckSender(List<string> problems, P4BackofficeProductOptions options)
+    {
+        if (options.Email.EffectiveFrom is { } from && !System.Net.Mail.MailAddress.TryCreate(from, out _))
+        {
+            problems.Add($"{Setting("Email:From")} / P4_BACKOFFICE_EMAIL_FROM is not a valid e-mail address.");
+        }
+        if (options.Email.EffectiveReplyTo is { } replyTo && !System.Net.Mail.MailAddress.TryCreate(replyTo, out _))
+        {
+            problems.Add($"{Setting("Email:ReplyTo")} / P4_BACKOFFICE_EMAIL_REPLY_TO is not a valid e-mail address.");
+        }
+    }
+
+    /// <summary>
+    /// A private server that sends e-mail through its notify-gateway: the gateway's address (plain
+    /// http inside the installation's network is fine) and a key; no service templates, which the
+    /// gateway does not know.
+    /// </summary>
+    private static void CheckGateway(List<string> problems, P4BackofficeProductOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.BaseUrl)
+            || !Uri.TryCreate(options.BaseUrl.Trim(), UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+        {
+            problems.Add($"{Setting("BaseUrl")} must be the gateway's absolute http(s) URL when {Setting("OnPremGateway")} is true.");
+        }
+        // The gateway takes the same p4sk_live_ / p4sk_test_ key, whose kind must match P4_BACKOFFICE_ENV.
+        CheckSecretKey(problems, options.SecretKey);
+        CheckKeyKind(problems, options.SecretKey, options.Environment);
+        if (options.Email.SelectedKeys().Any())
+        {
+            problems.Add($"{Setting("Email:TemplateKeys")} / Templates must be empty when {Setting("OnPremGateway")} is true: the gateway knows no service templates.");
         }
     }
 
@@ -308,7 +358,7 @@ internal sealed class BackofficeOptionsValidation(IHostEnvironment environment) 
 {
     public ValidateOptionsResult Validate(string? name, P4BackofficeProductOptions options)
     {
-        var problems = BackofficeOptionsValidator.Validate(options, rejectInvalidModes: environment.IsProduction(), requireBilling: environment.IsProduction());
+        var problems = BackofficeOptionsValidator.Validate(options, rejectInvalidModes: environment.IsProduction(), requireBilling: environment.IsProduction(), requireEmail: environment.IsProduction());
         return problems.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(problems);
     }
 }

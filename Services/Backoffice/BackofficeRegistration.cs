@@ -52,7 +52,8 @@ public static class BackofficeRegistration
         if (snapshot.AnyEnabled)
         {
             AddOutboxDispatcher(services, snapshot);
-            AddInboxProcessing(services, snapshot);
+            // Not through an on-prem gateway: it has no events to poll or receive.
+            if (snapshot.EventsEnabled) AddInboxProcessing(services, snapshot);
         }
         AddLegalDocuments(services, snapshot);
         AddConsents(services, snapshot);
@@ -69,25 +70,24 @@ public static class BackofficeRegistration
     public const string EmailKindPrefix = "email.";
 
     /// <summary>
-    /// E-mail by <c>Modules:Email</c>: On queues every message into the outbox — as a service
-    /// template (<c>email.template</c>) when its key is in <c>Email:TemplateKeys</c>, otherwise
-    /// rendered locally (<c>email.raw</c>) — with the break-glass fallback and handles
-    /// <c>email.*</c> events; Off sends through Resend directly, as before.
-    /// <see cref="ResendEmailSender"/> is always registered as its own type too.
-    /// While not On, queued e-mail items stay Pending and are sent once the module is On again.
+    /// E-mail has one path: every message is queued into the outbox — as a service template
+    /// (<c>email.template</c>) when its key is in <c>Email:TemplateKeys</c>, otherwise rendered
+    /// locally (<c>email.raw</c>) — and sent by the dispatcher; <c>email.*</c> events are handled.
+    /// It is on as soon as the service's address or key is configured (see
+    /// <see cref="P4BackofficeProductOptions.RequestedModeFor"/>); Production refuses to start
+    /// without them. Without a connection (development, a private server) the messages go to
+    /// <see cref="LoggingEmailSender"/>, which delivers nothing, and queued e-mail items stay Pending.
     /// </summary>
     internal static void AddEmail(IServiceCollection services, P4BackofficeProductOptions options)
     {
         services.TryAddSingleton(TimeProvider.System);
-        services.TryAddScoped<ResendEmailSender>();
         // Every caller goes through it; it reads TemplateKeys per message.
         services.TryAddScoped<ITemplatedEmailSender, TemplatedEmailSender>();
 
-        var mode = options.ModeFor(BackofficeModule.Email);
-        if (mode != BackofficeMode.On)
+        if (options.ModeFor(BackofficeModule.Email) != BackofficeMode.On)
         {
             services.TryAddSingleton(new OutboxKindFilter([EmailKindPrefix]));
-            services.AddScoped<IEmailSender>(sp => sp.GetRequiredService<ResendEmailSender>());
+            services.AddScoped<IEmailSender, LoggingEmailSender>();
             return;
         }
 
@@ -96,8 +96,6 @@ public static class BackofficeRegistration
         services.AddScoped<IEmailSender>(sp => sp.GetRequiredService<BackofficeOutboxEmailSender>());
         services.AddSingleton<IOutboxHandler, EmailRawOutboxHandler>();
         services.AddSingleton<IOutboxHandler, EmailTemplateOutboxHandler>();
-        services.TryAddSingleton<BreakGlassEmailFallback>();
-        services.AddSingleton<IOutboxFallback>(sp => sp.GetRequiredService<BreakGlassEmailFallback>());
         services.AddScoped<IBackofficeEventHandler, EmailEventsHandler>();
     }
 
@@ -311,7 +309,8 @@ public static class BackofficeRegistration
     {
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<DotNetSigningServer.Services.Erasure.AccountErasureService>();
-        if (!options.AnyEnabled) return;
+        // The erasure queue is a service feature (not a gateway's, not e-mail's).
+        if (!options.AnyEnabledBeyondEmail) return;
         services.AddScoped<IBackofficeEventHandler, ErasureRequestedHandler>();
     }
 
@@ -332,12 +331,11 @@ public static class BackofficeRegistration
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<OutboxSignal>();
         services.TryAddSingleton<OutboxPayloadProtector>();
-        services.TryAddSingleton<OutboxCircuitBreaker>();
         services.TryAddScoped<IBackofficeOutbox, BackofficeOutbox>();
     }
 
     /// <summary>
-    /// Sending: only when a module is On (and so never on a PrivateServer or in a
+    /// Sending: only when a module is On (and so never on a PrivateServer, except for e-mail through its gateway, or in a
     /// build without the SDK). Its own client, separate from the SDK's 3 s one.
     /// </summary>
     private static void AddOutboxDispatcher(IServiceCollection services, P4BackofficeProductOptions options)
@@ -412,9 +410,19 @@ internal sealed class BackofficeStartupReport(
     {
         var o = options.Value;
 
+        if (o.DisabledReason == BackofficeDisabledReason.None && o.OnPremGatewayRequested)
+        {
+            logger.LogWarning("OnPremGateway is set but this is not a private server; ignored");
+        }
+
         switch (o.DisabledReason)
         {
             case BackofficeDisabledReason.PrivateServer:
+                if (o.GatewayOnly)
+                {
+                    logger.LogInformation("PrivateServer: only e-mail, through the notify-gateway; the rest of the backoffice integration is disabled");
+                    break;
+                }
                 logger.LogInformation("PrivateServer: backoffice integration disabled");
                 if (!string.IsNullOrWhiteSpace(o.SecretKey))
                 {

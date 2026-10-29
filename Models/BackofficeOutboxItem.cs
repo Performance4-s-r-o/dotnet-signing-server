@@ -75,12 +75,9 @@ public static class BackofficeOutboxStatus
     /// <summary>Refused as unauthorised (401/403); requeued by an admin once the key is fixed.</summary>
     public const string Blocked = "Blocked";
 
-    /// <summary>Delivered by the local fallback instead of the service (break-glass e-mail).</summary>
-    public const string FallbackSent = "FallbackSent";
-
     /// <summary>No longer needed.</summary>
     public const string Cancelled = "Cancelled";
 
     public static readonly IReadOnlyList<string> All =
-        [Pending, Sent, Dead, Blocked, FallbackSent, Cancelled];
+        [Pending, Sent, Dead, Blocked, Cancelled];
 }

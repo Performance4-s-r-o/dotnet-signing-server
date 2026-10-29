@@ -24,7 +24,7 @@ internal sealed class MutableOptionsMonitor<T>(T value) : IOptionsMonitor<T>
     public IDisposable? OnChange(Action<T, string?> listener) => null;
 }
 
-/// <summary>Records what would have been sent directly (Resend with Email Off).</summary>
+/// <summary>Records what would have been sent without a backoffice connection.</summary>
 internal sealed class RecordingEmailSender : IEmailSender
 {
     public List<(string To, string Subject, string Html, EmailSendOptions? Options)> Sent { get; } = new();
@@ -48,7 +48,7 @@ internal sealed class TemplatedEmailTestHost : IDisposable
 
     public MutableOptionsMonitor<P4BackofficeProductOptions> Options { get; }
 
-    /// <summary>The sender used while the Email module is not On.</summary>
+    /// <summary>The sender used without a backoffice connection.</summary>
     public RecordingEmailSender Direct { get; } = new();
 
     public TemplatedEmailTestHost(string emailMode = "On", params string[] templateKeys)
@@ -71,8 +71,9 @@ internal sealed class TemplatedEmailTestHost : IDisposable
     public static P4BackofficeProductOptions OptionsFor(string emailMode, params string[] templateKeys) => new()
     {
         DisabledReason = BackofficeDisabledReason.None,
-        Modules = { Email = emailMode },
-        Email = { TemplateKeys = templateKeys.ToList() },
+        BaseUrl = emailMode == "On" ? "https://backoffice.test" : null,
+        SecretKey = emailMode == "On" ? "p4sk_test_abc" : null,
+        Email = { TemplateKeys = templateKeys.ToList(), From = EmailTestHost.From },
     };
 
     public static EmailTemplateRenderer CreateRenderer()

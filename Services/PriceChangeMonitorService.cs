@@ -114,6 +114,12 @@ public class PriceChangeMonitorService : BackgroundService
                 user.PriceChangeNotifiedAt = DateTimeOffset.UtcNow;
                 _logger.LogInformation("Price change notification sent to user {UserId} ({Email})", user.Id, LogRedaction.Email(user.Email));
             }
+            catch (EmailNotConfiguredException)
+            {
+                // No mail path on this installation: say so once, not for every user; tomorrow's run tries again.
+                _logger.LogWarning("Price change notices not sent: e-mail is not configured on this installation");
+                break;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to send price change notification to {Email}", LogRedaction.Email(user.Email));

@@ -71,27 +71,10 @@ public class TemplatedEmailSenderTests
         Assert.Equal("auto_recharge_success", root.GetProperty("tags").GetProperty("template").GetString());
         Assert.Equal(userId.ToString("D"), root.GetProperty("tags").GetProperty("user_id").GetString());
         Assert.Equal(EmailTestHost.From, root.GetProperty("from").GetString());
-        foreach (var local in new[] { "subject", "html", "text", "fallback", "critical", "category" })
+        foreach (var local in new[] { "subject", "html", "text", "critical", "category" })
         {
             Assert.False(root.TryGetProperty(local, out _), $"{local} must not be sent in template mode");
         }
-    }
-
-    [Fact]
-    public async Task CriticalTemplate_KeepsTheLocalRenderingForBreakGlass()
-    {
-        using var host = new TemplatedEmailTestHost("On", EmailTemplateId.TwoFactorCode);
-
-        await host.SendAsync(EmailTemplateId.TwoFactorCode, TwoFactor, locale: "en");
-
-        var item = Assert.Single(await host.ItemsAsync());
-        Assert.Equal(TemplatedEmailSender.OutboxKind, item.Kind);
-        Assert.True(item.Critical);
-        using var payload = host.Payload(item);
-        var fallback = payload.RootElement.GetProperty("fallback");
-        Assert.Equal("Your Performance4PDF sign-in code", fallback.GetProperty("subject").GetString());
-        Assert.Contains("123456", fallback.GetProperty("html").GetString());
-        Assert.Equal("123456", payload.RootElement.GetProperty("variables").GetProperty("otpCode").GetString());
     }
 
     [Fact]
@@ -185,6 +168,5 @@ public class TemplatedEmailSenderTests
 
         Assert.Equal("", payload.Variables["verificationUrl"]);
         Assert.Equal("en", payload.Locale);
-        Assert.Null(payload.Fallback);
     }
 }

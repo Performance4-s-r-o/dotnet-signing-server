@@ -3,11 +3,10 @@ namespace DotNetSigningServer.Services.Email;
 /// <summary>
 /// The one place that decides how a templated e-mail goes out:
 /// <list type="bullet">
-/// <item><c>Modules:Email=On</c> and the key listed in <c>P4Backoffice:Email:TemplateKeys</c> —
-/// outbox item <c>email.template</c> (the service renders its own template; critical ones also
-/// carry the local rendering for break-glass);</item>
+/// <item>a backoffice connection and the key listed in <c>P4Backoffice:Email:TemplateKeys</c> —
+/// outbox item <c>email.template</c> (the service renders its own template);</item>
 /// <item>otherwise — rendered locally (<see cref="IEmailTemplateRenderer"/>) and handed to
-/// <see cref="IEmailSender"/> (<c>email.raw</c> in the outbox when On, Resend otherwise).</item>
+/// <see cref="IEmailSender"/> (<c>email.raw</c> in the outbox).</item>
 /// </list>
 /// The key list is read on every call, so removing a key switches back to the local rendering
 /// without a deployment.

@@ -16,9 +16,37 @@ namespace DotNetSigningServer.Services.Backoffice.Handlers;
 /// Own HTTP call following the service's OpenAPI document — no SDK dependency, so every build
 /// (forks included) can use it.
 /// </summary>
-public class EmailRawOutboxHandler : JsonPostOutboxHandler
+public class EmailRawOutboxHandler : JsonPostOutboxHandler, IOutboxHandler
 {
     public const string SuppressedStatus = "suppressed";
+
+    /// <summary>A message not accepted this long after it was queued raises an ops alert.</summary>
+    public static readonly TimeSpan MailAlertAfter = TimeSpan.FromMinutes(5);
+
+    public TimeSpan? AlertAfter => MailAlertAfter;
+
+    /// <summary>The validity of the template named in the payload's <c>tags.template</c> (<see cref="CriticalEmails.ValidFor"/>).</summary>
+    public TimeSpan? CriticalValidity(string payloadJson)
+    {
+        string? template = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object
+                && doc.RootElement.TryGetProperty("tags", out var tags)
+                && tags.ValueKind == JsonValueKind.Object
+                && tags.TryGetProperty("template", out var t)
+                && t.ValueKind == JsonValueKind.String)
+            {
+                template = t.GetString();
+            }
+        }
+        catch (JsonException)
+        {
+            // Unreadable: the hour of an unknown template applies.
+        }
+        return CriticalEmails.ValidFor(template);
+    }
 
     public override string Kind => BackofficeOutboxEmailSender.OutboxKind;
 

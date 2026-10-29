@@ -57,6 +57,21 @@ public class P4BackofficeProductOptions
 
     public EmailOptions Email { get; set; } = new();
 
+    /// <summary>
+    /// <c>true</c> (exactly) on a private server (on-prem) whose e-mail goes through the
+    /// installation's own notify-gateway at <see cref="BaseUrl"/>, which speaks the e-mail part of
+    /// the service's <c>/v1</c> API. Everything else of the integration stays Off there: no inbox,
+    /// no polling, no erasure queue, no service templates. Any other value = off.
+    /// </summary>
+    public string? OnPremGateway { get; set; }
+
+    /// <summary>True when <see cref="OnPremGateway"/> is exactly <c>true</c> and this is a private server.</summary>
+    public bool GatewayOnly =>
+        DisabledReason == BackofficeDisabledReason.PrivateServer && OnPremGatewayRequested;
+
+    /// <summary>The raw switch, regardless of the private server.</summary>
+    public bool OnPremGatewayRequested => OnPremGateway?.Trim() == "true";
+
     public WebhookOptions Webhook { get; set; } = new();
 
     public PollingOptions Polling { get; set; } = new();
@@ -76,8 +91,12 @@ public class P4BackofficeProductOptions
     public BackofficeDisabledReason DisabledReason { get; internal set; }
 
     /// <summary>Effective mode of a module: the override, else the global mode, else Off.</summary>
-    public BackofficeMode ModeFor(BackofficeModule module) =>
-        DisabledReason != BackofficeDisabledReason.None ? BackofficeMode.Off : RequestedModeFor(module);
+    public BackofficeMode ModeFor(BackofficeModule module)
+    {
+        if (DisabledReason == BackofficeDisabledReason.None) return RequestedModeFor(module);
+        // A private server keeps every module Off, except e-mail through its own gateway.
+        return module == BackofficeModule.Email && GatewayOnly ? RequestedModeFor(module) : BackofficeMode.Off;
+    }
 
     /// <summary>
     /// Mode the configuration asks for, ignoring <see cref="DisabledReason"/>. An unparsable
@@ -85,11 +104,29 @@ public class P4BackofficeProductOptions
     /// </summary>
     public BackofficeMode RequestedModeFor(BackofficeModule module)
     {
+        // E-mail has no switch and no other provider: it goes through the service as soon as
+        // both its address and a key are configured (Production insists on both, see the validator).
+        if (module == BackofficeModule.Email)
+        {
+            return string.IsNullOrWhiteSpace(BaseUrl) || string.IsNullOrWhiteSpace(SecretKey)
+                ? BackofficeMode.Off
+                : BackofficeMode.On;
+        }
         var raw = Modules.Get(module);
         // Billing moves money: only its own setting switches it on (see BackofficeModule.Billing).
         if (string.IsNullOrWhiteSpace(raw) && module != BackofficeModule.Billing) raw = Mode;
         return TryParseMode(raw, out var mode) ? mode : BackofficeMode.Off;
     }
+
+    /// <summary>True when a module other than e-mail is effectively On (erasure queue, service templates need those).</summary>
+    public bool AnyEnabledBeyondEmail =>
+        Enum.GetValues<BackofficeModule>().Any(m => m != BackofficeModule.Email && ModeFor(m) != BackofficeMode.Off);
+
+    /// <summary>
+    /// The inbox, the event poll and the webhook run when any module is On — e-mail included,
+    /// because bounces and complaints arrive as events. Not through a gateway, which has none.
+    /// </summary>
+    public bool EventsEnabled => AnyEnabled && !GatewayOnly;
 
     /// <summary>True when at least one module is effectively On.</summary>
     public bool AnyEnabled => Enum.GetValues<BackofficeModule>().Any(m => ModeFor(m) != BackofficeMode.Off);
@@ -138,7 +175,6 @@ public class P4BackofficeProductOptions
     {
         public string? Docs { get; set; }
         public string? Consents { get; set; }
-        public string? Email { get; set; }
         public string? Pricing { get; set; }
         public string? Support { get; set; }
         public string? Billing { get; set; }
@@ -147,7 +183,7 @@ public class P4BackofficeProductOptions
         {
             BackofficeModule.Docs => Docs,
             BackofficeModule.Consents => Consents,
-            BackofficeModule.Email => Email,
+            BackofficeModule.Email => null,
             BackofficeModule.Pricing => Pricing,
             BackofficeModule.Support => Support,
             BackofficeModule.Billing => Billing,
@@ -164,7 +200,7 @@ public class P4BackofficeProductOptions
 
         /// <summary>
         /// Template keys sent as service templates; every other message is sent as raw HTML.
-        /// Empty by default — keys are added one at a time once the Email module is On.
+        /// Empty by default — keys are added one at a time once the e-mail path works.
         /// </summary>
         public List<string> TemplateKeys { get; set; } = new();
 
@@ -196,11 +232,25 @@ public class P4BackofficeProductOptions
                 .Select(k => k?.Trim() ?? string.Empty)
                 .Where(k => k.Length > 0);
 
-        /// <summary>Send critical messages (2FA, password reset, e-mail verification) directly when the service does not deliver them in time.</summary>
-        public bool FallbackDirect { get; set; } = true;
+        /// <summary>
+        /// Sender of every message, e.g. <c>Performance4PDF &lt;noreply@example.com&gt;</c>; its domain
+        /// must be the one configured for the environment in the service. Empty = the service's default sender.
+        /// </summary>
+        public string? From { get; set; }
 
-        /// <summary>How long a critical message may wait in the outbox before the direct fallback.</summary>
-        public TimeSpan FallbackAfter { get; set; } = TimeSpan.FromMinutes(1);
+        /// <summary>Reply-To of every message; empty = none.</summary>
+        public string? ReplyTo { get; set; }
+
+        /// <summary><see cref="From"/> without an unset value (empty or an unresolved Coolify placeholder).</summary>
+        public string? EffectiveFrom => EnvValues.IsUnset(From) ? null : From!.Trim();
+
+        /// <summary><see cref="ReplyTo"/> without an unset value.</summary>
+        public string? EffectiveReplyTo => EnvValues.IsUnset(ReplyTo) ? null : ReplyTo!.Trim();
+
+        /// <summary>
+        /// Log message bodies (2FA codes, links) of the development sender. Honoured in Development only.
+        /// </summary>
+        public bool LogBodies { get; set; }
     }
 
     public class WebhookOptions

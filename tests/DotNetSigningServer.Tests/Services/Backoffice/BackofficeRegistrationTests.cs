@@ -46,11 +46,18 @@ public class BackofficeRegistrationTests
         var services = Register(new()
         {
             ["P4Backoffice:Mode"] = "Off",
+        });
+        Assert.False(AnyInboxWorker(services));
+
+        // A connection alone starts the inbox: e-mail is on whenever there is one.
+        var connected = Register(new()
+        {
+            ["P4Backoffice:Mode"] = "Off",
             ["P4Backoffice:BaseUrl"] = "https://backoffice.example.com",
             ["P4Backoffice:SecretKey"] = "p4sk_test_abc",
             ["P4Backoffice:Environment"] = "test",
         });
-        Assert.False(AnyInboxWorker(services));
+        Assert.True(AnyInboxWorker(connected));
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
+using DotNetSigningServer.Services.Email;
 using Microsoft.EntityFrameworkCore;
 
 namespace DotNetSigningServer.Services.Backoffice.Outbox;
@@ -84,7 +85,7 @@ public static class OutboxHealth
         return blocked.Select(i => i.Id).ToList();
     }
 
-    /// <summary>Items that no longer need to be kept (sent, sent by fallback, cancelled) are deleted after this.</summary>
+    /// <summary>Items that no longer need to be kept (sent, cancelled) are deleted after this.</summary>
     public static readonly TimeSpan Retention = TimeSpan.FromDays(30);
 
     /// <summary>Deletes finished items older than <see cref="Retention"/>. Returns how many.</summary>
@@ -94,7 +95,6 @@ public static class OutboxHealth
         var cutoff = now - Retention;
         var finished = db.BackofficeOutboxItems.Where(i =>
             (i.Status == BackofficeOutboxStatus.Sent
-             || i.Status == BackofficeOutboxStatus.FallbackSent
              || i.Status == BackofficeOutboxStatus.Cancelled)
             && i.CreatedAt < cutoff);
 
@@ -109,17 +109,24 @@ public static class OutboxHealth
         return rows.Count;
     }
 
+    /// <summary>Critical items older than this carry nothing usable any more (the longest link, verification, lasts 24 h).</summary>
+    public static readonly TimeSpan StaleEmailAge = TimeSpan.FromHours(24);
+
+    /// <summary>Kinds of e-mail outbox items.</summary>
+    public static readonly IReadOnlyList<string> EmailKinds = [BackofficeOutboxEmailSender.OutboxKind, TemplatedEmailSender.OutboxKind];
+
     /// <summary>
     /// A critical or e-mail item that ended Dead or Blocked keeps its payload (2FA code, reset link)
-    /// for a manual requeue only until the break-glass window closes; after that the code is
+    /// for a manual requeue only for <see cref="StaleEmailAge"/>; after that the code is
     /// expired anyway, so the payload is dropped instead of staying until the item is deleted.
     /// </summary>
     public static async Task<int> ScrubStaleEmailPayloadsAsync(ApplicationDbContext db, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
-        var cutoff = now - BreakGlassEmailFallback.MaxAge;
-        var kinds = BreakGlassEmailFallback.Kinds.ToArray();
+        var cutoff = now - StaleEmailAge;
+        var kinds = EmailKinds.ToArray();
         var rows = await db.BackofficeOutboxItems
-            .Where(i => (i.Status == BackofficeOutboxStatus.Dead || i.Status == BackofficeOutboxStatus.Blocked)
+            .Where(i => (i.Status == BackofficeOutboxStatus.Dead || i.Status == BackofficeOutboxStatus.Blocked
+                         || (i.Status == BackofficeOutboxStatus.Pending && i.Critical))
                         && i.PayloadProtected != null && i.CreatedAt < cutoff
                         && (i.Critical || kinds.Contains(i.Kind)))
             .ToListAsync(cancellationToken);
@@ -128,7 +135,7 @@ public static class OutboxHealth
             row.PayloadProtected = null;
             // Nothing is left to send, so a blocked item must not be requeued from /Admin.
             row.Status = BackofficeOutboxStatus.Dead;
-            row.LastError = "Payload discarded: the message is older than the break-glass window.";
+            row.LastError = "Payload discarded: the message is older than the e-mail retention window.";
         }
         if (rows.Count > 0) await db.SaveChangesAsync(cancellationToken);
         return rows.Count;

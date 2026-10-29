@@ -42,7 +42,6 @@ public sealed class OutboxProcessor
     private readonly IHttpClientFactory _httpClients;
     private readonly IReadOnlyDictionary<string, IOutboxHandler> _handlers;
     private readonly OutboxPayloadProtector _protector;
-    private readonly OutboxCircuitBreaker _breaker;
     private readonly TimeProvider _time;
     private readonly ILogger<OutboxProcessor> _logger;
     private readonly OutboxKindFilter _kinds;
@@ -55,7 +54,6 @@ public sealed class OutboxProcessor
         IHttpClientFactory httpClients,
         IEnumerable<IOutboxHandler> handlers,
         OutboxPayloadProtector protector,
-        OutboxCircuitBreaker breaker,
         TimeProvider time,
         ILogger<OutboxProcessor> logger,
         OutboxKindFilter? kinds = null,
@@ -69,7 +67,6 @@ public sealed class OutboxProcessor
         _httpClients = httpClients;
         _handlers = handlers.GroupBy(h => h.Kind, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Last(), StringComparer.Ordinal);
         _protector = protector;
-        _breaker = breaker;
         _time = time;
         _logger = logger;
     }
@@ -99,6 +96,17 @@ public sealed class OutboxProcessor
                     {
                         await dbGate.WaitAsync(cancellationToken);
                         try { item.LockedUntil = null; } finally { dbGate.Release(); } // next pass (or another instance) takes it
+                        return;
+                    }
+                    if (ExpiredAt(item, _time.GetUtcNow()))
+                    {
+                        await dbGate.WaitAsync(cancellationToken);
+                        try
+                        {
+                            Expire(item);
+                            await db.SaveChangesAsync(cancellationToken);
+                        }
+                        finally { dbGate.Release(); }
                         return;
                     }
                     var result = await SendAsync(item, AttemptTimeout, cancellationToken);
@@ -189,14 +197,48 @@ public sealed class OutboxProcessor
     /// <summary>One attempt on a claimed, tracked item; records the outcome on it (not saved).</summary>
     private async Task AttemptAsync(BackofficeOutboxItem item, TimeSpan timeout, CancellationToken cancellationToken)
     {
+        if (ExpiredAt(item, _time.GetUtcNow())) { Expire(item); return; }
         Record(item, await SendAsync(item, timeout, cancellationToken));
+    }
+
+    /// <summary>Whether a critical item's content has expired at <paramref name="at"/> (from <c>CreatedAt</c>, not from the first attempt).</summary>
+    internal bool ExpiredAt(BackofficeOutboxItem item, DateTimeOffset at)
+    {
+        if (!item.Critical || item.PayloadProtected == null || !_handlers.TryGetValue(item.Kind, out var handler)) return false;
+        try
+        {
+            return handler.CriticalValidity(_protector.Unprotect(item.PayloadProtected)) is { } validity
+                   && at - item.CreatedAt >= validity;
+        }
+        catch (CryptographicException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Ends a critical item whose code or link has expired: Dead, payload dropped, an alert.</summary>
+    private void Expire(BackofficeOutboxItem item)
+    {
+        item.Status = BackofficeOutboxStatus.Dead;
+        item.LockedUntil = null;
+        item.PayloadProtected = null;
+        item.LastError = "Not confirmed before expiry (critical e-mail): " + RetryPolicy.Truncate(item.LastError, 200);
+        _logger.LogError(
+            AlertPrefix + " {ItemId} ({Kind}, {SubjectRef}) expired before the service took it; it is not sent late",
+            item.Id, item.Kind, item.SubjectRef);
+        _alerter?.Alert("outbox-dead:" + item.Kind, $"Backoffice outbox item ({item.Kind}) expired before delivery.");
     }
 
     /// <summary>Stores the outcome of an attempt on the item (not saved) and logs it.</summary>
     private void Record(BackofficeOutboxItem item, OutboxAttemptResult result)
     {
         var outcome = RetryPolicy.Apply(item, result, _time.GetUtcNow(), GiveUpAfterFor(item.Kind));
-        _breaker.Record(result);
+        // The next attempt would come after the content expired: end it now, not hours later.
+        if (outcome == OutboxOutcome.Retry && item.NextAttemptAt is { } next && ExpiredAt(item, next))
+        {
+            Expire(item);
+            return;
+        }
 
         switch (outcome)
         {

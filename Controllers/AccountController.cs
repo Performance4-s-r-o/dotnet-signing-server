@@ -323,8 +323,8 @@ public class AccountController : Controller
 
         var variables = EmailTemplateVariables.TwoFactorCode(otp, expiryMinutes: 10);
         var emailOptions = new EmailSendOptions(EmailTemplateId.TwoFactorCode, user.Locale, user.Id);
-        // Email module On: queued with the code in one SaveChangesAsync (break-glass delivers it
-        // if the service does not). Otherwise sent right after the save, as before.
+        // Connected: queued with the code in one SaveChangesAsync and sent by the outbox (retried
+        // until the code expires). Otherwise sent right after the save.
         var queued = _email.TryEnqueue(EmailTemplateId.TwoFactorCode, user.Email, CurrentLocale, variables, emailOptions);
         await _dbContext.SaveChangesAsync();
 

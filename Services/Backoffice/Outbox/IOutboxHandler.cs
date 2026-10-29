@@ -34,6 +34,13 @@ public interface IOutboxHandler
     /// </summary>
     TimeSpan? AlertAfter => null;
 
+    /// <summary>
+    /// How long after it was queued a <c>critical</c> item is still worth sending (a 2FA code, a reset
+    /// link expire). Measured from <c>CreatedAt</c>, checked before every attempt: past it the item is
+    /// Dead with its payload dropped. Null = no expiry beyond the usual give-up time.
+    /// </summary>
+    TimeSpan? CriticalValidity(string payloadJson) => null;
+
     Task<OutboxAttemptResult> SendAsync(OutboxRequest request, CancellationToken cancellationToken);
 }
 
