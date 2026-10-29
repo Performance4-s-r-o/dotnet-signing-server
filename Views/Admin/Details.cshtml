@@ -68,14 +68,14 @@
                 @if (Model.User.IsEnterprise)
                 {
                     <button type="submit" class="btn-small btn-secondary" style="color:#dc2626;border-color:#fca5a5"
-                            onclick="return confirm('@L["ConfirmDisableEnterprise"]')">
+                            data-confirm="@L["ConfirmDisableEnterprise"]">
                         @L["DisableEnterprise"]
                     </button>
                 }
                 else
                 {
                     <button type="submit" class="btn-small btn-secondary"
-                            onclick="return confirm('@L["ConfirmEnableEnterprise"]')">
+                            data-confirm="@L["ConfirmEnableEnterprise"]">
                         @L["EnableEnterprise"]
                     </button>
                 }
@@ -90,14 +90,14 @@
                 @if (Model.User.SealAllowed)
                 {
                     <button type="submit" class="btn-small btn-secondary" style="color:#dc2626;border-color:#fca5a5"
-                            onclick="return confirm('@L["ConfirmDisableSealAllowed"]')">
+                            data-confirm="@L["ConfirmDisableSealAllowed"]">
                         @L["DisableSealAllowed"]
                     </button>
                 }
                 else
                 {
                     <button type="submit" class="btn-small btn-secondary"
-                            onclick="return confirm('@L["ConfirmEnableSealAllowed"]')">
+                            data-confirm="@L["ConfirmEnableSealAllowed"]">
                         @L["EnableSealAllowed"]
                     </button>
                 }
@@ -112,14 +112,14 @@
                 @if (Model.User.TrustedCaller)
                 {
                     <button type="submit" class="btn-small btn-secondary" style="color:#dc2626;border-color:#fca5a5"
-                            onclick="return confirm('@L["ConfirmDisableTrustedCaller"]')">
+                            data-confirm="@L["ConfirmDisableTrustedCaller"]">
                         @L["DisableTrustedCaller"]
                     </button>
                 }
                 else
                 {
                     <button type="submit" class="btn-small btn-secondary"
-                            onclick="return confirm('@L["ConfirmEnableTrustedCaller"]')">
+                            data-confirm="@L["ConfirmEnableTrustedCaller"]">
                         @L["EnableTrustedCaller"]
                     </button>
                 }

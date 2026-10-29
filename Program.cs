@@ -209,6 +209,9 @@ builder.Services.AddSingleton<IIpWhitelistService, IpWhitelistService>();
 // timer) and pulls HttpClient instances from the factory by name.
 builder.Services.AddHttpClient(nameof(LokiClient));
 builder.Services.AddSingleton<LokiClient>();
+builder.Services.Configure<DotNetSigningServer.Middleware.CspOptions>(builder.Configuration.GetSection(DotNetSigningServer.Middleware.CspOptions.SectionName));
+// Alerts that must not travel through the system they report on (OPS_ALERT_WEBHOOK_URL).
+DotNetSigningServer.Services.Ops.OpsAlertRegistration.AddOpsAlerts(builder.Services, builder.Configuration);
 // Ship all ILogger output (not just unhandled exceptions) to Loki.
 builder.Services.AddSingleton<ILoggerProvider, DotNetSigningServer.Logging.LokiLoggerProvider>();
 // The model gets 60 s; the caller's RequestAborted is passed on per call (#72).
@@ -529,6 +532,9 @@ if (app.Environment.IsDevelopment())
 // when that peer is a configured proxy (#106).
 app.Use(ClientIp.CaptureSocketPeer);
 app.UseForwardedHeaders();
+
+// Content-Security-Policy for HTML pages (CSP_MODE: enforce | report-only | off).
+app.UseMiddleware<DotNetSigningServer.Middleware.ContentSecurityPolicyMiddleware>();
 
 // Security headers
 app.Use(async (context, next) =>

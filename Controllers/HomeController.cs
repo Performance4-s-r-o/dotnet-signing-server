@@ -128,6 +128,8 @@ public class HomeController : Controller
                         && string.Equals(_aiOptions.Provider, "google", StringComparison.OrdinalIgnoreCase)
                         && !string.IsNullOrWhiteSpace(_aiOptions.Google?.ApiKey);
         ViewData["AiDetectEnabled"] = aiEnabled;
+        // The builder compiles JSX in the browser (Babel), which needs eval.
+        HttpContext.Items[DotNetSigningServer.Middleware.ContentSecurityPolicyMiddleware.AllowEvalKey] = true;
         return View();
     }
 

@@ -1,0 +1,64 @@
+using System.Net;
+using DotNetSigningServer.Services.Ops;
+using DotNetSigningServer.Tests.Services.Backoffice.Outbox;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+
+namespace DotNetSigningServer.Tests.Services.Ops;
+
+public class OpsAlerterTests
+{
+    private readonly StubServiceHandler _hook = new();
+    private readonly ManualTimeProvider _time = new(new DateTimeOffset(2026, 10, 29, 12, 0, 0, TimeSpan.Zero));
+
+    private sealed class Factory(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
+    }
+
+    private OpsAlerter Alerter(string? url = "https://hooks.example.com/t/abc") =>
+        new(new Factory(_hook), Microsoft.Extensions.Options.Options.Create(new OpsAlertOptions { WebhookUrl = url }), _time, NullLogger<OpsAlerter>.Instance);
+
+    [Fact]
+    public async Task Posts_TextJson_AndDeduplicatesWithinTheCooldown()
+    {
+        var alerter = Alerter();
+        await alerter.PostAsync("k", "first");
+        Assert.Equal("""{"text":"[signing server] first"}""", _hook.Requests[0].Body);
+
+        alerter.Alert("k", "x");
+        alerter.Alert("k", "x");
+        await Task.Delay(200);
+        Assert.Equal(2, _hook.Requests.Count); // one direct, one from Alert (the second Alert was deduplicated)
+        _time.Advance(OpsAlerter.DefaultCooldown + TimeSpan.FromMinutes(1));
+        alerter.Alert("k", "x");
+        await Task.Delay(200);
+        Assert.Equal(3, _hook.Requests.Count);
+    }
+
+    [Fact]
+    public async Task WithoutAUrl_NothingIsSent()
+    {
+        Alerter(url: "").Alert("k", "x");
+        await Task.Delay(100);
+        Assert.Empty(_hook.Requests);
+    }
+
+    [Fact]
+    public async Task AFailedPost_IsRetriedAtTheNextOccurrence_AndNeverThrows()
+    {
+        var alerter = Alerter();
+        _hook.Enqueue(HttpStatusCode.InternalServerError);
+        alerter.Alert("k", "x");
+        await Task.Delay(200);
+        alerter.Alert("k", "x");
+        await Task.Delay(200);
+        Assert.Equal(2, _hook.Requests.Count);
+    }
+
+    [Theory]
+    [InlineData("http://hooks.example.com/x")]
+    [InlineData("not a url")]
+    public void ANonHttpsUrl_RefusesStartup(string url) =>
+        Assert.Throws<InvalidOperationException>(() => OpsAlerter.ParseUrl(url));
+}
