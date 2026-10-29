@@ -34,10 +34,10 @@ public static class CookieSessionValidator
         var db = context.HttpContext.RequestServices.GetRequiredService<ApplicationDbContext>();
         var user = await db.Users.AsNoTracking()
             .Where(u => u.Id == uid)
-            .Select(u => new { u.UpdatedAt, u.IsActive, u.IsAdmin })
+            .Select(u => new { u.UpdatedAt, u.IsActive, u.IsAdmin, u.IsServiceAccount })
             .FirstOrDefaultAsync(context.HttpContext.RequestAborted);
 
-        var decision = Decide(stamp, principal.IsInRole(SessionClaims.AdminRole), user?.UpdatedAt, user?.IsActive, user?.IsAdmin);
+        var decision = Decide(stamp, principal.IsInRole(SessionClaims.AdminRole), user?.UpdatedAt, user?.IsActive == true && user.IsServiceAccount == false, user?.IsAdmin);
         switch (decision)
         {
             case Decision.Reject:

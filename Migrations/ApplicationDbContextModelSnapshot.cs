@@ -948,6 +948,9 @@ namespace dotnetsigningserver.Migrations
                     b.Property<bool>("IsEnterprise")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsServiceAccount")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Locale")
                         .HasMaxLength(8)
                         .HasColumnType("character varying(8)");

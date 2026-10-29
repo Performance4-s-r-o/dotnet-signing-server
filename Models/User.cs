@@ -135,6 +135,13 @@ public class User
     public bool TrustedCaller { get; set; } = false;
 
     /// <summary>
+    /// A machine account created from configuration (#169), e.g. the portal's. It has no usable
+    /// password and never signs in to the web UI: sign-in, password reset and the e-mail code
+    /// all refuse it, and an existing cookie session is rejected. It is reached by API token only.
+    /// </summary>
+    public bool IsServiceAccount { get; set; } = false;
+
+    /// <summary>
     /// Timestamp when enterprise mode was last enabled. Usage shown in the enterprise billing
     /// view is filtered to records created at or after this time — usage before the switch is
     /// considered separately (pay-as-you-go credits). NULL = enterprise was never enabled, or

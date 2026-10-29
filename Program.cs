@@ -786,6 +786,14 @@ using (var scope = app.Services.CreateScope())
         dbContext,
         scope.ServiceProvider.GetRequiredService<DotNetSigningServer.Services.IAuthService>(),
         logger);
+
+    // After the administrator: the portal's service account and token from PORTAL_BOOTSTRAP_TOKEN (#169).
+    await DotNetSigningServer.Services.PortalBootstrap.EnsureAsync(
+        builder.Configuration.GetSection("PortalBootstrap").Get<DotNetSigningServer.Options.PortalBootstrapOptions>() ?? new(),
+        privateServer,
+        scope.ServiceProvider.GetRequiredService<DotNetSigningServer.Services.ITokenService>(),
+        dbContext,
+        logger);
 }
 
 app.Run();
