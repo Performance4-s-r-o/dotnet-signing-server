@@ -160,6 +160,118 @@ public class CodeScanRasterTests
         Assert.Throws<MagickPolicyErrorException>(() => new MagickImage("xc:red", new MagickReadSettings { Width = 2, Height = 2 }));
     }
 
+    /// <summary>
+    /// True when reading <paramref name="format"/> never reaches a decoder: refused by the policy, or
+    /// no coder for it in this build. Anything else means a coder ran on attacker bytes.
+    /// </summary>
+    private static bool NeverDecodes(MagickFormat format)
+    {
+        var data = System.Text.Encoding.ASCII.GetBytes("viewbox 0 0 1 1\n");
+        try
+        {
+            using var image = new MagickImage(data, new MagickReadSettings { Format = format });
+            return false;
+        }
+        catch (MagickPolicyErrorException)
+        {
+            return true;
+        }
+        catch (MagickMissingDelegateErrorException)
+        {
+            return true;
+        }
+        catch (MagickException)
+        {
+            return false;
+        }
+    }
+
+    [Fact]
+    public void Only_the_allowlisted_formats_can_be_read()
+    {
+        CodeScanRaster.EnsureConfigured();
+        var decodes = Enum.GetValues<MagickFormat>()
+            .Where(f => f != MagickFormat.Unknown && !CodeScanRaster.ReadAllowlist.Contains(f))
+            .Where(f => !NeverDecodes(f))
+            .ToList();
+
+        // Anything that reached a coder is a way in that nobody decided on.
+        Assert.Empty(decodes);
+    }
+
+    [Theory]
+    [InlineData(MagickFormat.Ps)]
+    [InlineData(MagickFormat.Eps)]
+    [InlineData(MagickFormat.Ps2)]
+    [InlineData(MagickFormat.Ps3)]
+    [InlineData(MagickFormat.Epi)]
+    [InlineData(MagickFormat.Https)]
+    [InlineData(MagickFormat.Ftp)]
+    [InlineData(MagickFormat.Label)]
+    [InlineData(MagickFormat.Caption)]
+    [InlineData(MagickFormat.Inline)]
+    [InlineData(MagickFormat.Vid)]
+    [InlineData(MagickFormat.Mvg)]
+    [InlineData(MagickFormat.Msl)]
+    public void Dangerous_coders_never_decode(MagickFormat format)
+    {
+        CodeScanRaster.EnsureConfigured();
+        Assert.True(NeverDecodes(format), format.ToString());
+    }
+
+    [Fact]
+    public void The_allowlisted_formats_are_not_refused()
+    {
+        CodeScanRaster.EnsureConfigured();
+        foreach (var format in CodeScanRaster.ReadAllowlist)
+        {
+            Assert.False(CodeScanRaster.PolicyRefuses(format), format.ToString());
+        }
+    }
+
+    [Theory]
+    [InlineData("@{0}")]
+    [InlineData("|echo x")]
+    [InlineData("url:http://127.0.0.1:9/x.png")]
+    [InlineData("https://127.0.0.1:9/x.png")]
+    [InlineData("ephemeral:{0}")]
+    [InlineData("text:{0}")]
+    [InlineData("msl:{0}")]
+    [InlineData("ps:{0}")]
+    [InlineData("eps:{0}")]
+    [InlineData("label:{0}")]
+    public void File_and_network_reads_through_a_path_never_decode(string template)
+    {
+        CodeScanRaster.EnsureConfigured();
+        var file = System.IO.Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(file, "viewbox 0 0 1 1\n");
+            var path = template.Replace("{0}", file);
+            var ex = Assert.ThrowsAny<MagickException>(() => new MagickImage(path));
+            Assert.True(ex is MagickPolicyErrorException or MagickMissingDelegateErrorException, ex.GetType().Name + ": " + ex.Message);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public void Only_the_grey_writer_is_allowed()
+    {
+        CodeScanRaster.EnsureConfigured();
+        // A 1 × 1 grey PAM, a readable format without Ghostscript.
+        var pam = System.Text.Encoding.ASCII.GetBytes("P7\nWIDTH 1\nHEIGHT 1\nDEPTH 1\nMAXVAL 255\nTUPLTYPE GRAYSCALE\nENDHDR\n")
+            .Concat(new byte[] { 0x80 }).ToArray();
+        using var image = new MagickImage(pam, new MagickReadSettings { Format = MagickFormat.Pam });
+
+        Assert.Single(image.ToByteArray(MagickFormat.Gray));
+        Assert.Throws<MagickPolicyErrorException>(() => image.ToByteArray(MagickFormat.Png));
+        Assert.Throws<MagickPolicyErrorException>(() => image.ToByteArray(MagickFormat.Ps));
+        Assert.Throws<MagickPolicyErrorException>(() => image.ToByteArray(MagickFormat.Svg));
+    }
+
     [Fact]
     public void Resource_limits_are_set()
     {

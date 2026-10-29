@@ -73,7 +73,9 @@ public static class CodeScanRaster
     /// What ImageMagick may do in this process. Only reading PDF (which hands the page to
     /// Ghostscript and reads back its PNG) and writing raw grey bytes for the decoder.
     /// Everything else is refused, including the coders that have been the way in before:
-    /// MVG, MSL, EPHEMERAL, URL/HTTP, SVG, TEXT, and "@file" / "|command" paths.
+    /// PS/EPS, MVG, MSL, EPHEMERAL, URL/HTTP, SVG, TEXT, and "@file" / "|command" paths.
+    /// The path prefixes repeat the coder rule on purpose: widening the coder list later
+    /// does not reopen them.
     /// The Ghostscript delegates carry -dSAFER already (Magick.NET's delegates.xml), and
     /// Ghostscript 9.50+ is SAFER by default; only the "gs" delegate may run.
     /// </summary>
@@ -86,8 +88,31 @@ public static class CodeScanRaster
           <policy domain="delegate" rights="execute" pattern="gs" />
           <policy domain="path" rights="none" pattern="@*" />
           <policy domain="path" rights="none" pattern="|*" />
+          <policy domain="path" rights="none" pattern="url:*" />
+          <policy domain="path" rights="none" pattern="http:*" />
+          <policy domain="path" rights="none" pattern="https:*" />
+          <policy domain="path" rights="none" pattern="ftp:*" />
+          <policy domain="path" rights="none" pattern="ephemeral:*" />
+          <policy domain="path" rights="none" pattern="msl:*" />
+          <policy domain="path" rights="none" pattern="mvg:*" />
+          <policy domain="path" rights="none" pattern="text:*" />
+          <policy domain="path" rights="none" pattern="label:*" />
+          <policy domain="path" rights="none" pattern="caption:*" />
+          <policy domain="path" rights="none" pattern="inline:*" />
+          <policy domain="path" rights="none" pattern="ps:*" />
+          <policy domain="path" rights="none" pattern="eps:*" />
+          <policy domain="path" rights="none" pattern="ps2:*" />
+          <policy domain="path" rights="none" pattern="ps3:*" />
+          <policy domain="path" rights="none" pattern="svg:*" />
+          <policy domain="path" rights="none" pattern="vid:*" />
         </policymap>
         """;
+
+    /// <summary>Formats the policy lets ImageMagick read; the only readers the code uses.</summary>
+    internal static readonly MagickFormat[] ReadAllowlist = { MagickFormat.Pdf, MagickFormat.Png, MagickFormat.Pam };
+
+    /// <summary>The one format ImageMagick may write (raw grey bytes for the decoder).</summary>
+    internal static readonly MagickFormat[] WriteAllowlist = { MagickFormat.Gray };
 
     /// <summary>
     /// Policy and limits, once per process. Must run before ImageMagick is used for the first
