@@ -317,6 +317,14 @@ namespace DotNetSigningServer.Controllers
                     });
                 });
             }
+            catch (CapacityExceededException ex)
+            {
+                // Pool R stayed full: the operation is refunded like any failed one, the caller retries.
+                Logger.LogWarning("find-codes refused: pool {Pool} full", ex.Pool);
+                Response.Headers.RetryAfter = CapacityPoolAttribute.RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                    new { message = Localizer["ServerAtCapacity"].Value, retryAfter = CapacityPoolAttribute.RetryAfterSeconds });
+            }
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Barcode scan failed");

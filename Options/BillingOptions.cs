@@ -67,6 +67,18 @@ public class BillingOptions
     public int? AiOperationsLimit { get; set; }
 
     /// <summary>
+    /// Pool R (#69): PDF pages rasterised at once (find-codes). Null = max(1, ⌊C/2⌋), the value R
+    /// always had; 0 = off. Env <c>RASTER_OPERATIONS_LIMIT</c>.
+    /// </summary>
+    public int? RasterOperationsLimit { get; set; }
+
+    /// <summary>
+    /// How long one page waits for a slot in R before the request gets 503, ms (#69). Pages of a
+    /// scan that is already charged wait longer than at the other pools. Env <c>RASTER_WAIT_MS</c>.
+    /// </summary>
+    public int RasterWaitMilliseconds { get; set; } = 30_000;
+
+    /// <summary>
     /// Longest wait in a user's queue, whatever the account has stored (#69). The trusted caller
     /// is exempt: it queues fairly between its own tenants. Env <c>USER_QUEUE_MAX_SECONDS</c>.
     /// </summary>

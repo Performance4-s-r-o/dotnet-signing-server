@@ -169,7 +169,7 @@ public class LoadProfileTests
                     return await PdfUtilityApiController.ScanCodesAsync(a4x10, plan, PdfUtilityApiController.ParseFormats("qr"), CancellationToken.None);
                 })));
                 return 0;
-            }, $"pool R = {CodeScanRaster.PoolSize}");
+            }, $"pool R = {CodeScanRaster.Pool.Limit}");
         }
 
         var a0 = Pdf(3, 2384, 3370, (_, p, i) => Qr(p, $"A0-{i}", 1500, 2000, 8));

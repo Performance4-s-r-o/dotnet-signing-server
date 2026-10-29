@@ -427,6 +427,8 @@ builder.Services.AddOptions<BillingOptions>()
         // #69: pools H and A, and the bounds of a user's queue.
         options.HeavyOperationsLimit = EnvValues.Int(builder.Configuration, "HEAVY_OPERATIONS_LIMIT") ?? options.HeavyOperationsLimit;
         options.AiOperationsLimit = EnvValues.Int(builder.Configuration, "AI_OPERATIONS_LIMIT") ?? options.AiOperationsLimit;
+        options.RasterOperationsLimit = EnvValues.Int(builder.Configuration, "RASTER_OPERATIONS_LIMIT") ?? options.RasterOperationsLimit;
+        options.RasterWaitMilliseconds = EnvValues.Int(builder.Configuration, "RASTER_WAIT_MS") ?? options.RasterWaitMilliseconds;
         options.UserQueueMaxSeconds = EnvValues.Int(builder.Configuration, "USER_QUEUE_MAX_SECONDS") ?? options.UserQueueMaxSeconds;
         options.UserQueueLengthFactor = EnvValues.Int(builder.Configuration, "USER_QUEUE_LENGTH_FACTOR") ?? options.UserQueueLengthFactor;
         if (options.HeavyOperationsLimit is < 0 or > BillingOptions.MaxPoolLimit)
@@ -436,6 +438,14 @@ builder.Services.AddOptions<BillingOptions>()
         if (options.AiOperationsLimit is < 0 or > BillingOptions.MaxPoolLimit)
         {
             throw new InvalidOperationException($"AI_OPERATIONS_LIMIT must be 0 (off) or 1-{BillingOptions.MaxPoolLimit}.");
+        }
+        if (options.RasterOperationsLimit is < 0 or > BillingOptions.MaxPoolLimit)
+        {
+            throw new InvalidOperationException($"RASTER_OPERATIONS_LIMIT must be 0 (off) or 1-{BillingOptions.MaxPoolLimit}.");
+        }
+        if (options.RasterWaitMilliseconds is < 0 or > 600_000)
+        {
+            throw new InvalidOperationException("RASTER_WAIT_MS must be 0-600000 milliseconds.");
         }
         if (options.UserQueueMaxSeconds is < 0 or > BillingOptions.MaxQueueSeconds)
         {
@@ -673,10 +683,12 @@ app.MapGet(ConcurrencyDiagnostics.Path, (HttpContext context,
 {
     var pools = app.Services.GetRequiredService<CapacityPools>();
     var cpus = Environment.ProcessorCount;
+    // R is the same instance the diagnostics endpoint reports.
+    CodeScanRaster.UsePool(pools.Raster, pools.RasterWait);
     app.Logger.LogInformation(
         "Concurrency pools (0 = off): global {Global}, heavy {Heavy}, ai {Ai}, raster {Raster}; suggested for {Cpus} CPUs: "
         + "global {SuggestedGlobal}, heavy {SuggestedHeavy}, ai {SuggestedAi}",
-        pools.Global.Limit, pools.Heavy.Limit, pools.Ai.Limit, CodeScanRaster.PoolSize, cpus,
+        pools.Global.Limit, pools.Heavy.Limit, pools.Ai.Limit, pools.Raster.Limit, cpus,
         BillingOptions.SuggestedGlobalLimit(cpus), BillingOptions.SuggestedHeavyLimit(cpus), BillingOptions.SuggestedAiLimit);
 }
 
