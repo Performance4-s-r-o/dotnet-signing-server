@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -90,6 +91,26 @@ public class AdminAuditControllerTests
         });
         Assert.Single(entries, e => e.Change.Contains("\"to\":true"));
         Assert.Single(entries, e => e.Change.Contains("\"to\":false"));
+    }
+
+    [Fact]
+    public async Task ToggleTrustedCaller_DropsTheAccountsCachedTokens()
+    {
+        var (db, user) = await SeedAsync();
+        var token = new ApiToken { UserId = user.Id, Label = "server" };
+        var other = new ApiToken { UserId = Guid.NewGuid(), Label = "someone else" };
+        db.ApiTokens.AddRange(token, other);
+        await db.SaveChangesAsync();
+        var apiAuth = new Mock<IApiAuthService>();
+        var controller = Controller(db);
+        controller.HttpContext.RequestServices = new ServiceCollection()
+            .AddSingleton(apiAuth.Object)
+            .AddSingleton(Mock.Of<Microsoft.AspNetCore.Mvc.Routing.IUrlHelperFactory>()).BuildServiceProvider();
+
+        await controller.ToggleTrustedCaller(user.Id);
+
+        apiAuth.Verify(a => a.InvalidateTokenCache(token.Id), Times.Once);
+        apiAuth.Verify(a => a.InvalidateTokenCache(other.Id), Times.Never);
     }
 
     [Fact]

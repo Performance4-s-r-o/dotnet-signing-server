@@ -364,6 +364,14 @@ public class AdminController : Controller
             new { from = !user.TrustedCaller, to = user.TrustedCaller }, _time.GetUtcNow());
         await _dbContext.SaveChangesAsync();
 
+        // The token validation cache holds the account as it was: drop it so the change applies now.
+        var apiAuth = HttpContext.RequestServices?.GetService<IApiAuthService>();
+        if (apiAuth != null)
+        {
+            var tokenIds = await _dbContext.ApiTokens.Where(t => t.UserId == user.Id).Select(t => t.Id).ToListAsync();
+            foreach (var tokenId in tokenIds) apiAuth.InvalidateTokenCache(tokenId);
+        }
+
         _logger.LogWarning(
             "Trusted caller flag for user {UserId} set to {TrustedCaller} by {ActorId}",
             user.Id, user.TrustedCaller, actorId);
