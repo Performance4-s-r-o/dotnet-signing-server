@@ -74,7 +74,7 @@ public static class CodeScanRaster
     /// Ghostscript and reads back its PNG) and writing raw grey bytes for the decoder.
     /// Everything else is refused, including the coders that have been the way in before:
     /// PS/EPS, MVG, MSL, EPHEMERAL, URL/HTTP, SVG, TEXT, and "@file" / "|command" paths.
-    /// The path prefixes repeat the coder rule on purpose: widening the coder list later
+    /// The path prefixes repeat the coder rule on purpose (matched case-insensitively, see tests): widening the coder list later
     /// does not reopen them.
     /// The Ghostscript delegates carry -dSAFER already (Magick.NET's delegates.xml), and
     /// Ghostscript 9.50+ is SAFER by default; only the "gs" delegate may run.
@@ -105,6 +105,8 @@ public static class CodeScanRaster
           <policy domain="path" rights="none" pattern="ps3:*" />
           <policy domain="path" rights="none" pattern="svg:*" />
           <policy domain="path" rights="none" pattern="vid:*" />
+          <policy domain="path" rights="none" pattern="fd:*" />
+          <policy domain="path" rights="none" pattern="-" />
         </policymap>
         """;
 
@@ -180,7 +182,7 @@ public static class CodeScanRaster
     }
 
     /// <summary>The scan of one document: page count, and the DPI of each page that is rendered.</summary>
-    public sealed record ScanPages(int TotalPages, IReadOnlyList<double> Dpi)
+    public sealed record ScanPages(int TotalPages, IReadOnlyList<double> Dpi, byte[]? CleanPdf = null)
     {
         public int PagesProcessed => Dpi.Count;
         public bool Truncated => TotalPages > PagesProcessed;
@@ -209,8 +211,27 @@ public static class CodeScanRaster
                 ?? throw new ApiValidationException("PDF_PAGE_TOO_LARGE", $"Page {i} is too large to rasterise");
             dpi.Add(pageDpi);
         }
-        return new ScanPages(total, dpi);
+        return new ScanPages(total, dpi, Reserialize(pdf));
     }
+
+    /// <summary>
+    /// The document as iText writes it: a fresh header at offset 0, nothing before it. Ghostscript
+    /// recognises its input by content, so bytes in front of <c>%PDF-</c> (a PostScript polyglot)
+    /// must never reach it; only this output does.
+    /// </summary>
+    internal static byte[] Reserialize(byte[] pdf)
+    {
+        using var input = new MemoryStream(pdf);
+        using var output = new MemoryStream();
+        using (var doc = new PdfDocument(new PdfReader(input), new PdfWriter(output)))
+        {
+        }
+        return output.ToArray();
+    }
+
+    /// <summary>True when the bytes start with <c>%PDF-</c> at offset 0.</summary>
+    internal static bool StartsWithPdfHeader(byte[] bytes) =>
+        bytes.Length >= 5 && bytes[0] == '%' && bytes[1] == 'P' && bytes[2] == 'D' && bytes[3] == 'F' && bytes[4] == '-';
 
     /// <summary>
     /// Resolution for a page of the given size in points: 300 DPI, lowered so the page fits
@@ -238,6 +259,11 @@ public static class CodeScanRaster
         byte[] pdf, int pageIndex, double dpi, Func<MagickImage, T> use, CancellationToken ct)
     {
         EnsureConfigured();
+        // Ghostscript sniffs the content: only a document that starts with the PDF header goes in.
+        if (!StartsWithPdfHeader(pdf))
+        {
+            throw new ApiValidationException("PDF_INVALID", "Rasterisation input does not start with a PDF header");
+        }
         return await WithSlotAsync(Pool, RasterWait, () =>
         {
             ct.ThrowIfCancellationRequested();

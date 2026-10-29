@@ -430,7 +430,7 @@ namespace DotNetSigningServer.Controllers
                 ct.ThrowIfCancellationRequested();
                 var dpi = pages.Dpi[pageIndex];
                 var decodedOnPage = await CodeScanRaster.WithPageAsync(
-                    pdfBytes, pageIndex, dpi, page => DecodePage(page, reader, ct), ct);
+                    pages.CleanPdf ?? pdfBytes, pageIndex, dpi, page => DecodePage(page, reader, ct), ct);
 
                 foreach (var (code, pageHeightPx) in decodedOnPage)
                 {

@@ -240,6 +240,12 @@ public class CodeScanRasterTests
     [InlineData("ps:{0}")]
     [InlineData("eps:{0}")]
     [InlineData("label:{0}")]
+    [InlineData("fd:0")]
+    [InlineData("-")]
+    [InlineData("URL:http://127.0.0.1:9/x.png")]
+    [InlineData("HTTPS://127.0.0.1:9/x.png")]
+    [InlineData("PS:{0}")]
+    [InlineData("Ephemeral:{0}")]
     public void File_and_network_reads_through_a_path_never_decode(string template)
     {
         CodeScanRaster.EnsureConfigured();
@@ -266,7 +272,7 @@ public class CodeScanRasterTests
             .Concat(new byte[] { 0x80 }).ToArray();
         using var image = new MagickImage(pam, new MagickReadSettings { Format = MagickFormat.Pam });
 
-        Assert.Single(image.ToByteArray(MagickFormat.Gray));
+        foreach (var format in CodeScanRaster.WriteAllowlist) Assert.NotEmpty(image.ToByteArray(format));
         Assert.Throws<MagickPolicyErrorException>(() => image.ToByteArray(MagickFormat.Png));
         Assert.Throws<MagickPolicyErrorException>(() => image.ToByteArray(MagickFormat.Ps));
         Assert.Throws<MagickPolicyErrorException>(() => image.ToByteArray(MagickFormat.Svg));
@@ -361,6 +367,60 @@ public class CodeScanRasterTests
         Assert.Equal(30, hits.Count);
         var grownMb = (peak - baseline) / (1024.0 * 1024.0);
         Assert.True(grownMb < 500, $"Process grew by {grownMb:F0} MB while scanning 30 A4 pages");
+    }
+
+    // ── What reaches Ghostscript ───────────────────────────────────────────
+
+    private const string PostScript = "%!PS\n/Helvetica findfont 20 scalefont setfont 10 10 moveto (X) show showpage quit\n";
+
+    private static byte[] Polyglot() =>
+        System.Text.Encoding.ASCII.GetBytes(PostScript).Concat(Pdf((A4W, A4H))).ToArray();
+
+    [Fact]
+    public void Only_bytes_starting_with_the_pdf_header_pass()
+    {
+        Assert.True(CodeScanRaster.StartsWithPdfHeader(Pdf((A4W, A4H))));
+        Assert.False(CodeScanRaster.StartsWithPdfHeader(System.Text.Encoding.ASCII.GetBytes(PostScript)));
+        Assert.False(CodeScanRaster.StartsWithPdfHeader(Polyglot()));
+        Assert.False(CodeScanRaster.StartsWithPdfHeader(Array.Empty<byte>()));
+    }
+
+    [Fact]
+    public void Plan_rewrites_a_polyglot_into_a_clean_pdf()
+    {
+        var polyglot = Polyglot();
+        var pages = CodeScanRaster.Plan(polyglot);
+
+        Assert.NotNull(pages.CleanPdf);
+        Assert.True(CodeScanRaster.StartsWithPdfHeader(pages.CleanPdf!));
+        Assert.DoesNotContain("%!PS", System.Text.Encoding.Latin1.GetString(pages.CleanPdf!));
+    }
+
+    [GhostscriptFact]
+    public async Task PostScript_bytes_sent_as_pdf_are_refused_before_Ghostscript()
+    {
+        var ps = System.Text.Encoding.ASCII.GetBytes(PostScript);
+        var ex = await Assert.ThrowsAsync<ApiValidationException>(() =>
+            CodeScanRaster.WithPageAsync(ps, 0, 100, p => p.Width, CancellationToken.None));
+        Assert.Equal("PDF_INVALID", ex.Code);
+    }
+
+    [GhostscriptFact]
+    public async Task A_polyglot_is_refused_when_it_reaches_the_rasteriser_raw()
+    {
+        var ex = await Assert.ThrowsAsync<ApiValidationException>(() =>
+            CodeScanRaster.WithPageAsync(Polyglot(), 0, 100, p => p.Width, CancellationToken.None));
+        Assert.Equal("PDF_INVALID", ex.Code);
+    }
+
+    [GhostscriptFact]
+    public async Task A_polyglot_scanned_through_the_normal_path_renders_only_the_pdf()
+    {
+        var polyglot = Polyglot();
+        var pages = CodeScanRaster.Plan(polyglot);
+        var width = await CodeScanRaster.WithPageAsync(pages.CleanPdf!, 0, pages.Dpi[0], p => (int)p.Width, CancellationToken.None);
+        // A4 at 100+ DPI; the PostScript page (default media) is not what was rendered.
+        Assert.InRange(width, 800, 2600);
     }
 
     // ── helpers ────────────────────────────────────────────────────────────
