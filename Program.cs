@@ -102,6 +102,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 // The migrate step serves nothing and may be given only the database variables.
 var portalTrust = migrateOnly ? new PortalTrustOptions() : PortalTrustOptions.From(builder.Configuration);
 builder.Services.AddSingleton(portalTrust);
+builder.Services.AddSingleton<DotNetSigningServer.Services.MissingTrustedCallerFlag>();
 if (portalTrust.RemovedVariableSet)
 {
     Console.Error.WriteLine(

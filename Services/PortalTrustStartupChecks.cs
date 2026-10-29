@@ -10,34 +10,40 @@ namespace DotNetSigningServer.Services;
 /// </summary>
 public static class PortalTrustStartupChecks
 {
-    /// <summary>The warnings for this configuration; empty = nothing to say.</summary>
-    public static async Task<IReadOnlyList<string>> CheckAsync(
+    /// <summary>A finding and whether it is an error (something stops working) or only a warning.</summary>
+    public sealed record Finding(bool IsError, string Message);
+
+    /// <summary>The findings for this configuration; empty = nothing to say.</summary>
+    public static async Task<IReadOnlyList<Finding>> CheckAsync(
         PortalTrustOptions options, ApplicationDbContext db, CancellationToken cancellationToken = default)
     {
         var flagged = await db.Users.AsNoTracking()
             .CountAsync(u => u.TrustedCaller && u.IsActive && u.ErasedAt == null, cancellationToken);
-        var warnings = new List<string>();
+        var findings = new List<Finding>();
         if (options.InternalPort is int port && flagged == 0)
         {
-            warnings.Add(
+            // An error, not a warning: tenant checks (403 TENANT_MISMATCH) are off and per-account
+            // limits apply to the internal caller until an administrator sets the flag.
+            findings.Add(new Finding(true,
                 $"The internal port {port} has no trusted account: no caller is trusted until an administrator "
-                + "marks one (Trusted caller) in the administration.");
+                + "marks one (Trusted caller) in the administration."));
         }
         else if (options.InternalPort == null && flagged > 0)
         {
-            warnings.Add(
+            findings.Add(new Finding(false,
                 $"{flagged} account(s) are marked as trusted caller but {PortalTrustOptions.InternalPortVariable} is empty: "
-                + "the flag has no effect and their tokens are treated as ordinary ones.");
+                + "the flag has no effect and their tokens are treated as ordinary ones."));
         }
-        return warnings;
+        return findings;
     }
 
     public static async Task WarnAsync(
         PortalTrustOptions options, ApplicationDbContext db, ILogger logger, CancellationToken cancellationToken = default)
     {
-        foreach (var warning in await CheckAsync(options, db, cancellationToken))
+        foreach (var finding in await CheckAsync(options, db, cancellationToken))
         {
-            logger.LogWarning("{Warning}", warning);
+            if (finding.IsError) logger.LogError("{Finding}", finding.Message);
+            else logger.LogWarning("{Finding}", finding.Message);
         }
     }
 }

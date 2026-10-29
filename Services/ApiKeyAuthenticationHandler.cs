@@ -17,17 +17,20 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
 
     private readonly IApiAuthService _apiAuth;
     private readonly DotNetSigningServer.Options.PortalTrustOptions _portalTrust;
+    private readonly MissingTrustedCallerFlag? _missingFlag;
 
     public ApiKeyAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
         IApiAuthService apiAuth,
-        DotNetSigningServer.Options.PortalTrustOptions portalTrust)
+        DotNetSigningServer.Options.PortalTrustOptions portalTrust,
+        MissingTrustedCallerFlag? missingFlag = null)
         : base(options, logger, encoder)
     {
         _apiAuth = apiAuth;
         _portalTrust = portalTrust;
+        _missingFlag = missingFlag;
     }
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -59,6 +62,15 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
                 "Portal token {TokenId} refused on port {Port}: it is accepted on the internal listener only",
                 validation.TokenId, Context.Connection.LocalPort);
             return AuthenticateResult.NoResult();
+        }
+
+        if (_missingFlag?.ShouldWarn(_portalTrust, Context.Connection.LocalPort, kind, validation.IsBrowserToken,
+                user.Id, Request.Headers, DateTimeOffset.UtcNow) == true)
+        {
+            Logger.LogWarning(Logging.LoggingEvents.AuthFailed,
+                "Account {UserId} sends trusted caller headers on the internal port but is not marked TrustedCaller: "
+                + "the headers are ignored, tenant checks are off and per-account limits apply. Set the flag in the administration.",
+                user.Id);
         }
 
         var claims = new List<Claim>

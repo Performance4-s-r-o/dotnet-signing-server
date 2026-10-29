@@ -196,6 +196,44 @@ public class PortalTrustTests : IDisposable
         Assert.True(PortalTrustOptions.From(Config(("TRUSTED_CALLER_USER_IDS", "not-a-guid"))).RemovedVariableSet);
     }
 
+    // ── Trusted caller headers without the flag on the internal port ────────────────────────────
+
+    private static HeaderDictionary Headers(params string[] names)
+    {
+        var headers = new HeaderDictionary();
+        foreach (var name in names) headers[name] = "x";
+        return headers;
+    }
+
+    [Theory]
+    [InlineData(PortalTrust.TenantHeader)]
+    [InlineData("X-P4PDF-Attachment-Billing-Bypass")]
+    public void Unflagged_caller_with_trusted_headers_on_the_internal_port_is_warned_once_a_minute(string header)
+    {
+        var tracker = new MissingTrustedCallerFlag();
+        var user = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+
+        Assert.True(tracker.ShouldWarn(Trust(), InternalPort, PortalCallKind.Ordinary, false, user, Headers(header), now));
+        Assert.False(tracker.ShouldWarn(Trust(), InternalPort, PortalCallKind.Ordinary, false, user, Headers(header), now.AddSeconds(30)));
+        Assert.True(tracker.ShouldWarn(Trust(), InternalPort, PortalCallKind.Ordinary, false, Guid.NewGuid(), Headers(header), now.AddSeconds(30)));
+        Assert.True(tracker.ShouldWarn(Trust(), InternalPort, PortalCallKind.Ordinary, false, user, Headers(header), now.Add(MissingTrustedCallerFlag.Interval)));
+    }
+
+    [Fact]
+    public void No_warning_for_the_trusted_caller_the_public_port_plain_requests_or_browser_tokens()
+    {
+        var tracker = new MissingTrustedCallerFlag();
+        var now = DateTimeOffset.UtcNow;
+        var tenant = Headers(PortalTrust.TenantHeader);
+
+        Assert.False(tracker.ShouldWarn(Trust(), InternalPort, PortalCallKind.Trusted, false, Guid.NewGuid(), tenant, now));
+        Assert.False(tracker.ShouldWarn(Trust(), PublicPort, PortalCallKind.Ordinary, false, Guid.NewGuid(), tenant, now));
+        Assert.False(tracker.ShouldWarn(Trust(), InternalPort, PortalCallKind.Ordinary, false, Guid.NewGuid(), Headers(), now));
+        Assert.False(tracker.ShouldWarn(Trust(), InternalPort, PortalCallKind.Ordinary, true, Guid.NewGuid(), tenant, now));
+        Assert.False(tracker.ShouldWarn(Trust(internalPort: null), InternalPort, PortalCallKind.Ordinary, false, Guid.NewGuid(), tenant, now));
+    }
+
     // ── Start-up warnings (never fatal) ─────────────────────────────────────────────────────────
 
     [Fact]
@@ -206,7 +244,8 @@ public class PortalTrustTests : IDisposable
 
         var warnings = await PortalTrustStartupChecks.CheckAsync(Trust(), _db);
 
-        Assert.Contains(warnings, w => w.Contains("no trusted account"));
+        // An error, not a warning: tenant checks are off until the flag is set. The start goes on.
+        Assert.Contains(warnings, w => w.IsError && w.Message.Contains("no trusted account"));
     }
 
     [Fact]
@@ -226,7 +265,7 @@ public class PortalTrustTests : IDisposable
 
         var warnings = await PortalTrustStartupChecks.CheckAsync(Trust(internalPort: null), _db);
 
-        Assert.Contains(warnings, w => w.Contains("no effect"));
+        Assert.Contains(warnings, w => !w.IsError && w.Message.Contains("no effect"));
     }
 
     [Fact]

@@ -134,7 +134,7 @@ public class DatabaseMigratorTests : IClassFixture<EmptyDatabaseFixture>
         // No flagged account on the internal port: a warning, not a failed start.
         var warnings = await PortalTrustStartupChecks.CheckAsync(
             new DotNetSigningServer.Options.PortalTrustOptions { InternalPort = 8086 }, db);
-        Assert.Single(warnings);
+        Assert.True(Assert.Single(warnings).IsError);
     }
 
     [DockerFact]
