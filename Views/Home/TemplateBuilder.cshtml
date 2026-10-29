@@ -71,6 +71,10 @@
   }
 </style>
 
+@* Before CSP_MODE=enforce: go through the template builder in report-only (loading a PDF, the preview,
+   JSX rendering). Babel runs inline text/babel code and pdf.js loads its worker from a blob that imports
+   a cdnjs script; under 'strict-dynamic' either may be blocked. Babel could be replaced by a precompiled
+   bundle, the worker served from 'self'. *@
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin></script>

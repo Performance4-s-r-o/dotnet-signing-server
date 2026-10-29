@@ -53,6 +53,8 @@ public class ContentSecurityPolicyTests
         Assert.Contains("'unsafe-eval'", policy);
         Assert.Contains("connect-src 'self' https://legal.example.com;", policy);
         Assert.Contains("frame-src 'self' https://legal.example.com;", policy);
+        Assert.Contains("style-src 'self' 'unsafe-inline' https://legal.example.com;", policy);
+        Assert.Contains("font-src 'self' data: https://legal.example.com;", policy);
     }
 
     private static async Task<(string? Enforce, string? ReportOnly, string? Json)> Run(string? mode)

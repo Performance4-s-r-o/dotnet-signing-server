@@ -101,9 +101,9 @@ public sealed class ContentSecurityPolicyMiddleware
         sb.Append("default-src 'self'; ");
         // strict-dynamic: scripts the nonce'd ones load (the cookie widget's parts) run too.
         sb.Append($"script-src 'nonce-{nonce}' 'strict-dynamic'{(allowEval ? " 'unsafe-eval'" : "")}; ");
-        sb.Append("style-src 'self' 'unsafe-inline'; ");
+        sb.Append($"style-src 'self' 'unsafe-inline'{extra}; ");
         sb.Append($"img-src 'self' data: blob:{extra}; ");
-        sb.Append("font-src 'self' data:; ");
+        sb.Append($"font-src 'self' data:{extra}; ");
         sb.Append($"connect-src 'self'{extra}; ");
         sb.Append($"frame-src 'self'{(frameOrigin == null ? "" : " " + frameOrigin)}; ");
         sb.Append($"worker-src 'self' blob:{(allowEval ? " " + PdfJsHost : "")}; ");
