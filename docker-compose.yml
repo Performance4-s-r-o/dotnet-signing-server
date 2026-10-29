@@ -120,6 +120,10 @@ services:
       - PrivateServer__Enabled=${PRIVATE_SERVER:-false}
       - SeedAdmin__Email=${SEED_ADMIN_EMAIL:-}
       - SeedAdmin__Password=${SEED_ADMIN_PASSWORD:-}
+      # The portal's server token (#169): at start the portal's service account and an API token
+      # with this value are created; empty = off. Shared Coolify variable DOTNET_PORTAL_BOOTSTRAP_TOKEN,
+      # set on purpose (it is NOT the old SIGN_API_TOKEN: a token already made by hand stays as it is).
+      - PortalBootstrap__Token=${PORTAL_BOOTSTRAP_TOKEN:-{{project.DOTNET_PORTAL_BOOTSTRAP_TOKEN}}}
       # Evidence encryption certificate (for SES evidence attachment encryption)
       - EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64=${EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64:-}
       - EVIDENCE_ENCRYPTION_CERTIFICATE_PEM=${EVIDENCE_ENCRYPTION_CERTIFICATE_PEM:-}

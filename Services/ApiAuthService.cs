@@ -185,7 +185,7 @@ public class ApiAuthService : IApiAuthService
         return $"apiauth:{tokenHash}:{origin}:{ip}";
     }
 
-    private static string NormalizeToken(string token)
+    public static string NormalizeToken(string token)
     {
         var trimmed = token.Trim().Trim('"');
         trimmed = trimmed.Replace(' ', '+');

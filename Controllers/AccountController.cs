@@ -165,7 +165,8 @@ public class AccountController : Controller
             return View(model);
         }
 
-        bool exists = await _dbContext.Users.AnyWithEmailAsync(model.Email);
+        // A reserved (.invalid) address gets the same outcome as a taken one, so it creates nothing.
+        bool exists = UserEmails.IsReserved(model.Email) || await _dbContext.Users.AnyWithEmailAsync(model.Email);
         if (exists)
         {
             // Do not reveal that the address is already registered — that turns signup
@@ -272,7 +273,8 @@ public class AccountController : Controller
         }
 
         var user = await _dbContext.Users.FindByEmailAsync(model.Email);
-        if (user == null || !_authService.VerifyPassword(model.Password, user.PasswordHash, user.PasswordSalt, user.PasswordIterations))
+        if (user == null || user.IsServiceAccount
+            || !_authService.VerifyPassword(model.Password, user.PasswordHash, user.PasswordSalt, user.PasswordIterations))
         {
             ModelState.AddModelError(string.Empty, _localizer["InvalidCredentials"]);
             return View(model);
@@ -470,7 +472,7 @@ public class AccountController : Controller
         }
 
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.LoginChallengeHash == challengeHash);
-        if (user == null || user.EmailOtpCode == null || user.EmailOtpExpiresAt == null)
+        if (user == null || user.IsServiceAccount || user.EmailOtpCode == null || user.EmailOtpExpiresAt == null)
         {
             Response.Cookies.Delete(LoginChallengeCookie);
             TempData["Error"] = _localizer["VerificationCodeInvalid"].Value;
@@ -584,7 +586,7 @@ public class AccountController : Controller
         }
 
         var user = await _dbContext.Users.FindByEmailAsync(model.Email);
-        if (user != null && user.IsActive && user.EmailVerified)
+        if (user != null && user.IsActive && user.EmailVerified && !user.IsServiceAccount)
         {
             var token = SecureTokens.Generate();
             user.PasswordResetToken = SecureTokens.Hash(token);
@@ -647,6 +649,7 @@ public class AccountController : Controller
         var tokenHash = SecureTokens.Hash(model.Token ?? string.Empty);
         var user = await _dbContext.Users.FirstOrDefaultAsync(u =>
             u.PasswordResetToken == tokenHash &&
+            !u.IsServiceAccount &&
             u.PasswordResetExpiresAt != null &&
             u.PasswordResetExpiresAt > now);
 

@@ -14,6 +14,16 @@ namespace DotNetSigningServer.Services;
 /// </summary>
 public static class UserEmails
 {
+    /// <summary>Addresses under <c>.invalid</c> (RFC 2606) are reserved for service accounts; nobody signs up with one.</summary>
+    public static bool IsReserved(string? email)
+    {
+        var at = Trim(email).LastIndexOf('@');
+        if (at < 0) return false;
+        var domain = Trim(email)[(at + 1)..];
+        return domain.Equals("invalid", StringComparison.OrdinalIgnoreCase)
+               || domain.EndsWith(".invalid", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>The form an address is stored and looked up in: trimmed, case kept.</summary>
     public static string Trim(string? email) => (email ?? "").Trim();
 
