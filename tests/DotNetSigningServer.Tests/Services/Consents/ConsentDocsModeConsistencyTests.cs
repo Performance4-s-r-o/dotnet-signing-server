@@ -53,8 +53,13 @@ public class ConsentDocsModeConsistencyTests
         {
             db.ConsentRecords.Add(new ConsentRecord
             {
-                UserId = userId, SubjectRef = "dotnet:user:" + userId, Document = doc.Document, Purpose = "terms",
-                Version = doc.Version, Action = doc.Action, OccurredAt = DateTimeOffset.UtcNow,
+                UserId = userId,
+                SubjectRef = "dotnet:user:" + userId,
+                Document = doc.Document,
+                Purpose = "terms",
+                Version = doc.Version,
+                Action = doc.Action,
+                OccurredAt = DateTimeOffset.UtcNow,
             });
         }
         await db.SaveChangesAsync();
