@@ -423,6 +423,60 @@ public class CodeScanRasterTests
         Assert.InRange(width, 800, 2600);
     }
 
+    [Fact]
+    public void Plan_maps_a_broken_page_tree_to_PDF_INVALID()
+    {
+        var ex = Assert.Throws<ApiValidationException>(
+            () => CodeScanRaster.Plan(System.Text.Encoding.ASCII.GetBytes(PdfSafetyGuardTests.PageTreeCycle)));
+        Assert.Equal("PDF_INVALID", ex.Code);
+    }
+
+    [Fact]
+    public void Plan_maps_garbage_after_the_header_to_PDF_INVALID()
+    {
+        var ex = Assert.Throws<ApiValidationException>(() => CodeScanRaster.Plan("%PDF-1.4\nnot a pdf"u8.ToArray()));
+        Assert.Equal("PDF_INVALID", ex.Code);
+    }
+
+    [Fact]
+    public void Plan_maps_a_password_protected_pdf_to_PDF_ENCRYPTED()
+    {
+        using var ms = new MemoryStream();
+        var props = new WriterProperties().SetStandardEncryption(
+            "user"u8.ToArray(), "owner"u8.ToArray(), iText.Kernel.Pdf.EncryptionConstants.ALLOW_PRINTING,
+            iText.Kernel.Pdf.EncryptionConstants.ENCRYPTION_AES_128);
+        using (var doc = new PdfDocument(new PdfWriter(ms, props))) doc.AddNewPage();
+        var ex = Assert.Throws<ApiValidationException>(() => CodeScanRaster.Plan(ms.ToArray()));
+        Assert.Equal("PDF_ENCRYPTED", ex.Code);
+    }
+
+    [Fact]
+    public void The_Ghostscript_delegate_never_passes_dDOPS()
+    {
+        var delegates = ImageMagick.Configuration.ConfigurationFiles.Default.Delegates.Data;
+        Assert.DoesNotContain("dDOPS", delegates, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [GhostscriptFact]
+    public async Task A_PostScript_XObject_in_a_pdf_is_not_executed()
+    {
+        // The XObject would paint the whole page black if Ghostscript ran it (needs -dDOPS).
+        var pdf = Pdf(new[] { (A4W, A4H) }, page =>
+        {
+            var ps = new PdfStream(System.Text.Encoding.ASCII.GetBytes("0 setgray 0 0 600 850 rectfill"));
+            ps.Put(PdfName.Type, PdfName.XObject);
+            ps.Put(PdfName.Subtype, new PdfName("PS"));
+            var xobjects = new PdfDictionary();
+            xobjects.Put(new PdfName("P0"), ps);
+            page.GetResources().GetPdfObject().Put(PdfName.XObject, xobjects);
+            new PdfCanvas(page).GetContentStream().GetOutputStream().WriteBytes("/P0 Do\n"u8.ToArray());
+        });
+        var pages = CodeScanRaster.Plan(pdf);
+        var mean = await CodeScanRaster.WithPageAsync(pages.CleanPdf, 0, 72, p =>
+            p.ToByteArray(MagickFormat.Gray).Select(b => (int)b).Average(), CancellationToken.None);
+        Assert.True(mean > 200, $"page mean {mean}: the PostScript was executed");
+    }
+
     // ── helpers ────────────────────────────────────────────────────────────
 
     private static async Task<List<JsonElement>> Scan(byte[] pdf)

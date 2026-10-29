@@ -2,6 +2,7 @@ using DotNetSigningServer.Exceptions;
 using ImageMagick;
 using DotNetSigningServer.Options;
 using ImageMagick.Configuration;
+using iText.Kernel.Exceptions;
 using iText.Kernel.Pdf;
 
 namespace DotNetSigningServer.Services;
@@ -182,7 +183,7 @@ public static class CodeScanRaster
     }
 
     /// <summary>The scan of one document: page count, and the DPI of each page that is rendered.</summary>
-    public sealed record ScanPages(int TotalPages, IReadOnlyList<double> Dpi, byte[]? CleanPdf = null)
+    public sealed record ScanPages(int TotalPages, IReadOnlyList<double> Dpi, byte[] CleanPdf)
     {
         public int PagesProcessed => Dpi.Count;
         public bool Truncated => TotalPages > PagesProcessed;
@@ -194,6 +195,22 @@ public static class CodeScanRaster
     /// <see cref="MinDpi"/> — before any credit is reserved and before Ghostscript runs.
     /// </summary>
     public static ScanPages Plan(byte[] pdf)
+    {
+        try
+        {
+            return PlanCore(pdf);
+        }
+        catch (BadPasswordException)
+        {
+            throw new ApiValidationException("PDF_ENCRYPTED", "Password protected");
+        }
+        catch (Exception ex) when (ex is PdfException or IOException)
+        {
+            throw new ApiValidationException("PDF_INVALID", ex.Message);
+        }
+    }
+
+    private static ScanPages PlanCore(byte[] pdf)
     {
         using var ms = new MemoryStream(pdf);
         using var reader = new PdfReader(ms);
