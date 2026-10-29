@@ -160,6 +160,124 @@ public class CodeScanRasterTests
         Assert.Throws<MagickPolicyErrorException>(() => new MagickImage("xc:red", new MagickReadSettings { Width = 2, Height = 2 }));
     }
 
+    /// <summary>
+    /// True when reading <paramref name="format"/> never reaches a decoder: refused by the policy, or
+    /// no coder for it in this build. Anything else means a coder ran on attacker bytes.
+    /// </summary>
+    private static bool NeverDecodes(MagickFormat format)
+    {
+        var data = System.Text.Encoding.ASCII.GetBytes("viewbox 0 0 1 1\n");
+        try
+        {
+            using var image = new MagickImage(data, new MagickReadSettings { Format = format });
+            return false;
+        }
+        catch (MagickPolicyErrorException)
+        {
+            return true;
+        }
+        catch (MagickMissingDelegateErrorException)
+        {
+            return true;
+        }
+        catch (MagickException)
+        {
+            return false;
+        }
+    }
+
+    [Fact]
+    public void Only_the_allowlisted_formats_can_be_read()
+    {
+        CodeScanRaster.EnsureConfigured();
+        var decodes = Enum.GetValues<MagickFormat>()
+            .Where(f => f != MagickFormat.Unknown && !CodeScanRaster.ReadAllowlist.Contains(f))
+            .Where(f => !NeverDecodes(f))
+            .ToList();
+
+        // Anything that reached a coder is a way in that nobody decided on.
+        Assert.Empty(decodes);
+    }
+
+    [Theory]
+    [InlineData(MagickFormat.Ps)]
+    [InlineData(MagickFormat.Eps)]
+    [InlineData(MagickFormat.Ps2)]
+    [InlineData(MagickFormat.Ps3)]
+    [InlineData(MagickFormat.Epi)]
+    [InlineData(MagickFormat.Https)]
+    [InlineData(MagickFormat.Ftp)]
+    [InlineData(MagickFormat.Label)]
+    [InlineData(MagickFormat.Caption)]
+    [InlineData(MagickFormat.Inline)]
+    [InlineData(MagickFormat.Vid)]
+    [InlineData(MagickFormat.Mvg)]
+    [InlineData(MagickFormat.Msl)]
+    public void Dangerous_coders_never_decode(MagickFormat format)
+    {
+        CodeScanRaster.EnsureConfigured();
+        Assert.True(NeverDecodes(format), format.ToString());
+    }
+
+    [Fact]
+    public void The_allowlisted_formats_are_not_refused()
+    {
+        CodeScanRaster.EnsureConfigured();
+        foreach (var format in CodeScanRaster.ReadAllowlist)
+        {
+            Assert.False(CodeScanRaster.PolicyRefuses(format), format.ToString());
+        }
+    }
+
+    [Theory]
+    [InlineData("@{0}")]
+    [InlineData("|echo x")]
+    [InlineData("url:http://127.0.0.1:9/x.png")]
+    [InlineData("https://127.0.0.1:9/x.png")]
+    [InlineData("ephemeral:{0}")]
+    [InlineData("text:{0}")]
+    [InlineData("msl:{0}")]
+    [InlineData("ps:{0}")]
+    [InlineData("eps:{0}")]
+    [InlineData("label:{0}")]
+    [InlineData("fd:0")]
+    [InlineData("-")]
+    [InlineData("URL:http://127.0.0.1:9/x.png")]
+    [InlineData("HTTPS://127.0.0.1:9/x.png")]
+    [InlineData("PS:{0}")]
+    [InlineData("Ephemeral:{0}")]
+    public void File_and_network_reads_through_a_path_never_decode(string template)
+    {
+        CodeScanRaster.EnsureConfigured();
+        var file = System.IO.Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(file, "viewbox 0 0 1 1\n");
+            var path = template.Replace("{0}", file);
+            var ex = Assert.ThrowsAny<MagickException>(() => new MagickImage(path));
+            Assert.True(ex is MagickPolicyErrorException or MagickMissingDelegateErrorException, ex.GetType().Name + ": " + ex.Message);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public void Only_the_grey_writer_is_allowed()
+    {
+        CodeScanRaster.EnsureConfigured();
+        // A 1 × 1 grey PAM, a readable format without Ghostscript.
+        var pam = System.Text.Encoding.ASCII.GetBytes("P7\nWIDTH 1\nHEIGHT 1\nDEPTH 1\nMAXVAL 255\nTUPLTYPE GRAYSCALE\nENDHDR\n")
+            .Concat(new byte[] { 0x80 }).ToArray();
+        using var image = new MagickImage(pam, new MagickReadSettings { Format = MagickFormat.Pam });
+
+        foreach (var format in CodeScanRaster.WriteAllowlist) Assert.NotEmpty(image.ToByteArray(format));
+        Assert.Throws<MagickPolicyErrorException>(() => image.ToByteArray(MagickFormat.Png));
+        Assert.Throws<MagickPolicyErrorException>(() => image.ToByteArray(MagickFormat.Ps));
+        Assert.Throws<MagickPolicyErrorException>(() => image.ToByteArray(MagickFormat.Svg));
+    }
+
     [Fact]
     public void Resource_limits_are_set()
     {
@@ -249,6 +367,114 @@ public class CodeScanRasterTests
         Assert.Equal(30, hits.Count);
         var grownMb = (peak - baseline) / (1024.0 * 1024.0);
         Assert.True(grownMb < 500, $"Process grew by {grownMb:F0} MB while scanning 30 A4 pages");
+    }
+
+    // ── What reaches Ghostscript ───────────────────────────────────────────
+
+    private const string PostScript = "%!PS\n/Helvetica findfont 20 scalefont setfont 10 10 moveto (X) show showpage quit\n";
+
+    private static byte[] Polyglot() =>
+        System.Text.Encoding.ASCII.GetBytes(PostScript).Concat(Pdf((A4W, A4H))).ToArray();
+
+    [Fact]
+    public void Only_bytes_starting_with_the_pdf_header_pass()
+    {
+        Assert.True(CodeScanRaster.StartsWithPdfHeader(Pdf((A4W, A4H))));
+        Assert.False(CodeScanRaster.StartsWithPdfHeader(System.Text.Encoding.ASCII.GetBytes(PostScript)));
+        Assert.False(CodeScanRaster.StartsWithPdfHeader(Polyglot()));
+        Assert.False(CodeScanRaster.StartsWithPdfHeader(Array.Empty<byte>()));
+    }
+
+    [Fact]
+    public void Plan_rewrites_a_polyglot_into_a_clean_pdf()
+    {
+        var polyglot = Polyglot();
+        var pages = CodeScanRaster.Plan(polyglot);
+
+        Assert.NotNull(pages.CleanPdf);
+        Assert.True(CodeScanRaster.StartsWithPdfHeader(pages.CleanPdf!));
+        Assert.DoesNotContain("%!PS", System.Text.Encoding.Latin1.GetString(pages.CleanPdf!));
+    }
+
+    [GhostscriptFact]
+    public async Task PostScript_bytes_sent_as_pdf_are_refused_before_Ghostscript()
+    {
+        var ps = System.Text.Encoding.ASCII.GetBytes(PostScript);
+        var ex = await Assert.ThrowsAsync<ApiValidationException>(() =>
+            CodeScanRaster.WithPageAsync(ps, 0, 100, p => p.Width, CancellationToken.None));
+        Assert.Equal("PDF_INVALID", ex.Code);
+    }
+
+    [GhostscriptFact]
+    public async Task A_polyglot_is_refused_when_it_reaches_the_rasteriser_raw()
+    {
+        var ex = await Assert.ThrowsAsync<ApiValidationException>(() =>
+            CodeScanRaster.WithPageAsync(Polyglot(), 0, 100, p => p.Width, CancellationToken.None));
+        Assert.Equal("PDF_INVALID", ex.Code);
+    }
+
+    [GhostscriptFact]
+    public async Task A_polyglot_scanned_through_the_normal_path_renders_only_the_pdf()
+    {
+        var polyglot = Polyglot();
+        var pages = CodeScanRaster.Plan(polyglot);
+        var width = await CodeScanRaster.WithPageAsync(pages.CleanPdf!, 0, pages.Dpi[0], p => (int)p.Width, CancellationToken.None);
+        // A4 at 100+ DPI; the PostScript page (default media) is not what was rendered.
+        Assert.InRange(width, 800, 2600);
+    }
+
+    [Fact]
+    public void Plan_maps_a_broken_page_tree_to_PDF_INVALID()
+    {
+        var ex = Assert.Throws<ApiValidationException>(
+            () => CodeScanRaster.Plan(System.Text.Encoding.ASCII.GetBytes(PdfSafetyGuardTests.PageTreeCycle)));
+        Assert.Equal("PDF_INVALID", ex.Code);
+    }
+
+    [Fact]
+    public void Plan_maps_garbage_after_the_header_to_PDF_INVALID()
+    {
+        var ex = Assert.Throws<ApiValidationException>(() => CodeScanRaster.Plan("%PDF-1.4\nnot a pdf"u8.ToArray()));
+        Assert.Equal("PDF_INVALID", ex.Code);
+    }
+
+    [Fact]
+    public void Plan_maps_a_password_protected_pdf_to_PDF_ENCRYPTED()
+    {
+        using var ms = new MemoryStream();
+        var props = new WriterProperties().SetStandardEncryption(
+            "user"u8.ToArray(), "owner"u8.ToArray(), iText.Kernel.Pdf.EncryptionConstants.ALLOW_PRINTING,
+            iText.Kernel.Pdf.EncryptionConstants.ENCRYPTION_AES_128);
+        using (var doc = new PdfDocument(new PdfWriter(ms, props))) doc.AddNewPage();
+        var ex = Assert.Throws<ApiValidationException>(() => CodeScanRaster.Plan(ms.ToArray()));
+        Assert.Equal("PDF_ENCRYPTED", ex.Code);
+    }
+
+    [Fact]
+    public void The_Ghostscript_delegate_never_passes_dDOPS()
+    {
+        var delegates = ImageMagick.Configuration.ConfigurationFiles.Default.Delegates.Data;
+        Assert.DoesNotContain("dDOPS", delegates, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [GhostscriptFact]
+    public async Task A_PostScript_XObject_in_a_pdf_is_not_executed()
+    {
+        // The XObject would paint the whole page black if Ghostscript ran it (needs -dDOPS).
+        var pdf = Pdf(new[] { (A4W, A4H) }, page =>
+        {
+            var ps = new PdfStream(System.Text.Encoding.ASCII.GetBytes("0 setgray 0 0 600 850 rectfill"));
+            ps.Put(PdfName.Type, PdfName.XObject);
+            ps.Put(PdfName.Subtype, new PdfName("PS"));
+            var xobjects = new PdfDictionary();
+            xobjects.Put(new PdfName("P0"), ps);
+            page.GetResources().GetPdfObject().Put(PdfName.XObject, xobjects);
+            new PdfCanvas(page).GetContentStream().GetOutputStream().WriteBytes("/P0 Do\n"u8.ToArray());
+        });
+        var pages = CodeScanRaster.Plan(pdf);
+        var mean = await CodeScanRaster.WithPageAsync(pages.CleanPdf, 0, 72, p =>
+            p.ToByteArray(MagickFormat.Gray).Select(b => (int)b).Average(), CancellationToken.None);
+        Assert.True(mean > 200, $"page mean {mean}: the PostScript was executed");
     }
 
     // ── helpers ────────────────────────────────────────────────────────────

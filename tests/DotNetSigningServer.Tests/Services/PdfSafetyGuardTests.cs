@@ -57,6 +57,17 @@ public class PdfSafetyGuardTests
         Assert.Equal("PDF_INVALID", ex.Code);
     }
 
+    internal const string PageTreeCycle =
+        "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[2 0 R]/Count 1>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n";
+
+    [Fact]
+    public void PageTreeCycle_IsInvalid_NotAnInternalError()
+    {
+        var ex = Assert.Throws<ApiValidationException>(
+            () => CreateGuard().EnsureSafePdf(System.Text.Encoding.ASCII.GetBytes(PageTreeCycle), "test"));
+        Assert.Equal("PDF_INVALID", ex.Code);
+    }
+
     [Fact]
     public void HeaderTooFarIn_IsInvalid()
     {

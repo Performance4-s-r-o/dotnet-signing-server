@@ -214,6 +214,11 @@ public class PdfSafetyGuard
         {
             throw new ApiValidationException("PDF_TOO_COMPLEX", $"{context}: structure above the limits");
         }
+        catch (Exception ex) when (ex is PdfException || ex is IOException)
+        {
+            // e.g. "Invalid page structure", a cycle in /Kids: the caller's file, not our fault.
+            throw new ApiValidationException("PDF_INVALID", $"{context}: {ex.Message}");
+        }
     }
 
     /// <summary>Counts fields, stopping as soon as the limit is passed. False = over the limit.</summary>

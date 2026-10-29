@@ -2,6 +2,7 @@ using DotNetSigningServer.Exceptions;
 using ImageMagick;
 using DotNetSigningServer.Options;
 using ImageMagick.Configuration;
+using iText.Kernel.Exceptions;
 using iText.Kernel.Pdf;
 
 namespace DotNetSigningServer.Services;
@@ -73,7 +74,9 @@ public static class CodeScanRaster
     /// What ImageMagick may do in this process. Only reading PDF (which hands the page to
     /// Ghostscript and reads back its PNG) and writing raw grey bytes for the decoder.
     /// Everything else is refused, including the coders that have been the way in before:
-    /// MVG, MSL, EPHEMERAL, URL/HTTP, SVG, TEXT, and "@file" / "|command" paths.
+    /// PS/EPS, MVG, MSL, EPHEMERAL, URL/HTTP, SVG, TEXT, and "@file" / "|command" paths.
+    /// The path prefixes repeat the coder rule on purpose (matched case-insensitively, see tests): widening the coder list later
+    /// does not reopen them.
     /// The Ghostscript delegates carry -dSAFER already (Magick.NET's delegates.xml), and
     /// Ghostscript 9.50+ is SAFER by default; only the "gs" delegate may run.
     /// </summary>
@@ -86,8 +89,33 @@ public static class CodeScanRaster
           <policy domain="delegate" rights="execute" pattern="gs" />
           <policy domain="path" rights="none" pattern="@*" />
           <policy domain="path" rights="none" pattern="|*" />
+          <policy domain="path" rights="none" pattern="url:*" />
+          <policy domain="path" rights="none" pattern="http:*" />
+          <policy domain="path" rights="none" pattern="https:*" />
+          <policy domain="path" rights="none" pattern="ftp:*" />
+          <policy domain="path" rights="none" pattern="ephemeral:*" />
+          <policy domain="path" rights="none" pattern="msl:*" />
+          <policy domain="path" rights="none" pattern="mvg:*" />
+          <policy domain="path" rights="none" pattern="text:*" />
+          <policy domain="path" rights="none" pattern="label:*" />
+          <policy domain="path" rights="none" pattern="caption:*" />
+          <policy domain="path" rights="none" pattern="inline:*" />
+          <policy domain="path" rights="none" pattern="ps:*" />
+          <policy domain="path" rights="none" pattern="eps:*" />
+          <policy domain="path" rights="none" pattern="ps2:*" />
+          <policy domain="path" rights="none" pattern="ps3:*" />
+          <policy domain="path" rights="none" pattern="svg:*" />
+          <policy domain="path" rights="none" pattern="vid:*" />
+          <policy domain="path" rights="none" pattern="fd:*" />
+          <policy domain="path" rights="none" pattern="-" />
         </policymap>
         """;
+
+    /// <summary>Formats the policy lets ImageMagick read; the only readers the code uses.</summary>
+    internal static readonly MagickFormat[] ReadAllowlist = { MagickFormat.Pdf, MagickFormat.Png, MagickFormat.Pam };
+
+    /// <summary>The one format ImageMagick may write (raw grey bytes for the decoder).</summary>
+    internal static readonly MagickFormat[] WriteAllowlist = { MagickFormat.Gray };
 
     /// <summary>
     /// Policy and limits, once per process. Must run before ImageMagick is used for the first
@@ -155,7 +183,7 @@ public static class CodeScanRaster
     }
 
     /// <summary>The scan of one document: page count, and the DPI of each page that is rendered.</summary>
-    public sealed record ScanPages(int TotalPages, IReadOnlyList<double> Dpi)
+    public sealed record ScanPages(int TotalPages, IReadOnlyList<double> Dpi, byte[] CleanPdf)
     {
         public int PagesProcessed => Dpi.Count;
         public bool Truncated => TotalPages > PagesProcessed;
@@ -167,6 +195,22 @@ public static class CodeScanRaster
     /// <see cref="MinDpi"/> — before any credit is reserved and before Ghostscript runs.
     /// </summary>
     public static ScanPages Plan(byte[] pdf)
+    {
+        try
+        {
+            return PlanCore(pdf);
+        }
+        catch (BadPasswordException)
+        {
+            throw new ApiValidationException("PDF_ENCRYPTED", "Password protected");
+        }
+        catch (Exception ex) when (ex is PdfException or IOException)
+        {
+            throw new ApiValidationException("PDF_INVALID", ex.Message);
+        }
+    }
+
+    private static ScanPages PlanCore(byte[] pdf)
     {
         using var ms = new MemoryStream(pdf);
         using var reader = new PdfReader(ms);
@@ -184,8 +228,27 @@ public static class CodeScanRaster
                 ?? throw new ApiValidationException("PDF_PAGE_TOO_LARGE", $"Page {i} is too large to rasterise");
             dpi.Add(pageDpi);
         }
-        return new ScanPages(total, dpi);
+        return new ScanPages(total, dpi, Reserialize(pdf));
     }
+
+    /// <summary>
+    /// The document as iText writes it: a fresh header at offset 0, nothing before it. Ghostscript
+    /// recognises its input by content, so bytes in front of <c>%PDF-</c> (a PostScript polyglot)
+    /// must never reach it; only this output does.
+    /// </summary>
+    internal static byte[] Reserialize(byte[] pdf)
+    {
+        using var input = new MemoryStream(pdf);
+        using var output = new MemoryStream();
+        using (var doc = new PdfDocument(new PdfReader(input), new PdfWriter(output)))
+        {
+        }
+        return output.ToArray();
+    }
+
+    /// <summary>True when the bytes start with <c>%PDF-</c> at offset 0.</summary>
+    internal static bool StartsWithPdfHeader(byte[] bytes) =>
+        bytes.Length >= 5 && bytes[0] == '%' && bytes[1] == 'P' && bytes[2] == 'D' && bytes[3] == 'F' && bytes[4] == '-';
 
     /// <summary>
     /// Resolution for a page of the given size in points: 300 DPI, lowered so the page fits
@@ -213,6 +276,11 @@ public static class CodeScanRaster
         byte[] pdf, int pageIndex, double dpi, Func<MagickImage, T> use, CancellationToken ct)
     {
         EnsureConfigured();
+        // Ghostscript sniffs the content: only a document that starts with the PDF header goes in.
+        if (!StartsWithPdfHeader(pdf))
+        {
+            throw new ApiValidationException("PDF_INVALID", "Rasterisation input does not start with a PDF header");
+        }
         return await WithSlotAsync(Pool, RasterWait, () =>
         {
             ct.ThrowIfCancellationRequested();
