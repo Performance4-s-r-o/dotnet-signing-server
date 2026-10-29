@@ -127,6 +127,14 @@ public class User
     public bool SealAllowed { get; set; } = false;
 
     /// <summary>
+    /// The trusted internal caller's service account (#78): its server token is accepted only on
+    /// the internal listener (<c>INTERNAL_API_PORT</c>), and only there are its tenant headers
+    /// believed and the attachment debit skippable. On the public port the token is refused.
+    /// Off by default; only an administrator sets it, never the account itself.
+    /// </summary>
+    public bool TrustedCaller { get; set; } = false;
+
+    /// <summary>
     /// Timestamp when enterprise mode was last enabled. Usage shown in the enterprise billing
     /// view is filtered to records created at or after this time — usage before the switch is
     /// considered separately (pay-as-you-go credits). NULL = enterprise was never enabled, or

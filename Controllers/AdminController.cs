@@ -72,6 +72,7 @@ public class AdminController : Controller
                 IsAdmin = u.IsAdmin,
                 IsEnterprise = u.IsEnterprise,
                 SealAllowed = u.SealAllowed,
+                TrustedCaller = u.TrustedCaller,
                 CreditsRemaining = u.CreditsRemaining,
                 AutoRechargeEnabled = u.AutoRechargeEnabled,
                 CreatedAt = u.CreatedAt,
@@ -336,6 +337,53 @@ public class AdminController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    /// <summary>
+    /// Marks or unmarks the trusted internal caller's account (#78). Only an administrator, and
+    /// never on their own account: whoever holds the flag gets the tenant headers believed.
+    /// </summary>
+    [HttpPost("/Admin/Users/{id:guid}/ToggleTrustedCaller")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ToggleTrustedCaller(Guid id)
+    {
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (user == null)
+        {
+            TempData["Error"] = _localizer["UserNotFound"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+
+        var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!user.TrustedCaller && string.Equals(actorId, user.Id.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            TempData["Error"] = _localizer["TrustedCallerNotOnSelf"].Value;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        user.TrustedCaller = !user.TrustedCaller;
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        AdminAudit.Record(_dbContext, User, user.Id, AdminAudit.Actions.TrustedCaller,
+            new { from = !user.TrustedCaller, to = user.TrustedCaller }, _time.GetUtcNow());
+        await _dbContext.SaveChangesAsync();
+
+        // The token validation cache holds the account as it was: drop it so the change applies now.
+        var apiAuth = HttpContext.RequestServices?.GetService<IApiAuthService>();
+        if (apiAuth != null)
+        {
+            var tokenIds = await _dbContext.ApiTokens.Where(t => t.UserId == user.Id).Select(t => t.Id).ToListAsync();
+            foreach (var tokenId in tokenIds) apiAuth.InvalidateTokenCache(tokenId);
+        }
+
+        _logger.LogWarning(
+            "Trusted caller flag for user {UserId} set to {TrustedCaller} by {ActorId}",
+            user.Id, user.TrustedCaller, actorId);
+
+        TempData["Info"] = user.TrustedCaller
+            ? _localizer["TrustedCallerEnabled"].Value
+            : _localizer["TrustedCallerDisabled"].Value;
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
     [HttpPost("/Admin/Users/{id:guid}/SetConcurrencyQueueTimeout")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SetConcurrencyQueueTimeout(Guid id, [FromForm] int? queueTimeoutSeconds)
@@ -390,6 +438,7 @@ public class AdminController : Controller
         public bool IsAdmin { get; set; }
         public bool IsEnterprise { get; set; }
         public bool SealAllowed { get; set; }
+        public bool TrustedCaller { get; set; }
         public int CreditsRemaining { get; set; }
         public bool AutoRechargeEnabled { get; set; }
         public DateTimeOffset CreatedAt { get; set; }

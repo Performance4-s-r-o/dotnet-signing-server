@@ -15,6 +15,7 @@ public static class AdminAudit
     {
         public const string Enterprise = "user.enterprise";
         public const string SealAllowed = "user.seal_allowed";
+        public const string TrustedCaller = "user.trusted_caller";
         public const string ConcurrencyQueueTimeout = "user.concurrency_queue_timeout";
         public const string OutboxRequeue = "backoffice.outbox_requeue";
         public const string InboxReplay = "backoffice.inbox_replay";

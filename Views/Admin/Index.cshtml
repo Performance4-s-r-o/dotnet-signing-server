@@ -62,6 +62,10 @@
                                     {
                                         <span class="tokens-status" style="background:#dbeafe;color:#1e40af;margin-left:0.5rem">Admin</span>
                                     }
+                                    @if (u.TrustedCaller)
+                                    {
+                                        <span class="tokens-status" style="background:#fee2e2;color:#991b1b;margin-left:0.5rem">@L["TrustedCallerBadge"]</span>
+                                    }
                                 </td>
                                 <td>@(u.IsEnterprise ? "∞" : u.CreditsRemaining.ToString())</td>
                                 <td>

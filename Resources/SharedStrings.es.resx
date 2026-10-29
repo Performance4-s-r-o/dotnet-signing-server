@@ -177,6 +177,16 @@
   <data name="ConfirmDisableSealAllowed" xml:space="preserve"><value>¿Retirar a esta cuenta el acceso al sellado?</value></data>
   <data name="SealAllowedEnabled" xml:space="preserve"><value>Sellado habilitado para esta cuenta.</value></data>
   <data name="SealAllowedDisabled" xml:space="preserve"><value>Sellado deshabilitado para esta cuenta.</value></data>
+  <data name="TrustedCaller" xml:space="preserve"><value>Llamante de confianza</value></data>
+  <data name="TrustedCallerDescription" xml:space="preserve"><value>El token de esta cuenta solo se acepta en el puerto interno (INTERNAL_API_PORT); allí se aceptan sus cabeceras X-P4-Tenant / X-Request-Id y puede omitir el cobro de adjuntos. En el puerto público se rechaza (401). Sin puerto interno la marca no tiene efecto.</value></data>
+  <data name="EnableTrustedCaller" xml:space="preserve"><value>Marcar como llamante de confianza</value></data>
+  <data name="DisableTrustedCaller" xml:space="preserve"><value>Quitar llamante de confianza</value></data>
+  <data name="ConfirmEnableTrustedCaller" xml:space="preserve"><value>¿Marcar esta cuenta como llamante de confianza? Su token dejará de funcionar en el puerto público.</value></data>
+  <data name="ConfirmDisableTrustedCaller" xml:space="preserve"><value>¿Retirar la confianza a esta cuenta?</value></data>
+  <data name="TrustedCallerEnabled" xml:space="preserve"><value>La cuenta está marcada como llamante de confianza.</value></data>
+  <data name="TrustedCallerDisabled" xml:space="preserve"><value>La cuenta ya no es llamante de confianza.</value></data>
+  <data name="TrustedCallerNotOnSelf" xml:space="preserve"><value>No puede marcar su propia cuenta como llamante de confianza.</value></data>
+  <data name="TrustedCallerBadge" xml:space="preserve"><value>Llamante de confianza</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>Se produjo un error al añadir el archivo adjunto</value></data>
   <data name="PdfaConversionError" xml:space="preserve"><value>Se produjo un error al convertir el documento a PDF/A</value></data>
   <data name="ProvideTemplateOrPdf" xml:space="preserve"><value>Proporcione TemplateId o PdfContent (pero no ambos).</value></data>

@@ -177,6 +177,16 @@
   <data name="ConfirmDisableSealAllowed" xml:space="preserve"><value>Odebrat tomuto účtu přístup k pečetění?</value></data>
   <data name="SealAllowedEnabled" xml:space="preserve"><value>Pečetění pro tento účet povoleno.</value></data>
   <data name="SealAllowedDisabled" xml:space="preserve"><value>Pečetění pro tento účet zakázáno.</value></data>
+  <data name="TrustedCaller" xml:space="preserve"><value>Důvěryhodný volající</value></data>
+  <data name="TrustedCallerDescription" xml:space="preserve"><value>Token tohoto účtu je přijat jen na interním portu (INTERNAL_API_PORT); tam se věří jeho hlavičkám X-P4-Tenant / X-Request-Id a smí přeskočit účtování příloh. Na veřejném portu je odmítnut (401). Bez interního portu nemá příznak účinek.</value></data>
+  <data name="EnableTrustedCaller" xml:space="preserve"><value>Označit jako důvěryhodného volajícího</value></data>
+  <data name="DisableTrustedCaller" xml:space="preserve"><value>Zrušit důvěryhodného volajícího</value></data>
+  <data name="ConfirmEnableTrustedCaller" xml:space="preserve"><value>Označit tento účet jako důvěryhodného volajícího? Jeho token pak na veřejném portu přestane fungovat.</value></data>
+  <data name="ConfirmDisableTrustedCaller" xml:space="preserve"><value>Odebrat tomuto účtu důvěru?</value></data>
+  <data name="TrustedCallerEnabled" xml:space="preserve"><value>Účet je označen jako důvěryhodný volající.</value></data>
+  <data name="TrustedCallerDisabled" xml:space="preserve"><value>Účet už není důvěryhodný volající.</value></data>
+  <data name="TrustedCallerNotOnSelf" xml:space="preserve"><value>Vlastní účet nelze označit jako důvěryhodného volajícího.</value></data>
+  <data name="TrustedCallerBadge" xml:space="preserve"><value>Důvěryhodný volající</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>Při přidávání přílohy došlo k chybě</value></data>
   <data name="PdfaConversionError" xml:space="preserve"><value>Při převodu dokumentu na PDF/A došlo k chybě</value></data>
   <data name="ProvideTemplateOrPdf" xml:space="preserve"><value>Zadejte buď TemplateId, nebo PdfContent (ne obojí).</value></data>

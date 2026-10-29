@@ -17,17 +17,20 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
 
     private readonly IApiAuthService _apiAuth;
     private readonly DotNetSigningServer.Options.PortalTrustOptions _portalTrust;
+    private readonly MissingTrustedCallerFlag? _missingFlag;
 
     public ApiKeyAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
         IApiAuthService apiAuth,
-        DotNetSigningServer.Options.PortalTrustOptions portalTrust)
+        DotNetSigningServer.Options.PortalTrustOptions portalTrust,
+        MissingTrustedCallerFlag? missingFlag = null)
         : base(options, logger, encoder)
     {
         _apiAuth = apiAuth;
         _portalTrust = portalTrust;
+        _missingFlag = missingFlag;
     }
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -50,15 +53,24 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
         }
         var user = validation.User;
 
-        // The portal's token works on the internal listener only (#78). On the public one it is
-        // refused like an unknown token, so the gate answers 401 before any body is read.
-        var kind = PortalTrust.Classify(_portalTrust, Context.Connection.LocalPort, user.Id, validation.IsBrowserToken);
+        // A trusted account's token works on the internal listener only (#78). On the public one it
+        // is refused like an unknown token, so the gate answers 401 before any body is read.
+        var kind = PortalTrust.Classify(_portalTrust, Context.Connection.LocalPort, user.TrustedCaller, validation.IsBrowserToken);
         if (kind == PortalCallKind.Refused)
         {
             Logger.LogWarning(Logging.LoggingEvents.AuthFailed,
                 "Portal token {TokenId} refused on port {Port}: it is accepted on the internal listener only",
                 validation.TokenId, Context.Connection.LocalPort);
             return AuthenticateResult.NoResult();
+        }
+
+        if (_missingFlag?.ShouldWarn(_portalTrust, Context.Connection.LocalPort, kind, validation.IsBrowserToken,
+                user.Id, Request.Headers, DateTimeOffset.UtcNow) == true)
+        {
+            Logger.LogWarning(Logging.LoggingEvents.AuthFailed,
+                "Account {UserId} sends trusted caller headers on the internal port but is not marked TrustedCaller: "
+                + "the headers are ignored, tenant checks are off and per-account limits apply. Set the flag in the administration.",
+                user.Id);
         }
 
         var claims = new List<Claim>

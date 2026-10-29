@@ -41,7 +41,7 @@ public enum AccountErasureRefusal
 {
     None,
 
-    /// <summary>The portal's service account (<c>TRUSTED_CALLER_USER_IDS</c>): every tenant's signing runs on it.</summary>
+    /// <summary>The trusted caller's service account (<c>User.TrustedCaller</c>): every tenant's signing runs on it.</summary>
     PortalAccount,
 
     /// <summary>The only active administrator: nobody could manage the installation afterwards.</summary>
@@ -210,8 +210,7 @@ public sealed class AccountErasureService
     private static async Task<AccountErasureRefusal> RefusalAsync(
         IServiceProvider services, ApplicationDbContext db, User user, CancellationToken cancellationToken)
     {
-        var portal = services.GetService<PortalTrustOptions>();
-        if (portal?.TrustedCallerUserIds.Contains(user.Id) == true) return AccountErasureRefusal.PortalAccount;
+        if (user.TrustedCaller) return AccountErasureRefusal.PortalAccount;
 
         if (user.IsAdmin && !await db.Users.AnyAsync(
                 u => u.Id != user.Id && u.IsAdmin && u.IsActive && u.ErasedAt == null, cancellationToken))
@@ -519,6 +518,7 @@ public sealed class AccountErasureService
         user.IsActive = false;
         user.IsAdmin = false;
         user.SealAllowed = false;
+        user.TrustedCaller = false;
         user.EmailVerified = false;
         user.EmailVerificationToken = null;
         user.EmailVerificationExpiresAt = null;

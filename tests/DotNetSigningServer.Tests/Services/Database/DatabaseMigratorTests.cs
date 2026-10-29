@@ -110,6 +110,34 @@ public class DatabaseMigratorTests : IClassFixture<EmptyDatabaseFixture>
     }
 
     [DockerFact]
+    public async Task TrustedCaller_column_exists_and_is_off_for_every_account()
+    {
+        await using var db = DatabaseMigrator.CreateContext(await _fixture.NewDatabaseAsync());
+        DatabaseMigrator.EnsureSchemaAndMigrate(db, NullLogger.Instance);
+
+        Assert.Contains("20261029000942_AddTrustedCaller", db.Database.GetAppliedMigrations());
+        var conn = db.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync();
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = """
+                SELECT is_nullable || '|' || column_default FROM information_schema.columns
+                WHERE table_schema = 'dotnet_signing' AND table_name = 'Users' AND column_name = 'TrustedCaller'
+                """;
+            Assert.Equal("NO|false", (string?)await cmd.ExecuteScalarAsync());
+        }
+
+        db.Users.Add(new DotNetSigningServer.Models.User { Email = "flag@example.com", IsActive = true });
+        await db.SaveChangesAsync();
+        Assert.False((await db.Users.AsNoTracking().SingleAsync()).TrustedCaller);
+
+        // No flagged account on the internal port: a warning, not a failed start.
+        var warnings = await PortalTrustStartupChecks.CheckAsync(
+            new DotNetSigningServer.Options.PortalTrustOptions { InternalPort = 8086 }, db);
+        Assert.True(Assert.Single(warnings).IsError);
+    }
+
+    [DockerFact]
     public async Task Start_without_the_switch_does_not_migrate_and_refuses_to_run()
     {
         var connectionString = await _fixture.NewDatabaseAsync();

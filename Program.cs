@@ -98,14 +98,16 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 
 // #78: the trusted caller's token only on the internal listener, its tenant headers only from there.
+// Which account is trusted is a flag set in the administration (User.TrustedCaller).
 // The migrate step serves nothing and may be given only the database variables.
 var portalTrust = migrateOnly ? new PortalTrustOptions() : PortalTrustOptions.From(builder.Configuration);
 builder.Services.AddSingleton(portalTrust);
-if (portalTrust.TrustedOnEveryPort)
+builder.Services.AddSingleton<DotNetSigningServer.Services.MissingTrustedCallerFlag>();
+if (portalTrust.RemovedVariableSet)
 {
     Console.Error.WriteLine(
-        $"WARN: {PortalTrustOptions.TrustedCallerUserIdsVariable} is set but {PortalTrustOptions.InternalPortVariable} is empty: "
-        + "the trusted token is accepted on every port, the public one included.");
+        $"WARN: {PortalTrustOptions.RemovedTrustedCallerUserIdsVariable} is set but no longer read and has no effect: "
+        + "mark the trusted account in the administration (Trusted caller) instead, then remove the variable.");
 }
 if (portalTrust.InternalPort is int internalPort)
 {
@@ -777,6 +779,9 @@ using (var scope = app.Services.CreateScope())
         logger.LogCritical(ex, "Database is not ready — aborting startup.");
         throw;
     }
+
+    // After the schema exists: an internal listener nobody may use, or a flag that does nothing, is said aloud.
+    await DotNetSigningServer.Services.PortalTrustStartupChecks.WarnAsync(portalTrust, dbContext, logger);
 
     // After the schema exists: a self-hosted installation has signing up switched
     // off, so without this there would be no way to obtain the first account.

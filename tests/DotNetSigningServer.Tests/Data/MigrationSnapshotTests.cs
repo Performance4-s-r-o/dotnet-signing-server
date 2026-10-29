@@ -36,7 +36,7 @@ public class MigrationSnapshotTests
         using var db = new ApplicationDbContext(options);
 
         var migrations = db.Database.GetMigrations().ToList();
-        Assert.Single(migrations);
+        // Migrations after the baseline only add to it; the hand-written objects live in the baseline.
         Assert.Equal(DatabaseMigrator.BaselineMigrationId, migrations[0]);
         var sql = db.GetService<IMigrator>().GenerateScript(Migration.InitialDatabase, migrations[0]);
 
