@@ -91,6 +91,8 @@ services:
       # (start at the CPU count), A = AI calls at once (start at 4).
       - HEAVY_OPERATIONS_LIMIT=${HEAVY_OPERATIONS_LIMIT:-{{project.DOTNET_HEAVY_OPERATIONS_LIMIT}}}
       - AI_OPERATIONS_LIMIT=${AI_OPERATIONS_LIMIT:-{{project.DOTNET_AI_OPERATIONS_LIMIT}}}
+      - RASTER_OPERATIONS_LIMIT=${RASTER_OPERATIONS_LIMIT:-{{project.DOTNET_RASTER_OPERATIONS_LIMIT}}}
+      - RASTER_WAIT_MS=${RASTER_WAIT_MS:-{{project.DOTNET_RASTER_WAIT_MS}}}
       # A user's queue (#69): longest wait whatever the account stores (empty = 30 s, 0-600) and
       # waiting requests per slot of the user's limit (empty = 2). The trusted caller is exempt.
       - USER_QUEUE_MAX_SECONDS=${USER_QUEUE_MAX_SECONDS:-{{project.DOTNET_USER_QUEUE_MAX_SECONDS}}}

@@ -1,3 +1,4 @@
+using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Filters;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Services;
@@ -169,5 +170,101 @@ public class CapacityPoolTests
         Assert.Contains("\"heavy\"", json);
         Assert.Contains("\"userQueues\"", json);
         Assert.Contains("\"workingSetBytes\"", json);
+    }
+
+    // ── Pool R (rasterisation) ─────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(3, 1)]
+    [InlineData(8, 4)]
+    [InlineData(24, 12)]
+    public void Raster_pool_defaults_to_half_the_cores_but_at_least_one(int cores, int expected)
+    {
+        var pools = new CapacityPools(new BillingOptions(), cores);
+        Assert.True(pools.Raster.Enabled);
+        Assert.Equal(expected, pools.Raster.Limit);
+        Assert.Same(pools.Raster, pools.Get(CapacityPoolKind.Rasterization));
+    }
+
+    [Fact]
+    public void Raster_pool_is_overridden_by_configuration_and_zero_switches_it_off()
+    {
+        Assert.Equal(2, new CapacityPools(new BillingOptions { RasterOperationsLimit = 2 }, 24).Raster.Limit);
+        Assert.False(new CapacityPools(new BillingOptions { RasterOperationsLimit = 0 }, 24).Raster.Enabled);
+        Assert.Equal(TimeSpan.FromSeconds(5), new CapacityPools(new BillingOptions { RasterWaitMilliseconds = 5000 }, 8).RasterWait);
+    }
+
+    [Fact]
+    public async Task Raster_slot_is_given_back_after_a_result_an_exception_and_a_cancellation()
+    {
+        var pool = new CapacityPool("raster", 1);
+
+        Assert.Equal(7, await CodeScanRaster.WithSlotAsync(pool, Bounded, () => 7, CancellationToken.None));
+        Assert.Equal(1, pool.Available);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CodeScanRaster.WithSlotAsync<int>(pool, Bounded, () => throw new InvalidOperationException("boom"), CancellationToken.None));
+        Assert.Equal(1, pool.Available);
+
+        Assert.True(await pool.TryEnterAsync(TimeSpan.Zero, CancellationToken.None));
+        using var cts = new CancellationTokenSource(30);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            CodeScanRaster.WithSlotAsync(pool, Bounded, () => 1, cts.Token));
+        pool.Release();
+        Assert.Equal(1, pool.Available);
+        Assert.Equal(0, pool.Snapshot().Waiting);
+    }
+
+    [Fact]
+    public async Task Raster_page_waits_for_the_slot_then_gets_capacity_exceeded()
+    {
+        var pool = new CapacityPool("raster", 1);
+        Assert.True(await pool.TryEnterAsync(TimeSpan.Zero, CancellationToken.None));
+
+        var started = false;
+        var ex = await Assert.ThrowsAsync<CapacityExceededException>(() =>
+            CodeScanRaster.WithSlotAsync(pool, TimeSpan.FromMilliseconds(40), () => { started = true; return 1; }, CancellationToken.None));
+
+        Assert.False(started);
+        Assert.Equal("raster", ex.Pool);
+        Assert.Equal(1, pool.Snapshot().Rejected);
+        Assert.Equal(1, pool.InUse);
+    }
+
+    [Fact]
+    public async Task Raster_pages_never_run_more_than_the_limit_at_once()
+    {
+        var pool = new CapacityPool("raster", 2);
+        var running = 0;
+        var peak = 0;
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var tasks = Enumerable.Range(0, 6).Select(_ => Task.Run(() =>
+            CodeScanRaster.WithSlotAsync(pool, Bounded, () =>
+            {
+                var now = Interlocked.Increment(ref running);
+                int seen;
+                while (now > (seen = Volatile.Read(ref peak)) && Interlocked.CompareExchange(ref peak, now, seen) != seen) { }
+                gate.Task.Wait(Bounded);
+                Interlocked.Decrement(ref running);
+                return 0;
+            }, CancellationToken.None))).ToArray();
+
+        SpinWait.SpinUntil(() => pool.InUse == 2 && pool.Snapshot().Waiting == 4, Bounded);
+        Assert.Equal(2, pool.InUse);
+        gate.SetResult();
+        await Task.WhenAll(tasks).WaitAsync(Bounded);
+
+        Assert.Equal(2, peak);
+        Assert.Equal(0, pool.InUse);
+        Assert.Equal(6, pool.Snapshot().Acquired);
+    }
+
+    [Fact]
+    public void Diagnostics_snapshot_lists_the_raster_pool()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(ConcurrencyDiagnostics.Snapshot(new CapacityPools(new BillingOptions(), 8)));
+        Assert.Contains("\"raster\"", json);
     }
 }

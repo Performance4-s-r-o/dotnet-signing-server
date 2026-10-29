@@ -11,6 +11,8 @@ public enum CapacityPoolKind
     Heavy,
     /// <summary>A: the AI endpoints.</summary>
     Ai,
+    /// <summary>R: rasterisation of a PDF page (Ghostscript + ImageMagick), taken per page.</summary>
+    Rasterization,
 }
 
 /// <summary>
@@ -130,8 +132,8 @@ public sealed record PoolSnapshot(
 
 /// <summary>
 /// The process-wide pools of #69: G (global, taken in <c>UserConcurrencyMiddleware</c>), H (heavy
-/// operations) and A (AI), each off unless configured. R (rasterisation) lives in
-/// <see cref="CodeScanRaster"/>. The sizes are starting hypotheses from the CPU count, to be
+/// operations), A (AI) and R (rasterisation, taken per page in <see cref="CodeScanRaster"/>).
+/// G, H and A are off unless configured; R defaults to max(1, ⌊C/2⌋). The sizes are starting hypotheses from the CPU count, to be
 /// tuned by the diagnostics endpoint and a load test, not measured capacity.
 /// </summary>
 public sealed class CapacityPools
@@ -146,6 +148,9 @@ public sealed class CapacityPools
         Global = new CapacityPool("global", BillingOptions.EffectiveGlobalLimit(billing, processorCount));
         Heavy = new CapacityPool("heavy", billing.HeavyOperationsLimit ?? 0);
         Ai = new CapacityPool("ai", billing.AiOperationsLimit ?? 0);
+        // R was always on (a fixed semaphore in CodeScanRaster); unset keeps that, 0 switches it off.
+        Raster = new CapacityPool("raster", billing.RasterOperationsLimit ?? BillingOptions.SuggestedRasterLimit(processorCount));
+        RasterWait = TimeSpan.FromMilliseconds(Math.Max(0, billing.RasterWaitMilliseconds));
         Wait = TimeSpan.FromMilliseconds(Math.Max(0, billing.GlobalConcurrencyWaitMilliseconds));
         HeavyCapacity = Heavy.Enabled ? Heavy.Limit : BillingOptions.SuggestedHeavyLimit(processorCount);
         SelfServiceMaxConcurrency = SelfServiceMax(HeavyCapacity, billing.ConcurrencyDefaultLimit);
@@ -156,6 +161,11 @@ public sealed class CapacityPools
     public CapacityPool Heavy { get; }
 
     public CapacityPool Ai { get; }
+
+    public CapacityPool Raster { get; }
+
+    /// <summary>How long a page waits for a slot in R. Longer than <see cref="Wait"/>: the scan is already paid for.</summary>
+    public TimeSpan RasterWait { get; }
 
     /// <summary>How long a request waits for a slot in G, H or A before the 503.</summary>
     public TimeSpan Wait { get; }
@@ -173,6 +183,7 @@ public sealed class CapacityPools
     {
         CapacityPoolKind.Heavy => Heavy,
         CapacityPoolKind.Ai => Ai,
+        CapacityPoolKind.Rasterization => Raster,
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 

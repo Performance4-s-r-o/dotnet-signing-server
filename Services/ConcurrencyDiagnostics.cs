@@ -34,9 +34,9 @@ public static class ConcurrencyDiagnostics
                 pools.Global.Snapshot(),
                 pools.Heavy.Snapshot(),
                 pools.Ai.Snapshot(),
+                pools.Raster.Snapshot(),
             },
             operations = OperationMetrics.Snapshot(),
-            raster = new { limit = CodeScanRaster.PoolSize, inUse = CodeScanRaster.InUse },
             suggested = new
             {
                 heavy = BillingOptions.SuggestedHeavyLimit(cpus),

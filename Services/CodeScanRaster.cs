@@ -1,5 +1,6 @@
 using DotNetSigningServer.Exceptions;
 using ImageMagick;
+using DotNetSigningServer.Options;
 using ImageMagick.Configuration;
 using iText.Kernel.Pdf;
 
@@ -46,17 +47,25 @@ public static class CodeScanRaster
     public const ulong TimeLimitSeconds = 60;
 
     /// <summary>
-    /// Rasterisations running at once in the process, R = max(1, ⌊cores / 2⌋). A page holds a
-    /// slot from Ghostscript to the last decode, so memory is bounded by R pages, not by the
-    /// number of requests — the per-user and global request semaphores (#69, #93) let more
-    /// requests in than this, and that is fine: they wait here, inside their own deadline.
+    /// Pool R (#69): rasterisations running at once, max(1, ⌊cores / 2⌋) unless configured. A page
+    /// holds a slot from Ghostscript to the last decode, so memory is bounded by R pages, not by the
+    /// number of requests — the per-user and global request semaphores let more requests in than
+    /// this, and that is fine: they wait here, up to <see cref="RasterWait"/>, then get 503.
+    /// Program.cs swaps in the pool of <see cref="CapacityPools"/> so diagnostics see the same one.
     /// </summary>
-    public static int PoolSize { get; } = Math.Max(1, Environment.ProcessorCount / 2);
+    public static CapacityPool Pool { get; private set; } =
+        new("raster", BillingOptions.SuggestedRasterLimit(Environment.ProcessorCount));
 
-    private static readonly SemaphoreSlim Pool = new(PoolSize, PoolSize);
+    /// <summary>How long one page waits for a slot of <see cref="Pool"/>.</summary>
+    public static TimeSpan RasterWait { get; private set; } = TimeSpan.FromSeconds(30);
 
-    /// <summary>Rasterisations running now; diagnostics only (#69).</summary>
-    internal static int InUse => PoolSize - Pool.CurrentCount;
+    /// <summary>Uses the pool and wait from the configuration (startup, tests).</summary>
+    public static void UsePool(CapacityPool pool, TimeSpan wait)
+    {
+        Pool = pool;
+        RasterWait = wait;
+    }
+
     private static readonly object ConfigureLock = new();
     private static bool _policyApplied;
 
@@ -204,8 +213,7 @@ public static class CodeScanRaster
         byte[] pdf, int pageIndex, double dpi, Func<MagickImage, T> use, CancellationToken ct)
     {
         EnsureConfigured();
-        await Pool.WaitAsync(ct);
-        try
+        return await WithSlotAsync(Pool, RasterWait, () =>
         {
             ct.ThrowIfCancellationRequested();
             var settings = new MagickReadSettings
@@ -221,10 +229,27 @@ public static class CodeScanRaster
             image.ColorType = ColorType.Grayscale;
             image.Depth = 8;
             return use(image);
+        }, ct);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="work"/> holding a slot of <paramref name="pool"/>. Waits at most
+    /// <paramref name="wait"/>, then throws <see cref="CapacityExceededException"/>; the slot is
+    /// given back whatever the work does (result, exception, cancellation).
+    /// </summary>
+    internal static async Task<T> WithSlotAsync<T>(CapacityPool pool, TimeSpan wait, Func<T> work, CancellationToken ct)
+    {
+        if (!await pool.TryEnterAsync(wait, ct))
+        {
+            throw new CapacityExceededException(pool.Name);
+        }
+        try
+        {
+            return work();
         }
         finally
         {
-            Pool.Release();
+            pool.Release();
         }
     }
 }
