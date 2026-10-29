@@ -26,6 +26,7 @@ public sealed class CapacityPool
     private long _waitTicksTotal;
     private long _waitedCount;
     private long _maxWaitTicks;
+    private readonly LatencyWindow _waits = new();
 
     public CapacityPool(string name, int limit)
     {
@@ -82,6 +83,7 @@ public sealed class CapacityPool
 
     private void RecordWait(long ticks)
     {
+        _waits.RecordTicks(ticks);
         Interlocked.Add(ref _waitTicksTotal, ticks);
         Interlocked.Increment(ref _waitedCount);
         long seen;
@@ -94,6 +96,7 @@ public sealed class CapacityPool
     public PoolSnapshot Snapshot()
     {
         var waited = Interlocked.Read(ref _waitedCount);
+        var waits = _waits.Snapshot();
         return new PoolSnapshot(
             Name,
             Limit,
@@ -103,7 +106,9 @@ public sealed class CapacityPool
             Interlocked.Read(ref _rejected),
             waited,
             waited == 0 ? 0 : TicksToMs(Interlocked.Read(ref _waitTicksTotal)) / waited,
-            TicksToMs(Interlocked.Read(ref _maxWaitTicks)));
+            TicksToMs(Interlocked.Read(ref _maxWaitTicks)),
+            waits.P95Ms,
+            waits.P99Ms);
     }
 
     private static double TicksToMs(long ticks) => Math.Round(ticks * 1000.0 / Stopwatch.Frequency, 1);
@@ -119,7 +124,9 @@ public sealed record PoolSnapshot(
     long Rejected,
     long Waited,
     double AverageWaitMs,
-    double MaxWaitMs);
+    double MaxWaitMs,
+    double P95WaitMs = 0,
+    double P99WaitMs = 0);
 
 /// <summary>
 /// The process-wide pools of #69: G (global, taken in <c>UserConcurrencyMiddleware</c>), H (heavy

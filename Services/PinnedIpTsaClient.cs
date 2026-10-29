@@ -196,7 +196,7 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
 
     // Shared handler/client: SocketsHttpHandler pools connections, so allocating one
     // per signing request would exhaust sockets under load.
-    private static readonly HttpClient SharedClient = CreateGuardedClient();
+    internal static HttpClient SharedClient { get; set; } = CreateGuardedClient();
 
     private static HttpClient CreateGuardedClient() =>
         PinnedIpHttp.CreateClient("TSA_HOST_NOT_ALLOWED", MaxRequestTimeout);

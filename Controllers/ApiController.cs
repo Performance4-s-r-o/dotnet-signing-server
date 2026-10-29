@@ -401,12 +401,16 @@ namespace DotNetSigningServer.Controllers
             var heartbeat = new LeaseHeartbeat(
                 HttpContext.RequestServices.GetRequiredService<IServiceScopeFactory>(),
                 op.Id, attempt, Operations.Options.HeartbeatInterval, Logger);
+            var timer = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 result = await AwaitWithDeadlineAsync(deadline, user.Id, work);
+                OperationMetrics.Record(operation, timer.Elapsed, OperationMetrics.Completed);
             }
             catch (Exception ex)
             {
+                OperationMetrics.Record(operation, timer.Elapsed,
+                    ex is OperationDeadlineExceededException ? OperationMetrics.DeadlineExceeded : OperationMetrics.Failed);
                 await heartbeat.DisposeAsync();
                 var uncertain = ex is OperationDeadlineExceededException late
                     ? late.ExternalCallStarted

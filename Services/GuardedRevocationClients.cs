@@ -55,11 +55,28 @@ internal sealed class GuardedResourceRetriever : DefaultResourceRetriever
 {
     private const string OcspRequestContentType = "application/ocsp-request";
 
-    private static readonly HttpClient Client =
+    private static readonly HttpClient SharedClient =
         PinnedIpHttp.CreateClient("REVOCATION_HOST_NOT_ALLOWED", TimeSpan.FromSeconds(20));
 
+    private readonly HttpClient _client;
+    private readonly Func<Uri, bool> _urlFilter;
+
+    public GuardedResourceRetriever() : this(null, null)
+    {
+    }
+
+    /// <summary>Tests hand in a client with a fake handler and a filter that accepts their URL.</summary>
+    internal GuardedResourceRetriever(HttpClient? client, Func<Uri, bool>? urlFilter, TimeSpan? bodyReadTimeout = null)
+    {
+        _client = client ?? SharedClient;
+        _urlFilter = urlFilter ?? (url => RevocationEndpointGuard.IsFetchable(url?.ToString()));
+        _bodyReadTimeout = bodyReadTimeout ?? BodyReadTimeout;
+    }
+
+    private readonly TimeSpan _bodyReadTimeout;
+
     /// <summary>iText's own pre-fetch hook — the cheap check, before any socket.</summary>
-    protected override bool UrlFilter(Uri url) => RevocationEndpointGuard.IsFetchable(url?.ToString());
+    protected override bool UrlFilter(Uri url) => _urlFilter(url);
 
     /// <summary>
     /// One entry point for both protocols: OCSP posts a request body, CRL fetches
@@ -84,7 +101,7 @@ internal sealed class GuardedResourceRetriever : DefaultResourceRetriever
         // limit, otherwise a responder that sends one byte a second holds the thread for as long
         // as the size cap allows.
         using var readDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
-        readDeadline.CancelAfter(BodyReadTimeout);
+        readDeadline.CancelAfter(_bodyReadTimeout);
 
         var current = url;
         // Redirects are followed by hand, a couple at most, and every hop is checked like the
@@ -109,7 +126,7 @@ internal sealed class GuardedResourceRetriever : DefaultResourceRetriever
 
             // The operation's deadline reaches the socket (#72); CRL and OCSP are read-only, so no
             // "external call" mark: a cancelled fetch leaves nothing uncertain behind.
-            using var response = Client.Send(request, HttpCompletionOption.ResponseHeadersRead, readDeadline.Token);
+            using var response = _client.Send(request, HttpCompletionOption.ResponseHeadersRead, readDeadline.Token);
 
             if (IsRedirect(response.StatusCode) && !isOcsp && response.Headers.Location is { } location)
             {

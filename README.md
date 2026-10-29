@@ -201,7 +201,9 @@ default; any other value that does not parse stops the server at startup.
 `GET /internal/concurrency` shows what the limits are doing (#69): occupancy, waits and
 rejections of the global, heavy and AI pools, the users' queues together (no user ids), the
 rasterisation pool, process memory and the thread pool, plus the start hypotheses for this
-machine. Counts only, and no token of its own: it answers on the `INTERNAL_API_PORT` listener
+machine. The pools show p95/p99 of the wait for a slot, and `operations` shows p50/p95/p99 and
+the outcome counts (completed, failed, deadline) of each paid operation, from the last 512 calls
+of each since start. Counts only, and no token of its own: it answers on the `INTERNAL_API_PORT` listener
 and is `404` everywhere else (and everywhere while that port is not set).
 
 Pool H counts the request, not the work: when a call's deadline (#72) answers the client, the
