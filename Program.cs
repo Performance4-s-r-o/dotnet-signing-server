@@ -775,6 +775,14 @@ using (var scope = app.Services.CreateScope())
         throw;
     }
 
+    // After the administrator: the portal's service account and token from PORTAL_BOOTSTRAP_TOKEN (#169).
+    await DotNetSigningServer.Services.PortalBootstrap.EnsureAsync(
+        builder.Configuration.GetSection("PortalBootstrap").Get<DotNetSigningServer.Options.PortalBootstrapOptions>() ?? new(),
+        privateServer,
+        scope.ServiceProvider.GetRequiredService<DotNetSigningServer.Services.ITokenService>(),
+        dbContext,
+        logger);
+
     // After the schema exists: an internal listener nobody may use, or a flag that does nothing, is said aloud.
     await DotNetSigningServer.Services.PortalTrustStartupChecks.WarnAsync(portalTrust, dbContext, logger);
 
@@ -787,13 +795,6 @@ using (var scope = app.Services.CreateScope())
         scope.ServiceProvider.GetRequiredService<DotNetSigningServer.Services.IAuthService>(),
         logger);
 
-    // After the administrator: the portal's service account and token from PORTAL_BOOTSTRAP_TOKEN (#169).
-    await DotNetSigningServer.Services.PortalBootstrap.EnsureAsync(
-        builder.Configuration.GetSection("PortalBootstrap").Get<DotNetSigningServer.Options.PortalBootstrapOptions>() ?? new(),
-        privateServer,
-        scope.ServiceProvider.GetRequiredService<DotNetSigningServer.Services.ITokenService>(),
-        dbContext,
-        logger);
 }
 
 app.Run();

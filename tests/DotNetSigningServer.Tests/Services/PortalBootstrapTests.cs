@@ -11,7 +11,7 @@ namespace DotNetSigningServer.Tests.Services;
 
 public class PortalBootstrapValidatorTests
 {
-    private const string Good = "q7Hn2xV9mLp4RtYb8KcZ3wFd6JgSe1Ua";
+    private const string Good = "q7Hn2xV9mLp4RtYb8KcZ3wFd6JgSe1UaP0oIuY5tR4e=";
 
     [Fact]
     public void Empty_is_off_and_valid()
@@ -28,6 +28,10 @@ public class PortalBootstrapValidatorTests
     [InlineData("change-this-secret")]
     [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
     [InlineData("has space inside the token value 1234567890")]
+    [InlineData("{{project.DOTNET_PORTAL_BOOTSTRAP_TOKEN}}")]
+    [InlineData("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123")]
+    [InlineData("Ab3dEf7hIj1mNo5qRs9uVw2yZa6Ab3dEf7hIj1mNo5qRs9uVw2yZa6")]
+    [InlineData("q7hn2xv9mlp4rtyb8kcz3wfd6jgse1uaq7hn2xv9mlp4rtyb8kcz")]
     public void Weak_values_are_refused(string value) => Assert.NotEmpty(PortalBootstrap.Validate(value));
 
     [Fact]
@@ -35,6 +39,19 @@ public class PortalBootstrapValidatorTests
     {
         const string weak = "weak-value-xyz";
         Assert.All(PortalBootstrap.Validate(weak), p => Assert.DoesNotContain(weak, p));
+    }
+
+    [Fact]
+    public void Long_hex_passes() =>
+        Assert.Empty(PortalBootstrap.Validate("3fa91c07be5d42e8a6c1d0f94b72e385c6a1f09d7b34e82a5c90d1f6b7e3a428"));
+
+    [Fact]
+    public void Reserved_addresses_are_recognised_in_any_case()
+    {
+        Assert.True(UserEmails.IsReserved("portal@service.invalid"));
+        Assert.True(UserEmails.IsReserved(" PORTAL@Service.Invalid "));
+        Assert.True(UserEmails.IsReserved("x@invalid"));
+        Assert.False(UserEmails.IsReserved("x@example.com"));
     }
 
     [Fact]
@@ -61,8 +78,8 @@ public class PortalBootstrapValidatorTests
 [Trait("Category", "Db")]
 public class PortalBootstrapPostgresTests : IClassFixture<OutboxPostgresFixture>
 {
-    private const string TokenA = "q7Hn2xV9mLp4RtYb8KcZ3wFd6JgSe1Ua";
-    private const string TokenB = "Zk3Vb8Nc1Xm5Lp9Qw2Er7Ty4Ui6Oa0Sd";
+    private const string TokenA = "q7Hn2xV9mLp4RtYb8KcZ3wFd6JgSe1UaP0oIuY5tR4e=";
+    private const string TokenB = "Zk3Vb8Nc1Xm5Lp9Qw2Er7Ty4Ui6Oa0SdH7gF2dS9a1Kx3Mn=";
     private const string SecretOne = "bootstrap-test-secret-one-0123456789";
     private const string SecretTwo = "bootstrap-test-secret-two-0123456789";
 
@@ -187,5 +204,88 @@ public class PortalBootstrapPostgresTests : IClassFixture<OutboxPostgresFixture>
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => RunAsync(TokenA));
         await ResetAsync();
+    }
+
+    [DockerFact]
+    public async Task A_token_that_belongs_to_another_account_is_left_alone()
+    {
+        await ResetAsync();
+        var hash = TestHelpers.CreateTokenService(SecretOne).HashToken(TokenA);
+        Guid manualId;
+        await using (var db = _pg.CreateContext())
+        {
+            var manual = new User { Email = $"manual-{Guid.NewGuid():N}@example.com", IsActive = true };
+            db.Users.Add(manual);
+            db.ApiTokens.Add(new ApiToken { UserId = manual.Id, Label = "hand", TokenHash = hash });
+            await db.SaveChangesAsync();
+            manualId = manual.Id;
+        }
+
+        await RunAsync(TokenA);
+
+        var (users, tokens) = await StateAsync();
+        Assert.Empty(users);
+        Assert.Empty(tokens);
+        await using var check = _pg.CreateContext();
+        var all = await check.ApiTokens.AsNoTracking().Where(t => t.TokenHash == hash).ToListAsync();
+        Assert.Equal(manualId, Assert.Single(all).UserId);
+        await check.ApiTokens.Where(t => t.UserId == manualId).ExecuteDeleteAsync();
+        await check.Users.Where(u => u.Id == manualId).ExecuteDeleteAsync();
+    }
+
+    [DockerFact]
+    public async Task A_revoked_value_is_not_revived()
+    {
+        await ResetAsync();
+        await RunAsync(TokenA);
+        await RunAsync(TokenB);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => RunAsync(TokenA));
+        Assert.DoesNotContain(TokenA, ex.Message);
+        Assert.Single((await StateAsync()).Tokens, t => t.RevokedAt == null);
+    }
+
+    [DockerFact]
+    public async Task A_reserved_address_in_other_letter_case_stops_the_start()
+    {
+        await ResetAsync();
+        await using (var db = _pg.CreateContext())
+        {
+            db.Users.Add(new User { Email = "PORTAL@service.invalid", IsActive = true });
+            await db.SaveChangesAsync();
+        }
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => RunAsync(TokenA));
+        await using var cleanup = _pg.CreateContext();
+        await cleanup.Users.Where(u => u.Email == "PORTAL@service.invalid").ExecuteDeleteAsync();
+    }
+
+    [DockerFact]
+    public async Task A_deactivated_service_account_stops_the_start()
+    {
+        await ResetAsync();
+        await RunAsync(TokenA);
+        await using (var db = _pg.CreateContext())
+        {
+            await db.Users.Where(u => u.Email == PortalBootstrap.AccountEmail)
+                .ExecuteUpdateAsync(x => x.SetProperty(u => u.IsActive, false));
+        }
+        await Assert.ThrowsAsync<InvalidOperationException>(() => RunAsync(TokenB));
+        Assert.Single((await StateAsync()).Tokens);
+
+        await using (var db = _pg.CreateContext())
+        {
+            await db.Users.Where(u => u.Email == PortalBootstrap.AccountEmail)
+                .ExecuteUpdateAsync(x => x.SetProperty(u => u.IsActive, true).SetProperty(u => u.ErasedAt, DateTimeOffset.UtcNow));
+        }
+        await Assert.ThrowsAsync<InvalidOperationException>(() => RunAsync(TokenB));
+    }
+
+    [DockerFact]
+    public async Task The_token_stores_no_prefix()
+    {
+        await ResetAsync();
+        await RunAsync(TokenA);
+        Assert.Null(Assert.Single((await StateAsync()).Tokens).TokenPrefix);
     }
 }

@@ -15,7 +15,7 @@ public static class PortalBootstrap
 {
     public const string AccountEmail = "portal@service.invalid";
     public const string TokenLabel = "bootstrap";
-    public const int MinimumTokenLength = 32;
+    public const int MinimumTokenLength = 43; // base64 of 32 random bytes
 
     private static readonly HashSet<string> KnownDefaults = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -30,23 +30,48 @@ public static class PortalBootstrap
         if (string.IsNullOrWhiteSpace(token)) return problems;
 
         var value = token.Trim();
+        if (EnvValues.IsUnresolvedPlaceholder(value) || value.Contains("{{", StringComparison.Ordinal))
+        {
+            problems.Add("PortalBootstrap:Token is an unresolved placeholder.");
+        }
         if (KnownDefaults.Contains(value))
         {
             problems.Add("PortalBootstrap:Token is a well-known default value.");
         }
         if (System.Text.Encoding.UTF8.GetByteCount(value) < MinimumTokenLength)
         {
-            problems.Add($"PortalBootstrap:Token is shorter than {MinimumTokenLength} bytes.");
+            problems.Add($"PortalBootstrap:Token is shorter than {MinimumTokenLength} characters (use `openssl rand -base64 32`).");
         }
         if (value.Any(c => char.IsWhiteSpace(c) || c == '"'))
         {
             problems.Add("PortalBootstrap:Token contains whitespace or a quote.");
         }
-        if (value.Distinct().Count() < 8)
+        if (!LooksRandom(value))
         {
-            problems.Add("PortalBootstrap:Token has too little variety (fewer than 8 distinct characters).");
+            problems.Add("PortalBootstrap:Token does not look random (too few character kinds, a repeated pattern or a sequence).");
         }
         return problems;
+    }
+
+    // Rough entropy guard: three character kinds, or long hex; no repeated pattern, no run of neighbours.
+    private static bool LooksRandom(string v)
+    {
+        if (v.Distinct().Count() < 12) return false;
+        for (var p = 1; p <= v.Length / 2; p++)
+        {
+            if (v.Length % p != 0) continue;
+            var repeated = true;
+            for (var i = p; i < v.Length && repeated; i++) repeated = v[i] == v[i - p];
+            if (repeated) return false;
+        }
+        var steps = 0;
+        for (var i = 1; i < v.Length; i++) if (v[i] - v[i - 1] == 1) steps++;
+        if (steps * 2 > v.Length) return false;
+
+        var kinds = (v.Any(char.IsLower) ? 1 : 0) + (v.Any(char.IsUpper) ? 1 : 0)
+                    + (v.Any(char.IsDigit) ? 1 : 0) + (v.Any(c => !char.IsLetterOrDigit(c)) ? 1 : 0);
+        var hex = v.Length >= 64 && v.All(Uri.IsHexDigit);
+        return kinds >= 3 || hex;
     }
 
     /// <summary>
@@ -75,12 +100,35 @@ public static class PortalBootstrap
         var token = ApiAuthService.NormalizeToken(options.Token.Trim());
         var hash = tokenService.HashToken(token);
 
+        // One hash, one account: a token that exists already (a hand-made portal account, a
+        // revoked one) is never registered a second time.
+        var sameHash = await db.ApiTokens.AsNoTracking()
+            .Where(t => t.TokenHash == hash).ToListAsync(cancellationToken);
         var email = UserEmails.Trim(AccountEmail);
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
+        var existing = await db.Users.FindByEmailAsync(email, cancellationToken);
+        var activeMatch = sameHash.FirstOrDefault(t => t.RevokedAt == null);
+        if (activeMatch != null && (existing == null || activeMatch.UserId != existing.Id))
+        {
+            logger.LogInformation(
+                "[portal-bootstrap] the token already belongs to account {UserId}; bootstrap not performed", activeMatch.UserId);
+            return;
+        }
+        if (activeMatch == null && sameHash.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "PortalBootstrap refuses to start: this PORTAL_BOOTSTRAP_TOKEN value was revoked. Change the value.");
+        }
+
+        var user = existing;
         if (user != null && !user.IsServiceAccount)
         {
             throw new InvalidOperationException(
                 "PortalBootstrap refuses to start: an ordinary account already uses the reserved portal address.");
+        }
+        if (user != null && (!user.IsActive || user.ErasedAt != null))
+        {
+            throw new InvalidOperationException(
+                "PortalBootstrap refuses to start: the portal service account is deactivated or erased. Reactivate it in the database.");
         }
 
         if (user == null)
@@ -103,8 +151,18 @@ public static class PortalBootstrap
                 EnterpriseEnabledAt = privateServer.Enabled ? DateTimeOffset.UtcNow : null,
             };
             db.Users.Add(user);
-            await db.SaveChangesAsync(cancellationToken);
-            logger.LogInformation("[portal-bootstrap] created the portal service account {UserId}", user.Id);
+            try
+            {
+                await db.SaveChangesAsync(cancellationToken);
+                logger.LogInformation("[portal-bootstrap] created the portal service account {UserId}", user.Id);
+            }
+            catch (DbUpdateException)
+            {
+                // Another instance created it a moment ago: take that one, once.
+                db.Entry(user).State = EntityState.Detached;
+                user = await db.Users.FindByEmailAsync(email, cancellationToken);
+                if (user is not { IsServiceAccount: true }) throw;
+            }
         }
 
         var active = await db.ApiTokens
@@ -119,7 +177,8 @@ public static class PortalBootstrap
             UserId = user.Id,
             Label = TokenLabel,
             TokenHash = hash,
-            TokenPrefix = token.Length >= 8 ? token[..8] : token,
+            // No prefix: it would leak 8 characters of the value.
+            TokenPrefix = null,
             IsBrowserToken = false,
         });
         await db.SaveChangesAsync(cancellationToken);

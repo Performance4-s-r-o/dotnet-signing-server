@@ -16,7 +16,7 @@ namespace DotNetSigningServer.Tests.Security;
 [Trait("Category", "Db")]
 public class PortalBootstrapAuthTests : IClassFixture<WebUiAuthFixture>
 {
-    private const string Token = "q7Hn2xV9mLp4RtYb8KcZ3wFd6JgSe1Ua";
+    private const string Token = "q7Hn2xV9mLp4RtYb8KcZ3wFd6JgSe1UaP0oIuY5tR4e=";
     private readonly WebUiAuthFixture _fx;
 
     public PortalBootstrapAuthTests(WebUiAuthFixture fx) => _fx = fx;
@@ -157,5 +157,35 @@ public class PortalBootstrapAuthTests : IClassFixture<WebUiAuthFixture>
         };
         post.Headers.Add("Cookie", $"{af}; {AccountController.LoginChallengeCookie}={challenge}");
         return await client.SendAsync(post);
+    }
+
+    [DockerFact]
+    public async Task Sign_up_with_the_reserved_address_creates_nothing_in_any_case()
+    {
+        // Control: the same form does create an ordinary account.
+        var ok = $"ctl-{Guid.NewGuid():N}@example.com";
+        await PostFormAsync("/Account/SignUp", new()
+        {
+            ["Email"] = ok, ["Password"] = "Long-enough-password-123", ["ConfirmPassword"] = "Long-enough-password-123",
+            ["AcceptTerms"] = "true",
+        });
+        await using (var db0 = _fx.Postgres.CreateContext())
+        {
+            Assert.True(await db0.Users.AnyAsync(u => u.Email == ok));
+        }
+
+        foreach (var email in new[] { "portal@service.invalid", "PORTAL@Service.Invalid", "someone@x.invalid" })
+        {
+            await using var before = _fx.Postgres.CreateContext();
+            var count = await before.Users.CountAsync(u => u.Email.ToLower() == email.ToLower());
+            var response = await PostFormAsync("/Account/SignUp", new()
+            {
+                ["Email"] = email, ["Password"] = "Long-enough-password-123", ["ConfirmPassword"] = "Long-enough-password-123",
+                ["AcceptTerms"] = "true",
+            });
+            Assert.True((int)response.StatusCode < 500);
+            await using var db = _fx.Postgres.CreateContext();
+            Assert.Equal(count, await db.Users.CountAsync(u => u.Email.ToLower() == email.ToLower()));
+        }
     }
 }

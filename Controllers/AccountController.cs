@@ -165,7 +165,8 @@ public class AccountController : Controller
             return View(model);
         }
 
-        bool exists = await _dbContext.Users.AnyWithEmailAsync(model.Email);
+        // A reserved (.invalid) address gets the same outcome as a taken one, so it creates nothing.
+        bool exists = UserEmails.IsReserved(model.Email) || await _dbContext.Users.AnyWithEmailAsync(model.Email);
         if (exists)
         {
             // Do not reveal that the address is already registered — that turns signup
