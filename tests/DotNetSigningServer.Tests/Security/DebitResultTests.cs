@@ -43,7 +43,7 @@ internal sealed class NoScanUtilityController(
     IStringLocalizer<SharedStrings> localizer)
     : PdfUtilityApiController(dbContext, apiAuthService, logger, limitGuard, billingOptions, env, pdfTemplateService, pdfConversionService, localizer)
 {
-    internal override Task<IReadOnlyList<object>> DetectCodesAsync(byte[] pdfBytes, CodeScanRaster.ScanPages pages, ScanPlan plan, CancellationToken ct) =>
+    internal override Task<IReadOnlyList<object>> DetectCodesAsync(byte[] pdfBytes, CodeScanRaster.ScanPages pages, ScanPlan plan, CancellationToken ct, TimeSpan? budget = null) =>
         Task.FromResult<IReadOnlyList<object>>(Array.Empty<object>());
 }
 

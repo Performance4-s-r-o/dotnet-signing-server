@@ -50,6 +50,7 @@ public sealed class CapacityPoolAttribute : Attribute, IAsyncResourceFilter
             context.HttpContext.Response.Headers["Retry-After"] = RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
             context.Result = new ObjectResult(new
             {
+                code = "SERVER_AT_CAPACITY",
                 message = localizer["ServerAtCapacity"].Value,
                 retryAfter = RetryAfterSeconds,
             })

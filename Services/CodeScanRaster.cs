@@ -60,7 +60,13 @@ public static class CodeScanRaster
     /// <summary>How long one page waits for a slot of <see cref="Pool"/>.</summary>
     public static TimeSpan RasterWait { get; private set; } = TimeSpan.FromSeconds(30);
 
-    /// <summary>Uses the pool and wait from the configuration (startup, tests).</summary>
+    /// <summary>Kept free at the end of the deadline for the answer and the refund.</summary>
+    public static readonly TimeSpan DeadlineReserve = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Uses the pool and wait from the configuration (startup, tests). The two assignments are
+    /// not atomic and the state is process-wide: tests share the last pool set.
+    /// </summary>
     public static void UsePool(CapacityPool pool, TimeSpan wait)
     {
         Pool = pool;
@@ -246,6 +252,10 @@ public static class CodeScanRaster
         return output.ToArray();
     }
 
+    /// <summary>The wait for a slot: the configured one, cut to what the deadline leaves (never negative).</summary>
+    internal static TimeSpan SlotWait(TimeSpan? left, TimeSpan configured) =>
+        left is { } l ? TimeSpan.FromTicks(Math.Clamp(l.Ticks, 0, configured.Ticks)) : configured;
+
     /// <summary>True when the bytes start with <c>%PDF-</c> at offset 0.</summary>
     internal static bool StartsWithPdfHeader(byte[] bytes) =>
         bytes.Length >= 5 && bytes[0] == '%' && bytes[1] == 'P' && bytes[2] == 'D' && bytes[3] == 'F' && bytes[4] == '-';
@@ -273,7 +283,8 @@ public static class CodeScanRaster
     /// <paramref name="use"/> returns. The image is disposed afterwards.
     /// </summary>
     public static async Task<T> WithPageAsync<T>(
-        byte[] pdf, int pageIndex, double dpi, Func<MagickImage, T> use, CancellationToken ct)
+        byte[] pdf, int pageIndex, double dpi, Func<MagickImage, T> use, CancellationToken ct,
+        TimeSpan? timeLeft = null)
     {
         EnsureConfigured();
         // Ghostscript sniffs the content: only a document that starts with the PDF header goes in.
@@ -281,7 +292,9 @@ public static class CodeScanRaster
         {
             throw new ApiValidationException("PDF_INVALID", "Rasterisation input does not start with a PDF header");
         }
-        return await WithSlotAsync(Pool, RasterWait, () =>
+        // Never wait for the slot past the operation's deadline: 503 + Retry-After beats a 504.
+        var wait = SlotWait(timeLeft, RasterWait);
+        return await WithSlotAsync(Pool, wait, () =>
         {
             ct.ThrowIfCancellationRequested();
             var settings = new MagickReadSettings
