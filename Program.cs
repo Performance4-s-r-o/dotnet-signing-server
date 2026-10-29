@@ -127,9 +127,9 @@ var privateServer = builder.Configuration.GetSection("PrivateServer")
     .Get<DotNetSigningServer.Options.PrivateServerOptions>() ?? new();
 builder.Services.Configure<DotNetSigningServer.Options.PrivateServerOptions>(
     builder.Configuration.GetSection("PrivateServer"));
-// P4 Backoffice integration (section P4Backoffice). Every module defaults to Off,
-// and PrivateServer forces Off; see Services/Backoffice/BackofficeRegistration.cs.
-builder.Services.AddP4BackofficeIntegration(builder.Configuration, privateServer);
+// P4 Backoffice integration (section P4Backoffice). In Production every module defaults to On,
+// elsewhere to Off; PrivateServer forces Off. See Services/Backoffice/BackofficeRegistration.cs.
+builder.Services.AddP4BackofficeIntegration(builder.Configuration, privateServer, defaultOn: builder.Environment.IsProduction());
 
 builder.Services.AddControllersWithViews(options =>
     {
