@@ -46,4 +46,18 @@ public class ModuleKeysTests
         o.Keys.Billing = "p4sk_test_b";
         Assert.Empty(BackofficeOptionsValidator.Validate(o));
     }
+
+    [Fact]
+    public void AnUnresolvedPlaceholderInAKeyVariable_IsScrubbed_SoTheMainKeyApplies()
+    {
+        var env = new System.Collections.Hashtable
+        {
+            ["P4Backoffice__Keys__Billing"] = "{{project.DOTNET_P4_BACKOFFICE_BILLING_SECRET_KEY}}",
+            ["P4Backoffice__Keys__Docs"] = "p4sk_test_docs",
+        };
+
+        Assert.Equal(["P4Backoffice__Keys__Billing"], EnvValues.UnresolvedPlaceholderNames(env));
+        var o = Options(); // scrubbed variable = unbound = empty
+        Assert.Equal("p4sk_test_main", o.KeyFor(BackofficeModule.Billing));
+    }
 }
