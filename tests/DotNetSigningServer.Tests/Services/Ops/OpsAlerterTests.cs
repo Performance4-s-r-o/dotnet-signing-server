@@ -45,15 +45,46 @@ public class OpsAlerterTests
     }
 
     [Fact]
-    public async Task AFailedPost_IsRetriedAtTheNextOccurrence_AndNeverThrows()
+    public async Task AFailedPost_IsRetriedAfterAShortPause_NotAtOnce_AndNeverThrows()
     {
         var alerter = Alerter();
         _hook.Enqueue(HttpStatusCode.InternalServerError);
         alerter.Alert("k", "x");
         await Task.Delay(200);
         alerter.Alert("k", "x");
+        await Task.Delay(100);
+        Assert.Single(_hook.Requests);
+
+        _time.Advance(OpsAlerter.FailureCooldown + TimeSpan.FromSeconds(1));
+        alerter.Alert("k", "x");
         await Task.Delay(200);
         Assert.Equal(2, _hook.Requests.Count);
+    }
+
+    [Fact]
+    public async Task ConcurrentAlerts_OfOneKey_SendOnce()
+    {
+        var alerter = Alerter();
+        Parallel.For(0, 64, _ => alerter.Alert("same", "x"));
+        await Task.Delay(300);
+        Assert.Single(_hook.Requests);
+    }
+
+    [Fact]
+    public async Task OverTheKeyCap_TheOldestKeyIsDropped()
+    {
+        var alerter = Alerter();
+        for (var i = 0; i < 250; i++)
+        {
+            alerter.Alert("k" + i, "x");
+            _time.Advance(TimeSpan.FromSeconds(1));
+        }
+        await Task.Delay(500);
+        var sent = _hook.Requests.Count;
+        alerter.Alert("k249", "x"); // recent: still deduplicated
+        alerter.Alert("k0", "x");   // oldest: forgotten, sent again
+        await Task.Delay(300);
+        Assert.Equal(sent + 1, _hook.Requests.Count);
     }
 
     [Theory]

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Options;
 
@@ -37,6 +36,7 @@ public sealed class OpsAlerter : IOpsAlerter
 {
     public const string HttpClientName = "OpsAlert";
     public static readonly TimeSpan DefaultCooldown = TimeSpan.FromHours(6);
+    public static readonly TimeSpan FailureCooldown = TimeSpan.FromMinutes(5);
     internal const int MaxTextLength = 500;
     private const int MaxKeys = 200;
 
@@ -45,7 +45,8 @@ public sealed class OpsAlerter : IOpsAlerter
     private readonly ILogger<OpsAlerter> _logger;
     private readonly Uri? _url;
     private readonly TimeSpan _cooldown;
-    private readonly ConcurrentDictionary<string, DateTimeOffset> _sent = new();
+    private readonly Dictionary<string, DateTimeOffset> _sent = new();
+    private readonly object _gate = new();
 
     public OpsAlerter(IHttpClientFactory httpClients, IOptions<OpsAlertOptions> options, TimeProvider time, ILogger<OpsAlerter> logger)
     {
@@ -74,9 +75,16 @@ public sealed class OpsAlerter : IOpsAlerter
     {
         if (_url == null) return;
         var now = _time.GetUtcNow();
-        if (_sent.TryGetValue(key, out var last) && now - last < _cooldown) return;
-        if (_sent.Count >= MaxKeys) Prune(now);
-        _sent[key] = now;
+        lock (_gate)
+        {
+            if (_sent.TryGetValue(key, out var last) && now - last < _cooldown) return;
+            if (!_sent.ContainsKey(key) && _sent.Count >= MaxKeys)
+            {
+                // Over the cap: drop the oldest key.
+                _sent.Remove(_sent.MinBy(kv => kv.Value).Key);
+            }
+            _sent[key] = now;
+        }
 
         var body = text.Length > MaxTextLength ? text[..MaxTextLength] + "…" : text;
         _ = Task.Run(() => PostAsync(key, body));
@@ -91,24 +99,24 @@ public sealed class OpsAlerter : IOpsAlerter
                 .PostAsJsonAsync(_url, new { text = "[signing server] " + text }, cts.Token);
             if (!response.IsSuccessStatusCode)
             {
-                // Allow a retry at the next occurrence instead of waiting out the cooldown.
-                _sent.TryRemove(key, out _);
+                Failed(key);
                 _logger.LogWarning("Ops alert {Key}: webhook answered HTTP {Status}", key, (int)response.StatusCode);
             }
         }
         catch (Exception ex)
         {
-            _sent.TryRemove(key, out _);
+            Failed(key);
             // The exception text can carry the URL; log the type only.
             _logger.LogWarning("Ops alert {Key}: webhook not reached ({Error})", key, ex.GetType().Name);
         }
     }
 
-    private void Prune(DateTimeOffset now)
+    /// <summary>A failed delivery is retried at the next occurrence after a short pause, not at once.</summary>
+    private void Failed(string key)
     {
-        foreach (var (k, at) in _sent)
+        lock (_gate)
         {
-            if (now - at >= _cooldown) _sent.TryRemove(k, out _);
+            _sent[key] = _time.GetUtcNow() - _cooldown + FailureCooldown;
         }
     }
 }
