@@ -355,6 +355,7 @@ public class UserConcurrencyMiddleware
                     var localizer = factory.Create(typeof(SharedStrings));
                     await context.Response.WriteAsJsonAsync(new
                     {
+                        code = "SERVER_AT_CAPACITY",
                         message = localizer["ServerAtCapacity"].Value,
                         retryAfter = 10,
                     });

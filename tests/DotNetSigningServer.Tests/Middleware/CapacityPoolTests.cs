@@ -267,4 +267,16 @@ public class CapacityPoolTests
         var json = System.Text.Json.JsonSerializer.Serialize(ConcurrencyDiagnostics.Snapshot(new CapacityPools(new BillingOptions(), 8)));
         Assert.Contains("\"raster\"", json);
     }
+
+    [Theory]
+    [InlineData(null, 30_000, 30_000)]
+    [InlineData(10_000, 30_000, 10_000)]
+    [InlineData(45_000, 30_000, 30_000)]
+    [InlineData(-5_000, 30_000, 0)]
+    public void Raster_slot_wait_is_cut_to_what_the_deadline_leaves(int? leftMs, int configuredMs, int expectedMs)
+    {
+        var left = leftMs is { } v ? TimeSpan.FromMilliseconds(v) : (TimeSpan?)null;
+        Assert.Equal(TimeSpan.FromMilliseconds(expectedMs),
+            CodeScanRaster.SlotWait(left, TimeSpan.FromMilliseconds(configuredMs)));
+    }
 }

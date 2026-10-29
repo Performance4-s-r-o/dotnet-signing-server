@@ -301,7 +301,9 @@ namespace DotNetSigningServer.Controllers
 
                 return await RunOperationAsync(user, "find-codes", fingerprint, requiredCredits, async ct =>
                 {
-                    var results = await DetectCodesAsync(pdfBytes, pages, plan, ct);
+                    // A page waits for pool R no longer than the deadline leaves, so a full pool is a 503, not a 504.
+                    var budget = Operations.Options.DeadlineFor("find-codes") - CodeScanRaster.DeadlineReserve;
+                    var results = await DetectCodesAsync(pdfBytes, pages, plan, ct, budget);
                     // `pages`/`pagesProcessed`/`credits` let the portal bill its own tenant
                     // at the same rate without opening the PDF a second time: `credits` is
                     // computed from `pagesProcessed`. It is the base rate before any
@@ -323,7 +325,7 @@ namespace DotNetSigningServer.Controllers
                 Logger.LogWarning("find-codes refused: pool {Pool} full", ex.Pool);
                 Response.Headers.RetryAfter = CapacityPoolAttribute.RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 return StatusCode(StatusCodes.Status503ServiceUnavailable,
-                    new { message = Localizer["ServerAtCapacity"].Value, retryAfter = CapacityPoolAttribute.RetryAfterSeconds });
+                    new { code = "SERVER_AT_CAPACITY", message = Localizer["ServerAtCapacity"].Value, retryAfter = CapacityPoolAttribute.RetryAfterSeconds });
             }
             catch (Exception ex)
             {
@@ -379,7 +381,8 @@ namespace DotNetSigningServer.Controllers
             byte[] pdfBytes,
             CodeScanRaster.ScanPages pages,
             ScanPlan plan,
-            CancellationToken ct) => ScanCodesAsync(pdfBytes, pages, plan, ct);
+            CancellationToken ct,
+            TimeSpan? budget = null) => ScanCodesAsync(pdfBytes, pages, plan, ct, budget);
 
         /// <summary>Credits for a scan: the pages actually rendered, never the whole document (#71).</summary>
         internal static int FindCodesCredits(CodeScanRaster.ScanPages pages) =>
@@ -389,8 +392,10 @@ namespace DotNetSigningServer.Controllers
             byte[] pdfBytes,
             CodeScanRaster.ScanPages pages,
             ScanPlan plan,
-            CancellationToken ct)
+            CancellationToken ct,
+            TimeSpan? budget = null)
         {
+            var scanClock = System.Diagnostics.Stopwatch.StartNew();
             var formats = plan.Formats;
             // Which spec produced a hit, so the guards can be applied to it by name.
             var specByFormat = plan.Specs
@@ -430,7 +435,8 @@ namespace DotNetSigningServer.Controllers
                 ct.ThrowIfCancellationRequested();
                 var dpi = pages.Dpi[pageIndex];
                 var decodedOnPage = await CodeScanRaster.WithPageAsync(
-                    pages.CleanPdf, pageIndex, dpi, page => DecodePage(page, reader, ct), ct);
+                    pages.CleanPdf, pageIndex, dpi, page => DecodePage(page, reader, ct), ct,
+                    budget is { } b ? b - scanClock.Elapsed : null);
 
                 foreach (var (code, pageHeightPx) in decodedOnPage)
                 {
