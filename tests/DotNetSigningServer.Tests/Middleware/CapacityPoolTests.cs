@@ -233,7 +233,7 @@ public class CapacityPoolTests
     }
 
     [Fact]
-    public async Task Raster_pages_run_in_order_of_arrival_and_never_more_than_the_limit_at_once()
+    public async Task Raster_pages_never_run_more_than_the_limit_at_once()
     {
         var pool = new CapacityPool("raster", 2);
         var running = 0;
