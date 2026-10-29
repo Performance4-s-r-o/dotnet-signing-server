@@ -186,6 +186,7 @@
   <data name="TrustedCallerEnabled" xml:space="preserve"><value>Účet je označen jako důvěryhodný volající.</value></data>
   <data name="TrustedCallerDisabled" xml:space="preserve"><value>Účet už není důvěryhodný volající.</value></data>
   <data name="TrustedCallerNotOnSelf" xml:space="preserve"><value>Vlastní účet nelze označit jako důvěryhodného volajícího.</value></data>
+  <data name="TrustedCallerBadge" xml:space="preserve"><value>Důvěryhodný volající</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>Při přidávání přílohy došlo k chybě</value></data>
   <data name="PdfaConversionError" xml:space="preserve"><value>Při převodu dokumentu na PDF/A došlo k chybě</value></data>
   <data name="ProvideTemplateOrPdf" xml:space="preserve"><value>Zadejte buď TemplateId, nebo PdfContent (ne obojí).</value></data>

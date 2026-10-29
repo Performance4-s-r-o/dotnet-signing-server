@@ -72,6 +72,7 @@ public class AdminController : Controller
                 IsAdmin = u.IsAdmin,
                 IsEnterprise = u.IsEnterprise,
                 SealAllowed = u.SealAllowed,
+                TrustedCaller = u.TrustedCaller,
                 CreditsRemaining = u.CreditsRemaining,
                 AutoRechargeEnabled = u.AutoRechargeEnabled,
                 CreatedAt = u.CreatedAt,
@@ -437,6 +438,7 @@ public class AdminController : Controller
         public bool IsAdmin { get; set; }
         public bool IsEnterprise { get; set; }
         public bool SealAllowed { get; set; }
+        public bool TrustedCaller { get; set; }
         public int CreditsRemaining { get; set; }
         public bool AutoRechargeEnabled { get; set; }
         public DateTimeOffset CreatedAt { get; set; }

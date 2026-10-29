@@ -186,6 +186,7 @@
   <data name="TrustedCallerEnabled" xml:space="preserve"><value>The account is marked as trusted caller.</value></data>
   <data name="TrustedCallerDisabled" xml:space="preserve"><value>The account is no longer a trusted caller.</value></data>
   <data name="TrustedCallerNotOnSelf" xml:space="preserve"><value>You cannot mark your own account as trusted caller.</value></data>
+  <data name="TrustedCallerBadge" xml:space="preserve"><value>Trusted caller</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>An error occurred while adding the attachment</value></data>
   <data name="PdfaConversionError" xml:space="preserve"><value>An error occurred while converting the document to PDF/A</value></data>
   <data name="ProvideTemplateOrPdf" xml:space="preserve"><value>Provide either TemplateId or PdfContent (but not both).</value></data>
