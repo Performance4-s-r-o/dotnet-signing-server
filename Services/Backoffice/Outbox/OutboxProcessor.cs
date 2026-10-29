@@ -48,6 +48,8 @@ public sealed class OutboxProcessor
     private readonly OutboxKindFilter _kinds;
     private readonly TimeSpan _giveUpAfter;
 
+    private readonly DotNetSigningServer.Services.Ops.IOpsAlerter? _alerter;
+
     public OutboxProcessor(
         IServiceScopeFactory scopes,
         IHttpClientFactory httpClients,
@@ -57,8 +59,10 @@ public sealed class OutboxProcessor
         TimeProvider time,
         ILogger<OutboxProcessor> logger,
         OutboxKindFilter? kinds = null,
-        IOptions<P4BackofficeProductOptions>? options = null)
+        IOptions<P4BackofficeProductOptions>? options = null,
+        DotNetSigningServer.Services.Ops.IOpsAlerter? alerter = null)
     {
+        _alerter = alerter;
         _giveUpAfter = options?.Value.Outbox.EffectiveGiveUpAfter ?? RetryPolicy.GiveUpAfter;
         _kinds = kinds ?? OutboxKindFilter.None;
         _scopes = scopes;
@@ -205,6 +209,8 @@ public sealed class OutboxProcessor
                     AlertPrefix + " {ItemId} ({Kind}, {SubjectRef}) still not accepted since {CreatedAt:o}; attempt {Attempts} failed: {Error}; "
                     + "next attempt at {NextAttemptAt:o}",
                     item.Id, item.Kind, item.SubjectRef, item.CreatedAt, item.Attempts, item.LastError, item.NextAttemptAt);
+                _alerter?.Alert("outbox-overdue:" + item.Kind,
+                    $"Backoffice outbox item ({item.Kind}) is still not accepted since {item.CreatedAt:u}; the service looks unavailable.");
                 break;
             case OutboxOutcome.Retry:
                 _logger.LogWarning(
@@ -215,6 +221,8 @@ public sealed class OutboxProcessor
                 _logger.LogError(
                     "Backoffice outbox {ItemId} ({Kind}) blocked: {Error}. Check P4Backoffice:SecretKey and its scopes, then requeue blocked items in /Admin",
                     item.Id, item.Kind, item.LastError);
+                _alerter?.Alert("outbox-blocked:" + item.Kind,
+                    $"Backoffice outbox item ({item.Kind}) is blocked; check the key and its scopes, then requeue in the admin.");
                 break;
             case OutboxOutcome.Suppressed:
                 _logger.LogInformation(
@@ -225,6 +233,7 @@ public sealed class OutboxProcessor
                 _logger.LogError(
                     AlertPrefix + " {ItemId} ({Kind}, {SubjectRef}) is dead and needs a person: {Error}",
                     item.Id, item.Kind, item.SubjectRef, item.LastError);
+                _alerter?.Alert("outbox-dead:" + item.Kind, $"Backoffice outbox item ({item.Kind}) is dead and needs a person.");
                 break;
             case OutboxOutcome.Dead:
                 _logger.LogError(

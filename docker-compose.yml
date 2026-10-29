@@ -178,10 +178,21 @@ services:
       # Outbox retries end this long after the first attempt (empty = 20 h, < 24 h).
       - P4Backoffice__Outbox__GiveUpAfter=${P4_BACKOFFICE_OUTBOX_GIVE_UP_AFTER:-{{project.DOTNET_P4_BACKOFFICE_OUTBOX_GIVE_UP_AFTER}}}
       - P4Backoffice__Modules__Billing=${P4_BACKOFFICE_BILLING_MODE:-}
+      # Optional narrower key per module (empty = P4_BACKOFFICE_SECRET_KEY). The outbox and
+      # the event poll always use the main key.
+      - P4Backoffice__Keys__Docs=${P4_BACKOFFICE_DOCS_SECRET_KEY:-{{project.DOTNET_P4_BACKOFFICE_DOCS_SECRET_KEY}}}
+      - P4Backoffice__Keys__Consents=${P4_BACKOFFICE_CONSENTS_SECRET_KEY:-{{project.DOTNET_P4_BACKOFFICE_CONSENTS_SECRET_KEY}}}
+      - P4Backoffice__Keys__Pricing=${P4_BACKOFFICE_PRICING_SECRET_KEY:-{{project.DOTNET_P4_BACKOFFICE_PRICING_SECRET_KEY}}}
+      - P4Backoffice__Keys__Support=${P4_BACKOFFICE_SUPPORT_SECRET_KEY:-{{project.DOTNET_P4_BACKOFFICE_SUPPORT_SECRET_KEY}}}
+      - P4Backoffice__Keys__Billing=${P4_BACKOFFICE_BILLING_SECRET_KEY:-{{project.DOTNET_P4_BACKOFFICE_BILLING_SECRET_KEY}}}
+      # Alert channel independent of the backoffice (https webhook, POST {"text": ...}); empty = log only.
+      - OpsAlert__WebhookUrl=${OPS_ALERT_WEBHOOK_URL:-{{project.DOTNET_OPS_ALERT_WEBHOOK_URL}}}
       - P4Backoffice__CookieWidget__Url=${P4_BACKOFFICE_WIDGET_URL:-}
       - P4Backoffice__CookieWidget__PublishableKey=${P4_BACKOFFICE_PK:-}
       - P4Backoffice__SupportForm__Product=${P4_BACKOFFICE_SUPPORT_FORM_PRODUCT:-}
       - P4Backoffice__SupportForm__Url=${P4_BACKOFFICE_SUPPORT_FORM_URL:-}
+      # Content-Security-Policy of HTML pages: report-only (default, empty) | enforce | off.
+      - Csp__Mode=${CSP_MODE:-{{project.DOTNET_CSP_MODE}}}
       # Size limits
       - Limits__PdfMaxBytes=${PDF_MAX_BYTES:-20971520}
       - Limits__ImageMaxBytes=${IMAGE_MAX_BYTES:-1048576}

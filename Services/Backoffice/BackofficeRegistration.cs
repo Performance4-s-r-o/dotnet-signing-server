@@ -126,7 +126,7 @@ public static class BackofficeRegistration
         }
 
         var baseUrl = options.BaseUrl?.Trim() ?? "";
-        var secretKey = options.SecretKey?.Trim() ?? "";
+        var secretKey = options.KeyFor(BackofficeModule.Consents);
         services.AddHttpClient(ConsentReconciliationService.HttpClientName, client =>
         {
             client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
@@ -177,7 +177,7 @@ public static class BackofficeRegistration
         }
 
         var baseUrl = options.BaseUrl?.Trim() ?? "";
-        var secretKey = options.SecretKey?.Trim() ?? "";
+        var secretKey = options.KeyFor(BackofficeModule.Docs);
         services.AddHttpClient(BackofficeDocumentsClient.HttpClientName, client =>
         {
             client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
@@ -237,7 +237,7 @@ public static class BackofficeRegistration
         }
 
         var baseUrl = options.BaseUrl?.Trim() ?? "";
-        var secretKey = options.SecretKey?.Trim() ?? "";
+        var secretKey = options.KeyFor(BackofficeModule.Pricing);
         services.AddHttpClient(BackofficePricingClient.HttpClientName, client =>
         {
             client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
@@ -287,7 +287,7 @@ public static class BackofficeRegistration
         }
 
         var baseUrl = options.BaseUrl?.Trim() ?? "";
-        var secretKey = options.SecretKey?.Trim() ?? "";
+        var secretKey = options.KeyFor(BackofficeModule.Support);
         services.AddHttpClient(SupportCategoriesClient.HttpClientName, client =>
         {
             client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");

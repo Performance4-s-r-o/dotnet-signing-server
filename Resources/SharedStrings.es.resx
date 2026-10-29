@@ -131,6 +131,7 @@
   <data name="ConfirmEnableEnterprise" xml:space="preserve"><value>Esto desactivará la recarga automática y eliminará la tarjeta guardada. ¿Continuar?</value></data>
   <data name="ConfirmDisableEnterprise" xml:space="preserve"><value>El usuario volverá a facturarse por créditos. ¿Continuar?</value></data>
   <data name="EnterpriseEnabled" xml:space="preserve"><value>Modo Enterprise activado. Recarga automática desactivada y tarjetas eliminadas.</value></data>
+  <data name="EnterpriseDetachFailed" xml:space="preserve"><value>No se pudieron eliminar los métodos de pago, por lo que no se activó el modo Enterprise. Inténtalo de nuevo.</value></data>
   <data name="EnterpriseDisabled" xml:space="preserve"><value>Modo Enterprise desactivado.</value></data>
   <data name="UsageThisMonth" xml:space="preserve"><value>Uso este mes</value></data>
   <data name="CreditsUsedInMonth" xml:space="preserve"><value>créditos usados en {0}</value></data>

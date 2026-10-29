@@ -131,6 +131,7 @@
   <data name="ConfirmEnableEnterprise" xml:space="preserve"><value>Tím se vypne auto-dobíjení a odpojí uložená platební metoda. Pokračovat?</value></data>
   <data name="ConfirmDisableEnterprise" xml:space="preserve"><value>Uživatel bude znovu placen kredity. Pokračovat?</value></data>
   <data name="EnterpriseEnabled" xml:space="preserve"><value>Enterprise režim aktivován. Auto-dobíjení vypnuto, platební metody odpojeny.</value></data>
+  <data name="EnterpriseDetachFailed" xml:space="preserve"><value>Platební metody se nepodařilo odpojit, Enterprise režim proto nebyl zapnut. Zkuste to znovu.</value></data>
   <data name="EnterpriseDisabled" xml:space="preserve"><value>Enterprise režim deaktivován.</value></data>
   <data name="UsageThisMonth" xml:space="preserve"><value>Spotřeba tento měsíc</value></data>
   <data name="CreditsUsedInMonth" xml:space="preserve"><value>kreditů spotřebováno v {0}</value></data>

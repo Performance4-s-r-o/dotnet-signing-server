@@ -82,6 +82,12 @@ public static class BackofficeOptionsValidator
             CheckBaseUrl(problems, options.BaseUrl);
             CheckSecretKey(problems, options.SecretKey);
             CheckKeyKind(problems, options.SecretKey, options.Environment);
+            foreach (var module in Enum.GetValues<BackofficeModule>())
+            {
+                var own = options.Keys.Get(module);
+                if (string.IsNullOrWhiteSpace(own)) continue;
+                CheckModuleKey(problems, module, own, options.Environment);
+            }
         }
 
         return problems;
@@ -262,6 +268,27 @@ public static class BackofficeOptionsValidator
         uri.IsLoopback
         || string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase)
         || (IPAddress.TryParse(uri.Host.Trim('[', ']'), out var ip) && IPAddress.IsLoopback(ip));
+
+    /// <summary>A module's own key: same prefix and test/live rules as the main key.</summary>
+    private static void CheckModuleKey(List<string> problems, BackofficeModule module, string key, string? environment)
+    {
+        var setting = Setting($"Keys:{module}");
+        var trimmed = key.Trim();
+        if (!trimmed.StartsWith(SecretKeyPrefix, StringComparison.Ordinal))
+        {
+            problems.Add($"{setting} must start with {SecretKeyPrefix}.");
+            return;
+        }
+        var target = environment?.Trim().ToLowerInvariant();
+        if (target == LiveEnvironment && trimmed.StartsWith(TestKeyPrefix, StringComparison.Ordinal))
+        {
+            problems.Add($"{setting} is a test key ({TestKeyPrefix}…) but P4_BACKOFFICE_ENV is {LiveEnvironment}.");
+        }
+        else if (target == TestEnvironment && trimmed.StartsWith(LiveKeyPrefix, StringComparison.Ordinal))
+        {
+            problems.Add($"{setting} is a live key ({LiveKeyPrefix}…) but P4_BACKOFFICE_ENV is {TestEnvironment}.");
+        }
+    }
 
     private static void CheckSecretKey(List<string> problems, string? value)
     {

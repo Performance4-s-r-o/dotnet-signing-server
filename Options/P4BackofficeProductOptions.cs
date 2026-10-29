@@ -25,6 +25,17 @@ public class P4BackofficeProductOptions
     public string? SecretKey { get; set; }
 
     /// <summary>
+    /// Optional keys of their own per module. A module without one uses <see cref="SecretKey"/>,
+    /// so nothing changes until a narrower key is issued and set. The outbox and the event
+    /// poll serve several modules and always use <see cref="SecretKey"/>.
+    /// </summary>
+    public ModuleKeysOptions Keys { get; set; } = new();
+
+    /// <summary>Key a module's client sends: its own, else <see cref="SecretKey"/>.</summary>
+    public string KeyFor(BackofficeModule module) =>
+        (string.IsNullOrWhiteSpace(Keys.Get(module)) ? SecretKey : Keys.Get(module))?.Trim() ?? "";
+
+    /// <summary>
     /// Which service environment this installation belongs to: <c>live</c> or <c>test</c>
     /// (<c>P4_BACKOFFICE_ENV</c>). The kind of <see cref="SecretKey"/> must match it; required
     /// once any module is On (p4-backoffice #212).
@@ -102,6 +113,25 @@ public class P4BackofficeProductOptions
             }
         }
         return false;
+    }
+
+    public class ModuleKeysOptions
+    {
+        public string? Docs { get; set; }
+        public string? Consents { get; set; }
+        public string? Pricing { get; set; }
+        public string? Support { get; set; }
+        public string? Billing { get; set; }
+
+        public string? Get(BackofficeModule module) => module switch
+        {
+            BackofficeModule.Docs => Docs,
+            BackofficeModule.Consents => Consents,
+            BackofficeModule.Pricing => Pricing,
+            BackofficeModule.Support => Support,
+            BackofficeModule.Billing => Billing,
+            _ => null,
+        };
     }
 
     public class ModulesOptions

@@ -35,7 +35,7 @@ public static class BillingRegistration
         services.AddScoped<IBackofficeEventHandler, BillingEventsHandler>();
 
         var baseUrl = options.BaseUrl?.Trim() ?? "";
-        var secretKey = options.SecretKey?.Trim() ?? "";
+        var secretKey = options.KeyFor(BackofficeModule.Billing);
         services.AddHttpClient(BackofficeBillingClient.HttpClientName, client =>
         {
             client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");

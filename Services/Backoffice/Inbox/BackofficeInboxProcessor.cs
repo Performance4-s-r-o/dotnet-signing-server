@@ -54,12 +54,16 @@ public sealed class BackofficeInboxProcessor : BackgroundService
     private readonly ILogger<BackofficeInboxProcessor> _logger;
     private DateTimeOffset _nextCleanup;
 
+    private readonly DotNetSigningServer.Services.Ops.IOpsAlerter? _alerter;
+
     public BackofficeInboxProcessor(
         IServiceScopeFactory scopes,
         BackofficeInboxSignal signal,
         TimeProvider time,
-        ILogger<BackofficeInboxProcessor> logger)
+        ILogger<BackofficeInboxProcessor> logger,
+        DotNetSigningServer.Services.Ops.IOpsAlerter? alerter = null)
     {
+        _alerter = alerter;
         _scopes = scopes;
         _signal = signal;
         _time = time;
@@ -263,6 +267,8 @@ public sealed class BackofficeInboxProcessor : BackgroundService
                     AlertPrefix + " event {EventType} {EventId} is dead after {Attempts} failed attempts{Consequence}; "
                     + "fix the cause and replay it in /Admin",
                     item.Type, item.WebhookId, item.Attempts, Consequence(item.Type));
+                _alerter?.Alert("inbox-dead:" + item.Type,
+                    $"Backoffice event {item.Type} is dead after {item.Attempts} failed attempts{Consequence(item.Type)}; replay it in the admin.");
             }
             else
             {
@@ -298,6 +304,7 @@ public sealed class BackofficeInboxProcessor : BackgroundService
         if (dead > 0)
         {
             _logger.LogError(AlertPrefix + " {Count} dead event(s) wait for a replay in /Admin", dead);
+            _alerter?.Alert("inbox-dead-backlog", $"{dead} dead backoffice event(s) wait for a replay in the admin.");
         }
     }
 

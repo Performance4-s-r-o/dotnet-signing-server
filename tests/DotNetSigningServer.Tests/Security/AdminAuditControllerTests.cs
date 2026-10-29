@@ -23,12 +23,12 @@ public class AdminAuditControllerTests
 {
     private static readonly Guid ActorId = Guid.NewGuid();
 
-    private static AdminController Controller(DotNetSigningServer.Data.ApplicationDbContext db)
+    private static AdminController Controller(DotNetSigningServer.Data.ApplicationDbContext db, IPaymentGateway? payments = null, IAutoRechargeService? autoRecharge = null)
     {
         var controller = new AdminController(
             db,
-            Mock.Of<IAutoRechargeService>(),
-            Mock.Of<IPaymentGateway>(),
+            autoRecharge ?? Mock.Of<IAutoRechargeService>(),
+            payments ?? Mock.Of<IPaymentGateway>(),
             NullLogger<AdminController>.Instance,
             new StringLocalizer<SharedStrings>(new KeyEchoLocalizerFactory()),
             TestHelpers.WrapOptions(new P4BackofficeProductOptions()),
@@ -166,5 +166,30 @@ public class AdminAuditControllerTests
         var entry = await db.AdminAuditEntries.SingleAsync();
         Assert.Equal(AdminAudit.Actions.ConcurrencyQueueTimeout, entry.Action);
         Assert.Contains("\"to\":30", entry.Change);
+    }
+
+    [Fact]
+    public async Task ToggleEnterprise_WhenDetachingTheCardFails_ChangesNothing()
+    {
+        var db = TestHelpers.CreateInMemoryDbContext();
+        var user = new User { Email = "t@example.cz", StripeCustomerId = "cus_1", AutoRechargeEnabled = true };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        var payments = new Mock<IPaymentGateway>();
+        payments.Setup(p => p.DetachPaymentMethodsAsync(It.IsAny<User>(), It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("down"));
+        var autoRecharge = new Mock<IAutoRechargeService>();
+        var controller = Controller(db, payments.Object, autoRecharge.Object);
+
+        await controller.ToggleEnterprise(user.Id);
+
+        Assert.False((await db.Users.SingleAsync()).IsEnterprise);
+        autoRecharge.Verify(a => a.DisableAsync(It.IsAny<User>()), Times.Never);
+        Assert.Empty(await db.AdminAuditEntries.ToListAsync());
+        Assert.Equal("EnterpriseDetachFailed", controller.TempData["Error"]);
+
+        // The retry, with the service back, enables it.
+        payments.Setup(p => p.DetachPaymentMethodsAsync(It.IsAny<User>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        await controller.ToggleEnterprise(user.Id);
+        Assert.True((await db.Users.SingleAsync()).IsEnterprise);
     }
 }
