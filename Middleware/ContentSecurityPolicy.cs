@@ -17,13 +17,13 @@ public sealed class CspOptions
 {
     public const string SectionName = "Csp";
 
-    /// <summary><c>enforce</c> (default), <c>report-only</c> or <c>off</c>.</summary>
+    /// <summary><c>report-only</c> (default), <c>enforce</c> or <c>off</c>.</summary>
     public string? Mode { get; set; }
 
     public CspMode EffectiveMode => (Mode ?? "").Trim().ToLowerInvariant() switch
     {
-        "" or "enforce" => CspMode.Enforce,
-        "report-only" or "reportonly" => CspMode.ReportOnly,
+        "enforce" => CspMode.Enforce,
+        "" or "report-only" or "reportonly" => CspMode.ReportOnly,
         "off" => CspMode.Off,
         _ => throw new InvalidOperationException(
             "Csp:Mode (environment variable Csp__Mode / CSP_MODE) must be enforce, report-only or off."),

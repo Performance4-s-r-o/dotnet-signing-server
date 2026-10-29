@@ -55,29 +55,59 @@ public class ContentSecurityPolicyTests
         Assert.Contains("frame-src 'self' https://legal.example.com;", policy);
     }
 
-    [Fact]
-    public async Task Middleware_SetsTheHeaderOnHtmlOnly_AndNoncesDiffer()
+    private static async Task<(string? Enforce, string? ReportOnly, string? Json)> Run(string? mode)
     {
         var mw = new ContentSecurityPolicyMiddleware(
             ctx => { ctx.Response.ContentType = ctx.Request.Path == "/json" ? "application/json" : "text/html"; return Task.CompletedTask; },
-            Microsoft.Extensions.Options.Options.Create(new CspOptions()),
+            Microsoft.Extensions.Options.Options.Create(new CspOptions { Mode = mode }),
             Microsoft.Extensions.Options.Options.Create(new P4BackofficeProductOptions()));
+        var (html, f1) = NewContext();
+        var (json, f2) = NewContext("/json");
+        await mw.InvokeAsync(html); await f1.FireAsync();
+        await mw.InvokeAsync(json); await f2.FireAsync();
+        return (html.Response.Headers["Content-Security-Policy"].FirstOrDefault(),
+            html.Response.Headers["Content-Security-Policy-Report-Only"].FirstOrDefault(),
+            json.Response.Headers["Content-Security-Policy-Report-Only"].FirstOrDefault()
+            ?? json.Response.Headers["Content-Security-Policy"].FirstOrDefault());
+    }
 
-        var (html1, f1) = NewContext();
-        var (html2, f2) = NewContext();
-        var (json, f3) = NewContext("/json");
-        await mw.InvokeAsync(html1); await f1.FireAsync();
-        await mw.InvokeAsync(html2); await f2.FireAsync();
-        await mw.InvokeAsync(json); await f3.FireAsync();
+    [Fact]
+    public async Task Default_IsReportOnly_OnHtmlOnly()
+    {
+        var (enforce, report, json) = await Run(null);
+        Assert.Null(enforce);
+        Assert.NotNull(report);
+        Assert.Null(json);
+    }
 
-        Assert.True(html1.Response.Headers.ContainsKey("Content-Security-Policy"));
-        Assert.NotEqual(html1.Response.Headers["Content-Security-Policy"], html2.Response.Headers["Content-Security-Policy"]);
-        Assert.False(json.Response.Headers.ContainsKey("Content-Security-Policy"));
+    [Fact]
+    public async Task Enforce_OnlyWhenSet()
+    {
+        var (enforce, report, _) = await Run("enforce");
+        Assert.NotNull(enforce);
+        Assert.Null(report);
+    }
+
+    [Fact]
+    public async Task Off_SendsNoHeader()
+    {
+        var (enforce, report, _) = await Run("off");
+        Assert.Null(enforce);
+        Assert.Null(report);
+    }
+
+    [Fact]
+    public async Task NoncesDifferPerRequest()
+    {
+        var a = (await Run("enforce")).Enforce;
+        var b = (await Run("enforce")).Enforce;
+        Assert.NotEqual(a, b);
     }
 
     [Theory]
-    [InlineData("", CspMode.Enforce)]
+    [InlineData("", CspMode.ReportOnly)]
     [InlineData("report-only", CspMode.ReportOnly)]
+    [InlineData("enforce", CspMode.Enforce)]
     [InlineData("OFF", CspMode.Off)]
     public void Mode_IsParsed(string value, CspMode expected) =>
         Assert.Equal(expected, new CspOptions { Mode = value }.EffectiveMode);
