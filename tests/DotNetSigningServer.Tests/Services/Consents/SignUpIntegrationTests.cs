@@ -302,7 +302,12 @@ public class SignUpIntegrationTests : IClassFixture<SignUpPostgresFixture>
             {
                 db.LegalDocuments.Add(new LegalDocument
                 {
-                    Slug = "terms-of-service", Locale = "en", Version = 2, Title = "Terms", Content = "Terms v2", EffectiveFrom = termsSince,
+                    Slug = "terms-of-service",
+                    Locale = "en",
+                    Version = 2,
+                    Title = "Terms",
+                    Content = "Terms v2",
+                    EffectiveFrom = termsSince,
                 });
             }
             else

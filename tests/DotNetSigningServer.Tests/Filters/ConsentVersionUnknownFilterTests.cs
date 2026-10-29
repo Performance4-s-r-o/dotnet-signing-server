@@ -15,7 +15,8 @@ namespace DotNetSigningServer.Tests.Filters;
 public class ConsentVersionUnknownFilterTests
 {
     private static ExceptionContext Context(Exception ex) => new(
-        new ActionContext(new DefaultHttpContext(), new RouteData(), new ActionDescriptor()), []) { Exception = ex };
+        new ActionContext(new DefaultHttpContext(), new RouteData(), new ActionDescriptor()), [])
+    { Exception = ex };
 
     private static ConsentVersionUnknownFilter Filter()
     {

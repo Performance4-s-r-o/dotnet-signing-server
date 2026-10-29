@@ -45,14 +45,14 @@ public class UserConcurrencyMiddlewareTests
 
     private static BillingOptions Billing(int userLimit, int queueSeconds, int globalLimit, int globalWaitMs = 0,
         int queueFactor = 2, int queueMaxSeconds = 30) => new()
-    {
-        ConcurrencyDefaultLimit = userLimit,
-        ConcurrencyQueueTimeoutSeconds = queueSeconds,
-        GlobalConcurrencyLimit = globalLimit,
-        GlobalConcurrencyWaitMilliseconds = globalWaitMs,
-        UserQueueLengthFactor = queueFactor,
-        UserQueueMaxSeconds = queueMaxSeconds,
-    };
+        {
+            ConcurrencyDefaultLimit = userLimit,
+            ConcurrencyQueueTimeoutSeconds = queueSeconds,
+            GlobalConcurrencyLimit = globalLimit,
+            GlobalConcurrencyWaitMilliseconds = globalWaitMs,
+            UserQueueLengthFactor = queueFactor,
+            UserQueueMaxSeconds = queueMaxSeconds,
+        };
 
     private static async Task<bool> Eventually(Func<bool> condition)
     {
