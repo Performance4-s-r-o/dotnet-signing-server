@@ -436,6 +436,10 @@ through the installation's `notify-gateway`: `BaseUrl` is the gateway
 webhook, erasure queue or service templates there (`Email:TemplateKeys` must be
 empty). Everything else stays off.
 
+With e-mail as the only module (Development, Staging), a `subject.erasure.requested` event is
+marked processed without a handler. Production never is in that state, it requires
+Billing On.
+
 Events: bounces and complaints arrive as events, so a connected hosted installation
 runs the inbox, the poll and the webhook whenever any module, e-mail included, is
 on. The erasure queue to the service only runs with a module other than e-mail.
@@ -461,12 +465,17 @@ publishing in the service first.
 Outage: there is no direct fallback. While the service is unreachable, answers 5xx
 or refuses the key, the item stays in the outbox and is retried with backoff until
 `P4Backoffice__Outbox__GiveUpAfter` (default 20 h, always under 24 h because of the
-service's `Idempotency-Key`), then it is `Dead`. Critical e-mail (2FA, reset,
-verification) ends sooner, an hour after it was queued: it is then `Dead` with the
-error "Expired before delivery" and its payload dropped, because the user has asked
-again by then. A user waiting for a 2FA code or a reset link does not get it until
-the service is back. Not accepted five minutes after queueing, an e-mail raises an
-ops alert (`outbox-overdue:email.*`, `outbox-dead:email.*` when it ends dead; see
+service's `Idempotency-Key`), then it is `Dead`. Critical e-mail ends sooner, when its
+content expires, counted from the moment it was queued (not from the first attempt)
+and checked before every attempt, a requeue of a Blocked item included: 2FA code 10
+minutes, password reset 1 hour, e-mail verification 20 hours (`CriticalEmails.ValidFor`).
+It is then `Dead` with "Not confirmed before expiry", its payload is dropped and it is
+never sent late. A critical item that stays Pending without any attempt (the kind is
+paused for lack of a connection) loses its payload after 24 h. A user waiting for a 2FA
+code or a reset link does not get it until the service is back. An e-mail not accepted
+five minutes after queueing raises an ops alert at its next failed attempt (about 12
+minutes in with the retry schedule); `outbox-overdue:email.*`, and `outbox-dead:email.*`
+when it ends dead (see
 `OpsAlert__WebhookUrl`). Outbox items with the old status `FallbackSent` no longer
 exist in code; no installation ever held one, a database that did needs them set to
 `Sent` by hand.

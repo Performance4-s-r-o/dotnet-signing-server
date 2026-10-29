@@ -410,6 +410,11 @@ internal sealed class BackofficeStartupReport(
     {
         var o = options.Value;
 
+        if (o.DisabledReason == BackofficeDisabledReason.None && o.OnPremGatewayRequested)
+        {
+            logger.LogWarning("OnPremGateway is set but this is not a private server; ignored");
+        }
+
         switch (o.DisabledReason)
         {
             case BackofficeDisabledReason.PrivateServer:
@@ -419,10 +424,6 @@ internal sealed class BackofficeStartupReport(
                     break;
                 }
                 logger.LogInformation("PrivateServer: backoffice integration disabled");
-                if (o.OnPremGatewayRequested)
-                {
-                    logger.LogWarning("PrivateServer: OnPremGateway is set but this is not a private server; ignored");
-                }
                 if (!string.IsNullOrWhiteSpace(o.SecretKey))
                 {
                     logger.LogWarning(

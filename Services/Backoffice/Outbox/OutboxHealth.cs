@@ -125,7 +125,8 @@ public static class OutboxHealth
         var cutoff = now - StaleEmailAge;
         var kinds = EmailKinds.ToArray();
         var rows = await db.BackofficeOutboxItems
-            .Where(i => (i.Status == BackofficeOutboxStatus.Dead || i.Status == BackofficeOutboxStatus.Blocked)
+            .Where(i => (i.Status == BackofficeOutboxStatus.Dead || i.Status == BackofficeOutboxStatus.Blocked
+                         || (i.Status == BackofficeOutboxStatus.Pending && i.Critical))
                         && i.PayloadProtected != null && i.CreatedAt < cutoff
                         && (i.Critical || kinds.Contains(i.Kind)))
             .ToListAsync(cancellationToken);

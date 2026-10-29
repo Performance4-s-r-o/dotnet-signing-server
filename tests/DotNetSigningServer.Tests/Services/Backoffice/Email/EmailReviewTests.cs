@@ -15,25 +15,92 @@ using static DotNetSigningServer.Tests.Services.Backoffice.BackofficeRegistratio
 
 namespace DotNetSigningServer.Tests.Services.Backoffice.Email;
 
-/// <summary>Outage reporting and the expiry of critical e-mail (H1).</summary>
+/// <summary>Outage reporting and the expiry of critical e-mail.</summary>
 public class CriticalEmailExpiryTests
 {
-    [Fact]
-    public async Task CriticalEmail_ExpiresAfterAnHour_WithoutPayload()
+    private static async Task<Guid> FailFirstAttemptAsync(EmailTestHost email, string template)
     {
-        using var email = new EmailTestHost();
-        var id = await email.SendAsync(EmailTemplateId.TwoFactorCode);
+        var id = await email.SendAsync(template);
         email.Host.Service.EnqueueProblem(HttpStatusCode.BadGateway, "bad_gateway");
         await email.Host.Processor.DispatchDueAsync(CancellationToken.None);
         Assert.Equal(BackofficeOutboxStatus.Pending, (await email.Host.ItemAsync(id)).Status);
+        return id;
+    }
 
-        email.Host.Time.Advance(TimeSpan.FromMinutes(61));
-        email.Host.Service.EnqueueProblem(HttpStatusCode.BadGateway, "bad_gateway");
+    [Fact]
+    public async Task TwoFactorCode_IsNotSentAfterItsTenMinutes_AndLosesItsPayload()
+    {
+        using var email = new EmailTestHost();
+        var id = await FailFirstAttemptAsync(email, EmailTemplateId.TwoFactorCode);
+
+        email.Host.Time.Advance(TimeSpan.FromMinutes(11));
         await email.Host.Processor.DispatchDueAsync(CancellationToken.None);
 
         var item = await email.Host.ItemAsync(id);
         Assert.Equal(BackofficeOutboxStatus.Dead, item.Status);
-        Assert.StartsWith("Expired before delivery", item.LastError);
+        Assert.StartsWith("Not confirmed before expiry", item.LastError);
+        Assert.Null(item.PayloadProtected);
+        Assert.Single(email.Host.Service.Requests);
+    }
+
+    [Fact]
+    public async Task EmailVerification_SurvivesAnHour_PasswordResetDoesNot()
+    {
+        using var email = new EmailTestHost();
+        var verification = await FailFirstAttemptAsync(email, EmailTemplateId.EmailVerification);
+        var reset = await FailFirstAttemptAsync(email, EmailTemplateId.PasswordReset);
+
+        email.Host.Time.Advance(TimeSpan.FromMinutes(61));
+        email.Host.Service.Enqueue(HttpStatusCode.Accepted, """{"id":"em_1","status":"queued"}""");
+        await email.Host.Processor.DispatchDueAsync(CancellationToken.None);
+
+        Assert.Equal(BackofficeOutboxStatus.Sent, (await email.Host.ItemAsync(verification)).Status);
+        Assert.Equal(BackofficeOutboxStatus.Dead, (await email.Host.ItemAsync(reset)).Status);
+    }
+
+    [Fact]
+    public async Task FirstAttemptAfterTheValidity_SendsNothing()
+    {
+        using var email = new EmailTestHost();
+        var id = await email.SendAsync(EmailTemplateId.TwoFactorCode);
+
+        email.Host.Time.Advance(TimeSpan.FromMinutes(61));
+        email.Host.Service.Enqueue(HttpStatusCode.Accepted, """{"id":"em_1","status":"queued"}""");
+        await email.Host.Processor.DispatchDueAsync(CancellationToken.None);
+
+        Assert.Equal(BackofficeOutboxStatus.Dead, (await email.Host.ItemAsync(id)).Status);
+        Assert.Empty(email.Host.Service.Requests);
+    }
+
+    [Fact]
+    public async Task RequeuedOldCriticalItem_IsNotSent()
+    {
+        using var email = new EmailTestHost();
+        var id = await email.SendAsync(EmailTemplateId.PasswordReset);
+        await email.UpdateAsync(id, i => i.Status = BackofficeOutboxStatus.Blocked);
+
+        email.Host.Time.Advance(TimeSpan.FromHours(3));
+        await email.Host.WithDbAsync(db => OutboxHealth.RequeueBlockedAsync(db, email.Host.Time.Now));
+        email.Host.Service.Enqueue(HttpStatusCode.Accepted, """{"id":"em_1","status":"queued"}""");
+        await email.Host.Processor.DispatchDueAsync(CancellationToken.None);
+
+        var item = await email.Host.ItemAsync(id);
+        Assert.Equal(BackofficeOutboxStatus.Dead, item.Status);
+        Assert.Null(item.PayloadProtected);
+        Assert.Empty(email.Host.Service.Requests);
+    }
+
+    [Fact]
+    public async Task PendingCriticalItemWithoutAttempts_LosesItsPayloadAfter24Hours()
+    {
+        using var email = new EmailTestHost();
+        var id = await email.SendAsync(EmailTemplateId.TwoFactorCode);
+
+        email.Host.Time.Advance(TimeSpan.FromHours(25));
+        await email.Host.WithDbAsync(db => OutboxHealth.ScrubStaleEmailPayloadsAsync(db, email.Host.Time.Now));
+
+        var item = await email.Host.ItemAsync(id);
+        Assert.Equal(BackofficeOutboxStatus.Dead, item.Status);
         Assert.Null(item.PayloadProtected);
     }
 
@@ -41,11 +108,16 @@ public class CriticalEmailExpiryTests
     public async Task NonCriticalEmail_KeepsTheUsualGiveUpTime()
     {
         using var email = new EmailTestHost();
-        var critical = await email.SendAsync(EmailTemplateId.TwoFactorCode);
-        var plain = await email.SendAsync(EmailTemplateId.PaymentFailed);
+        var id = await email.SendAsync(EmailTemplateId.PaymentFailed);
+        email.Host.Service.EnqueueProblem(HttpStatusCode.BadGateway, "bad_gateway");
+        await email.Host.Processor.DispatchDueAsync(CancellationToken.None);
 
-        Assert.Equal(EmailRawOutboxHandler.CriticalExpiry, email.Host.Processor.GiveUpAfterFor(await email.Host.ItemAsync(critical)));
-        Assert.Equal(TimeSpan.FromHours(20), email.Host.Processor.GiveUpAfterFor(await email.Host.ItemAsync(plain)));
+        email.Host.Time.Advance(TimeSpan.FromHours(3));
+        email.Host.Service.Enqueue(HttpStatusCode.Accepted, """{"id":"em_1","status":"queued"}""");
+        await email.Host.Processor.DispatchDueAsync(CancellationToken.None);
+
+        Assert.Equal(BackofficeOutboxStatus.Sent, (await email.Host.ItemAsync(id)).Status);
+        Assert.Equal(TimeSpan.FromHours(20), email.Host.Processor.GiveUpAfterFor(BackofficeOutboxEmailSender.OutboxKind));
     }
 
     [Fact]
@@ -117,18 +189,18 @@ public class EmailSenderAndGatewayTests
     {
         var sender = Logging(environment, null, out var log);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => sender.SendAsync("jan@example.com", "Code", "<p>123456</p>"));
+        await Assert.ThrowsAsync<EmailNotConfiguredException>(() => sender.SendAsync("jan@example.com", "Code", "<p>123456</p>"));
         Assert.DoesNotContain(log.Entries, e => e.Message.Contains("jan@example.com") || e.Message.Contains("123456"));
     }
 
     [Fact]
-    public async Task LoggingSender_InDevelopment_LogsAMaskedRecipientAndNoBody()
+    public async Task LoggingSender_InDevelopment_LogsARedactedRecipientAndNoBody()
     {
         var sender = Logging("Development", null, out var log);
 
         await sender.SendAsync("jan@example.com", "Code", "<p>123456</p>");
 
-        Assert.Contains(log.Entries, e => e.Message.Contains("j***@example.com") && e.Message.Contains("Code"));
+        Assert.Contains(log.Entries, e => e.Message.Contains("email:") && e.Message.Contains("Code"));
         Assert.DoesNotContain(log.Entries, e => e.Message.Contains("jan@example.com") || e.Message.Contains("123456"));
     }
 
@@ -150,7 +222,8 @@ public class EmailSenderAndGatewayTests
             DisabledReason = BackofficeDisabledReason.PrivateServer,
             OnPremGateway = "true",
             BaseUrl = "http://notify-gateway:8090",
-            SecretKey = "gw_key",
+            SecretKey = "p4sk_test_0123456789abcdefghijklmnop",
+            Environment = "test",
         };
         change?.Invoke(o);
         return o;
@@ -197,6 +270,9 @@ public class EmailSenderAndGatewayTests
         Assert.Contains(BackofficeOptionsValidator.Validate(Gateway(x => x.Email.TemplateKeys = ["password_reset"])), p => p.Contains("gateway knows no service templates"));
         Assert.Contains(BackofficeOptionsValidator.Validate(Gateway(x => x.Email.Templates = "*")), p => p.Contains("gateway knows no service templates"));
         Assert.Contains(BackofficeOptionsValidator.Validate(Gateway(x => x.SecretKey = null)), p => p.Contains("SecretKey"));
+        Assert.Contains(BackofficeOptionsValidator.Validate(Gateway(x => x.SecretKey = "gw_key")), p => p.Contains("must start with p4sk_"));
+        Assert.Contains(BackofficeOptionsValidator.Validate(Gateway(x => x.SecretKey = "p4sk_live_0123456789abcdefghijklmnop")), p => p.Contains("live key"));
+        Assert.Contains(BackofficeOptionsValidator.Validate(Gateway(x => x.Environment = null)), p => p.Contains("P4_BACKOFFICE_ENV"));
         Assert.Contains(BackofficeOptionsValidator.Validate(Gateway(x => x.BaseUrl = "notaurl")), p => p.Contains("gateway's absolute"));
         Assert.Contains(BackofficeOptionsValidator.Validate(Gateway(x => x.BaseUrl = null), requireEmail: true), p => p.Contains("BaseUrl"));
         // Without a gateway a private server stays exempt.
@@ -218,7 +294,8 @@ public class EmailSenderAndGatewayTests
         {
             ["P4Backoffice:OnPremGateway"] = "true",
             ["P4Backoffice:BaseUrl"] = "http://notify-gateway:8090",
-            ["P4Backoffice:SecretKey"] = "gw_key",
+            ["P4Backoffice:SecretKey"] = "p4sk_test_0123456789abcdefghijklmnop",
+            ["P4Backoffice:Environment"] = "test",
         }, privateServer: true);
 
         Assert.False(AnyInboxWorker(services));
@@ -252,5 +329,20 @@ public class EmailSenderAndGatewayTests
         settings["P4Backoffice:Modules:Docs"] = "On";
 
         Assert.Contains(Register(settings), d => d.ImplementationType == typeof(ErasureRequestedHandler));
+    }
+
+    [Fact]
+    public async Task StartupReport_WarnsWhenTheGatewaySwitchIsSetOnANonPrivateServer()
+    {
+        var log = new ListLoggerProvider();
+        var options = Options(o => o.OnPremGateway = "true");
+        var report = new BackofficeStartupReport(
+            Microsoft.Extensions.Options.Options.Create(options),
+            new TestHostEnvironment { EnvironmentName = "Development" },
+            log.CreateLogger<BackofficeStartupReport>());
+
+        await report.StartAsync(CancellationToken.None);
+
+        Assert.Contains(log.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("OnPremGateway"));
     }
 }

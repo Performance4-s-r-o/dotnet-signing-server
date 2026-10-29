@@ -148,10 +148,9 @@ public static class BackofficeOptionsValidator
         {
             problems.Add($"{Setting("BaseUrl")} must be the gateway's absolute http(s) URL when {Setting("OnPremGateway")} is true.");
         }
-        if (string.IsNullOrWhiteSpace(options.SecretKey))
-        {
-            problems.Add($"{Setting("SecretKey")} is required when {Setting("OnPremGateway")} is true.");
-        }
+        // The gateway takes the same p4sk_live_ / p4sk_test_ key, whose kind must match P4_BACKOFFICE_ENV.
+        CheckSecretKey(problems, options.SecretKey);
+        CheckKeyKind(problems, options.SecretKey, options.Environment);
         if (options.Email.SelectedKeys().Any())
         {
             problems.Add($"{Setting("Email:TemplateKeys")} / Templates must be empty when {Setting("OnPremGateway")} is true: the gateway knows no service templates.");

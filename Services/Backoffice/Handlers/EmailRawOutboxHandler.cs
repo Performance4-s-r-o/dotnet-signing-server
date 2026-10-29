@@ -23,15 +23,30 @@ public class EmailRawOutboxHandler : JsonPostOutboxHandler, IOutboxHandler
     /// <summary>A message not accepted this long after it was queued raises an ops alert.</summary>
     public static readonly TimeSpan MailAlertAfter = TimeSpan.FromMinutes(5);
 
-    /// <summary>
-    /// Critical e-mail (2FA code, reset or verification link) is not sent later than this: the
-    /// user has asked again by then, and the code or link is no use. Shorter than <c>Outbox:GiveUpAfter</c>.
-    /// </summary>
-    public static readonly TimeSpan CriticalExpiry = TimeSpan.FromHours(1);
-
     public TimeSpan? AlertAfter => MailAlertAfter;
 
-    public TimeSpan? CriticalGiveUpAfter => CriticalExpiry;
+    /// <summary>The validity of the template named in the payload's <c>tags.template</c> (<see cref="CriticalEmails.ValidFor"/>).</summary>
+    public TimeSpan? CriticalValidity(string payloadJson)
+    {
+        string? template = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object
+                && doc.RootElement.TryGetProperty("tags", out var tags)
+                && tags.ValueKind == JsonValueKind.Object
+                && tags.TryGetProperty("template", out var t)
+                && t.ValueKind == JsonValueKind.String)
+            {
+                template = t.GetString();
+            }
+        }
+        catch (JsonException)
+        {
+            // Unreadable: the hour of an unknown template applies.
+        }
+        return CriticalEmails.ValidFor(template);
+    }
 
     public override string Kind => BackofficeOutboxEmailSender.OutboxKind;
 
