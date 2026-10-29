@@ -175,7 +175,8 @@ public class AccountEmailOutboxIntegrationTests : IClassFixture<SignUpPostgresFi
             services.AddScoped<IEmailSender>(sp => sp.GetRequiredService<BackofficeOutboxEmailSender>());
             services.PostConfigure<DotNetSigningServer.Options.P4BackofficeProductOptions>(o =>
             {
-                o.Modules.Email = "On";
+                o.BaseUrl = "https://backoffice.test";
+                o.SecretKey = "p4sk_test_abc";
                 o.Email.TemplateKeys = [EmailTemplateId.PasswordReset];
             });
         });
@@ -208,6 +209,5 @@ public class AccountEmailOutboxIntegrationTests : IClassFixture<SignUpPostgresFi
         Assert.Equal(EmailTemplateId.PasswordReset, payload.Template);
         Assert.Contains("ResetPassword?token=", payload.Variables["resetUrl"]);
         Assert.Equal("60", payload.Variables["expiryMinutes"]);
-        Assert.Contains(payload.Variables["resetUrl"], payload.Fallback!.Html);
     }
 }

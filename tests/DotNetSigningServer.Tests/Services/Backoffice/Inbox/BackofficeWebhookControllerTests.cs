@@ -130,6 +130,9 @@ public class BackofficeWebhookControllerTests
         {
             o.Mode = mode;
             o.DisabledReason = reason;
+            // A connection alone switches e-mail (and with it the inbox) on.
+            o.BaseUrl = null;
+            o.SecretKey = null;
         });
 
         Assert.Equal(404, Status(await PostAsync(host, Body)));

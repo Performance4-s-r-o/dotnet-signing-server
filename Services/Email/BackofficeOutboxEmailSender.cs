@@ -8,11 +8,11 @@ using Microsoft.Extensions.Options;
 namespace DotNetSigningServer.Services.Email;
 
 /// <summary>
-/// <c>IEmailSender</c> while <c>P4Backoffice:Modules:Email</c> is On: the HTML is still rendered
+/// <c>IEmailSender</c> of every configured installation: the HTML is still rendered
 /// locally, and the message is queued as outbox item <c>email.raw</c> (encrypted), sent to the
 /// service's <c>POST /v1/emails</c> by the dispatcher. Nothing is sent during the call, so a
-/// service outage adds no latency to sign-in or sign-up. Critical messages that the service does
-/// not deliver in time are sent directly through Resend by <c>BreakGlassEmailFallback</c>.
+/// service outage adds no latency to sign-in or sign-up. There is no other way out: while the
+/// service is down the item waits in the outbox and is retried until <c>Outbox:GiveUpAfter</c>.
 /// </summary>
 public sealed partial class BackofficeOutboxEmailSender : ITransactionalEmailSender
 {
@@ -23,13 +23,13 @@ public sealed partial class BackofficeOutboxEmailSender : ITransactionalEmailSen
 
     private readonly IBackofficeOutbox _outbox;
     private readonly ApplicationDbContext _db;
-    private readonly ResendOptions _resend;
+    private readonly IOptionsMonitor<P4BackofficeProductOptions> _options;
 
-    public BackofficeOutboxEmailSender(IBackofficeOutbox outbox, ApplicationDbContext db, IOptions<ResendOptions> resend)
+    public BackofficeOutboxEmailSender(IBackofficeOutbox outbox, ApplicationDbContext db, IOptionsMonitor<P4BackofficeProductOptions> options)
     {
         _outbox = outbox;
         _db = db;
-        _resend = resend.Value;
+        _options = options;
     }
 
     public Task SendAsync(string toEmail, string subject, string htmlBody) =>
@@ -45,7 +45,8 @@ public sealed partial class BackofficeOutboxEmailSender : ITransactionalEmailSen
     public void Enqueue(string toEmail, string subject, string htmlBody, EmailSendOptions? options)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toEmail);
-        var payload = BuildPayload(toEmail, subject, htmlBody, options, _resend);
+        var email = _options.CurrentValue.Email;
+        var payload = BuildPayload(toEmail, subject, htmlBody, options, email.From, email.ReplyTo);
         _outbox.Enqueue(
             OutboxKind,
             payload,
@@ -54,15 +55,15 @@ public sealed partial class BackofficeOutboxEmailSender : ITransactionalEmailSen
     }
 
     public static EmailRawPayload BuildPayload(
-        string toEmail, string subject, string htmlBody, EmailSendOptions? options, ResendOptions? resend = null) => new()
+        string toEmail, string subject, string htmlBody, EmailSendOptions? options, string? from = null, string? replyTo = null) => new()
         {
             To = toEmail,
             Subject = subject,
             Html = htmlBody,
             // The service sends from the environment's default sender unless told otherwise;
-            // EMAIL_FROM keeps the product's own verified domain on the message.
-            From = string.IsNullOrWhiteSpace(resend?.From) ? null : resend!.From,
-            ReplyTo = string.IsNullOrWhiteSpace(resend?.ReplyTo) ? null : resend!.ReplyTo,
+            // P4_BACKOFFICE_EMAIL_FROM keeps the product's own verified domain on the message.
+            From = string.IsNullOrWhiteSpace(from) ? null : from,
+            ReplyTo = string.IsNullOrWhiteSpace(replyTo) ? null : replyTo,
             Tags = Tags(options),
             Critical = options?.IsCritical ?? false,
         };

@@ -162,12 +162,8 @@ builder.Services.AddScoped<IApiAuthService, ApiAuthService>();
 // SizeLimit counts entries: every cache.Set must carry Size = 1 (#74). Without a limit the
 // token and consent caches grow with whatever a caller sends.
 builder.Services.AddMemoryCache(o => o.SizeLimit = 10_000);
-builder.Services.AddHttpClient("resend", client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(15);
-});
-// IEmailSender itself is registered by AddP4BackofficeIntegration (Modules:Email: On = outbox,
-// otherwise ResendEmailSender directly).
+// IEmailSender itself is registered by AddP4BackofficeIntegration (the backoffice outbox;
+// a logging stand-in without a connection).
 builder.Services.AddSingleton<DotNetSigningServer.Services.Email.IEmailTemplateRenderer, DotNetSigningServer.Services.Email.EmailTemplateRenderer>();
 builder.Services.AddScoped<PdfTemplateService>();
 builder.Services.AddScoped<PdfConversionService>();
@@ -253,7 +249,6 @@ builder.Services.AddOptions<LimitsOptions>()
         options.MaxApiTokensPerUser = EnvValues.Int(builder.Configuration, "MAX_API_TOKENS_PER_USER") ?? options.MaxApiTokensPerUser)
     .ValidateOnStart();
 builder.Services.AddScoped<AuthAttemptLimiter>();
-builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection("Resend"));
 builder.Services.Configure<LokiOptions>(builder.Configuration.GetSection("Loki"));
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("AI"));
 // The switch is read from the raw text, not bound: only exactly "true" turns AI on.
@@ -473,18 +468,6 @@ if (!migrateOnly)
     var appOptions = app.Services
         .GetRequiredService<Microsoft.Extensions.Options.IOptions<AppOptions>>().Value;
     _ = appOptions.BaseUrl;
-
-    // E-mail is optional — with no API key the sender just logs and skips. But a
-    // key without a sender address is a misconfiguration that would fail one
-    // message at a time, so catch it here instead.
-    var resendOptions = app.Services
-        .GetRequiredService<Microsoft.Extensions.Options.IOptions<ResendOptions>>().Value;
-    if (!string.IsNullOrWhiteSpace(resendOptions.ApiKey) && string.IsNullOrWhiteSpace(resendOptions.From))
-    {
-        throw new InvalidOperationException(
-            "Resend:ApiKey is set but Resend:From is not. Set EMAIL_FROM to a sender on a domain "
-            + "verified in Resend, e.g. \"Performance4PDF <noreply@send.example.com>\".");
-    }
 }
 
 var appLogger = app.Services.GetRequiredService<ILogger<Program>>();

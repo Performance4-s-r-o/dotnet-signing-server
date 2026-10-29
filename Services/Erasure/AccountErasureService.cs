@@ -351,7 +351,6 @@ public sealed class AccountErasureService
                          || i.SubjectRef == emailItemRef || i.SubjectRef.StartsWith(emailItemRefChild))
                         && !i.Kind.StartsWith(AccountErasure.KindPrefix)
                         && i.Status != BackofficeOutboxStatus.Sent
-                        && i.Status != BackofficeOutboxStatus.FallbackSent
                         && i.Status != BackofficeOutboxStatus.Cancelled)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(i => i.Status, BackofficeOutboxStatus.Cancelled)
@@ -364,7 +363,7 @@ public sealed class AccountErasureService
                          || i.SubjectRef == emailItemRef || i.SubjectRef.StartsWith(emailItemRefChild))
                         && !i.Kind.StartsWith(AccountErasure.KindPrefix)
                         && i.PayloadProtected != null
-                        && (i.Status == BackofficeOutboxStatus.Sent || i.Status == BackofficeOutboxStatus.FallbackSent))
+                        && i.Status == BackofficeOutboxStatus.Sent)
             .ExecuteUpdateAsync(s => s.SetProperty(i => i.PayloadProtected, (string?)null), ct);
 
         // Processed events that name the account (its id, its own address as a whole JSON string).

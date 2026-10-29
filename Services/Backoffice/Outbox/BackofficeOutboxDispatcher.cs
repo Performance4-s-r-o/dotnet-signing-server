@@ -28,7 +28,6 @@ public sealed class BackofficeOutboxDispatcher : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly TimeProvider _time;
     private readonly ILogger<BackofficeOutboxDispatcher> _logger;
-    private readonly IReadOnlyList<IOutboxFallback> _fallbacks;
 
     /// <summary>How long a pass waits for the signal; <see cref="PollInterval"/> unless a test sets it.</summary>
     private readonly TimeSpan _pollInterval;
@@ -42,11 +41,9 @@ public sealed class BackofficeOutboxDispatcher : BackgroundService
         IServiceScopeFactory scopes,
         TimeProvider time,
         ILogger<BackofficeOutboxDispatcher> logger,
-        IEnumerable<IOutboxFallback>? fallbacks = null,
         TimeSpan? pollInterval = null)
     {
         _pollInterval = pollInterval ?? PollInterval;
-        _fallbacks = fallbacks?.ToList() ?? [];
         _processor = processor;
         _signal = signal;
         _scopes = scopes;
@@ -93,23 +90,11 @@ public sealed class BackofficeOutboxDispatcher : BackgroundService
     }
 
     /// <summary>
-    /// One pass: the fallbacks (break-glass e-mail), then send what is due (batch after batch,
+    /// One pass: send what is due (batch after batch,
     /// for at most <see cref="DrainBudget"/>), then the periodic chores. Returns true when the budget ran out with more likely due.
     /// </summary>
     internal async Task<bool> RunPassAsync(CancellationToken cancellationToken)
     {
-        foreach (var fallback in _fallbacks)
-        {
-            try
-            {
-                await fallback.RunAsync(cancellationToken);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
-            {
-                _logger.LogError(ex, "Backoffice outbox fallback {Fallback} failed", fallback.GetType().Name);
-            }
-        }
-
         var drainStarted = _time.GetUtcNow();
         var moreDue = false;
         // A full batch means there may be more due right now.

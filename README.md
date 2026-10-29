@@ -178,13 +178,14 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS` | no | `true` = a Production start without the certificate is allowed, with a warning (single host, protected volume). Otherwise Production refuses to start with an unencrypted key ring; with `true` it starts and prints a warning. Outside Production nothing is checked or printed. Back up the certificate: adding it does not encrypt keys already written in plaintext (they are replaced when the ring rotates, about every 90 days), and a lost certificate makes the ring unreadable |
 | `P4Backoffice__Modules__Billing` | in production (startup fails otherwise) | `On`: payments go through the billing service; this product holds no payment provider key. See *Payments* below |
 | `Billing__Currency` (compose: `BILLING_CURRENCY`) | no (`EUR`; empty or an unresolved placeholder = `EUR`) | Three-letter ISO 4217 code (anything else stops a production start). Currency the product sells in: selects the price list's prices and is the currency of the configured fallback prices |
-| `Resend__ApiKey` / `Resend__From` | for email | Transactional email |
+| `P4Backoffice__BaseUrl` + `P4Backoffice__SecretKey` | in production (startup fails otherwise) | All e-mail (2FA, password reset, notifications) goes through the backoffice outbox; there is no other provider. Without them outside production messages are only logged |
+| `P4Backoffice__Email__From` / `__ReplyTo` (compose: `P4_BACKOFFICE_EMAIL_FROM` / `_REPLY_TO`) | | Sender and Reply-To of every message; the sender's domain must be the one configured for the environment in the service. Empty = the service's default |
 | `OsTicket__Url` / `OsTicket__ApiKey` | | Support form; without them (and with `Modules:Support` not `On`) the routes 404 and the nav entry hides |
 | `AI__Enabled` / `AI__Google__ApiKey` | | AI-assisted template field detection; `AI__Enabled` is on only when exactly `true`, otherwise every `/api/ai/*` route answers 403 `AI_DISABLED` |
 | `Sentry__Dsn` | | Error monitoring; disabled when empty |
 | `Loki__Url` | | Log shipping; disabled when empty |
 | `Limits__*` | | Request/PDF/image/attachment size caps |
-| `P4Backoffice__Mode` / `P4Backoffice__Modules__*` | | P4 Backoffice integration: `Off` (default) or `On`, globally or per module (`Docs`, `Consents`, `Email`, `Pricing`, `Support`, `Billing`; `Billing` never follows the global mode) |
+| `P4Backoffice__Mode` / `P4Backoffice__Modules__*` | | P4 Backoffice integration: `Off` (default) or `On`, globally or per module (`Docs`, `Consents`, `Pricing`, `Support`, `Billing`; `Billing` never follows the global mode) |
 | `P4Backoffice__BaseUrl` / `P4Backoffice__SecretKey` | when not `Off` | Service URL (https) and `p4sk_` key; startup fails without them |
 | `P4Backoffice__Webhook__Secret` | | Webhook signing secret (`whsec_` + base64 of at least 24 bytes); `…__PreviousSecret` during rotation |
 | `P4Backoffice__CookieWidget__PublishableKey` / `…__Url` | | Cookie banner of the service: publishable key `p4pk_…` (empty = no banner) and the origin of `widget.js` (default `https://legal.performance4.cz`) |
@@ -238,7 +239,7 @@ error. Finished items are deleted after 30 days.
 
 E-mails with secrets (2FA code, password reset, verification link): the service has no
 "sensitive" marker and keeps the body of a sent message in its log for its own retention (30 days
-at the time of writing). The outbox payload here is deleted once the item is sent, and for a critical or e-mail item that ended Dead or Blocked it is dropped after 24 h (the code has expired by then). A 2FA or reset e-mail leaves directly within seconds when the service refuses the connection, answers 5xx or its breaker is open. After a single timeout the product waits `Email:FallbackAfter` (1 min) on purpose, because the service may have accepted the message and a direct send would duplicate it. What this
+at the time of writing). The outbox payload here is deleted once the item is sent, and for a critical or e-mail item that ended Dead or Blocked it is dropped after 24 h (the code has expired by then). While the service is down a 2FA or reset e-mail waits in the outbox and goes out once it is back (see *E-mail*). What this
 product can do today is `critical` (so the message is not held back) and, with
 `P4Backoffice__Email__Templates`, sending a template key plus variables instead of raw HTML;
 the code or link is then still a variable stored by the service. What stays open is a retention
@@ -404,21 +405,25 @@ Off* (`/Admin`), which queues every record without an outbox item once.
 TODO: there is no account deletion yet. When it is added, queue an outbox item
 `erase` (`POST /v1/subjects/{ref}/erase`) in the same transaction.
 
-#### E-mail (`Modules:Email`)
+#### E-mail
 
-Every message is still rendered locally (`EmailTemplateRenderer`, the user's
-language). What happens next depends on the mode:
+There is one path and no switch: every message is rendered locally
+(`EmailTemplateRenderer`, the user's language) and queued as outbox item
+`email.raw` (`POST /v1/emails` with `to`, `subject`, `html`, `from` =
+`P4Backoffice__Email__From`, tags `template`, `locale`, `user_id`, `critical`,
+`category=transactional`). The product has no mail provider of its own; the
+service is the SaaS backoffice, an on-prem installation runs `notify-gateway`
+with the same `/v1` API. Sign-up, 2FA and password reset queue their message
+in the same `SaveChangesAsync` as the token, so they add no latency when the
+service is down. The code or link is only in the encrypted payload, which is
+cleared once sent.
 
-- `Off` — sent through Resend during the call (`ResendEmailSender`), exactly as
-  before, including the error messages when Resend fails.
-- `On` — queued as outbox item `email.raw` (`POST /v1/emails` with `to`,
-  `subject`, `html`, `from` = `EMAIL_FROM`, tags `template`, `locale`,
-  `user_id`, `critical`, `category=transactional`). Sign-up, 2FA and password
-  reset queue their message in the same `SaveChangesAsync` as the token, so
-  they add no latency when the service is down. The code or link is only in the
-  encrypted payload, which is cleared once sent.
+Production refuses to start without `P4Backoffice__BaseUrl` and `SecretKey`.
+Outside production, without them, `LoggingEmailSender` only logs the message
+(the body in Development only) and nothing is delivered. A private server also
+uses it: its backoffice integration is off.
 
-Service templates: with `On`, a template whose key is selected — in
+Service templates: a template whose key is selected — in
 `P4Backoffice__Email__TemplateKeys__0`, `__1`, … or, as a single value,
 `P4Backoffice__Email__Templates` / `P4_BACKOFFICE_TEMPLATES` (`*` for every
 template, otherwise keys separated by commas or whitespace; empty by default) —
@@ -433,22 +438,16 @@ item `Dead` with an error log, without retries. Keys: `auto_recharge_success`,
 `email_verification`, `password_reset`, `two_factor_code` — add them one at a
 time, the critical three last. The local templates stay as the fallback. With
 `*` a key the service does not know is sent to it anyway and refused; the
-message then goes out by break-glass if it is critical, so nothing is lost
-silently, but a new local template is worth publishing in the service first.
+message then ends `Dead` with an error log, so a new local template is worth
+publishing in the service first.
 
-Break-glass: 2FA codes, password resets and e-mail verification are `critical`.
-When the service has not taken one within `P4Backoffice__Email__FallbackAfter`
-(default 60 s), when it is known to be down (circuit breaker, or the item's own
-attempt got no connection or a 5xx — then within a dispatcher pass), when the
-key is refused (`Blocked`), or when the service refused the message for good
-(`Dead` while the payload is still there — a sender on an unverified domain, a
-template that is not published), the dispatcher sends it directly through Resend
-(`RESEND_API_KEY` must stay configured), marks it `FallbackSent` and logs a
-warning; the service never sends it afterwards. A suppressed recipient is
-`Dead` too but its payload was cleared, so break-glass leaves it alone — nobody
-should deliver it. Critical items older than 24 h are left alone. Critical `email.template` items carry the local rendering in
-their encrypted payload (never sent to the service), so break-glass does not
-need the service either. Disable with `P4Backoffice__Email__FallbackDirect=false`.
+Outage: there is no direct fallback. While the service is unreachable, answers 5xx
+or refuses the key, the item stays in the outbox and is retried with backoff until
+`P4Backoffice__Outbox__GiveUpAfter` (default 20 h, always under 24 h because of the
+service's `Idempotency-Key`), then it is `Dead`. A user waiting for a 2FA code or a
+reset link does not get it until the service is back; a 2FA code is valid for minutes,
+so in a longer outage the user has to ask for a new one. Critical items older than
+24 h lose their payload.
 
 Background e-mails (auto-recharge, failed payment, price change) use the
 language of the user's last sign-up or sign-in (`Users.Locale`, default `en`).
@@ -457,11 +456,8 @@ language of the user's last sign-up or sign-in (`Users.Locale`, default `en`).
 is logged. The sending domain configured for the environment in the service
 must be the domain of `EMAIL_FROM` (DKIM).
 
-Rollback: remove a key from `P4Backoffice__Email__TemplateKeys` (local
-rendering again), or `P4Backoffice__Modules__Email=Off` sends through Resend
-directly again. E-mail items still pending stay in the outbox untouched while the module
-is not `On` (critical ones will already have gone out by break-glass) and are
-sent once it is `On` again.
+Rollback: remove a key from `P4Backoffice__Email__TemplateKeys` (local rendering
+again). Queued items are never lost by that.
 
 #### Pricing
 

@@ -33,7 +33,6 @@ public class EmailRawOutboxHandlerTests
         Assert.Equal("jan@example.com", json.RootElement.GetProperty("to").GetString());
         Assert.True(json.RootElement.GetProperty("critical").GetBoolean());
         Assert.Equal("two_factor_code", json.RootElement.GetProperty("tags").GetProperty("template").GetString());
-        Assert.Empty(email.DirectSends);
     }
 
     [Fact]
@@ -150,7 +149,6 @@ public class EmailRawOutboxHandlerTests
             services.GetRequiredService<IHttpClientFactory>(),
             services.GetServices<IOutboxHandler>(),
             services.GetRequiredService<OutboxPayloadProtector>(),
-            email.Breaker,
             email.Host.Time,
             NullLogger<OutboxProcessor>.Instance,
             new OutboxKindFilter(["email."]));

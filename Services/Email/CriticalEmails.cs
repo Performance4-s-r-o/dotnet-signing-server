@@ -2,8 +2,7 @@ namespace DotNetSigningServer.Services.Email;
 
 /// <summary>
 /// Messages a user is waiting for to get into their account. Sent as <c>critical</c> (the
-/// service bypasses complaint/manual suppression for them) and delivered directly when the
-/// service does not deliver them in time (break-glass).
+/// service bypasses complaint/manual suppression for them).
 /// </summary>
 public static class CriticalEmails
 {

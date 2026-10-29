@@ -43,7 +43,6 @@ public class EmailTemplateOutboxHandlerTests
         Assert.False(root.TryGetProperty("fallback", out _));
         Assert.False(root.TryGetProperty("subject", out _));
         Assert.False(root.TryGetProperty("html", out _));
-        Assert.Empty(host.Email.DirectSends);
     }
 
     [Fact]
@@ -86,54 +85,6 @@ public class EmailTemplateOutboxHandlerTests
         Assert.Equal(1, item.Attempts);
         Assert.Contains(EmailTemplateOutboxHandler.TemplateVariablesInvalid, item.LastError);
         Assert.Single(host.Host.Service.Requests);
-    }
-
-    [Fact]
-    public async Task CriticalTemplate_BreakGlassSendsTheLocalRendering()
-    {
-        using var host = new TemplatedEmailTestHost("On", EmailTemplateId.PasswordReset);
-        await host.SendAsync(EmailTemplateId.PasswordReset, Reset, locale: "en");
-        var id = Assert.Single(await host.ItemsAsync()).Id;
-
-        host.Host.Time.Advance(TimeSpan.FromMinutes(1));
-        Assert.Equal(1, await host.Email.Fallback.RunAsync(CancellationToken.None));
-
-        var (to, subject, html) = Assert.Single(host.Email.DirectSends);
-        Assert.Equal("jan@example.com", to);
-        Assert.False(string.IsNullOrWhiteSpace(subject));
-        Assert.Contains("https://app.example.com/Account/ResetPassword?token=abc", html);
-        var item = await host.Host.ItemAsync(id);
-        Assert.Equal(BackofficeOutboxStatus.FallbackSent, item.Status);
-        Assert.Null(item.PayloadProtected);
-        Assert.Empty(host.Host.Service.Requests);
-    }
-
-    [Fact]
-    public async Task CriticalTemplateWithoutLocalCopy_IsLeftToTheService()
-    {
-        using var host = new TemplatedEmailTestHost("On");
-        var id = await host.Host.EnqueueAsync(
-            TemplatedEmailSender.BuildPayload(EmailTemplateId.TwoFactorCode, "jan@example.com", "cs",
-                EmailTemplateVariables.TwoFactorCode("123456", 10), new EmailSendOptions(EmailTemplateId.TwoFactorCode, "cs")),
-            critical: true,
-            kind: TemplatedEmailSender.OutboxKind);
-
-        host.Host.Time.Advance(TimeSpan.FromMinutes(1));
-        Assert.Equal(0, await host.Email.Fallback.RunAsync(CancellationToken.None));
-
-        Assert.Empty(host.Email.DirectSends);
-        var item = await host.Host.ItemAsync(id);
-        Assert.Equal(BackofficeOutboxStatus.Pending, item.Status);
-        Assert.NotNull(item.PayloadProtected);
-    }
-
-    [Fact]
-    public void WithoutFallback_RemovesOnlyTheLocalCopy()
-    {
-        var body = EmailTemplateOutboxHandler.WithoutFallback(
-            """{"to":"a@example.com","template":"two_factor_code","variables":{"otpCode":"1"},"fallback":{"subject":"s","html":"h"}}""");
-
-        Assert.Equal("""{"to":"a@example.com","template":"two_factor_code","variables":{"otpCode":"1"}}""", body);
     }
 }
 

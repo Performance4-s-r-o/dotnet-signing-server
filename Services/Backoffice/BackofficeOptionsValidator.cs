@@ -36,7 +36,12 @@ public static class BackofficeOptionsValidator
     /// without <c>Modules:Billing=On</c> would start with no way to take a payment. A private
     /// server (no billing at all) is exempt.
     /// </param>
-    public static IReadOnlyList<string> Validate(P4BackofficeProductOptions options, bool rejectInvalidModes = true, bool requireBilling = false)
+    /// <param name="requireEmail">
+    /// True (Production): every e-mail goes through the service and there is no other provider,
+    /// so a missing address or key stops the start instead of losing 2FA codes and resets quietly.
+    /// A private server (e-mail off) is exempt.
+    /// </param>
+    public static IReadOnlyList<string> Validate(P4BackofficeProductOptions options, bool rejectInvalidModes = true, bool requireBilling = false, bool requireEmail = false)
     {
         var problems = new List<string>();
 
@@ -51,10 +56,6 @@ public static class BackofficeOptionsValidator
         CheckWebhookSecret(problems, options.Webhook.Secret, "Webhook:Secret");
         CheckWebhookSecret(problems, options.Webhook.PreviousSecret, "Webhook:PreviousSecret");
 
-        if (options.Email.FallbackAfter < TimeSpan.Zero)
-        {
-            problems.Add($"{Setting("Email:FallbackAfter")} must not be negative.");
-        }
         if (options.DocumentsTtl is { } ttl && ttl <= TimeSpan.Zero)
         {
             problems.Add($"{Setting("DocumentsTtl")} must be positive.");
@@ -71,6 +72,7 @@ public static class BackofficeOptionsValidator
         CheckConsentDocuments(problems, options.Consents, options.RequestedModeFor(BackofficeModule.Docs));
         CheckBilling(problems, options);
         if (requireBilling) RequireBilling(problems, options);
+        if (requireEmail) RequireEmail(problems, options);
 
         // A self-hosted installation is forced Off whatever it asks for, so a key or URL
         // left over there is not a reason to refuse to start (it is logged instead). A build
@@ -104,6 +106,15 @@ public static class BackofficeOptionsValidator
             && options.RequestedModeFor(BackofficeModule.Pricing) != BackofficeMode.On)
         {
             problems.Add($"{Setting("Modules:Billing")} is On, which needs {Setting("Modules:Pricing")} On (payments use the price list's lookup keys).");
+        }
+    }
+
+    private static void RequireEmail(List<string> problems, P4BackofficeProductOptions options)
+    {
+        if (options.DisabledReason == BackofficeDisabledReason.PrivateServer) return;
+        if (string.IsNullOrWhiteSpace(options.BaseUrl) || string.IsNullOrWhiteSpace(options.KeyFor(BackofficeModule.Email)))
+        {
+            problems.Add($"{Setting("BaseUrl")} and {Setting("SecretKey")} are required in production: all e-mail (2FA, password reset) goes through the service, this product has no mail provider of its own.");
         }
     }
 
@@ -308,7 +319,7 @@ internal sealed class BackofficeOptionsValidation(IHostEnvironment environment) 
 {
     public ValidateOptionsResult Validate(string? name, P4BackofficeProductOptions options)
     {
-        var problems = BackofficeOptionsValidator.Validate(options, rejectInvalidModes: environment.IsProduction(), requireBilling: environment.IsProduction());
+        var problems = BackofficeOptionsValidator.Validate(options, rejectInvalidModes: environment.IsProduction(), requireBilling: environment.IsProduction(), requireEmail: environment.IsProduction());
         return problems.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(problems);
     }
 }

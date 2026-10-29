@@ -85,6 +85,14 @@ public class P4BackofficeProductOptions
     /// </summary>
     public BackofficeMode RequestedModeFor(BackofficeModule module)
     {
+        // E-mail has no switch and no other provider: it goes through the service as soon as
+        // an address or a key for it is configured (Production insists on both, see the validator).
+        if (module == BackofficeModule.Email)
+        {
+            return string.IsNullOrWhiteSpace(BaseUrl) && string.IsNullOrWhiteSpace(SecretKey)
+                ? BackofficeMode.Off
+                : BackofficeMode.On;
+        }
         var raw = Modules.Get(module);
         // Billing moves money: only its own setting switches it on (see BackofficeModule.Billing).
         if (string.IsNullOrWhiteSpace(raw) && module != BackofficeModule.Billing) raw = Mode;
@@ -138,7 +146,6 @@ public class P4BackofficeProductOptions
     {
         public string? Docs { get; set; }
         public string? Consents { get; set; }
-        public string? Email { get; set; }
         public string? Pricing { get; set; }
         public string? Support { get; set; }
         public string? Billing { get; set; }
@@ -147,7 +154,7 @@ public class P4BackofficeProductOptions
         {
             BackofficeModule.Docs => Docs,
             BackofficeModule.Consents => Consents,
-            BackofficeModule.Email => Email,
+            BackofficeModule.Email => null,
             BackofficeModule.Pricing => Pricing,
             BackofficeModule.Support => Support,
             BackofficeModule.Billing => Billing,
@@ -164,7 +171,7 @@ public class P4BackofficeProductOptions
 
         /// <summary>
         /// Template keys sent as service templates; every other message is sent as raw HTML.
-        /// Empty by default — keys are added one at a time once the Email module is On.
+        /// Empty by default — keys are added one at a time once the e-mail path works.
         /// </summary>
         public List<string> TemplateKeys { get; set; } = new();
 
@@ -196,11 +203,14 @@ public class P4BackofficeProductOptions
                 .Select(k => k?.Trim() ?? string.Empty)
                 .Where(k => k.Length > 0);
 
-        /// <summary>Send critical messages (2FA, password reset, e-mail verification) directly when the service does not deliver them in time.</summary>
-        public bool FallbackDirect { get; set; } = true;
+        /// <summary>
+        /// Sender of every message, e.g. <c>Performance4PDF &lt;noreply@example.com&gt;</c>; its domain
+        /// must be the one configured for the environment in the service. Empty = the service's default sender.
+        /// </summary>
+        public string? From { get; set; }
 
-        /// <summary>How long a critical message may wait in the outbox before the direct fallback.</summary>
-        public TimeSpan FallbackAfter { get; set; } = TimeSpan.FromMinutes(1);
+        /// <summary>Reply-To of every message; empty = none.</summary>
+        public string? ReplyTo { get; set; }
     }
 
     public class WebhookOptions

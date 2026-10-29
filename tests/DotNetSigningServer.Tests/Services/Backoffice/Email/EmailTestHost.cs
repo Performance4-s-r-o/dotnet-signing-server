@@ -1,20 +1,16 @@
 using DotNetSigningServer.Options;
-using DotNetSigningServer.Services;
 using DotNetSigningServer.Services.Backoffice.Handlers;
 using DotNetSigningServer.Services.Backoffice.Outbox;
 using DotNetSigningServer.Services.Email;
 using DotNetSigningServer.Tests.Services.Backoffice.Outbox;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Moq;
 
 namespace DotNetSigningServer.Tests.Services.Backoffice.Email;
 
 /// <summary>
-/// Outbox host with the Email module's pieces (outbox sender, <c>email.raw</c> handler,
-/// break-glass) and a mocked <see cref="ResendEmailSender"/> — nothing leaves the test.
+/// Outbox host with the e-mail pieces (outbox sender, <c>email.raw</c> handler) — nothing leaves the test.
 /// </summary>
 internal sealed class EmailTestHost : IDisposable
 {
@@ -22,41 +18,18 @@ internal sealed class EmailTestHost : IDisposable
 
     public OutboxTestHost Host { get; }
 
-    public Mock<ResendEmailSender> Resend { get; }
-
-    public List<(string To, string Subject, string Html)> DirectSends { get; } = new();
-
     public EmailTestHost(
-        bool fallbackDirect = true,
-        bool resendConfigured = true,
         Action<DbContextOptionsBuilder>? database = null,
         Action<IServiceCollection>? configure = null)
     {
-        Resend = new Mock<ResendEmailSender>(
-            Microsoft.Extensions.Options.Options.Create(new ResendOptions()),
-            Mock.Of<IHttpClientFactory>(),
-            NullLogger<ResendEmailSender>.Instance)
-        { CallBase = false };
-        Resend.SetupGet(r => r.IsConfigured).Returns(resendConfigured);
-        Resend.Setup(r => r.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<string, string, string>((to, subject, html) => DirectSends.Add((to, subject, html)))
-            .Returns(Task.CompletedTask);
-
         Host = new OutboxTestHost(database, services =>
         {
-            services.Configure<ResendOptions>(o => o.From = From);
-            services.Configure<P4BackofficeProductOptions>(o => o.Email.FallbackDirect = fallbackDirect);
-            services.AddScoped(_ => Resend.Object);
+            services.Configure<P4BackofficeProductOptions>(o => o.Email.From = From);
             services.AddScoped<BackofficeOutboxEmailSender>();
             services.AddSingleton<IOutboxHandler, EmailRawOutboxHandler>();
-            services.AddSingleton<BreakGlassEmailFallback>();
             configure?.Invoke(services);
         });
     }
-
-    public BreakGlassEmailFallback Fallback => Host.Services.GetRequiredService<BreakGlassEmailFallback>();
-
-    public OutboxCircuitBreaker Breaker => Host.Services.GetRequiredService<OutboxCircuitBreaker>();
 
     /// <summary>Queues an e-mail through the outbox sender, as a request would.</summary>
     public async Task<Guid> SendAsync(string templateId, string to = "jan@example.com", Guid? userId = null)

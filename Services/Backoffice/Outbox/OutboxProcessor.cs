@@ -42,7 +42,6 @@ public sealed class OutboxProcessor
     private readonly IHttpClientFactory _httpClients;
     private readonly IReadOnlyDictionary<string, IOutboxHandler> _handlers;
     private readonly OutboxPayloadProtector _protector;
-    private readonly OutboxCircuitBreaker _breaker;
     private readonly TimeProvider _time;
     private readonly ILogger<OutboxProcessor> _logger;
     private readonly OutboxKindFilter _kinds;
@@ -55,7 +54,6 @@ public sealed class OutboxProcessor
         IHttpClientFactory httpClients,
         IEnumerable<IOutboxHandler> handlers,
         OutboxPayloadProtector protector,
-        OutboxCircuitBreaker breaker,
         TimeProvider time,
         ILogger<OutboxProcessor> logger,
         OutboxKindFilter? kinds = null,
@@ -69,7 +67,6 @@ public sealed class OutboxProcessor
         _httpClients = httpClients;
         _handlers = handlers.GroupBy(h => h.Kind, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Last(), StringComparer.Ordinal);
         _protector = protector;
-        _breaker = breaker;
         _time = time;
         _logger = logger;
     }
@@ -196,7 +193,6 @@ public sealed class OutboxProcessor
     private void Record(BackofficeOutboxItem item, OutboxAttemptResult result)
     {
         var outcome = RetryPolicy.Apply(item, result, _time.GetUtcNow(), GiveUpAfterFor(item.Kind));
-        _breaker.Record(result);
 
         switch (outcome)
         {

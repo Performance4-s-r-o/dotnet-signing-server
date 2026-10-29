@@ -85,7 +85,6 @@ internal sealed class OutboxTestHost : IDisposable
         services.AddSingleton<TimeProvider>(Time);
         services.AddSingleton<OutboxSignal>();
         services.AddSingleton<OutboxPayloadProtector>();
-        services.AddSingleton<OutboxCircuitBreaker>();
         services.AddScoped<IBackofficeOutbox, BackofficeOutbox>();
         services.AddSingleton<IOutboxHandler, TestOutboxHandler>();
         services.AddSingleton<OutboxProcessor>();

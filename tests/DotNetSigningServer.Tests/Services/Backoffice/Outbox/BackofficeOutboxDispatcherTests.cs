@@ -282,21 +282,6 @@ public class BackofficeOutboxDispatcherTests
     }
 
     [Fact]
-    public async Task RepeatedServiceFailures_MarkTheServiceDown()
-    {
-        using var host = new OutboxTestHost();
-        for (var i = 0; i < 3; i++)
-        {
-            await host.EnqueueAsync(new { n = i });
-            host.Service.EnqueueProblem(HttpStatusCode.BadGateway, "bad_gateway");
-        }
-
-        await host.Processor.DispatchDueAsync(CancellationToken.None);
-
-        Assert.True(host.Services.GetRequiredService<OutboxCircuitBreaker>().IsServiceDown);
-    }
-
-    [Fact]
     public async Task Dispatcher_SendsAnItemSoonAfterCommit()
     {
         using var host = new OutboxTestHost();
