@@ -17,8 +17,9 @@ namespace DotNetSigningServer.Services.Billing;
 /// (<see cref="BillingRetryPolicy"/>). Answers are returned, not thrown; only cancellation by
 /// the caller throws.
 ///
-/// Outages: reads time out after <see cref="ReadTimeout"/>; <see cref="BillingCircuitBreaker"/>
-/// stops sending after repeated failures (a refused call is "no answer", never a success).
+/// Outages: the invoice list times out after <see cref="ReadTimeout"/> (other calls keep the
+/// client's 15 s: the service calls Stripe inline); <see cref="BillingCircuitBreaker"/>
+/// (one for reads, one for writes) stops sending after repeated failures (a refused call is "no answer", never a success).
 /// Only the invoice list is cached: a fresh copy for <see cref="InvoicesFresh"/>, and a stale one
 /// up to <see cref="InvoicesStale"/> when the service does not answer (display only). A checkout
 /// or customer read decides about money, so it is never served from the cache.
@@ -33,7 +34,7 @@ public sealed class BackofficeBillingClient
     /// <summary>The service calls Stripe inline (10 s timeout of its own), so this is a little longer.</summary>
     public static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(15);
 
-    /// <summary>Reads wait less: nothing is charged by them and a user is waiting.</summary>
+    /// <summary>The invoice list (display only) waits less; checkout and customer reads keep 15 s.</summary>
     public static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(5);
 
     public static readonly TimeSpan InvoicesFresh = TimeSpan.FromSeconds(30);
@@ -51,6 +52,7 @@ public sealed class BackofficeBillingClient
     private readonly Func<int, TimeSpan> _delay;
     private readonly TimeProvider _time;
     private readonly BillingCircuitBreaker _breaker;
+    private readonly BillingCircuitBreaker _readBreaker;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTimeOffset At, BillingApiResult Result)> _invoices = new();
 
     public BackofficeBillingClient(IHttpClientFactory httpClients, ILogger<BackofficeBillingClient> logger, TimeProvider time, IOpsAlerter? alerter = null)
@@ -70,17 +72,34 @@ public sealed class BackofficeBillingClient
         _logger = logger;
         _delay = delay;
         _time = time ?? TimeProvider.System;
+        // Separate breakers: slow reads must not close checkout and charges.
         _breaker = new BillingCircuitBreaker(_time);
         _breaker.Opened += () =>
         {
-            _logger.LogError("Billing API unavailable: calls are refused for {Seconds} s after repeated failures",
+            _logger.LogError("Billing API unavailable: writes are refused for {Seconds} s after repeated failures",
                 (int)BillingCircuitBreaker.OpenFor.TotalSeconds);
             alerter?.Alert("billing-api-down",
                 "Billing API unavailable: payments are refused until it answers again.");
         };
+        _readBreaker = new BillingCircuitBreaker(_time);
+        _readBreaker.Opened += () =>
+        {
+            _logger.LogError("Billing API reads unavailable: refused for {Seconds} s after repeated failures",
+                (int)BillingCircuitBreaker.OpenFor.TotalSeconds);
+            alerter?.Alert("billing-api-reads-down", "Billing API reads are failing; payment status cannot be confirmed.");
+        };
     }
 
+    /// <summary>Breaker of writes (checkout, charge, customer, portal).</summary>
+    /// <summary>Tests shorten it.</summary>
+    internal TimeSpan InvoicesTimeout { get; set; } = ReadTimeout;
+
     internal BillingCircuitBreaker Breaker => _breaker;
+
+    /// <summary>Breaker of reads (GET); never affects writes.</summary>
+    internal BillingCircuitBreaker ReadBreaker => _readBreaker;
+
+    private BillingCircuitBreaker BreakerFor(HttpMethod method) => method == HttpMethod.Get ? _readBreaker : _breaker;
 
     public Task<BillingApiResult> PutCustomerAsync(string customerRef, object body, CancellationToken ct) =>
         SendAsync(HttpMethod.Put, $"v1/billing/customers/{Uri.EscapeDataString(customerRef)}", body, NewKey(), ct, attempts: 1);
@@ -100,7 +119,7 @@ public sealed class BackofficeBillingClient
         var now = _time.GetUtcNow();
         if (_invoices.TryGetValue(path, out var cached) && now - cached.At < InvoicesFresh) return cached.Result;
 
-        var result = await SendAsync(HttpMethod.Get, path, null, null, ct, attempts: 1);
+        var result = await SendAsync(HttpMethod.Get, path, null, null, ct, attempts: 1, timeout: InvoicesTimeout);
         if (result.IsSuccess)
         {
             if (_invoices.Count >= MaxCachedLists) PruneInvoices(now);
@@ -136,7 +155,7 @@ public sealed class BackofficeBillingClient
 
     private static string NewKey() => Guid.NewGuid().ToString("D");
 
-    private async Task<BillingApiResult> SendAsync(HttpMethod method, string path, object? body, string? idempotencyKey, CancellationToken ct, int attempts)
+    private async Task<BillingApiResult> SendAsync(HttpMethod method, string path, object? body, string? idempotencyKey, CancellationToken ct, int attempts, TimeSpan? timeout = null)
     {
         var json = body is null ? null : JsonSerializer.Serialize(body, Json);
         var result = BillingApiResult.NoAnswer();
@@ -144,20 +163,23 @@ public sealed class BackofficeBillingClient
         {
             if (attempt > 1)
             {
+                // An open breaker: no wait, the outcome stays "unknown".
+                if (BreakerFor(method).IsOpen) break;
                 _logger.LogInformation("Billing API {Method} {Path}: {Result}; repeating with the same idempotency key",
                     method, PathForLog(path), result.Describe());
                 await Task.Delay(_delay(attempt), ct);
             }
 
-            result = await AttemptAsync(method, path, json, idempotencyKey, ct);
+            result = await AttemptAsync(method, path, json, idempotencyKey, ct, timeout);
             if (!BillingRetryPolicy.RetryWithSameKey(result)) break;
         }
         return result;
     }
 
-    private async Task<BillingApiResult> AttemptAsync(HttpMethod method, string path, string? json, string? idempotencyKey, CancellationToken ct)
+    private async Task<BillingApiResult> AttemptAsync(HttpMethod method, string path, string? json, string? idempotencyKey, CancellationToken ct, TimeSpan? timeoutAfter)
     {
-        if (_breaker.IsOpen)
+        var breaker = BreakerFor(method);
+        if (breaker.IsOpen)
         {
             _logger.LogWarning("Billing API {Method} {Path}: not sent, the service did not answer recently", method, PathForLog(path));
             return BillingApiResult.NoAnswer();
@@ -169,7 +191,7 @@ public sealed class BackofficeBillingClient
         if (json != null) request.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        if (method == HttpMethod.Get) timeout.CancelAfter(ReadTimeout);
+        if (timeoutAfter is { } after) timeout.CancelAfter(after);
 
         BillingApiResult result;
         try
@@ -187,7 +209,7 @@ public sealed class BackofficeBillingClient
             _logger.LogWarning("Billing API {Method} {Path}: no answer ({Error})", method, PathForLog(path), ex.GetType().Name);
             result = BillingApiResult.NoAnswer();
         }
-        _breaker.Record(result);
+        breaker.Record(result);
         return result;
     }
 

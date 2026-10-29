@@ -156,4 +156,75 @@ public class BillingResilienceTests
         var outage = await client.GetCustomerAsync("user:1", CancellationToken.None);
         Assert.Equal(502, outage.Status);
     }
+
+    [Fact]
+    public async Task SlowOrFailingReads_NeverCloseCheckoutAndCharges()
+    {
+        var client = Client();
+        for (var i = 0; i < BillingCircuitBreaker.Threshold; i++)
+        {
+            _service.EnqueueProblem(HttpStatusCode.BadGateway, "stripe_error");
+            await client.GetCheckoutAsync("cs_1", CancellationToken.None);
+        }
+        Assert.True(client.ReadBreaker.IsOpen);
+        Assert.False(client.Breaker.IsOpen);
+
+        _service.Enqueue(HttpStatusCode.Created, """{"url":"https://billing.stripe.test/p"}""");
+        var checkout = await client.CreateCheckoutAsync(new { }, CancellationToken.None);
+        Assert.True(checkout.IsSuccess);
+        Assert.Contains("billing-api-reads-down", _alerts.Keys);
+        Assert.DoesNotContain("billing-api-down", _alerts.Keys);
+    }
+
+    [Fact]
+    public async Task WriteOutages_DoNotBlockReads()
+    {
+        var client = Client();
+        Outages(BillingCircuitBreaker.Threshold);
+        for (var i = 0; i < BillingCircuitBreaker.Threshold; i++) await client.CreateCheckoutAsync(new { }, CancellationToken.None);
+        Assert.True(client.Breaker.IsOpen);
+
+        _service.Enqueue(HttpStatusCode.OK, """{"id":"cs_1","payment_status":"paid"}""");
+        Assert.True((await client.GetCheckoutAsync("cs_1", CancellationToken.None)).IsSuccess);
+    }
+
+    [Fact]
+    public async Task RepeatWithOpenBreaker_ReturnsAtOnce_AndStaysUnknown()
+    {
+        var waited = new List<int>();
+        var client = new BackofficeBillingClient(new Factory(_service), NullLogger<BackofficeBillingClient>.Instance,
+            a => { waited.Add(a); return TimeSpan.FromMinutes(5); }, _time, _alerts);
+        Outages(BillingCircuitBreaker.Threshold);
+        for (var i = 0; i < BillingCircuitBreaker.Threshold - 1; i++) await client.CreateCheckoutAsync(new { }, CancellationToken.None);
+        waited.Clear();
+
+        // The charge's first attempt fails and opens the breaker; the repeat must not wait 5 minutes.
+        var charge = await client.CreateChargeAsync(new { }, "key-1", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(502, charge.Status);
+        Assert.Empty(waited);
+    }
+
+    private sealed class SlowHandler(TimeSpan delay) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            await Task.Delay(delay, ct);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"data":[]}""") };
+        }
+    }
+
+    [Fact]
+    public async Task OnlyTheInvoiceList_GetsTheShortTimeout()
+    {
+        var client = new BackofficeBillingClient(new Factory(new SlowHandler(TimeSpan.FromMilliseconds(400))),
+            NullLogger<BackofficeBillingClient>.Instance, _ => TimeSpan.Zero, _time, _alerts)
+        { InvoicesTimeout = TimeSpan.FromMilliseconds(80) };
+
+        var invoices = await client.ListInvoicesAsync("user:1", 10, CancellationToken.None);
+        var checkout = await client.GetCheckoutAsync("cs_1", CancellationToken.None);
+
+        Assert.Null(invoices.Status);
+        Assert.True(checkout.IsSuccess);
+    }
 }
