@@ -52,7 +52,8 @@ public static class BackofficeRegistration
         if (snapshot.AnyEnabled)
         {
             AddOutboxDispatcher(services, snapshot);
-            AddInboxProcessing(services, snapshot);
+            // Not through an on-prem gateway: it has no events to poll or receive.
+            if (snapshot.EventsEnabled) AddInboxProcessing(services, snapshot);
         }
         AddLegalDocuments(services, snapshot);
         AddConsents(services, snapshot);
@@ -308,7 +309,8 @@ public static class BackofficeRegistration
     {
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<DotNetSigningServer.Services.Erasure.AccountErasureService>();
-        if (!options.AnyEnabled) return;
+        // The erasure queue is a service feature (not a gateway's, not e-mail's).
+        if (!options.AnyEnabledBeyondEmail) return;
         services.AddScoped<IBackofficeEventHandler, ErasureRequestedHandler>();
     }
 
@@ -333,7 +335,7 @@ public static class BackofficeRegistration
     }
 
     /// <summary>
-    /// Sending: only when a module is On (and so never on a PrivateServer or in a
+    /// Sending: only when a module is On (and so never on a PrivateServer, except for e-mail through its gateway, or in a
     /// build without the SDK). Its own client, separate from the SDK's 3 s one.
     /// </summary>
     private static void AddOutboxDispatcher(IServiceCollection services, P4BackofficeProductOptions options)
@@ -411,7 +413,16 @@ internal sealed class BackofficeStartupReport(
         switch (o.DisabledReason)
         {
             case BackofficeDisabledReason.PrivateServer:
+                if (o.GatewayOnly)
+                {
+                    logger.LogInformation("PrivateServer: only e-mail, through the notify-gateway; the rest of the backoffice integration is disabled");
+                    break;
+                }
                 logger.LogInformation("PrivateServer: backoffice integration disabled");
+                if (o.OnPremGatewayRequested)
+                {
+                    logger.LogWarning("PrivateServer: OnPremGateway is set but this is not a private server; ignored");
+                }
                 if (!string.IsNullOrWhiteSpace(o.SecretKey))
                 {
                     logger.LogWarning(

@@ -125,6 +125,9 @@ services:
       - Billing__Currency=${BILLING_CURRENCY:-{{project.DOTNET_BILLING_CURRENCY}}}
       # All e-mail goes through the backoffice outbox (P4_BACKOFFICE_URL + SECRET_KEY below).
       # From must name the sending domain configured in the service; empty = its default.
+      # On-prem (PrivateServer): exactly "true" sends e-mail, and only e-mail, through the
+      # installation's notify-gateway (BaseUrl = the gateway, SecretKey = its key). Anything else = off.
+      - P4Backoffice__OnPremGateway=${P4_BACKOFFICE_ONPREM_GATEWAY:-{{project.DOTNET_P4_BACKOFFICE_ONPREM_GATEWAY}}}
       - P4Backoffice__Email__From=${P4_BACKOFFICE_EMAIL_FROM:-{{project.DOTNET_P4_BACKOFFICE_EMAIL_FROM}}}
       - P4Backoffice__Email__ReplyTo=${P4_BACKOFFICE_EMAIL_REPLY_TO:-{{project.DOTNET_P4_BACKOFFICE_EMAIL_REPLY_TO}}}
       # Loki logging
@@ -160,10 +163,10 @@ services:
       # Off. On needs BaseUrl + a p4sk_ key or startup fails. Empty module
       # overrides inherit Mode.
       - P4Backoffice__Mode=${P4_BACKOFFICE_MODE:-Off}
-      - P4Backoffice__BaseUrl=${P4_BACKOFFICE_URL:-}
-      - P4Backoffice__SecretKey=${P4_BACKOFFICE_SECRET_KEY:-}
+      - P4Backoffice__BaseUrl=${P4_BACKOFFICE_URL:-{{project.P4PDF_P4_BACKOFFICE_URL}}}
+      - P4Backoffice__SecretKey=${P4_BACKOFFICE_SECRET_KEY:-{{project.DOTNET_P4_BACKOFFICE_SECRET_KEY}}}
       # live | test; the key kind must match it. Required once a module is On.
-      - P4Backoffice__Environment=${P4_BACKOFFICE_ENV:-}
+      - P4Backoffice__Environment=${P4_BACKOFFICE_ENV:-{{project.P4PDF_P4_BACKOFFICE_ENV}}}
       - P4Backoffice__Webhook__Secret=${P4_BACKOFFICE_WEBHOOK_SECRET:-}
       - P4Backoffice__Webhook__PreviousSecret=${P4_BACKOFFICE_WEBHOOK_PREVIOUS_SECRET:-}
       - P4Backoffice__Modules__Docs=${P4_BACKOFFICE_DOCS_MODE:-}

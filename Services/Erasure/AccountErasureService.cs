@@ -424,7 +424,7 @@ public sealed class AccountErasureService
                 retainedReason is null ? AccountErasure.AckStatuses.Done : AccountErasure.AckStatuses.Retained,
                 AckCounts(counts), retainedReason, subjectRef);
         }
-        else if (firstTime && backoffice.AnyEnabled)
+        else if (firstTime && backoffice.AnyEnabledBeyondEmail)
         {
             // The service erases its own targets (consents, e-mail log, support, billing, …).
             outbox.Enqueue(AccountErasure.RequestOutboxKind, new ErasureRequestPayload

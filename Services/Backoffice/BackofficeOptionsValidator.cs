@@ -77,6 +77,8 @@ public static class BackofficeOptionsValidator
         // A self-hosted installation is forced Off whatever it asks for, so a key or URL
         // left over there is not a reason to refuse to start (it is logged instead). A build
         // without the SDK is validated as configured: the configuration is wrong either way.
+        CheckSender(problems, options);
+        if (options.GatewayOnly) CheckGateway(problems, options);
         var connectionNeeded = options.DisabledReason != BackofficeDisabledReason.PrivateServer
                                && options.AnyRequested;
         if (connectionNeeded)
@@ -111,10 +113,48 @@ public static class BackofficeOptionsValidator
 
     private static void RequireEmail(List<string> problems, P4BackofficeProductOptions options)
     {
-        if (options.DisabledReason == BackofficeDisabledReason.PrivateServer) return;
+        // A private server without a gateway has no e-mail at all; with one, CheckGateway asks for its address.
+        if (options.DisabledReason == BackofficeDisabledReason.PrivateServer && !options.GatewayOnly) return;
+        if (options.GatewayOnly && !string.IsNullOrWhiteSpace(options.BaseUrl) && !string.IsNullOrWhiteSpace(options.SecretKey)) return;
         if (string.IsNullOrWhiteSpace(options.BaseUrl) || string.IsNullOrWhiteSpace(options.KeyFor(BackofficeModule.Email)))
         {
             problems.Add($"{Setting("BaseUrl")} and {Setting("SecretKey")} are required in production: all e-mail (2FA, password reset) goes through the service, this product has no mail provider of its own.");
+        }
+    }
+
+    /// <summary>From / Reply-To, when given, must be addresses (<c>Name &lt;a@b&gt;</c> or <c>a@b</c>).</summary>
+    private static void CheckSender(List<string> problems, P4BackofficeProductOptions options)
+    {
+        if (options.Email.EffectiveFrom is { } from && !System.Net.Mail.MailAddress.TryCreate(from, out _))
+        {
+            problems.Add($"{Setting("Email:From")} / P4_BACKOFFICE_EMAIL_FROM is not a valid e-mail address.");
+        }
+        if (options.Email.EffectiveReplyTo is { } replyTo && !System.Net.Mail.MailAddress.TryCreate(replyTo, out _))
+        {
+            problems.Add($"{Setting("Email:ReplyTo")} / P4_BACKOFFICE_EMAIL_REPLY_TO is not a valid e-mail address.");
+        }
+    }
+
+    /// <summary>
+    /// A private server that sends e-mail through its notify-gateway: the gateway's address (plain
+    /// http inside the installation's network is fine) and a key; no service templates, which the
+    /// gateway does not know.
+    /// </summary>
+    private static void CheckGateway(List<string> problems, P4BackofficeProductOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.BaseUrl)
+            || !Uri.TryCreate(options.BaseUrl.Trim(), UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+        {
+            problems.Add($"{Setting("BaseUrl")} must be the gateway's absolute http(s) URL when {Setting("OnPremGateway")} is true.");
+        }
+        if (string.IsNullOrWhiteSpace(options.SecretKey))
+        {
+            problems.Add($"{Setting("SecretKey")} is required when {Setting("OnPremGateway")} is true.");
+        }
+        if (options.Email.SelectedKeys().Any())
+        {
+            problems.Add($"{Setting("Email:TemplateKeys")} / Templates must be empty when {Setting("OnPremGateway")} is true: the gateway knows no service templates.");
         }
     }
 

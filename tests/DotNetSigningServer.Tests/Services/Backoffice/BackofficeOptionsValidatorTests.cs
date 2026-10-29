@@ -188,16 +188,6 @@ public class BackofficeOptionsValidatorTests
     }
 
     [Fact]
-    public void AKeyAlone_SwitchesEmailOn_SoTheUrlAndKeyKindAreChecked()
-    {
-        var options = Options(mode: "Off", secretKey: "p4sk_test_x", environment: "live");
-
-        var problems = BackofficeOptionsValidator.Validate(options);
-        Assert.Contains(problems, p => p.Contains("P4Backoffice__BaseUrl"));
-        Assert.Contains(problems, p => p.Contains("test key"));
-    }
-
-    [Fact]
     public void KeyKind_IsNotCheckedOnAPrivateServer()
     {
         var options = Options(mode: "On", baseUrl: Url, secretKey: "p4sk_test_x", environment: null,

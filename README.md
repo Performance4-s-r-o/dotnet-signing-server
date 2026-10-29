@@ -418,15 +418,32 @@ in the same `SaveChangesAsync` as the token, so they add no latency when the
 service is down. The code or link is only in the encrypted payload, which is
 cleared once sent.
 
-Production refuses to start without `P4Backoffice__BaseUrl` and `SecretKey`.
-Outside production, without them, `LoggingEmailSender` only logs the message
-(the body in Development only) and nothing is delivered. A private server also
-uses it: its backoffice integration is off.
+E-mail is on when both `P4Backoffice__BaseUrl` and `SecretKey` are set (one alone
+is not enough). Production refuses to start without them, and `From` / `ReplyTo`,
+when set, must be valid addresses. An unresolved Coolify placeholder counts as unset.
+
+Without a connection (Development, Staging, a private server without a gateway)
+`LoggingEmailSender` delivers nothing: in Development it logs the subject and a
+masked recipient (the body only with `P4Backoffice__Email__LogBodies=true`, at
+Debug); anywhere else it throws, so a flow that waits for a mail (2FA, reset)
+reports a failure instead of "code sent". `email.*` outbox items already queued
+stay Pending until a connection exists.
+
+On-prem: a private server (`PrivateServer__Enabled=true`) with
+`P4Backoffice__OnPremGateway=true` (exactly `true`) sends e-mail, and only e-mail,
+through the installation's `notify-gateway`: `BaseUrl` is the gateway
+(`http://notify-gateway:8090` is accepted), `SecretKey` its key. No inbox, polling,
+webhook, erasure queue or service templates there (`Email:TemplateKeys` must be
+empty). Everything else stays off.
+
+Events: bounces and complaints arrive as events, so a connected hosted installation
+runs the inbox, the poll and the webhook whenever any module, e-mail included, is
+on. The erasure queue to the service only runs with a module other than e-mail.
 
 Service templates: a template whose key is selected — in
 `P4Backoffice__Email__TemplateKeys__0`, `__1`, … or, as a single value,
 `P4Backoffice__Email__Templates` / `P4_BACKOFFICE_TEMPLATES` (`*` for every
-template, otherwise keys separated by commas or whitespace; empty by default) —
+template - not checked at start: a key the service does not know ends `Dead` and alerts; otherwise keys separated by commas or whitespace; empty by default) —
 is queued as outbox item `email.template` instead (`POST /v1/emails` with `template`,
 `variables`, `locale` = `cs` or `en`, tags) and rendered by the service. All
 callers go through `ITemplatedEmailSender`; the variables are defined in
@@ -444,17 +461,22 @@ publishing in the service first.
 Outage: there is no direct fallback. While the service is unreachable, answers 5xx
 or refuses the key, the item stays in the outbox and is retried with backoff until
 `P4Backoffice__Outbox__GiveUpAfter` (default 20 h, always under 24 h because of the
-service's `Idempotency-Key`), then it is `Dead`. A user waiting for a 2FA code or a
-reset link does not get it until the service is back; a 2FA code is valid for minutes,
-so in a longer outage the user has to ask for a new one. Critical items older than
-24 h lose their payload.
+service's `Idempotency-Key`), then it is `Dead`. Critical e-mail (2FA, reset,
+verification) ends sooner, an hour after it was queued: it is then `Dead` with the
+error "Expired before delivery" and its payload dropped, because the user has asked
+again by then. A user waiting for a 2FA code or a reset link does not get it until
+the service is back. Not accepted five minutes after queueing, an e-mail raises an
+ops alert (`outbox-overdue:email.*`, `outbox-dead:email.*` when it ends dead; see
+`OpsAlert__WebhookUrl`). Outbox items with the old status `FallbackSent` no longer
+exist in code; no installation ever held one, a database that did needs them set to
+`Sent` by hand.
 
 Background e-mails (auto-recharge, failed payment, price change) use the
 language of the user's last sign-up or sign-in (`Users.Locale`, default `en`).
 `email.bounced` / `email.complained` set `Users.EmailBouncedAt` (matched by the
 `user_id` tag, else the address), shown in `/Admin/Users/{id}`; `email.failed`
 is logged. The sending domain configured for the environment in the service
-must be the domain of `EMAIL_FROM` (DKIM).
+must be the domain of `P4Backoffice__Email__From` (DKIM).
 
 Rollback: remove a key from `P4Backoffice__Email__TemplateKeys` (local rendering
 again). Queued items are never lost by that.

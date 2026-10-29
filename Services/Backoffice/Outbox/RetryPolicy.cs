@@ -105,10 +105,6 @@ public static class RetryPolicy
         return total;
     }
 
-    /// <summary>Network errors, timeouts and 5xx: what makes the service count as down.</summary>
-    public static bool IsServiceFailure(OutboxAttemptResult result) =>
-        !result.IsLocalFailure && result.StatusCode is null or >= 500;
-
     /// <summary>
     /// Records an attempt on the item: increments <c>Attempts</c>, releases the claim and sets
     /// the status, next attempt, error and — on success — the remote id, clearing the payload.

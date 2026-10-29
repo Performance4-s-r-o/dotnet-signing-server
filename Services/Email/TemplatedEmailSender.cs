@@ -52,7 +52,9 @@ public sealed class TemplatedEmailSender : ITemplatedEmailSender
     public TemplatedEmailRoute RouteFor(string templateKey)
     {
         var options = _options.CurrentValue;
+        // A gateway knows no service templates: everything is rendered locally.
         return options.ModeFor(BackofficeModule.Email) == BackofficeMode.On
+               && !options.GatewayOnly
                && IsListed(options, templateKey)
                && _emailSender is ITransactionalEmailSender
             ? TemplatedEmailRoute.ServiceTemplate
@@ -107,7 +109,7 @@ public sealed class TemplatedEmailSender : ITemplatedEmailSender
         IReadOnlyDictionary<string, string?> variables, EmailSendOptions options)
     {
         var email = _options.CurrentValue.Email;
-        var payload = BuildPayload(templateKey, toEmail, locale, variables, options, email.From, email.ReplyTo);
+        var payload = BuildPayload(templateKey, toEmail, locale, variables, options, email.EffectiveFrom, email.EffectiveReplyTo);
         _outbox.Enqueue(
             OutboxKind,
             payload,

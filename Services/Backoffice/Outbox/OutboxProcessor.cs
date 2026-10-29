@@ -170,6 +170,17 @@ public sealed class OutboxProcessor
     /// The kind's own give-up time, else the longer one of a kind the service deduplicates
     /// itself, else the configured one.
     /// </summary>
+    internal TimeSpan GiveUpAfterFor(BackofficeOutboxItem item)
+    {
+        var usual = GiveUpAfterFor(item.Kind);
+        return item.Critical
+               && _handlers.TryGetValue(item.Kind, out var handler)
+               && handler.CriticalGiveUpAfter is { } critical
+               && critical < usual
+            ? critical
+            : usual;
+    }
+
     internal TimeSpan GiveUpAfterFor(string kind)
     {
         if (!_handlers.TryGetValue(kind, out var handler)) return _giveUpAfter;
@@ -192,7 +203,15 @@ public sealed class OutboxProcessor
     /// <summary>Stores the outcome of an attempt on the item (not saved) and logs it.</summary>
     private void Record(BackofficeOutboxItem item, OutboxAttemptResult result)
     {
-        var outcome = RetryPolicy.Apply(item, result, _time.GetUtcNow(), GiveUpAfterFor(item.Kind));
+        var outcome = RetryPolicy.Apply(item, result, _time.GetUtcNow(), GiveUpAfterFor(item));
+        if (outcome == OutboxOutcome.Dead && item.Critical
+            && item.LastError?.StartsWith("Gave up", StringComparison.Ordinal) == true
+            && GiveUpAfterFor(item) < GiveUpAfterFor(item.Kind))
+        {
+            // The code or link has expired: nobody may send it later, and it is not kept.
+            item.LastError = RetryPolicy.Truncate("Expired before delivery: " + item.LastError, RetryPolicy.MaxErrorLength);
+            item.PayloadProtected = null;
+        }
 
         switch (outcome)
         {

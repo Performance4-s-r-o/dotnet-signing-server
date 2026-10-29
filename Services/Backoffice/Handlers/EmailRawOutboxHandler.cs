@@ -16,9 +16,22 @@ namespace DotNetSigningServer.Services.Backoffice.Handlers;
 /// Own HTTP call following the service's OpenAPI document — no SDK dependency, so every build
 /// (forks included) can use it.
 /// </summary>
-public class EmailRawOutboxHandler : JsonPostOutboxHandler
+public class EmailRawOutboxHandler : JsonPostOutboxHandler, IOutboxHandler
 {
     public const string SuppressedStatus = "suppressed";
+
+    /// <summary>A message not accepted this long after it was queued raises an ops alert.</summary>
+    public static readonly TimeSpan MailAlertAfter = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Critical e-mail (2FA code, reset or verification link) is not sent later than this: the
+    /// user has asked again by then, and the code or link is no use. Shorter than <c>Outbox:GiveUpAfter</c>.
+    /// </summary>
+    public static readonly TimeSpan CriticalExpiry = TimeSpan.FromHours(1);
+
+    public TimeSpan? AlertAfter => MailAlertAfter;
+
+    public TimeSpan? CriticalGiveUpAfter => CriticalExpiry;
 
     public override string Kind => BackofficeOutboxEmailSender.OutboxKind;
 

@@ -46,7 +46,7 @@ public sealed partial class BackofficeOutboxEmailSender : ITransactionalEmailSen
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toEmail);
         var email = _options.CurrentValue.Email;
-        var payload = BuildPayload(toEmail, subject, htmlBody, options, email.From, email.ReplyTo);
+        var payload = BuildPayload(toEmail, subject, htmlBody, options, email.EffectiveFrom, email.EffectiveReplyTo);
         _outbox.Enqueue(
             OutboxKind,
             payload,
