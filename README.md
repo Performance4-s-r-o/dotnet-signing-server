@@ -402,8 +402,14 @@ Rollback: `P4Backoffice__Modules__Consents=Off`. Records made while `Off` are
 sent later with the admin action *Send consents recorded while the module was
 Off* (`/Admin`), which queues every record without an outbox item once.
 
-TODO: there is no account deletion yet. When it is added, queue an outbox item
-`erase` (`POST /v1/subjects/{ref}/erase`) in the same transaction.
+Account deletion: a signed-in user deletes the account at `/Account/Delete` (recent
+re-authentication and an explicit confirmation). `AccountErasureService` erases or
+pseudonymises the personal data in one database transaction and queues outbox item
+`subject.erase` (`POST /v1/erasures`) in it. An erasure requested by the service
+(`subject.erasure.requested` webhook / event) runs the same erasure and queues
+`subject.erasure.ack`. Both kinds are retried for 30 days, alert from 72 h on, and are never
+dropped quietly (Dead, kept). Invoices, audit actions and pseudonymised consent records are
+retained and acknowledged as `retained`.
 
 #### E-mail
 
