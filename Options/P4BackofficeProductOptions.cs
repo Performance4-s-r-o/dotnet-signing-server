@@ -12,7 +12,10 @@ public class P4BackofficeProductOptions
 {
     public const string SectionName = "P4Backoffice";
 
-    /// <summary>Global mode (<c>Off</c>, <c>On</c>); empty means <c>Off</c>.</summary>
+    /// <summary>
+    /// Global mode (<c>Off</c>, <c>On</c>). Empty means the default of the environment: <c>On</c> in
+    /// Production (see <see cref="DefaultOn"/>), <c>Off</c> elsewhere. <c>Off</c> is the emergency rollback.
+    /// </summary>
     public string? Mode { get; set; }
 
     /// <summary>Per-module overrides; an empty value inherits <see cref="Mode"/>.</summary>
@@ -85,12 +88,19 @@ public class P4BackofficeProductOptions
     public SupportFormOptions SupportForm { get; set; } = new();
 
     /// <summary>
+    /// Set by the integration after binding: true in Production, where a module without any
+    /// setting is On. Development and Testing keep the default Off, so a local run and the tests
+    /// need no service. Set <c>Off</c> (globally or per module) to roll back.
+    /// </summary>
+    public bool DefaultOn { get; internal set; }
+
+    /// <summary>
     /// Set by the integration after binding. When not <see cref="BackofficeDisabledReason.None"/>
     /// every module is Off whatever the configuration says.
     /// </summary>
     public BackofficeDisabledReason DisabledReason { get; internal set; }
 
-    /// <summary>Effective mode of a module: the override, else the global mode, else Off.</summary>
+    /// <summary>Effective mode of a module: the override, else the global mode, else the environment default (On in Production, else Off).</summary>
     public BackofficeMode ModeFor(BackofficeModule module)
     {
         if (DisabledReason == BackofficeDisabledReason.None) return RequestedModeFor(module);
@@ -113,8 +123,15 @@ public class P4BackofficeProductOptions
                 : BackofficeMode.On;
         }
         var raw = Modules.Get(module);
-        // Billing moves money: only its own setting switches it on (see BackofficeModule.Billing).
-        if (string.IsNullOrWhiteSpace(raw) && module != BackofficeModule.Billing) raw = Mode;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            // Billing moves money: the global mode never switches it on, only the global Off rolls it back.
+            var inherited = module != BackofficeModule.Billing
+                || (TryParseMode(Mode, out var global) && global == BackofficeMode.Off && !string.IsNullOrWhiteSpace(Mode));
+            if (inherited) raw = Mode;
+        }
+        // Nothing set at all: the environment default.
+        if (string.IsNullOrWhiteSpace(raw)) return DefaultOn ? BackofficeMode.On : BackofficeMode.Off;
         return TryParseMode(raw, out var mode) ? mode : BackofficeMode.Off;
     }
 

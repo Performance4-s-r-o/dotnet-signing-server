@@ -186,8 +186,8 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `Sentry__Dsn` | | Error monitoring; disabled when empty |
 | `Loki__Url` | | Log shipping; disabled when empty |
 | `Limits__*` | | Request/PDF/image/attachment size caps |
-| `P4Backoffice__Mode` / `P4Backoffice__Modules__*` | | P4 Backoffice integration: `Off` (default) or `On`, globally or per module (`Docs`, `Consents`, `Pricing`, `Support`, `Billing`; `Billing` never follows the global mode) |
-| `P4Backoffice__BaseUrl` / `P4Backoffice__SecretKey` | when not `Off` | Service URL (https) and `p4sk_` key; startup fails without them |
+| `P4Backoffice__Mode` / `P4Backoffice__Modules__*` | | P4 Backoffice integration: Empty = the default of the environment: `On` in Production (every module, no setting needed), `Off` in Development and Testing and on a private server. `Off` globally or per module (`Docs`, `Consents`, `Pricing`, `Support`, `Billing`) is the emergency rollback; a global `On` never switches `Billing` on |
+| `P4Backoffice__BaseUrl` / `P4Backoffice__SecretKey` / `P4Backoffice__Environment` | when a module is `On` (always in Production unless rolled back) | Service URL (https), `p4sk_` key and `live`/`test`; startup fails without them |
 | `P4Backoffice__Webhook__Secret` | | Webhook signing secret (`whsec_` + base64 of at least 24 bytes); `…__PreviousSecret` during rotation |
 | `P4Backoffice__CookieWidget__PublishableKey` / `…__Url` | | Cookie banner of the service: publishable key `p4pk_…` (empty = no banner) and the origin of `widget.js` (default `https://legal.performance4.cz`) |
 | `P4Backoffice__Email__Templates` / `P4_BACKOFFICE_TEMPLATES` | | Templates the service renders: `*` for all, otherwise keys separated by commas or whitespace (empty = all rendered locally) |

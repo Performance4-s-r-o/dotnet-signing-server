@@ -31,14 +31,19 @@ public static class BackofficeRegistration
     public static IServiceCollection AddP4BackofficeIntegration(
         this IServiceCollection services,
         IConfiguration configuration,
-        PrivateServerOptions privateServer)
+        PrivateServerOptions privateServer,
+        bool defaultOn = false)
     {
         var section = configuration.GetSection(P4BackofficeProductOptions.SectionName);
         var reason = DisabledReason(privateServer);
 
         services.AddOptions<P4BackofficeProductOptions>()
             .Bind(section)
-            .PostConfigure(options => options.DisabledReason = reason)
+            .PostConfigure(options =>
+            {
+                options.DisabledReason = reason;
+                options.DefaultOn = defaultOn;
+            })
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<P4BackofficeProductOptions>, BackofficeOptionsValidation>();
         services.AddHostedService<BackofficeStartupReport>();
@@ -49,6 +54,7 @@ public static class BackofficeRegistration
         // options above; the options pipeline itself is only available after Build().
         var snapshot = section.Get<P4BackofficeProductOptions>() ?? new P4BackofficeProductOptions();
         snapshot.DisabledReason = reason;
+        snapshot.DefaultOn = defaultOn;
         if (snapshot.AnyEnabled)
         {
             AddOutboxDispatcher(services, snapshot);

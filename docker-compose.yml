@@ -161,8 +161,9 @@ services:
       - OsTicket__Topic__billing=${OSTICKET_TOPIC_BILLING:-3}
       - OsTicket__Topic__account=${OSTICKET_TOPIC_ACCOUNT:-4}
       - OsTicket__Topic__other=${OSTICKET_TOPIC_OTHER:-5}
-      # P4 Backoffice integration. Everything Off by default; PrivateServer forces
-      # Off. On needs BaseUrl + a p4sk_ key or startup fails. Empty module
+      # P4 Backoffice integration. Production: every module On by default (empty
+      # = code default); Off is the emergency rollback. PrivateServer forces Off.
+      # On needs BaseUrl + a p4sk_ key + Environment or startup fails. Empty module
       # overrides inherit Mode.
       - P4Backoffice__Mode=${P4_BACKOFFICE_MODE:-{{project.DOTNET_P4_BACKOFFICE_MODE}}}
       - P4Backoffice__BaseUrl=${P4_BACKOFFICE_URL:-{{project.P4PDF_P4_BACKOFFICE_URL}}}

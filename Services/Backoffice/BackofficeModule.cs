@@ -22,8 +22,9 @@ public enum BackofficeModule
     Support,
 
     /// <summary>
-    /// Payments (checkout, saved cards, invoices, auto-recharge). Never inherits the global
-    /// <c>Mode</c>: it moves money, so it is switched on by its own setting only.
+    /// Payments (checkout, saved cards, invoices, auto-recharge). The global <c>Mode=On</c> never
+    /// switches it on: it moves money. In Production it is On by default; its own setting
+    /// or a global <c>Off</c> rolls it back.
     /// </summary>
     Billing,
 }
