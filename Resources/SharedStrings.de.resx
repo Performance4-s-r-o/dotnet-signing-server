@@ -131,6 +131,7 @@
   <data name="ConfirmEnableEnterprise" xml:space="preserve"><value>Dadurch wird die Auto-Aufladung deaktiviert und die Karte entfernt. Fortfahren?</value></data>
   <data name="ConfirmDisableEnterprise" xml:space="preserve"><value>Der Benutzer wird wieder mit Credits abgerechnet. Fortfahren?</value></data>
   <data name="EnterpriseEnabled" xml:space="preserve"><value>Enterprise-Modus aktiviert. Auto-Aufladung deaktiviert, Karten entfernt.</value></data>
+  <data name="EnterpriseDetachFailed" xml:space="preserve"><value>Zahlungsmethoden konnten nicht entfernt werden, daher wurde der Enterprise-Modus nicht aktiviert. Bitte erneut versuchen.</value></data>
   <data name="EnterpriseDisabled" xml:space="preserve"><value>Enterprise-Modus deaktiviert.</value></data>
   <data name="UsageThisMonth" xml:space="preserve"><value>Nutzung diesen Monat</value></data>
   <data name="CreditsUsedInMonth" xml:space="preserve"><value>Credits verbraucht in {0}</value></data>

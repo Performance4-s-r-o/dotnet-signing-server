@@ -258,12 +258,7 @@ public class AdminController : Controller
             // 1. Disable auto-recharge
             // 2. Detach all saved payment methods from Stripe
             // 3. Set IsEnterprise flag
-            var wasAutoRecharge = user.AutoRechargeEnabled;
-            if (user.AutoRechargeEnabled)
-            {
-                await _autoRechargeService.DisableAsync(user);
-            }
-
+            // Detach first: when it fails nothing is changed and the admin can simply retry.
             if (!string.IsNullOrWhiteSpace(user.StripeCustomerId))
             {
                 try
@@ -273,7 +268,15 @@ public class AdminController : Controller
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Failed to list/detach payment methods for user {UserId}", user.Id);
+                    TempData["Error"] = _localizer["EnterpriseDetachFailed"].Value;
+                    return RedirectToAction(nameof(Details), new { id });
                 }
+            }
+
+            var wasAutoRecharge = user.AutoRechargeEnabled;
+            if (user.AutoRechargeEnabled)
+            {
+                await _autoRechargeService.DisableAsync(user);
             }
 
             user.IsEnterprise = true;
