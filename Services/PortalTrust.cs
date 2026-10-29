@@ -33,11 +33,14 @@ public static class PortalTrust
     public const int MaxTenantIdLength = 64;
     public const int MaxRequestIdLength = 128;
 
-    public static PortalCallKind Classify(PortalTrustOptions options, int localPort, Guid userId, bool isBrowserToken)
+    /// <param name="trustedCallerAccount">The account's <c>TrustedCaller</c> flag, set by an administrator.</param>
+    public static PortalCallKind Classify(PortalTrustOptions options, int localPort, bool trustedCallerAccount, bool isBrowserToken)
     {
         // A browser token is used from a browser, through the public hostname, whoever issued it.
-        if (isBrowserToken || !options.TrustedCallerUserIds.Contains(userId)) return PortalCallKind.Ordinary;
-        if (options.InternalPort is int internalPort && localPort != internalPort) return PortalCallKind.Refused;
+        if (isBrowserToken || !trustedCallerAccount) return PortalCallKind.Ordinary;
+        // Without the internal listener nothing is trusted: the flag alone never is enough.
+        if (options.InternalPort is not int internalPort) return PortalCallKind.Ordinary;
+        if (localPort != internalPort) return PortalCallKind.Refused;
         return PortalCallKind.Trusted;
     }
 

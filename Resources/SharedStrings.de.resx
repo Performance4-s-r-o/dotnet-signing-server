@@ -177,6 +177,15 @@
   <data name="ConfirmDisableSealAllowed" xml:space="preserve"><value>Diesem Konto den Zugriff auf das Siegeln entziehen?</value></data>
   <data name="SealAllowedEnabled" xml:space="preserve"><value>Siegeln für dieses Konto aktiviert.</value></data>
   <data name="SealAllowedDisabled" xml:space="preserve"><value>Siegeln für dieses Konto deaktiviert.</value></data>
+  <data name="TrustedCaller" xml:space="preserve"><value>Vertrauenswürdiger Aufrufer</value></data>
+  <data name="TrustedCallerDescription" xml:space="preserve"><value>Das Token dieses Kontos wird nur am internen Port (INTERNAL_API_PORT) angenommen; dort werden seine Header X-P4-Tenant / X-Request-Id übernommen und es darf die Abrechnung von Anhängen überspringen. Am öffentlichen Port wird es abgelehnt (401). Ohne internen Port hat das Merkmal keine Wirkung.</value></data>
+  <data name="EnableTrustedCaller" xml:space="preserve"><value>Als vertrauenswürdigen Aufrufer markieren</value></data>
+  <data name="DisableTrustedCaller" xml:space="preserve"><value>Vertrauenswürdigen Aufrufer entfernen</value></data>
+  <data name="ConfirmEnableTrustedCaller" xml:space="preserve"><value>Dieses Konto als vertrauenswürdigen Aufrufer markieren? Sein Token funktioniert dann am öffentlichen Port nicht mehr.</value></data>
+  <data name="ConfirmDisableTrustedCaller" xml:space="preserve"><value>Diesem Konto das Vertrauen entziehen?</value></data>
+  <data name="TrustedCallerEnabled" xml:space="preserve"><value>Das Konto ist als vertrauenswürdiger Aufrufer markiert.</value></data>
+  <data name="TrustedCallerDisabled" xml:space="preserve"><value>Das Konto ist kein vertrauenswürdiger Aufrufer mehr.</value></data>
+  <data name="TrustedCallerNotOnSelf" xml:space="preserve"><value>Das eigene Konto kann nicht als vertrauenswürdiger Aufrufer markiert werden.</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>Beim Hinzufügen des Anhangs ist ein Fehler aufgetreten</value></data>
   <data name="PdfaConversionError" xml:space="preserve"><value>Beim Konvertieren des Dokuments in PDF/A ist ein Fehler aufgetreten</value></data>
   <data name="ProvideTemplateOrPdf" xml:space="preserve"><value>Geben Sie entweder TemplateId oder PdfContent an (nicht beides).</value></data>

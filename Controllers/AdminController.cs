@@ -336,6 +336,45 @@ public class AdminController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    /// <summary>
+    /// Marks or unmarks the trusted internal caller's account (#78). Only an administrator, and
+    /// never on their own account: whoever holds the flag gets the tenant headers believed.
+    /// </summary>
+    [HttpPost("/Admin/Users/{id:guid}/ToggleTrustedCaller")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ToggleTrustedCaller(Guid id)
+    {
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (user == null)
+        {
+            TempData["Error"] = _localizer["UserNotFound"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+
+        var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!user.TrustedCaller && string.Equals(actorId, user.Id.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            TempData["Error"] = _localizer["TrustedCallerNotOnSelf"].Value;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        user.TrustedCaller = !user.TrustedCaller;
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        AdminAudit.Record(_dbContext, User, user.Id, AdminAudit.Actions.TrustedCaller,
+            new { from = !user.TrustedCaller, to = user.TrustedCaller }, _time.GetUtcNow());
+        await _dbContext.SaveChangesAsync();
+
+        _logger.LogWarning(
+            "Trusted caller flag for user {UserId} set to {TrustedCaller} by {ActorId}",
+            user.Id, user.TrustedCaller, actorId);
+
+        TempData["Info"] = user.TrustedCaller
+            ? _localizer["TrustedCallerEnabled"].Value
+            : _localizer["TrustedCallerDisabled"].Value;
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
     [HttpPost("/Admin/Users/{id:guid}/SetConcurrencyQueueTimeout")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SetConcurrencyQueueTimeout(Guid id, [FromForm] int? queueTimeoutSeconds)

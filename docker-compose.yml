@@ -43,16 +43,12 @@ services:
       - "8086"
     environment:
       - ASPNETCORE_URLS=http://+:8085
-      # Second listener for the trusted caller only (#78), added next to ASPNETCORE_URLS. That
-      # caller's token (TRUSTED_CALLER_USER_IDS) is accepted on it and refused (401) on 8085.
+      # Second listener for the trusted caller only (#78), added next to ASPNETCORE_URLS. The token
+      # of an account marked Trusted caller in the administration is accepted on it and refused
+      # (401) on 8085.
       # Empty (the default) = one listener, a plain API. When set, it has to be in the `expose`
       # list above too. An unresolved Coolify placeholder counts as empty (#121).
       - INTERNAL_API_PORT=${INTERNAL_API_PORT:-{{project.DOTNET_INTERNAL_API_PORT}}}
-      # Service account id(s) of the trusted caller, comma-separated. Required while
-      # INTERNAL_API_PORT is set (startup fails without it). Only this account's token, on the
-      # internal port, may skip the attachment debit and have its X-P4-Tenant / X-Request-Id
-      # believed.
-      - TRUSTED_CALLER_USER_IDS=${TRUSTED_CALLER_USER_IDS:-{{project.DOTNET_TRUSTED_CALLER_USER_IDS}}}
       # #106, two lists. TRUSTED_CF_PROXIES = address / CIDR of cloudflared: CF-Connecting-IP is the
       # client only when the request came from it (directly, or through a TRUSTED_PROXIES proxy).
       # Production refuses to start while empty (every visitor would share the tunnel's IP limit);
@@ -68,7 +64,7 @@ services:
       - DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS=${DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS:-{{project.DOTNET_DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS}}}
       - AllowedHosts=${ALLOWED_HOSTS:-*}
       - UseLocalDb=false
-      # Per-account caps (#74); 0 = no limit. The portal's account (TRUSTED_CALLER_USER_IDS)
+      # Per-account caps (#74); 0 = no limit. The trusted caller's account
       # is exempt: it works for every tenant, so a number here would cap the whole platform.
       - Limits__MaxPendingPresignsPerUser=${MAX_PENDING_PRESIGNS_PER_USER:-20}
       - Limits__MaxTemplatesPerUser=${MAX_TEMPLATES_PER_USER:-100}

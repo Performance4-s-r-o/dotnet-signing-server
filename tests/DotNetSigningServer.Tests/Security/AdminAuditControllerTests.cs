@@ -72,6 +72,57 @@ public class AdminAuditControllerTests
     }
 
     [Fact]
+    public async Task ToggleTrustedCaller_IsAudited_BothWays()
+    {
+        var (db, user) = await SeedAsync();
+        await Controller(db).ToggleTrustedCaller(user.Id);
+        Assert.True((await db.Users.SingleAsync(u => u.Id == user.Id)).TrustedCaller);
+        await Controller(db).ToggleTrustedCaller(user.Id);
+        Assert.False((await db.Users.SingleAsync(u => u.Id == user.Id)).TrustedCaller);
+
+        var entries = await db.AdminAuditEntries.ToListAsync();
+        Assert.Equal(2, entries.Count);
+        Assert.All(entries, e =>
+        {
+            Assert.Equal(ActorId, e.ActorUserId);
+            Assert.Equal(user.Id, e.TargetUserId);
+            Assert.Equal(AdminAudit.Actions.TrustedCaller, e.Action);
+        });
+        Assert.Single(entries, e => e.Change.Contains("\"to\":true"));
+        Assert.Single(entries, e => e.Change.Contains("\"to\":false"));
+    }
+
+    [Fact]
+    public async Task ToggleTrustedCaller_RefusesTheAdminsOwnAccount()
+    {
+        var db = TestHelpers.CreateInMemoryDbContext();
+        db.Users.Add(new User { Id = ActorId, Email = "admin@example.cz", IsAdmin = true });
+        await db.SaveChangesAsync();
+
+        await Controller(db).ToggleTrustedCaller(ActorId);
+
+        Assert.False((await db.Users.SingleAsync()).TrustedCaller);
+        Assert.Empty(await db.AdminAuditEntries.ToListAsync());
+    }
+
+    [Fact]
+    public void ToggleTrustedCaller_IsAdminOnly()
+    {
+        var policy = typeof(AdminController).GetCustomAttributes(typeof(CookieAuthorizeAttribute), true)
+            .Cast<CookieAuthorizeAttribute>().Single().Policy;
+        Assert.Equal("AdminOnly", policy);
+        var action = typeof(AdminController).GetMethod(nameof(AdminController.ToggleTrustedCaller))!;
+        Assert.Empty(action.GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute), true));
+        Assert.NotEmpty(action.GetCustomAttributes(typeof(ValidateAntiForgeryTokenAttribute), true));
+    }
+
+    [Fact]
+    public void TrustedCaller_IsOffByDefault()
+    {
+        Assert.False(new User().TrustedCaller);
+    }
+
+    [Fact]
     public async Task ToggleEnterprise_IsAudited_BothWays()
     {
         var (db, user) = await SeedAsync();
@@ -81,8 +132,8 @@ public class AdminAuditControllerTests
         var entries = await db.AdminAuditEntries.OrderBy(a => a.CreatedAt).ToListAsync();
         Assert.Equal(2, entries.Count);
         Assert.All(entries, e => Assert.Equal(AdminAudit.Actions.Enterprise, e.Action));
-        Assert.Contains("\"to\":true", entries[0].Change);
-        Assert.Contains("\"to\":false", entries[1].Change);
+        Assert.Single(entries, e => e.Change.Contains("\"to\":true"));
+        Assert.Single(entries, e => e.Change.Contains("\"to\":false"));
     }
 
     [Fact]

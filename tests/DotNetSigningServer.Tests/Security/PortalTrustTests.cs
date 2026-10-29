@@ -40,10 +40,11 @@ public class PortalTrustTests : IDisposable
 
     public void Dispose() => _db.Dispose();
 
-    private static PortalTrustOptions Trust(int? internalPort = InternalPort) =>
-        new() { InternalPort = internalPort, TrustedCallerUserIds = new HashSet<Guid> { PortalUserId } };
+    private static PortalTrustOptions Trust(int? internalPort = InternalPort) => new() { InternalPort = internalPort };
 
-    private static User UserWith(Guid id) => new() { Id = id, Email = $"{id:N}@example.test", IsActive = true, CreditsRemaining = 100 };
+    // The account flag (set in the administration) marks the trusted caller; PortalUserId carries it.
+    private static User UserWith(Guid id) =>
+        new() { Id = id, Email = $"{id:N}@example.test", IsActive = true, CreditsRemaining = 100, TrustedCaller = id == PortalUserId };
 
     // ── Authentication handler: which port the portal's token works on ──────────────────────────
 
@@ -97,10 +98,40 @@ public class PortalTrustTests : IDisposable
     }
 
     [Fact]
-    public async Task Without_an_internal_port_nothing_changes_for_the_portal_token()
+    public async Task Without_an_internal_port_the_flagged_token_works_but_is_not_trusted()
     {
         var (result, _) = await AuthenticateAsync(Trust(internalPort: null), PortalUserId, PublicPort);
         Assert.True(result.Succeeded);
+        Assert.Null(result.Principal!.FindFirst(PortalTrust.TrustedCallerClaim));
+    }
+
+    [Fact]
+    public async Task An_unflagged_token_on_the_internal_port_works_and_is_not_trusted()
+    {
+        var (result, _) = await AuthenticateAsync(Trust(), Guid.NewGuid(), InternalPort);
+        Assert.True(result.Succeeded);
+        Assert.Null(result.Principal!.FindFirst(PortalTrust.TrustedCallerClaim));
+    }
+
+    [Theory]
+    [InlineData(true, InternalPort, false, PortalCallKind.Trusted)]
+    [InlineData(true, PublicPort, false, PortalCallKind.Refused)]
+    [InlineData(false, InternalPort, false, PortalCallKind.Ordinary)]
+    [InlineData(false, PublicPort, false, PortalCallKind.Ordinary)]
+    [InlineData(true, InternalPort, true, PortalCallKind.Ordinary)]
+    [InlineData(true, PublicPort, true, PortalCallKind.Ordinary)]
+    public void Only_the_flag_and_the_internal_port_together_make_a_trusted_caller(
+        bool flagged, int port, bool browserToken, PortalCallKind expected)
+    {
+        Assert.Equal(expected, PortalTrust.Classify(Trust(), port, flagged, browserToken));
+    }
+
+    [Theory]
+    [InlineData(InternalPort)]
+    [InlineData(PublicPort)]
+    public void Without_an_internal_port_the_flag_is_never_trusted(int port)
+    {
+        Assert.Equal(PortalCallKind.Ordinary, PortalTrust.Classify(Trust(internalPort: null), port, trustedCallerAccount: true, isBrowserToken: false));
     }
 
     [Fact]
@@ -130,10 +161,11 @@ public class PortalTrustTests : IDisposable
         new ConfigurationBuilder().AddInMemoryCollection(values.ToDictionary(v => v.Key, v => v.Value)).Build();
 
     [Fact]
-    public void Internal_port_without_the_portal_account_fails_startup()
+    public void Internal_port_without_any_account_id_starts()
     {
-        Assert.Throws<InvalidOperationException>(() =>
-            PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086"), ("TRUSTED_CALLER_USER_IDS", ""))));
+        var options = PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086")));
+        Assert.Equal(8086, options.InternalPort);
+        Assert.False(options.RemovedVariableSet);
     }
 
     [Fact]
@@ -142,33 +174,70 @@ public class PortalTrustTests : IDisposable
         var options = PortalTrustOptions.From(Config(
             ("INTERNAL_API_PORT", null), ("TRUSTED_CALLER_USER_IDS", "{{project.DOTNET_TRUSTED_CALLER_USER_IDS}}")));
         Assert.Null(options.InternalPort);
-        Assert.Empty(options.TrustedCallerUserIds);
+        Assert.False(options.RemovedVariableSet);
     }
 
     [Fact]
-    public void Configured_portal_accounts_are_parsed()
+    public void Empty_port_placeholder_means_no_internal_listener()
     {
-        var other = Guid.NewGuid();
-        var options = PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086"), ("TRUSTED_CALLER_USER_IDS", $"{PortalUserId}, {other}")));
-        Assert.Equal(8086, options.InternalPort);
-        Assert.Equal(new HashSet<Guid> { PortalUserId, other }, options.TrustedCallerUserIds);
-    }
-
-    [Fact]
-    public void Empty_port_placeholder_needs_no_account_id()
-    {
-        var options = PortalTrustOptions.From(Config(
-            ("INTERNAL_API_PORT", "{{project.DOTNET_INTERNAL_API_PORT}}"), ("TRUSTED_CALLER_USER_IDS", null)));
+        var options = PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "{{project.DOTNET_INTERNAL_API_PORT}}")));
         Assert.Null(options.InternalPort);
-        Assert.Empty(options.TrustedCallerUserIds);
     }
 
     [Fact]
-    public void Ids_without_port_are_flagged_as_trusted_on_every_port()
+    public void The_removed_id_list_is_ignored_and_reported()
     {
-        var options = PortalTrustOptions.From(Config(("TRUSTED_CALLER_USER_IDS", PortalUserId.ToString())));
-        Assert.True(options.TrustedOnEveryPort);
-        Assert.False(PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086"), ("TRUSTED_CALLER_USER_IDS", PortalUserId.ToString()))).TrustedOnEveryPort);
+        // Even a valid id must not make anybody trusted: the flag on the account decides.
+        var options = PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086"), ("TRUSTED_CALLER_USER_IDS", PortalUserId.ToString())));
+        Assert.True(options.RemovedVariableSet);
+        Assert.Equal(PortalCallKind.Ordinary, PortalTrust.Classify(options, InternalPort, trustedCallerAccount: false, isBrowserToken: false));
+        Assert.Equal(PortalCallKind.Ordinary, PortalTrust.Classify(options, PublicPort, trustedCallerAccount: false, isBrowserToken: false));
+        // Not valid any more either: garbage there does not stop the start.
+        Assert.True(PortalTrustOptions.From(Config(("TRUSTED_CALLER_USER_IDS", "not-a-guid"))).RemovedVariableSet);
+    }
+
+    // ── Start-up warnings (never fatal) ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Internal_port_without_a_flagged_account_only_warns()
+    {
+        _db.Users.Add(UserWith(Guid.NewGuid()));
+        await _db.SaveChangesAsync();
+
+        var warnings = await PortalTrustStartupChecks.CheckAsync(Trust(), _db);
+
+        Assert.Contains(warnings, w => w.Contains("no trusted account"));
+    }
+
+    [Fact]
+    public async Task Internal_port_with_a_flagged_account_is_quiet()
+    {
+        _db.Users.Add(UserWith(PortalUserId));
+        await _db.SaveChangesAsync();
+
+        Assert.Empty(await PortalTrustStartupChecks.CheckAsync(Trust(), _db));
+    }
+
+    [Fact]
+    public async Task A_flag_without_the_internal_port_is_reported_as_doing_nothing()
+    {
+        _db.Users.Add(UserWith(PortalUserId));
+        await _db.SaveChangesAsync();
+
+        var warnings = await PortalTrustStartupChecks.CheckAsync(Trust(internalPort: null), _db);
+
+        Assert.Contains(warnings, w => w.Contains("no effect"));
+    }
+
+    [Fact]
+    public async Task An_inactive_flagged_account_does_not_count()
+    {
+        var user = UserWith(PortalUserId);
+        user.IsActive = false;
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+
+        Assert.NotEmpty(await PortalTrustStartupChecks.CheckAsync(Trust(), _db));
     }
 
     [Theory]

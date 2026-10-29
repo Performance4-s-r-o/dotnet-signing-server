@@ -177,6 +177,15 @@
   <data name="ConfirmDisableSealAllowed" xml:space="preserve"><value>Withdraw this account's access to sealing?</value></data>
   <data name="SealAllowedEnabled" xml:space="preserve"><value>Sealing enabled for this account.</value></data>
   <data name="SealAllowedDisabled" xml:space="preserve"><value>Sealing disabled for this account.</value></data>
+  <data name="TrustedCaller" xml:space="preserve"><value>Trusted caller</value></data>
+  <data name="TrustedCallerDescription" xml:space="preserve"><value>This account's token is accepted on the internal port (INTERNAL_API_PORT) only; there its X-P4-Tenant / X-Request-Id headers are believed and it may skip the attachment charge. On the public port it is refused (401). Without an internal port the flag has no effect.</value></data>
+  <data name="EnableTrustedCaller" xml:space="preserve"><value>Mark as trusted caller</value></data>
+  <data name="DisableTrustedCaller" xml:space="preserve"><value>Remove trusted caller</value></data>
+  <data name="ConfirmEnableTrustedCaller" xml:space="preserve"><value>Mark this account as the trusted caller? Its token then stops working on the public port.</value></data>
+  <data name="ConfirmDisableTrustedCaller" xml:space="preserve"><value>Withdraw trust from this account?</value></data>
+  <data name="TrustedCallerEnabled" xml:space="preserve"><value>The account is marked as trusted caller.</value></data>
+  <data name="TrustedCallerDisabled" xml:space="preserve"><value>The account is no longer a trusted caller.</value></data>
+  <data name="TrustedCallerNotOnSelf" xml:space="preserve"><value>You cannot mark your own account as trusted caller.</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>An error occurred while adding the attachment</value></data>
   <data name="PdfaConversionError" xml:space="preserve"><value>An error occurred while converting the document to PDF/A</value></data>
   <data name="ProvideTemplateOrPdf" xml:space="preserve"><value>Provide either TemplateId or PdfContent (but not both).</value></data>

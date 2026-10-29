@@ -224,10 +224,10 @@ namespace DotNetSigningServer.Controllers
             {
                 return null;
             }
-            // Same rule as the authentication handler (#78): the portal's token only on the internal listener.
+            // Same rule as the authentication handler (#78): a trusted account's token only on the internal listener.
             var portalTrust = HttpContext.RequestServices.GetService<DotNetSigningServer.Options.PortalTrustOptions>()
                               ?? new DotNetSigningServer.Options.PortalTrustOptions();
-            if (PortalTrust.Classify(portalTrust, HttpContext.Connection.LocalPort, validation.User.Id, validation.IsBrowserToken)
+            if (PortalTrust.Classify(portalTrust, HttpContext.Connection.LocalPort, validation.User.TrustedCaller, validation.IsBrowserToken)
                 == PortalCallKind.Refused)
             {
                 return null;

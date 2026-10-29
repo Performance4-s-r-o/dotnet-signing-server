@@ -62,7 +62,6 @@ public sealed class ConcurrencyPipelineFixture : IAsyncLifetime
             if (internalPort)
             {
                 builder.UseSetting("INTERNAL_API_PORT", InternalPort.ToString());
-                builder.UseSetting("TRUSTED_CALLER_USER_IDS", Guid.NewGuid().ToString());
             }
             builder.ConfigureTestServices(services =>
             {

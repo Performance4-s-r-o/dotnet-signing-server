@@ -50,9 +50,9 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
         }
         var user = validation.User;
 
-        // The portal's token works on the internal listener only (#78). On the public one it is
-        // refused like an unknown token, so the gate answers 401 before any body is read.
-        var kind = PortalTrust.Classify(_portalTrust, Context.Connection.LocalPort, user.Id, validation.IsBrowserToken);
+        // A trusted account's token works on the internal listener only (#78). On the public one it
+        // is refused like an unknown token, so the gate answers 401 before any body is read.
+        var kind = PortalTrust.Classify(_portalTrust, Context.Connection.LocalPort, user.TrustedCaller, validation.IsBrowserToken);
         if (kind == PortalCallKind.Refused)
         {
             Logger.LogWarning(Logging.LoggingEvents.AuthFailed,

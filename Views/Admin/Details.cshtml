@@ -102,6 +102,28 @@
                     </button>
                 }
             </form>
+
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:1.25rem 0" />
+
+            <h3 class="billing-pricing-title">@L["TrustedCaller"]</h3>
+            <p class="muted" style="font-size:0.875rem;margin-bottom:0.75rem">@L["TrustedCallerDescription"]</p>
+            <form method="post" action="/Admin/Users/@Model.User.Id/ToggleTrustedCaller">
+                @Html.AntiForgeryToken()
+                @if (Model.User.TrustedCaller)
+                {
+                    <button type="submit" class="btn-small btn-secondary" style="color:#dc2626;border-color:#fca5a5"
+                            onclick="return confirm('@L["ConfirmDisableTrustedCaller"]')">
+                        @L["DisableTrustedCaller"]
+                    </button>
+                }
+                else
+                {
+                    <button type="submit" class="btn-small btn-secondary"
+                            onclick="return confirm('@L["ConfirmEnableTrustedCaller"]')">
+                        @L["EnableTrustedCaller"]
+                    </button>
+                }
+            </form>
         </div>
 
         <div class="card">

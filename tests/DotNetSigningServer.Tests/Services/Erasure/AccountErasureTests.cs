@@ -583,7 +583,11 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
     public async Task The_portal_service_account_is_never_erased_and_a_request_for_it_acks_failed()
     {
         var a = await SeedAsync($"portal{Guid.NewGuid():N}@example.com");
-        _portal.TrustedCallerUserIds.Add(a.UserId);
+        await using (var flag = _pg.CreateContext())
+        {
+            (await flag.Users.SingleAsync(u => u.Id == a.UserId)).TrustedCaller = true;
+            await flag.SaveChangesAsync();
+        }
 
         var result = await DeleteAsync(a.UserId);
         Assert.Equal(AccountErasureStatus.Refused, result.Status);
