@@ -48,20 +48,20 @@ services:
       # (401) on 8085.
       # Empty (the default) = one listener, a plain API. When set, it has to be in the `expose`
       # list above too. An unresolved Coolify placeholder counts as empty (#121).
-      - INTERNAL_API_PORT=${INTERNAL_API_PORT:-{{project.DOTNET_INTERNAL_API_PORT}}}
+      - INTERNAL_API_PORT=${INTERNAL_API_PORT:-}
       # #106, two lists. TRUSTED_CF_PROXIES = address / CIDR of cloudflared: CF-Connecting-IP is the
       # client only when the request came from it (directly, or through a TRUSTED_PROXIES proxy).
       # Production refuses to start while empty (every visitor would share the tunnel's IP limit);
       # `none` = no tunnel in front. TRUSTED_PROXIES = the reverse proxy (Traefik): whose
       # X-Forwarded-For is believed. Empty = the private ranges (as before), `none` = nobody's.
-      - TRUSTED_CF_PROXIES=${TRUSTED_CF_PROXIES:-{{project.DOTNET_TRUSTED_CF_PROXIES}}}
-      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-{{project.DOTNET_TRUSTED_PROXIES}}}
+      - TRUSTED_CF_PROXIES=${TRUSTED_CF_PROXIES:-}
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-}
       # The key ring also protects stored TSA credentials. Production refuses to start with an
       # unencrypted ring: give it a certificate (base64 PFX + password), or set
       # DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS=true to accept plaintext keys on purpose.
-      - DataProtection__CertificateBase64=${DATA_PROTECTION_CERTIFICATE_BASE64:-{{project.DOTNET_DATA_PROTECTION_CERTIFICATE_BASE64}}}
-      - DataProtection__CertificatePassword=${DATA_PROTECTION_CERTIFICATE_PASSWORD:-{{project.DOTNET_DATA_PROTECTION_CERTIFICATE_PASSWORD}}}
-      - DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS=${DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS:-{{project.DOTNET_DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS}}}
+      - DataProtection__CertificateBase64=${DATA_PROTECTION_CERTIFICATE_BASE64:-}
+      - DataProtection__CertificatePassword=${DATA_PROTECTION_CERTIFICATE_PASSWORD:-}
+      - DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS=${DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS:-}
       - AllowedHosts=${ALLOWED_HOSTS:-*}
       - UseLocalDb=false
       # Per-account caps (#74); 0 = no limit. The trusted caller's account
@@ -71,33 +71,33 @@ services:
       # #80. Each falls back to a Coolify project-shared variable (DOTNET_*); an unset one
       # arrives empty or as the placeholder and the code default applies (Options/EnvValues.cs).
       # Live API tokens per account; 0 = no limit (default 100). The portal holds one token.
-      - MAX_API_TOKENS_PER_USER=${MAX_API_TOKENS_PER_USER:-{{project.DOTNET_MAX_API_TOKENS_PER_USER}}}
+      - MAX_API_TOKENS_PER_USER=${MAX_API_TOKENS_PER_USER:-}
       # Browser origins allowed to call /api (comma-separated). Production no longer falls back
       # to the origins of every user's browser tokens: list the sites that use them.
-      - Cors__AllowedOrigins=${CORS_ALLOWED_ORIGINS:-{{project.DOTNET_CORS_ALLOWED_ORIGINS}}}
+      - Cors__AllowedOrigins=${CORS_ALLOWED_ORIGINS:-}
       # Step-up re-auth: minutes since the last password/2FA confirmation before an API token
       # can be created or billing changed (default 15); wrong 2FA codes before a code is void (5).
-      - AUTH_REAUTH_MINUTES=${AUTH_REAUTH_MINUTES:-{{project.DOTNET_AUTH_REAUTH_MINUTES}}}
-      - AUTH_OTP_MAX_FAILED_ATTEMPTS=${AUTH_OTP_MAX_FAILED_ATTEMPTS:-{{project.DOTNET_AUTH_OTP_MAX_FAILED_ATTEMPTS}}}
+      - AUTH_REAUTH_MINUTES=${AUTH_REAUTH_MINUTES:-}
+      - AUTH_OTP_MAX_FAILED_ATTEMPTS=${AUTH_OTP_MAX_FAILED_ATTEMPTS:-}
       # Sign-in and 2FA attempts per account whatever the IP (default 30 per 15 min).
-      - AUTH_ACCOUNT_MAX_ATTEMPTS=${AUTH_ACCOUNT_MAX_ATTEMPTS:-{{project.DOTNET_AUTH_ACCOUNT_MAX_ATTEMPTS}}}
-      - AUTH_ACCOUNT_WINDOW_MINUTES=${AUTH_ACCOUNT_WINDOW_MINUTES:-{{project.DOTNET_AUTH_ACCOUNT_WINDOW_MINUTES}}}
+      - AUTH_ACCOUNT_MAX_ATTEMPTS=${AUTH_ACCOUNT_MAX_ATTEMPTS:-}
+      - AUTH_ACCOUNT_WINDOW_MINUTES=${AUTH_ACCOUNT_WINDOW_MINUTES:-}
       # #69/#94: cap on concurrent operations of the whole server (G). Empty or 0 = off. A request
       # waits GLOBAL_CONCURRENCY_WAIT_MS (default 2000) for a slot of G, H or A, then 503.
       # The start hypotheses for this machine are logged at startup and shown on /internal/concurrency.
-      - GLOBAL_CONCURRENCY_LIMIT=${GLOBAL_CONCURRENCY_LIMIT:-{{project.DOTNET_GLOBAL_CONCURRENCY_LIMIT}}}
-      - GLOBAL_CONCURRENCY_WAIT_MS=${GLOBAL_CONCURRENCY_WAIT_MS:-{{project.DOTNET_GLOBAL_CONCURRENCY_WAIT_MS}}}
+      - GLOBAL_CONCURRENCY_LIMIT=${GLOBAL_CONCURRENCY_LIMIT:-}
+      - GLOBAL_CONCURRENCY_WAIT_MS=${GLOBAL_CONCURRENCY_WAIT_MS:-}
       # Pools (#69), empty or 0 = off: H = presign/sign/seal/timestamp/extend/fill/PDF/A at once
       # (start at the CPU count), A = AI calls at once (start at 4).
-      - HEAVY_OPERATIONS_LIMIT=${HEAVY_OPERATIONS_LIMIT:-{{project.DOTNET_HEAVY_OPERATIONS_LIMIT}}}
-      - AI_OPERATIONS_LIMIT=${AI_OPERATIONS_LIMIT:-{{project.DOTNET_AI_OPERATIONS_LIMIT}}}
-      - RASTER_OPERATIONS_LIMIT=${RASTER_OPERATIONS_LIMIT:-{{project.DOTNET_RASTER_OPERATIONS_LIMIT}}}
-      - RASTER_WAIT_MS=${RASTER_WAIT_MS:-{{project.DOTNET_RASTER_WAIT_MS}}}
+      - HEAVY_OPERATIONS_LIMIT=${HEAVY_OPERATIONS_LIMIT:-}
+      - AI_OPERATIONS_LIMIT=${AI_OPERATIONS_LIMIT:-}
+      - RASTER_OPERATIONS_LIMIT=${RASTER_OPERATIONS_LIMIT:-}
+      - RASTER_WAIT_MS=${RASTER_WAIT_MS:-}
       # A user's queue (#69): longest wait whatever the account stores (empty = 30 s, 0-600) and
       # waiting requests per slot of the user's limit (empty = 2). The trusted caller is exempt.
-      - USER_QUEUE_MAX_SECONDS=${USER_QUEUE_MAX_SECONDS:-{{project.DOTNET_USER_QUEUE_MAX_SECONDS}}}
-      - USER_QUEUE_LENGTH_FACTOR=${USER_QUEUE_LENGTH_FACTOR:-{{project.DOTNET_USER_QUEUE_LENGTH_FACTOR}}}
-      - FqdnServerName=${FQDN_SERVER:-{{project.DOTNET_FQDN_SERVER}}}
+      - USER_QUEUE_MAX_SECONDS=${USER_QUEUE_MAX_SECONDS:-}
+      - USER_QUEUE_LENGTH_FACTOR=${USER_QUEUE_LENGTH_FACTOR:-}
+      - FqdnServerName=${FQDN_SERVER:-}
       # Pool and timeouts (#75): the database is shared with the portal's PostgREST and pool,
       # so this server must not take what its connection-limited role would refuse anyway.
       # Max Pool Size stays under the role's `connection limit` (25), leaving room for migrations.
@@ -105,7 +105,7 @@ services:
       # The database as one URL (postgresql://user:password@host:5432/postgres), the shape the
       # portal uses. Set, it wins over the DB_* parts above; the pool and command timeout still
       # come from DB_MAX_POOL_SIZE / DB_COMMAND_TIMEOUT_SECONDS. The schema is not in the URL.
-      - DATABASE_URL=${DATABASE_URL:-{{project.DOTNET_DATABASE_URL}}}
+      - DATABASE_URL=${DATABASE_URL:-}
       - DB_MAX_POOL_SIZE=${DB_MAX_POOL_SIZE:-20}
       - DB_COMMAND_TIMEOUT_SECONDS=${DB_COMMAND_TIMEOUT_SECONDS:-15}
       # Schema migrations are a release step (#85): the `migrate` service below (or
@@ -113,8 +113,8 @@ services:
       # starts. Without it the server refuses to start while migrations are pending.
       # true restores migrate-on-start (single instance / on-prem only; the runtime
       # role then needs DDL rights).
-      - Database__RunMigrationsOnStart=${RUN_MIGRATIONS_ON_START:-{{project.DOTNET_RUN_MIGRATIONS_ON_START}}}
-      - Token__Secret=${TOKEN_SECRET:-{{project.DOTNET_TOKEN_SECRET}}}
+      - Database__RunMigrationsOnStart=${RUN_MIGRATIONS_ON_START:-}
+      - Token__Secret=${TOKEN_SECRET:-}
       # Internal preprocessing bypass — must match the same key on the calling service
       - Billing__AttachmentDebitBypassKey=${BILLING_ATTACHMENT_DEBIT_BYPASS_KEY:-}
       - PrivateServer__Enabled=${PRIVATE_SERVER:-false}
@@ -123,19 +123,19 @@ services:
       # The portal's server token (#169): at start the portal's service account and an API token
       # with this value are created; empty = off. Shared Coolify variable DOTNET_PORTAL_BOOTSTRAP_TOKEN,
       # set on purpose (it is NOT the old SIGN_API_TOKEN: a token already made by hand stays as it is).
-      - PortalBootstrap__Token=${PORTAL_BOOTSTRAP_TOKEN:-{{project.DOTNET_PORTAL_BOOTSTRAP_TOKEN}}}
+      - PortalBootstrap__Token=${PORTAL_BOOTSTRAP_TOKEN:-}
       # Evidence encryption certificate (for SES evidence attachment encryption)
       - EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64=${EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64:-}
       - EVIDENCE_ENCRYPTION_CERTIFICATE_PEM=${EVIDENCE_ENCRYPTION_CERTIFICATE_PEM:-}
       # Currency the product sells in (price list and configured fallback prices).
-      - Billing__Currency=${BILLING_CURRENCY:-{{project.DOTNET_BILLING_CURRENCY}}}
+      - Billing__Currency=${BILLING_CURRENCY:-}
       # All e-mail goes through the backoffice outbox (P4_BACKOFFICE_URL + SECRET_KEY below).
       # From must name the sending domain configured in the service; empty = its default.
       # On-prem (PrivateServer): exactly "true" sends e-mail, and only e-mail, through the
       # installation's notify-gateway (BaseUrl = the gateway, SecretKey = its key). Anything else = off.
-      - P4Backoffice__OnPremGateway=${P4_BACKOFFICE_ONPREM_GATEWAY:-{{project.DOTNET_P4_BACKOFFICE_ONPREM_GATEWAY}}}
-      - P4Backoffice__Email__From=${P4_BACKOFFICE_EMAIL_FROM:-{{project.DOTNET_P4_BACKOFFICE_EMAIL_FROM}}}
-      - P4Backoffice__Email__ReplyTo=${P4_BACKOFFICE_EMAIL_REPLY_TO:-{{project.DOTNET_P4_BACKOFFICE_EMAIL_REPLY_TO}}}
+      - P4Backoffice__OnPremGateway=${P4_BACKOFFICE_ONPREM_GATEWAY:-}
+      - P4Backoffice__Email__From=${P4_BACKOFFICE_EMAIL_FROM:-}
+      - P4Backoffice__Email__ReplyTo=${P4_BACKOFFICE_EMAIL_REPLY_TO:-}
       # Loki logging
       - Loki__Url=${LOKI_URL:-}
       - Loki__Username=${LOKI_USERNAME:-}
@@ -144,16 +144,16 @@ services:
       - Loki__App=${LOKI_APP:-dotnet-signing-server}
       - Loki__Environment=${LOKI_ENVIRONMENT:-development}
       # Sentry error monitoring (DSN is public-safe; overridable via SENTRY_DSN)
-      - Sentry__Dsn=${SENTRY_DSN:-{{project.DOTNET_SENTRY_DSN}}}
+      - Sentry__Dsn=${SENTRY_DSN:-}
       - Sentry__Debug=${SENTRY_DEBUG:-false}
       - Sentry__TracesSampleRate=${SENTRY_TRACES_SAMPLE_RATE:-0}
       # Environment tag — set per deployment (e.g. test / production).
       # Defaults to "production" when unset.
       - Sentry__Environment=${SENTRY_ENVIRONMENT:-production}
       # AI (Google). Off unless AI_ENABLED is exactly "true"; empty = off.
-      - AI__Enabled=${AI_ENABLED:-{{project.DOTNET_AI_ENABLED}}}
+      - AI__Enabled=${AI_ENABLED:-}
       - AI__Provider=${AI_PROVIDER:-google}
-      - AI__Google__ApiKey=${AI_GOOGLE_API_KEY:-{{project.DOTNET_AI_GOOGLE_API_KEY}}}
+      - AI__Google__ApiKey=${AI_GOOGLE_API_KEY:-}
       - AI__Google__Model=${AI_GOOGLE_MODEL:-gemini-1.5-flash}
       - AI__Google__Endpoint=${AI_GOOGLE_ENDPOINT:-https://generativelanguage.googleapis.com/v1beta}
       # osTicket (support tickets). Url + ApiKey both required — without them the
@@ -169,36 +169,36 @@ services:
       # = code default); Off is the emergency rollback. PrivateServer forces Off.
       # On needs BaseUrl + a p4sk_ key + Environment or startup fails. Empty module
       # overrides inherit Mode.
-      - P4Backoffice__Mode=${P4_BACKOFFICE_MODE:-{{project.DOTNET_P4_BACKOFFICE_MODE}}}
-      - P4Backoffice__BaseUrl=${P4_BACKOFFICE_URL:-{{project.P4PDF_P4_BACKOFFICE_URL}}}
-      - P4Backoffice__SecretKey=${P4_BACKOFFICE_SECRET_KEY:-{{project.DOTNET_P4_BACKOFFICE_SECRET_KEY}}}
+      - P4Backoffice__Mode=${P4_BACKOFFICE_MODE:-}
+      - P4Backoffice__BaseUrl=${P4_BACKOFFICE_URL:-}
+      - P4Backoffice__SecretKey=${P4_BACKOFFICE_SECRET_KEY:-}
       # live | test; the key kind must match it. Required once a module is On.
-      - P4Backoffice__Environment=${P4_BACKOFFICE_ENV:-{{project.P4PDF_P4_BACKOFFICE_ENV}}}
-      - P4Backoffice__Webhook__Secret=${P4_BACKOFFICE_WEBHOOK_SECRET:-{{project.DOTNET_P4_BACKOFFICE_WEBHOOK_SECRET}}}
+      - P4Backoffice__Environment=${P4_BACKOFFICE_ENV:-}
+      - P4Backoffice__Webhook__Secret=${P4_BACKOFFICE_WEBHOOK_SECRET:-}
       - P4Backoffice__Webhook__PreviousSecret=${P4_BACKOFFICE_WEBHOOK_PREVIOUS_SECRET:-}
-      - P4Backoffice__Modules__Docs=${P4_BACKOFFICE_DOCS_MODE:-{{project.DOTNET_P4_BACKOFFICE_DOCS_MODE}}}
-      - P4Backoffice__Modules__Consents=${P4_BACKOFFICE_CONSENTS_MODE:-{{project.DOTNET_P4_BACKOFFICE_CONSENTS_MODE}}}
+      - P4Backoffice__Modules__Docs=${P4_BACKOFFICE_DOCS_MODE:-}
+      - P4Backoffice__Modules__Consents=${P4_BACKOFFICE_CONSENTS_MODE:-}
       - P4Backoffice__Email__Templates=${P4_BACKOFFICE_TEMPLATES:-}
-      - P4Backoffice__Modules__Pricing=${P4_BACKOFFICE_PRICING_MODE:-{{project.DOTNET_P4_BACKOFFICE_PRICING_MODE}}}
-      - P4Backoffice__Modules__Support=${P4_BACKOFFICE_SUPPORT_MODE:-{{project.DOTNET_P4_BACKOFFICE_SUPPORT_MODE}}}
+      - P4Backoffice__Modules__Pricing=${P4_BACKOFFICE_PRICING_MODE:-}
+      - P4Backoffice__Modules__Support=${P4_BACKOFFICE_SUPPORT_MODE:-}
       # Outbox retries end this long after the first attempt (empty = 20 h, < 24 h).
-      - P4Backoffice__Outbox__GiveUpAfter=${P4_BACKOFFICE_OUTBOX_GIVE_UP_AFTER:-{{project.DOTNET_P4_BACKOFFICE_OUTBOX_GIVE_UP_AFTER}}}
-      - P4Backoffice__Modules__Billing=${P4_BACKOFFICE_BILLING_MODE:-{{project.DOTNET_P4_BACKOFFICE_BILLING_MODE}}}
+      - P4Backoffice__Outbox__GiveUpAfter=${P4_BACKOFFICE_OUTBOX_GIVE_UP_AFTER:-}
+      - P4Backoffice__Modules__Billing=${P4_BACKOFFICE_BILLING_MODE:-}
       # Optional narrower key per module (empty = P4_BACKOFFICE_SECRET_KEY). The outbox and
       # the event poll always use the main key.
-      - P4Backoffice__Keys__Docs=${P4_BACKOFFICE_DOCS_SECRET_KEY:-{{project.DOTNET_P4_BACKOFFICE_DOCS_SECRET_KEY}}}
-      - P4Backoffice__Keys__Consents=${P4_BACKOFFICE_CONSENTS_SECRET_KEY:-{{project.DOTNET_P4_BACKOFFICE_CONSENTS_SECRET_KEY}}}
-      - P4Backoffice__Keys__Pricing=${P4_BACKOFFICE_PRICING_SECRET_KEY:-{{project.DOTNET_P4_BACKOFFICE_PRICING_SECRET_KEY}}}
-      - P4Backoffice__Keys__Support=${P4_BACKOFFICE_SUPPORT_SECRET_KEY:-{{project.DOTNET_P4_BACKOFFICE_SUPPORT_SECRET_KEY}}}
-      - P4Backoffice__Keys__Billing=${P4_BACKOFFICE_BILLING_SECRET_KEY:-{{project.DOTNET_P4_BACKOFFICE_BILLING_SECRET_KEY}}}
+      - P4Backoffice__Keys__Docs=${P4_BACKOFFICE_DOCS_SECRET_KEY:-}
+      - P4Backoffice__Keys__Consents=${P4_BACKOFFICE_CONSENTS_SECRET_KEY:-}
+      - P4Backoffice__Keys__Pricing=${P4_BACKOFFICE_PRICING_SECRET_KEY:-}
+      - P4Backoffice__Keys__Support=${P4_BACKOFFICE_SUPPORT_SECRET_KEY:-}
+      - P4Backoffice__Keys__Billing=${P4_BACKOFFICE_BILLING_SECRET_KEY:-}
       # Alert channel independent of the backoffice (https webhook, POST {"text": ...}); empty = log only.
-      - OpsAlert__WebhookUrl=${OPS_ALERT_WEBHOOK_URL:-{{project.DOTNET_OPS_ALERT_WEBHOOK_URL}}}
+      - OpsAlert__WebhookUrl=${OPS_ALERT_WEBHOOK_URL:-}
       - P4Backoffice__CookieWidget__Url=${P4_BACKOFFICE_WIDGET_URL:-}
       - P4Backoffice__CookieWidget__PublishableKey=${P4_BACKOFFICE_PK:-}
       - P4Backoffice__SupportForm__Product=${P4_BACKOFFICE_SUPPORT_FORM_PRODUCT:-}
       - P4Backoffice__SupportForm__Url=${P4_BACKOFFICE_SUPPORT_FORM_URL:-}
       # Content-Security-Policy of HTML pages: report-only (default, empty) | enforce | off.
-      - Csp__Mode=${CSP_MODE:-{{project.DOTNET_CSP_MODE}}}
+      - Csp__Mode=${CSP_MODE:-}
       # Size limits
       - Limits__PdfMaxBytes=${PDF_MAX_BYTES:-20971520}
       - Limits__ImageMaxBytes=${IMAGE_MAX_BYTES:-1048576}
@@ -217,7 +217,7 @@ services:
       # Per TSA authority (primary, then backup). Must stay well under the portal's wait.
       - Tsa__TimeoutSeconds=${TSA_TIMEOUT_SECONDS:-10}
       # Authority calls in flight at once (#72); empty or an unresolved placeholder = 24.
-      - TSA_MAX_CONCURRENT_CALLS=${TSA_MAX_CONCURRENT_CALLS:-{{project.DOTNET_TSA_MAX_CONCURRENT_CALLS}}}
+      - TSA_MAX_CONCURRENT_CALLS=${TSA_MAX_CONCURRENT_CALLS:-}
       # Circuit breaker per TSA host (#72): failures in a row that open it (0 = off), seconds open.
       - Tsa__Breaker__FailureThreshold=${TSA_BREAKER_FAILURE_THRESHOLD:-5}
       - Tsa__Breaker__OpenSeconds=${TSA_BREAKER_OPEN_SECONDS:-30}
@@ -247,7 +247,7 @@ services:
       - Database__MigrationUser=${MIGRATION_DB_USER:-}
       - Database__MigrationPassword=${MIGRATION_DB_PASSWORD:-}
       # The migration role as one URL; set, it wins over MIGRATION_DB_USER / _PASSWORD.
-      - MIGRATION_DATABASE_URL=${MIGRATION_DATABASE_URL:-{{project.DOTNET_MIGRATION_DATABASE_URL}}}
+      - MIGRATION_DATABASE_URL=${MIGRATION_DATABASE_URL:-}
 
 volumes:
   data_protection_keys:

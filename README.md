@@ -197,8 +197,9 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `P4Backoffice__Consents__Documents__0…` / `…__Acknowledged__0…` | | Documents consented to at sign-up (default `terms`, `dpa`) and documents only acknowledged (default `privacy`) |
 
 The `#80` variables (`CORS_ALLOWED_ORIGINS`, `AUTH_*`, `MAX_API_TOKENS_PER_USER`,
-`GLOBAL_CONCURRENCY_*`, `HEAVY_OPERATIONS_LIMIT`, `AI_OPERATIONS_LIMIT`, `RASTER_*`, `USER_QUEUE_*`) and `TRUSTED_CF_PROXIES` / `TRUSTED_PROXIES` fall back to Coolify project variables (`DOTNET_*`) in
-`docker-compose.yml`. An empty value or an unresolved `{{project.…}}` placeholder means the
+`GLOBAL_CONCURRENCY_*`, `HEAVY_OPERATIONS_LIMIT`, `AI_OPERATIONS_LIMIT`, `RASTER_*`, `USER_QUEUE_*`) and `TRUSTED_CF_PROXIES` / `TRUSTED_PROXIES` are read from the application's own Coolify variables, whose value is a link to a shared one
+(`{{environment.DOTNET_*}}`); `docker-compose.yml` only has `${NAME:-}` (a default with its own
+braces would append a stray `}` to a set value). An empty value or an unresolved `{{…}}` placeholder means the
 default; any other value that does not parse stops the server at startup.
 
 `GET /internal/concurrency` shows what the limits are doing (#69): occupancy, waits and
