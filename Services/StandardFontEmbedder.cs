@@ -50,20 +50,20 @@ public static class StandardFontEmbedder
         {
             writer.SetCloseStream(false);
             var doc = new PdfDocument(reader, writer);
-                var cache = new Dictionary<PdfDictionary, PdfFont>(ReferenceEqualityComparer.Instance as IEqualityComparer<PdfDictionary>);
-                var seen = new HashSet<PdfDictionary>(ReferenceEqualityComparer.Instance as IEqualityComparer<PdfDictionary>);
-                for (var i = 1; i <= doc.GetNumberOfPages(); i++)
+            var cache = new Dictionary<PdfDictionary, PdfFont>(ReferenceEqualityComparer.Instance as IEqualityComparer<PdfDictionary>);
+            var seen = new HashSet<PdfDictionary>(ReferenceEqualityComparer.Instance as IEqualityComparer<PdfDictionary>);
+            for (var i = 1; i <= doc.GetNumberOfPages(); i++)
+            {
+                var page = doc.GetPage(i);
+                Walk(doc, page.GetPdfObject().GetAsDictionary(PdfName.Resources), cache, seen, ref replaced);
+                var annots = page.GetPdfObject().GetAsArray(PdfName.Annots);
+                for (var j = 0; annots != null && j < annots.Size(); j++)
                 {
-                    var page = doc.GetPage(i);
-                    Walk(doc, page.GetPdfObject().GetAsDictionary(PdfName.Resources), cache, seen, ref replaced);
-                    var annots = page.GetPdfObject().GetAsArray(PdfName.Annots);
-                    for (var j = 0; annots != null && j < annots.Size(); j++)
-                    {
-                        WalkAppearance(doc, annots.GetAsDictionary(j), cache, seen, ref replaced);
-                    }
+                    WalkAppearance(doc, annots.GetAsDictionary(j), cache, seen, ref replaced);
                 }
-                var acro = doc.GetCatalog().GetPdfObject().GetAsDictionary(PdfName.AcroForm);
-                Walk(doc, acro?.GetAsDictionary(PdfName.DR), cache, seen, ref replaced);
+            }
+            var acro = doc.GetCatalog().GetPdfObject().GetAsDictionary(PdfName.AcroForm);
+            Walk(doc, acro?.GetAsDictionary(PdfName.DR), cache, seen, ref replaced);
             doc.Close();
         }
         return replaced == 0 ? pdf : output.ToArray();
