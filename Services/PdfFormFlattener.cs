@@ -80,7 +80,8 @@ public static class PdfFormFlattener
                 // rewrite would break it.
                 var catalog = document.GetCatalog().GetPdfObject();
                 if (new SignatureUtil(document).GetSignatureNames().Count > 0
-                    || catalog.GetAsDictionary(PdfName.Perms)?.ContainsKey(PdfName.DocMDP) == true)
+                    || catalog.GetAsDictionary(PdfName.Perms)?.ContainsKey(PdfName.DocMDP) == true
+                    || HasSignatureValue(catalog.GetAsDictionary(PdfName.AcroForm)?.GetAsArray(PdfName.Fields), null, 0))
                 {
                     throw new ApiValidationException(AlreadySignedCode, "document carries a signature");
                 }
@@ -155,27 +156,43 @@ public static class PdfFormFlattener
             // without /AP gets one generated. Either way we regenerate — with a font that can draw
             // the value (the default Helvetica has no code for č, ř, ů).
             if ((PdfName.Tx.Equals(type) || PdfName.Ch.Equals(type))
-                && (needAppearances || widgets.Any(w => !IsHidden(w.GetPdfObject()) && !HasNormalAppearance(w.GetPdfObject()))))
+                && (needAppearances || widgets.Any(w => !IsHidden(document, w.GetPdfObject()) && !HasNormalAppearance(w.GetPdfObject()))))
             {
-                var value = field.GetValueAsString() ?? string.Empty;
-                if (CanDraw(field.GetFont(), value))
+                var texts = DrawnTexts(field);
+                // iText 9.8 draws combo options with PdfString.GetValue(): a UTF-16 option (any č)
+                // comes out as its raw bytes. Options decoded for the drawing, put back after.
+                var options = field.GetPdfObject().Get(PdfName.Opt);
+                if (PdfName.Ch.Equals(type) && options is PdfArray optionArray)
                 {
-                    field.RegenerateField();
+                    field.GetPdfObject().Put(PdfName.Opt, DecodedOptions(optionArray));
                 }
-                else
+                foreach (var widget in widgets)
                 {
-                    // A widget's own /DA would put its old font back on regeneration.
-                    foreach (var widget in widgets)
+                    var merged = widget.GetPdfObject() == field.GetPdfObject();
+                    // Each widget is drawn with its own /DA font and size: check that font, keep that size.
+                    var font = merged ? field.GetFont() : widget.GetFont();
+                    if (texts.All(t => CanDraw(font, t)))
                     {
-                        if (widget.GetPdfObject() != field.GetPdfObject()) widget.GetPdfObject().Remove(PdfName.DA);
+                        widget.RegenerateField();
                     }
-                    field.SetFont(UnicodeFont());
+                    else if (merged)
+                    {
+                        field.SetFontAndSize(UnicodeFont(), field.GetFontSize());
+                    }
+                    else
+                    {
+                        // Its own /DA would put the old font back on regeneration.
+                        var size = widget.GetFontSize();
+                        widget.GetPdfObject().Remove(PdfName.DA);
+                        widget.SetFontAndSize(UnicodeFont(), size);
+                    }
                 }
+                if (options != null) field.GetPdfObject().Put(PdfName.Opt, options);
             }
             foreach (var widget in widgets)
             {
                 // Not shown by a viewer, so not drawn: iText would draw it (or generate one).
-                if (IsHidden(widget.GetPdfObject())) SetEmptyAppearance(document, widget.GetPdfObject());
+                if (IsHidden(document, widget.GetPdfObject())) SetEmptyAppearance(document, widget.GetPdfObject());
             }
         }
 
@@ -219,10 +236,86 @@ public static class PdfFormFlattener
             .Select(kv => (kv.Key, kv.Value))
             .ToList();
 
-    private static bool IsHidden(PdfDictionary widget)
+    /// <summary>Not shown by a viewer: the Hidden / NoView flag, or a layer that is off by default.</summary>
+    private static bool IsHidden(PdfDocument document, PdfDictionary widget)
     {
         var flags = widget.GetAsNumber(PdfName.F)?.IntValue() ?? 0;
-        return (flags & (PdfAnnotation.HIDDEN | PdfAnnotation.NO_VIEW)) != 0;
+        if ((flags & (PdfAnnotation.HIDDEN | PdfAnnotation.NO_VIEW)) != 0) return true;
+        var layer = widget.GetAsDictionary(PdfName.OC);
+        var off = document.GetCatalog().GetPdfObject().GetAsDictionary(PdfName.OCProperties)
+            ?.GetAsDictionary(PdfName.D)?.GetAsArray(PdfName.OFF);
+        return layer != null && off != null && off.Contains(layer);
+    }
+
+    /// <summary>
+    /// Every text the appearance of a field can show: the value and, for a choice field, each
+    /// option (a combo shows the display text of the selected export value, a list all of them).
+    /// </summary>
+    private static List<string> DrawnTexts(PdfFormField field)
+    {
+        var texts = new List<string> { field.GetValueAsString() ?? string.Empty };
+        var options = field.GetPdfObject().GetAsArray(PdfName.Opt);
+        if (options == null) return texts;
+        for (var i = 0; i < options.Size(); i++)
+        {
+            switch (options.Get(i))
+            {
+                case PdfString option:
+                    texts.Add(option.ToUnicodeString());
+                    break;
+                case PdfArray pair:
+                    for (var j = 0; j < pair.Size(); j++)
+                    {
+                        if (pair.Get(j) is PdfString part) texts.Add(part.ToUnicodeString());
+                    }
+                    break;
+            }
+        }
+        return texts;
+    }
+
+    private static PdfArray DecodedOptions(PdfArray options)
+    {
+        var decoded = new PdfArray();
+        for (var i = 0; i < options.Size(); i++)
+        {
+            switch (options.Get(i))
+            {
+                case PdfString option:
+                    decoded.Add(new PdfString(option.ToUnicodeString()));
+                    break;
+                case PdfArray pair:
+                    var copy = new PdfArray();
+                    for (var j = 0; j < pair.Size(); j++)
+                    {
+                        copy.Add(pair.Get(j) is PdfString part ? new PdfString(part.ToUnicodeString()) : pair.Get(j));
+                    }
+                    decoded.Add(copy);
+                    break;
+                default:
+                    decoded.Add(options.Get(i));
+                    break;
+            }
+        }
+        return decoded;
+    }
+
+    /// <summary>
+    /// A signature field with a value, /FT inherited from a parent included: SignatureUtil only
+    /// counts fields with their own /FT and a complete signature dictionary.
+    /// </summary>
+    private static bool HasSignatureValue(PdfArray? fields, PdfName? inheritedType, int depth)
+    {
+        if (fields == null || depth > MaxDepth) return false;
+        for (var i = 0; i < fields.Size(); i++)
+        {
+            var field = fields.GetAsDictionary(i);
+            if (field == null) continue;
+            var type = field.GetAsName(PdfName.FT) ?? inheritedType;
+            if (PdfName.Sig.Equals(type) && field.Get(PdfName.V) is PdfDictionary) return true;
+            if (HasSignatureValue(field.GetAsArray(PdfName.Kids), type, depth + 1)) return true;
+        }
+        return false;
     }
 
     private static bool HasNormalAppearance(PdfDictionary widget)

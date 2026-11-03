@@ -206,6 +206,41 @@ public class PdfFormFlattenerTests
         Assert.Null(Read(result.Pdf, d => d.GetCatalog().GetPdfObject().Get(PdfName.AcroForm)));
     }
 
+    [Fact]
+    public void Combo_display_text_with_diacritics_is_drawn_with_an_embedded_font()
+    {
+        var pdf = Build(doc =>
+        {
+            var form = PdfAcroForm.GetAcroForm(doc, true);
+            var combo = new ChoiceFormFieldBuilder(doc, "country")
+                .SetWidgetRectangle(new Rectangle(50, 500, 300, 24)).SetPage(1)
+                .SetOptions(new[] { new[] { "CZ", "Česká republika" }, new[] { "SK", "Slovenská republika" } })
+                .CreateComboBox();
+            form.AddField(combo);
+            combo.GetPdfObject().Put(PdfName.V, new PdfString("CZ"));
+            form.SetNeedAppearances(true);
+        });
+
+        Assert.Contains("Česká republika", PageText(Flatten(pdf).Pdf));
+    }
+
+    [Fact]
+    public void Field_in_a_layer_that_is_off_is_not_drawn()
+    {
+        var pdf = Build(doc =>
+        {
+            var layer = new iText.Kernel.Pdf.Layer.PdfLayer("hidden", doc);
+            layer.SetOn(false);
+            Text(doc, "visible", "on the page", y: 700);
+            var hidden = Text(doc, "secret", "not on the page", y: 600);
+            hidden.GetWidgets()[0].GetPdfObject().Put(PdfName.OC, layer.GetPdfObject());
+        });
+
+        var text = PageText(Flatten(pdf).Pdf);
+        Assert.Contains("on the page", text);
+        Assert.DoesNotContain("not on the page", text);
+    }
+
     // ── active content ───────────────────────────────────────────────────
 
     [Fact]
@@ -415,6 +450,30 @@ public class PdfFormFlattenerTests
 
         Assert.Equal(PdfFormFlattener.AlreadySignedCode, ex.Code);
         Assert.Equal(copy, signed);
+    }
+
+    [Fact]
+    public void Signature_value_under_an_inherited_FT_is_refused()
+    {
+        // SignatureUtil misses it (no /FT of its own); the rewrite would still break it.
+        var pdf = Build(doc =>
+        {
+            var form = PdfAcroForm.GetAcroForm(doc, true);
+            var parent = new PdfDictionary();
+            parent.Put(PdfName.FT, PdfName.Sig);
+            parent.Put(PdfName.T, new PdfString("sigs"));
+            var kid = new PdfDictionary();
+            kid.Put(PdfName.T, new PdfString("one"));
+            kid.Put(PdfName.Parent, parent.MakeIndirect(doc));
+            var value = new PdfDictionary();
+            value.Put(PdfName.Type, PdfName.Sig);
+            kid.Put(PdfName.V, value);
+            parent.Put(PdfName.Kids, new PdfArray(kid.MakeIndirect(doc)));
+            form.GetPdfObject().Put(PdfName.Fields, new PdfArray(parent));
+        });
+
+        var ex = Assert.Throws<ApiValidationException>(() => PdfFormFlattener.Flatten(pdf, Limits));
+        Assert.Equal(PdfFormFlattener.AlreadySignedCode, ex.Code);
     }
 
     [Fact]
