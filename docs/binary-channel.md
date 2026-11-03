@@ -97,6 +97,7 @@ Bez té hlavičky je odpověď JSON jako dosud. Platí i pro opakování z ulož
 | `POST /api/visual-sign` | ✅ multipart | ✅ |
 | `POST /api/attachment` | ✅ multipart (`attachmentContent` zůstává v `metadata` v base64; strop metadat roste o `Limits:AttachmentMaxBytes`) | ✅ |
 | `POST /api/convert/pdfa` | ✅ multipart | ✅ (+ `X-PDF-Conformance`) |
+| `POST /api/flatten-form` | ✅ multipart (`metadata` = `{}`) | ✅ (+ `X-Source-Sha256`, `X-Result-Sha256`) |
 
 Ostatní endpointy berou zatím jen JSON (multipart na nich skončí `415`). Záměrně mimo:
 `/api/fill-pdf` (PDF na vstupu je jen volitelný přímý režim, hlavní cesta je šablona a

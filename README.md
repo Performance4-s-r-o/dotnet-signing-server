@@ -79,7 +79,7 @@ the server injects the resulting PKCS#7 container into the prepared placeholder.
 ### Retries, operation state and credits
 
 Every paid call (`sign`, `sign-pfx`, `timestamp`, `extend-signature`,
-`visual-sign`, `attachment`, `convert/pdfa`, `fill-pdf`, `find-codes`,
+`visual-sign`, `attachment`, `convert/pdfa`, `flatten-form`, `fill-pdf`, `find-codes`,
 `ai/detect-fields`, `ai/extract-data`) is a durable operation:
 
 - **Credits are reserved before the work** and returned when it fails. `402`
@@ -144,6 +144,7 @@ for any other client. Two limits of that:
 | `GET POST PUT DELETE /api/pdf-template[/{id}]` | Template CRUD |
 | `POST /api/fill-pdf` | Render a template with supplied field data |
 | `POST /api/convert/pdfa` | Convert a PDF to PDF/A |
+| `POST /api/flatten-form` | Flatten filled form fields into the page and remove active content (JavaScript, Launch, trigger actions), so the document can be signed. `409` `PDF_ALREADY_SIGNED` / `PDF_XFA_DYNAMIC` / `FLATTEN_INCOMPLETE`. Answers `result`, `sourceSha256`, `resultSha256`, `changed`, `flattenedFields`, `removed[]`. Price `FLATTEN_FORM_CREDIT_COST` (default 1) |
 | `POST /api/find-codes` | Detect barcodes and QR codes |
 | `POST /api/ai/detect-fields` | Suggest template fields from a PDF (optional, needs `AI__Enabled`) |
 | `POST /api/ai/extract-data` | Extract structured data from a PDF (optional) |

@@ -29,7 +29,7 @@ public class OperationsOptions
     /// </summary>
     public int SignDeadlineSeconds { get; set; } = 45;
 
-    /// <summary>fill-pdf and PDF/A conversion. Env <c>OPERATION_DEADLINE_DOCUMENT_SECONDS</c>.</summary>
+    /// <summary>fill-pdf, PDF/A conversion and flatten-form. Env <c>OPERATION_DEADLINE_DOCUMENT_SECONDS</c>.</summary>
     public int DocumentDeadlineSeconds { get; set; } = 60;
 
     /// <summary>find-codes, extend-signature and the AI endpoints. Env <c>OPERATION_DEADLINE_HEAVY_SECONDS</c>.</summary>
@@ -41,7 +41,7 @@ public class OperationsOptions
     /// <summary>The deadline for an operation name as passed to <c>RunOperationAsync</c>.</summary>
     public TimeSpan DeadlineFor(string operation) => TimeSpan.FromSeconds(operation switch
     {
-        "fill-pdf" or "pdfa" => DocumentDeadlineSeconds,
+        "fill-pdf" or "pdfa" or "flatten-form" => DocumentDeadlineSeconds,
         "find-codes" or "extend-signature" or "ai-detect-fields" or "ai-extract-data" => HeavyDeadlineSeconds,
         _ => SignDeadlineSeconds,
     });

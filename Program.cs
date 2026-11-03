@@ -413,6 +413,11 @@ builder.Services.AddOptions<BillingOptions>()
     {
         if (currencyProblem != null) options.Currency = "EUR";
         options.AttachmentDebitBypassKey = builder.Configuration["ATTACHMENT_DEBIT_BYPASS_KEY"] ?? options.AttachmentDebitBypassKey;
+        options.FlattenFormCredits = EnvValues.Int(builder.Configuration, "FLATTEN_FORM_CREDIT_COST") ?? options.FlattenFormCredits;
+        if (options.FlattenFormCredits < 0)
+        {
+            throw new InvalidOperationException("FLATTEN_FORM_CREDIT_COST must be 0 (free) or a positive number of credits.");
+        }
         options.GlobalConcurrencyLimit = EnvValues.Int(builder.Configuration, "GLOBAL_CONCURRENCY_LIMIT") ?? options.GlobalConcurrencyLimit;
         options.GlobalConcurrencyWaitMilliseconds = EnvValues.Int(builder.Configuration, "GLOBAL_CONCURRENCY_WAIT_MS") ?? options.GlobalConcurrencyWaitMilliseconds;
         // A value that makes no sense stops the server, it does not quietly switch the cap off.

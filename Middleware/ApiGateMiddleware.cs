@@ -37,6 +37,7 @@ public class ApiGateMiddleware
         ("/api/presign", "sign"), ("/api/sign", "sign"), ("/api/sign-pfx", "sign"),
         ("/api/timestamp", "sign"), ("/api/visual-sign", "sign"),
         ("/api/attachment", "sign"), ("/api/convert/pdfa", "pdfa"), ("/api/fill-pdf", "fill"),
+        ("/api/flatten-form", "flatten-form"),
         ("/api/find-codes", "find-codes"), ("/api/extend-signature", "extend-signature"),
         ("/api/ai/", "ai"),
     };

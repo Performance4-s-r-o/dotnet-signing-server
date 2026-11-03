@@ -3,7 +3,7 @@
 Every paid call is a durable operation (table `ApiOperations`, part of the
 baseline migration `InitialSchema`): `pending → running → completed | failed | failed_uncertain`.
 Endpoints: `sign`, `sign-pfx`, `timestamp`, `extend-signature`, `visual-sign`,
-`attachment`, `convert/pdfa`, `fill-pdf`, `find-codes`,
+`attachment`, `convert/pdfa`, `flatten-form`, `fill-pdf`, `find-codes`,
 `ai/detect-fields`, `ai/extract-data`.
 
 ## Contract

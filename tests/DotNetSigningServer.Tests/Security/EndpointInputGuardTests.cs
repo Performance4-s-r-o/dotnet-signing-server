@@ -69,7 +69,7 @@ public class EndpointInputGuardTests
         var expected = new[]
         {
             "/api/ai/detect-fields", "/api/ai/extract-data", "/api/attachment", "/api/convert/pdfa",
-            "/api/extend-signature", "/api/fill-pdf", "/api/find-codes", "/api/inspect-signatures",
+            "/api/extend-signature", "/api/fill-pdf", "/api/find-codes", "/api/flatten-form", "/api/inspect-signatures",
             "/api/pdf-template", "/api/pdf-template/{templateId:guid}", "/api/presign",
             "/api/sign-pfx", "/api/timestamp", "/api/visual-sign",
         };
