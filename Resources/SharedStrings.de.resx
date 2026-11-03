@@ -167,6 +167,8 @@
   <data name="Error_TSA_REQUIRED_FOR_ARCHIVE_TIMESTAMP" xml:space="preserve"><value>Ein Archiv-Zeitstempel benötigt eine Zeitstempelstelle — geben Sie tsaUrl an oder setzen Sie addArchiveTimestamp auf false für reines B-LT.</value></data>
   <data name="Error_NO_SIGNATURE_TO_EXTEND" xml:space="preserve"><value>Das Dokument enthält keine Signatur, die erweitert werden könnte.</value></data>
   <data name="Error_NO_REVOCATION_DATA_AVAILABLE" xml:space="preserve"><value>Für die Signaturzertifikate konnten keine Sperrinformationen abgerufen werden, daher wurden keine Daten für die Langzeitvalidierung eingebettet.</value></data>
+  <data name="Error_INCOMPLETE_REVOCATION_DATA" xml:space="preserve"><value>Nicht für jedes Zertifikat der geforderten Signatur oder ihres Zeitstempels konnten Sperrinformationen abgerufen werden, daher wäre sie langfristig nicht überprüfbar.</value></data>
+  <data name="Error_SIGNATURE_NOT_FOUND" xml:space="preserve"><value>Das Dokument enthält keine Signatur mit dem angegebenen Namen.</value></data>
   <data name="VisualSignError" xml:space="preserve"><value>Beim Anbringen der visuellen Signatur ist ein Fehler aufgetreten</value></data>
   <data name="SealCertificateRequired" xml:space="preserve"><value>Der Server hat kein eigenes Siegelzertifikat. Stellen Sie das Zertifikat selbst bereit (presign/sign mit Ihrem Schlüssel oder sign-pfx).</value></data>
   <data name="SealNotPermitted" xml:space="preserve"><value>Das Siegeln ist für dieses Konto nicht freigeschaltet.</value></data>
@@ -547,7 +549,8 @@
   <data name="ApiDocExtendIntro" xml:space="preserve"><value>Ein Zeitstempel belegt, wann ein Dokument signiert wurde — nicht, dass das Zertifikat damals gültig war. Dafür braucht es Sperrinformationen, die nur online verfügbar sind und die Zertifizierungsstellen nach Ablauf eines Zertifikats nicht mehr veröffentlichen. Dieser Aufruf friert diese Nachweise im Dokument ein (B-LT) und stempelt das Ergebnis (B-LTA), sodass es Jahre später allein aus der Datei geprüft werden kann. Führen Sie ihn erneut aus, bevor das Zertifikat des Archiv-Zeitstempels abläuft, um die Kette zu erneuern.</value></data>
   <data name="ApiDocExtendNote1" xml:space="preserve"><value>Kostet 1 Credit zuzüglich des Zeitstempel-Aufschlags, wenn ein Archiv-Zeitstempel angefordert wird.</value></data>
   <data name="ApiDocExtendNote2" xml:space="preserve"><value>Für reines B-LT setzen Sie addArchiveTimestamp auf false; bei true ist tsaUrl erforderlich und die Anfrage wird abgelehnt statt stillschweigend herabgestuft.</value></data>
-  <data name="ApiDocExtendNote3" xml:space="preserve"><value>Schlägt fehl, wenn keine Sperrinformationen abgerufen werden können — statt ein Dokument zurückzugeben, das Langzeitgültigkeit nur vortäuscht.</value></data>
+  <data name="ApiDocExtendNote3" xml:space="preserve"><value>Schlägt fehl, wenn für keine Signatur Sperrinformationen abgerufen werden können. Ohne requireCompleteRevocationFor genügen Daten für einzelne Signaturen.</value></data>
+  <data name="ApiDocExtendNote4" xml:space="preserve"><value>Das optionale requireCompleteRevocationFor benennt ein Signaturfeld (meist das gerade hinzugefügte): Jedes Zertifikat seiner Kette und seines Signaturzeitstempels, Vertrauensanker ausgenommen, braucht OCSP oder eine CRL, sonst schlägt der Aufruf mit INCOMPLETE_REVOCATION_DATA fehl.</value></data>
   <data name="ApiDocAttachmentTitle" xml:space="preserve"><value>Embed a file attachment</value></data>
   <data name="ApiDocAttachmentPurpose" xml:space="preserve"><value>Embed attachment</value></data>
   <data name="ApiDocAttachmentCredits" xml:space="preserve"><value>1</value></data>

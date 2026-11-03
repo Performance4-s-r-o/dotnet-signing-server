@@ -167,6 +167,8 @@
   <data name="Error_TSA_REQUIRED_FOR_ARCHIVE_TIMESTAMP" xml:space="preserve"><value>An archive timestamp needs a timestamping authority — supply tsaUrl, or set addArchiveTimestamp to false for B-LT only.</value></data>
   <data name="Error_NO_SIGNATURE_TO_EXTEND" xml:space="preserve"><value>The document carries no signature to extend.</value></data>
   <data name="Error_NO_REVOCATION_DATA_AVAILABLE" xml:space="preserve"><value>No revocation data could be retrieved for the signing certificates, so no long-term validation information was embedded.</value></data>
+  <data name="Error_INCOMPLETE_REVOCATION_DATA" xml:space="preserve"><value>No revocation data could be retrieved for every certificate of the required signature or of its timestamp, so it would not be verifiable long term.</value></data>
+  <data name="Error_SIGNATURE_NOT_FOUND" xml:space="preserve"><value>The document has no signature with the given name.</value></data>
   <data name="VisualSignError" xml:space="preserve"><value>An error occurred while applying the visual signature</value></data>
   <data name="SealCertificateRequired" xml:space="preserve"><value>The server has no seal certificate of its own. Supply the certificate yourself (presign/sign with your key, or sign-pfx).</value></data>
   <data name="SealNotPermitted" xml:space="preserve"><value>Sealing is not enabled for this account.</value></data>
@@ -557,7 +559,8 @@
   <data name="ApiDocExtendIntro" xml:space="preserve"><value>A timestamp proves when a document was signed; it does not prove the certificate was valid at that moment. That needs revocation data, which is only available online and which certificate authorities stop publishing once a certificate expires. This call freezes that evidence into the document (B-LT) and timestamps the result (B-LTA), so it can be verified years later from the file alone. Run it again before the archive timestamp's own certificate expires to renew the chain.</value></data>
   <data name="ApiDocExtendNote1" xml:space="preserve"><value>Costs 1 credit plus the timestamp surcharge when an archive timestamp is requested.</value></data>
   <data name="ApiDocExtendNote2" xml:space="preserve"><value>Set addArchiveTimestamp to false for B-LT only; with true, tsaUrl is required and the request is refused rather than quietly downgraded.</value></data>
-  <data name="ApiDocExtendNote3" xml:space="preserve"><value>Fails when no revocation data can be retrieved, rather than returning a document that appears long-term valid without being so.</value></data>
+  <data name="ApiDocExtendNote3" xml:space="preserve"><value>Fails when no revocation data can be retrieved for any signature. Data for some signatures only is enough unless requireCompleteRevocationFor is set.</value></data>
+  <data name="ApiDocExtendNote4" xml:space="preserve"><value>Optional requireCompleteRevocationFor names one signature field (usually the one just added): every certificate of its chain and of its signature timestamp, trust anchors aside, must get OCSP or a CRL, otherwise the call fails with INCOMPLETE_REVOCATION_DATA.</value></data>
   <data name="ApiDocAttachmentTitle" xml:space="preserve"><value>Embed a file attachment</value></data>
   <data name="ApiDocAttachmentPurpose" xml:space="preserve"><value>Embed attachment</value></data>
   <data name="ApiDocAttachmentCredits" xml:space="preserve"><value>1</value></data>

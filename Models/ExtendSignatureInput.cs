@@ -20,6 +20,15 @@ public class ExtendSignatureInput
     public bool AddArchiveTimestamp { get; set; } = true;
 
     /// <summary>
+    /// Optional field name of one signature that must come out fully covered:
+    /// revocation data for every certificate of its chain and of its signature
+    /// timestamp, trust anchors aside. Missing data fails the call with
+    /// INCOMPLETE_REVOCATION_DATA instead of succeeding on what other signatures
+    /// got. Empty = best effort over all signatures, as before.
+    /// </summary>
+    public string? RequireCompleteRevocationFor { get; set; }
+
+    /// <summary>
     /// RFC 3161 authority for the archive timestamp. The server has none of its
     /// own, so this is required whenever AddArchiveTimestamp is true.
     /// </summary>

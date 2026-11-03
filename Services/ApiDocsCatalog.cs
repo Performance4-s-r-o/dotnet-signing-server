@@ -284,12 +284,14 @@ Content-Type: application/json
 }
 
 addArchiveTimestamp: true -> B-LTA (requires tsaUrl), false -> B-LT only
+requireCompleteRevocationFor (optional): signature field that must get
+  revocation data for its whole chain and its timestamp, or the call fails
 
 Response:
 { "result": "base64-pdf-with-validation-data" }
 """,
                 Curl: $$"""curl -X POST {{b}}/extend-signature -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"pdfContent":"base64-signed-pdf","addArchiveTimestamp":true,"tsaUrl":"https://freetsa.org/tsr"}'""",
-                NoteKeys: new[] { "ApiDocExtendNote1", "ApiDocExtendNote2", "ApiDocExtendNote3" }),
+                NoteKeys: new[] { "ApiDocExtendNote1", "ApiDocExtendNote2", "ApiDocExtendNote3", "ApiDocExtendNote4" }),
 
             new ApiEndpointDoc(
                 Slug: "attachment",

@@ -24,10 +24,24 @@ internal sealed class LocalTsaClient : TSAClientBouncyCastle
     private readonly AsymmetricKeyParameter _privateKey;
     private int _serial;
 
+    private readonly Org.BouncyCastle.X509.X509Certificate[] _chain;
+
     internal LocalTsaClient()
         : base("http://tsa.invalid/")
     {
         (_certificate, _privateKey) = TestHelpers.CreateTsaCertificate();
+        _chain = new[] { _certificate };
+    }
+
+    /// <summary>A TSA issued by a test CA; <paramref name="issuers"/> travel in the token with its certificate.</summary>
+    internal LocalTsaClient(
+        Org.BouncyCastle.X509.X509Certificate certificate,
+        AsymmetricKeyParameter privateKey,
+        params Org.BouncyCastle.X509.X509Certificate[] issuers)
+        : base("http://tsa.invalid/")
+    {
+        (_certificate, _privateKey) = (certificate, privateKey);
+        _chain = new[] { certificate }.Concat(issuers).ToArray();
     }
 
     protected override byte[] GetTSAResponse(byte[] requestBytes)
@@ -40,7 +54,7 @@ internal sealed class LocalTsaClient : TSAClientBouncyCastle
             TspAlgorithms.Sha256,
             PolicyOid);
         tokenGenerator.SetCertificates(
-            CollectionUtilities.CreateStore(new[] { _certificate }));
+            CollectionUtilities.CreateStore(_chain));
 
         var responseGenerator = new TimeStampResponseGenerator(tokenGenerator, TspAlgorithms.Allowed);
         var response = responseGenerator.Generate(

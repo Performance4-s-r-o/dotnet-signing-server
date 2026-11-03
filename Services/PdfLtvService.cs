@@ -1,6 +1,10 @@
 using DotNetSigningServer.Exceptions;
+using iText.Commons.Bouncycastle.Cert;
 using iText.Kernel.Pdf;
 using iText.Signatures;
+using Org.BouncyCastle.Asn1;
+using Org.BouncyCastle.Asn1.Ocsp;
+using Org.BouncyCastle.Ocsp;
 using Org.BouncyCastle.Tsp;
 
 namespace DotNetSigningServer.Services;
@@ -37,8 +41,14 @@ public class PdfLtvService
     /// written first so that the archive timestamp covers it. A timestamp applied
     /// before the DSS would leave the evidence it is meant to protect outside its
     /// own coverage.
+    ///
+    /// <paramref name="requireCompleteFor"/> names a signature that must end up
+    /// fully covered: every certificate of its chain and of its signature
+    /// timestamp (trust anchors aside) has OCSP or a CRL, or the call fails with
+    /// <c>INCOMPLETE_REVOCATION_DATA</c>. Without it the call is best effort and
+    /// passes as soon as any signature got any data.
     /// </summary>
-    public byte[] Extend(byte[] signedPdf, ITSAClient? tsaClient, bool addArchiveTimestamp)
+    public byte[] Extend(byte[] signedPdf, ITSAClient? tsaClient, bool addArchiveTimestamp, string? requireCompleteFor = null)
     {
         // Checked before any of the work below: collecting revocation data means
         // a round trip per responder, and spending those only to refuse the
@@ -53,7 +63,7 @@ public class PdfLtvService
         byte[] withValidationData;
         using (RevocationFetchPolicy.Begin())
         {
-            withValidationData = AddValidationData(signedPdf);
+            withValidationData = AddValidationData(signedPdf, requireCompleteFor);
         }
 
         return addArchiveTimestamp
@@ -65,7 +75,7 @@ public class PdfLtvService
     /// Writes a DSS dictionary holding the certificate chain plus OCSP responses
     /// and CRLs for every signature the document already carries.
     /// </summary>
-    private byte[] AddValidationData(byte[] signedPdf)
+    private byte[] AddValidationData(byte[] signedPdf, string? requireCompleteFor)
     {
         using var input = new MemoryStream(signedPdf);
         using var output = new MemoryStream();
@@ -77,16 +87,29 @@ public class PdfLtvService
         var document = new PdfDocument(reader, writer, new StampingProperties().UseAppendMode());
 
         var verification = new LtvVerification(document);
-        var signatureNames = new SignatureUtil(document).GetSignatureNames();
+        var signatureUtil = new SignatureUtil(document);
+        var signatureNames = signatureUtil.GetSignatureNames();
         if (signatureNames.Count == 0)
         {
             throw new ApiValidationException("NO_SIGNATURE_TO_EXTEND");
+        }
+        if (requireCompleteFor != null && !signatureNames.Contains(requireCompleteFor))
+        {
+            throw new ApiValidationException("SIGNATURE_NOT_FOUND", $"No signature named '{requireCompleteFor}'");
         }
 
         var added = false;
         foreach (var name in signatureNames)
         {
             DotNetSigningServer.Services.Operations.OperationDeadline.ThrowIfCancelled();
+            if (name == requireCompleteFor)
+            {
+                AddCompleteVerification(verification, signatureUtil, name);
+                added = true;
+                continue;
+            }
+            // Best effort for the others: an earlier signer's CA being offline
+            // must not block a later signature, so their partial data still counts.
             // WHOLE_CHAIN: a verifier years from now needs the intermediates too,
             // not just the leaf. OCSP_OPTIONAL_CRL takes OCSP where the CA offers
             // it and falls back to a CRL where it does not.
@@ -111,6 +134,119 @@ public class PdfLtvService
         verification.Merge();
         document.Close();
         return output.ToArray();
+    }
+
+    /// <summary>
+    /// Validation data for one signature, all or nothing. iText's own
+    /// <c>AddVerification</c> reports success when any certificate got data, and
+    /// with <c>WHOLE_CHAIN</c> never looks at the signature timestamp's
+    /// certificates (only <c>ALL_CERTIFICATES</c> does, and that one also fetches
+    /// issuers from AIA outside the revocation guard). So the chain is walked
+    /// here with the same guarded clients and handed to iText ready-made.
+    ///
+    /// A certificate counts as covered with a "good" OCSP answer or at least one
+    /// CRL. Self-signed certificates other than the signer's are trust anchors
+    /// and need none. Only certificates the signature carries are checked: an
+    /// issuer missing from the CMS or the token cannot be looked up here.
+    /// </summary>
+    private void AddCompleteVerification(LtvVerification verification, SignatureUtil signatureUtil, string name)
+    {
+        var pkcs7 = signatureUtil.ReadSignatureData(name);
+        var signingCertificate = pkcs7.GetSigningCertificate();
+        var carried = new List<IX509Certificate>();
+        foreach (var certificate in pkcs7.GetCertificates().Concat(pkcs7.GetTimestampCertificates() ?? Array.Empty<IX509Certificate>()))
+        {
+            if (!carried.Any(c => c.Equals(certificate)))
+            {
+                carried.Add(certificate);
+            }
+        }
+
+        var ocsps = new List<byte[]>();
+        var crls = new List<byte[]>();
+        var missing = new List<string>();
+        foreach (var certificate in carried)
+        {
+            DotNetSigningServer.Services.Operations.OperationDeadline.ThrowIfCancelled();
+            if (!certificate.Equals(signingCertificate) && IsSelfSigned(certificate))
+            {
+                continue;
+            }
+            if (Bc(certificate).GetExtensionValue(new DerObjectIdentifier(ShortTermValidityOid)) != null)
+            {
+                // ETSI short-term certificate: validity is assured without revocation data.
+                continue;
+            }
+
+            var issuer = carried.FirstOrDefault(c => !c.Equals(certificate) && IsIssuerOf(c, certificate));
+            var ocsp = issuer == null ? null : _ocspClient.GetEncoded(certificate, issuer, null);
+            if (ocsp != null && IsGood(ocsp, certificate))
+            {
+                ocsps.Add(ocsp);
+                continue;
+            }
+
+            var found = _crlClient.GetEncoded(certificate, null);
+            if (found != null && found.Count > 0)
+            {
+                foreach (var crl in found.Where(crl => !crls.Any(known => known.SequenceEqual(crl))))
+                {
+                    crls.Add(crl);
+                }
+                continue;
+            }
+
+            missing.Add(certificate.GetSubjectDN()?.ToString() ?? "(no subject)");
+        }
+
+        if (missing.Count > 0)
+        {
+            throw new ApiValidationException(
+                "INCOMPLETE_REVOCATION_DATA",
+                $"No revocation data for: {string.Join("; ", missing)}");
+        }
+
+        verification.AddVerification(name, ocsps, crls, carried.Select(c => c.GetEncoded()).ToList());
+    }
+
+    private const string ShortTermValidityOid = "0.4.0.194121.2.1";
+
+    /// <summary>A basic OCSP response that says "good" about this certificate's serial number.</summary>
+    private static bool IsGood(byte[] basicOcspResponse, IX509Certificate certificate)
+    {
+        try
+        {
+            var response = new BasicOcspResp(BasicOcspResponse.GetInstance(Asn1Object.FromByteArray(basicOcspResponse)));
+            var serial = Bc(certificate).SerialNumber;
+            return response.Responses.Any(single =>
+                single.GetCertID().SerialNumber.Equals(serial) && single.GetCertStatus() == CertificateStatus.Good);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static Org.BouncyCastle.X509.X509Certificate Bc(IX509Certificate certificate) =>
+        ((iText.Bouncycastle.X509.X509CertificateBC)certificate).GetCertificate();
+
+    private static bool IsSelfSigned(IX509Certificate certificate) => IsIssuerOf(certificate, certificate);
+
+    private static bool IsIssuerOf(IX509Certificate candidate, IX509Certificate certificate)
+    {
+        if (!string.Equals(candidate.GetSubjectDN()?.ToString(), certificate.GetIssuerDN()?.ToString(), StringComparison.Ordinal))
+        {
+            return false;
+        }
+        try
+        {
+            certificate.Verify(candidate.GetPublicKey());
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>

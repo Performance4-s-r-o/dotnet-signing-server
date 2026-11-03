@@ -591,7 +591,8 @@ namespace DotNetSigningServer.Controllers
                 return await RunOperationAsync(user, "extend-signature", fingerprint, baseCost: 1, _ =>
                 {
                     var pdfBytes = pdf ?? Convert.FromBase64String(input.PdfContent);
-                    var extended = Convert.ToBase64String(_ltvService.Extend(pdfBytes, tsaClient, input.AddArchiveTimestamp));
+                    var required = string.IsNullOrWhiteSpace(input.RequireCompleteRevocationFor) ? null : input.RequireCompleteRevocationFor;
+                    var extended = Convert.ToBase64String(_ltvService.Extend(pdfBytes, tsaClient, input.AddArchiveTimestamp, required));
                     return Task.FromResult(new PaidResult(new { result = extended }, extended));
                 });
             }
@@ -601,6 +602,8 @@ namespace DotNetSigningServer.Controllers
             }
             catch (ApiValidationException ex)
             {
+                // The detail names the certificates without revocation data; the answer carries only the code.
+                Logger.LogWarning("Extend signature refused: {Code} ({Detail})", ex.Code, ex.Message);
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
             catch (TsaCommunicationException ex)
