@@ -80,7 +80,8 @@ the server injects the resulting PKCS#7 container into the prepared placeholder.
 
 `presign` can prepare the document in the same call, so it does not have to make
 a round trip through `flatten-form` or `convert/pdfa` first. Both switches are
-optional; without them presign is unchanged.
+optional; without them presign is unchanged. An older server ignores them and signs the
+document as it is: `GET /api/capabilities` reports `presignPreparation: true` where they are read.
 
 | Field | Meaning |
 |---|---|
