@@ -647,6 +647,10 @@
   <data name="Error_TOO_MANY_TEMPLATES" xml:space="preserve"><value>Byl dosažen maximální počet uložených šablon.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Stránka PDF je pro hledání kódů příliš velká (víc než asi 1,6 m² nebo strana delší než 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>PDF obsahuje aktivní obsah (akci Launch nebo JavaScript spouštěný při otevření) a bylo odmítnuto.</value></data>
+  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>Dokument už je podepsaný, formulář proto nejde zploštit bez porušení dosavadního podpisu.</value></data>
+  <data name="Error_PDF_XFA_DYNAMIC" xml:space="preserve"><value>Jde o dynamický formulář (XFA), který nejde zploštit. Uložte ho jako statický PDF formulář nebo ho vytiskněte do PDF a podepište ten.</value></data>
+  <data name="Error_FLATTEN_INCOMPLETE" xml:space="preserve"><value>Dokument i po zploštění obsahuje aktivní obsah, a byl proto odmítnut.</value></data>
+  <data name="FlattenFormError" xml:space="preserve"><value>Při zplošťování formuláře došlo k chybě</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>Příloha překračuje maximální povolenou velikost.</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>Obsah PDF je povinný.</value></data>
   <data name="Error_FIELDS_REQUIRED" xml:space="preserve"><value>Je vyžadována alespoň jedna definice pole.</value></data>

@@ -120,6 +120,138 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
+        /// <summary>
+        /// Flattens the filled form fields into the page and removes active content (#180), so the
+        /// document passes <see cref="PdfSafetyGuard"/> on the signing endpoints. On the way in only
+        /// the structural limits apply — active content is what this removes; the result must pass
+        /// the full check or it is not handed out. A signed document or a dynamic XFA form is
+        /// refused with 409 before anything changes. Only an explicit call flattens: no other
+        /// endpoint does it on its own.
+        /// </summary>
+        [CapacityPool(CapacityPoolKind.Heavy)]
+        [HttpPost("/api/flatten-form")]
+        public async Task<IActionResult> FlattenForm([FromBody] FlattenFormInput input)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            if (string.IsNullOrWhiteSpace(input.PdfContent))
+            {
+                return BadRequest(new { message = Localizer["PdfContentRequired"].Value });
+            }
+
+            byte[] pdf;
+            try
+            {
+                pdf = GuardedPdfFromBase64(input.PdfContent, FlattenContext, checkActiveContent: false);
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
+            }
+
+            return await FlattenFormCoreAsync(user, pdf, ApiOperationService.Fingerprint("flatten-form", input));
+        }
+
+        /// <summary><c>/api/flatten-form</c> v interním binárním kanálu (#74), viz <see cref="ConvertToPdfABinary"/>.</summary>
+        [CapacityPool(CapacityPoolKind.Heavy)]
+        [HttpPost("/api/flatten-form")]
+        [Consumes(BinaryPdfChannel.ContentType)]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> FlattenFormBinary()
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            var (input, pdf, refused) = await ReadBinaryPdfAsync<FlattenFormInput>(FlattenContext, i => i.PdfContent);
+            if (refused != null) return refused;
+            if (pdf!.Length == 0)
+            {
+                return BadRequest(new { message = Localizer["PdfContentRequired"].Value });
+            }
+            try
+            {
+                SafetyGuard.EnsureSafePdf(pdf, FlattenContext, checkActiveContent: false);
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
+            }
+
+            return await FlattenFormCoreAsync(user, pdf, BinaryFingerprint("flatten-form", input!, pdf));
+        }
+
+        private const string FlattenContext = "Flatten form";
+
+        /// <summary>Refusals of the document as it is (409): flattening it would break a signature or lose the form.</summary>
+        internal static readonly IReadOnlySet<string> FlattenRefusalCodes = new HashSet<string>(StringComparer.Ordinal)
+        {
+            PdfFormFlattener.AlreadySignedCode, PdfFormFlattener.XfaDynamicCode, FlattenIncompleteCode,
+        };
+
+        public const string FlattenIncompleteCode = "FLATTEN_INCOMPLETE";
+
+        /// <summary>flatten-form po vstupní kontrole, společné oběma kanálům.</summary>
+        private async Task<IActionResult> FlattenFormCoreAsync(User user, byte[] pdf, string fingerprint)
+        {
+            // Billed on the public API (FLATTEN_FORM_CREDIT_COST); the portal's flow pays for the signature.
+            var cost = PortalTrust.IsTrustedCaller(HttpContext) ? 0 : BillingOptions.FlattenFormCredits;
+            var guard = SafetyGuard;
+            var limits = LimitGuard.Limits;
+            try
+            {
+                return await RunOperationAsync(user, "flatten-form", fingerprint, cost, _ =>
+                {
+                    var flattened = PdfFormFlattener.Flatten(pdf, limits);
+                    try
+                    {
+                        guard.EnsureSafePdf(flattened.Pdf, FlattenContext + " result");
+                    }
+                    catch (ApiValidationException ex) when (ex.Code == "PDF_ACTIVE_CONTENT")
+                    {
+                        throw new ApiValidationException(FlattenIncompleteCode, ex.Message);
+                    }
+
+                    var sourceSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(pdf)).ToLowerInvariant();
+                    var resultSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(flattened.Pdf)).ToLowerInvariant();
+                    // Counts and kinds only: field names and values are the signer's data.
+                    Logger.LogInformation("Flatten form: {Fields} fields flattened, removed [{Removed}], changed {Changed}",
+                        flattened.Report.FlattenedFields, string.Join(",", flattened.Report.Removed), flattened.Report.Changed);
+                    var result = Convert.ToBase64String(flattened.Pdf);
+                    return Task.FromResult(new PaidResult(
+                        new
+                        {
+                            result,
+                            sourceSha256,
+                            resultSha256,
+                            changed = flattened.Report.Changed,
+                            flattenedFields = flattened.Report.FlattenedFields,
+                            removed = flattened.Report.Removed,
+                        },
+                        result,
+                        new Dictionary<string, string>
+                        {
+                            ["X-Source-Sha256"] = sourceSha256,
+                            ["X-Result-Sha256"] = resultSha256,
+                        }));
+                });
+            }
+            catch (ApiValidationException ex) when (FlattenRefusalCodes.Contains(ex.Code))
+            {
+                Logger.LogInformation("Flatten form refused: {Code}", ex.Code);
+                return Conflict(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Flatten form failed");
+                return SafeProblem(Localizer["FlattenFormError"], ex);
+            }
+        }
+
         [CapacityPool(CapacityPoolKind.Heavy)]
         [HttpPost("/api/fill-pdf")]
         public async Task<IActionResult> FillPdf([FromBody] FillPdfInput input)

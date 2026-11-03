@@ -20,6 +20,9 @@ public class ServerCapabilities
     /// stated here so nobody infers otherwise from the endpoint existing.
     /// </summary>
     public bool TimestampRequiresCallerAuthority { get; set; } = true;
+
+    /// <summary>/api/flatten-form exists (#180): a caller can check before offering it.</summary>
+    public bool FormFlatten { get; set; } = true;
 }
 
 public class SealCapability

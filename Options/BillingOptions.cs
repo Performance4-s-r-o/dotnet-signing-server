@@ -20,6 +20,13 @@ public class BillingOptions
     public int AiCallCredits { get; set; } = 2;
 
     /// <summary>
+    /// Credits per document for /api/flatten-form (#180). Free would turn it into a free PDF
+    /// rewriter; the portal (trusted caller) is not charged, its signature is. 0 = free, written
+    /// down on purpose. Env <c>FLATTEN_FORM_CREDIT_COST</c>, empty = 1, negative stops the start.
+    /// </summary>
+    public int FlattenFormCredits { get; set; } = 1;
+
+    /// <summary>
     /// Number of parallel slots per tier. Example: 5 means slots 1–5 cost 1×,
     /// slots 6–10 cost 2×, slots 11–15 cost 3×, etc.
     /// </summary>

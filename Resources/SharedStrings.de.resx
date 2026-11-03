@@ -637,6 +637,10 @@
   <data name="Error_TOO_MANY_TEMPLATES" xml:space="preserve"><value>Die maximale Anzahl gespeicherter Vorlagen ist erreicht.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Eine Seite des PDF ist zu groß für die Codesuche (mehr als etwa 1,6 m² oder eine Seite länger als 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>Das PDF enthält aktive Inhalte (eine Launch-Aktion oder beim Öffnen ausgeführtes JavaScript) und wurde abgelehnt.</value></data>
+  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>Das Dokument ist bereits signiert; das Formular kann nicht reduziert werden, ohne die vorhandene Signatur zu zerstören.</value></data>
+  <data name="Error_PDF_XFA_DYNAMIC" xml:space="preserve"><value>Dies ist ein dynamisches (XFA-)Formular, das nicht reduziert werden kann. Speichern Sie es als statisches PDF-Formular oder drucken Sie es in eine PDF-Datei und signieren Sie diese.</value></data>
+  <data name="Error_FLATTEN_INCOMPLETE" xml:space="preserve"><value>Das Dokument enthält nach dem Reduzieren weiterhin aktive Inhalte und wurde abgelehnt.</value></data>
+  <data name="FlattenFormError" xml:space="preserve"><value>Beim Reduzieren des Formulars ist ein Fehler aufgetreten</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>Der Anhang überschreitet die maximal zulässige Größe.</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>PDF-Inhalt ist erforderlich.</value></data>
   <data name="Error_FIELDS_REQUIRED" xml:space="preserve"><value>Mindestens eine Felddefinition ist erforderlich.</value></data>

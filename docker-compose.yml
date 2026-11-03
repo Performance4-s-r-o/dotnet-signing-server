@@ -129,6 +129,8 @@ services:
       - EVIDENCE_ENCRYPTION_CERTIFICATE_PEM=${EVIDENCE_ENCRYPTION_CERTIFICATE_PEM:-}
       # Currency the product sells in (price list and configured fallback prices).
       - Billing__Currency=${BILLING_CURRENCY:-}
+      # Credits per document for /api/flatten-form (#180); empty = 1, 0 = free, negative stops the start.
+      - FLATTEN_FORM_CREDIT_COST=${FLATTEN_FORM_CREDIT_COST:-}
       # All e-mail goes through the backoffice outbox (P4_BACKOFFICE_URL + SECRET_KEY below).
       # From must name the sending domain configured in the service; empty = its default.
       # On-prem (PrivateServer): exactly "true" sends e-mail, and only e-mail, through the
