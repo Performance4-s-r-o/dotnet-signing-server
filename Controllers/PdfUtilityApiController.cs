@@ -189,7 +189,7 @@ namespace DotNetSigningServer.Controllers
             PdfFormFlattener.AlreadySignedCode, PdfFormFlattener.XfaDynamicCode, FlattenIncompleteCode,
         };
 
-        public const string FlattenIncompleteCode = "FLATTEN_INCOMPLETE";
+        public const string FlattenIncompleteCode = PdfFormFlattener.IncompleteCode;
 
         /// <summary>flatten-form po vstupní kontrole, společné oběma kanálům.</summary>
         private async Task<IActionResult> FlattenFormCoreAsync(User user, byte[] pdf, string fingerprint)
@@ -202,15 +202,7 @@ namespace DotNetSigningServer.Controllers
             {
                 return await RunOperationAsync(user, "flatten-form", fingerprint, cost, _ =>
                 {
-                    var flattened = PdfFormFlattener.Flatten(pdf, limits);
-                    try
-                    {
-                        guard.EnsureSafePdf(flattened.Pdf, FlattenContext + " result");
-                    }
-                    catch (ApiValidationException ex) when (ex.Code == "PDF_ACTIVE_CONTENT")
-                    {
-                        throw new ApiValidationException(FlattenIncompleteCode, ex.Message);
-                    }
+                    var flattened = PdfFormFlattener.FlattenVerified(pdf, limits, guard, FlattenContext);
 
                     var sourceSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(pdf)).ToLowerInvariant();
                     var resultSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(flattened.Pdf)).ToLowerInvariant();

@@ -503,6 +503,7 @@
   <data name="ApiDocPresignMeta" xml:space="preserve"><value>Prepare un PDF para firma externa y reciba el hash que debe firmar. La clave privada nunca sale de su dispositivo: Performance4PDF solo ve el hash.</value></data>
   <data name="ApiDocPresignIntro" xml:space="preserve"><value>Inicia el flujo de firma en dos pasos. Performance4PDF incrusta un marcador de firma en el PDF, calcula el resumen sobre los rangos de bytes firmados y lo devuelve. Usted firma ese resumen allí donde resida la clave —tarjeta inteligente, HSM, WebCrypto del navegador— y termina con /api/sign. La clave privada nunca se sube.</value></data>
   <data name="ApiDocPresignNote1" xml:space="preserve"><value>Gratis: no se cobra ningún crédito hasta que la firma se finaliza con /api/sign.</value></data>
+  <data name="ApiDocPresignNotePdfa" xml:space="preserve"><value>Los parámetros opcionales flattenForm (aplanar el formulario y quitar el contenido activo; se omite en un documento firmado) y convertToPdfa con pdfaConformance (PDF/A-2B por defecto, o PDF/A-3B) preparan el documento en la misma llamada. La respuesta incluye entonces preparation (flatten, pdfa, conformance, credits); los créditos se cobran con /api/sign. 409 PDFA_CONVERSION_FAILED, PDFA_NOT_PRESERVED, PDF_ALREADY_SIGNED (firmado y no PDF/A), PDF_XFA_DYNAMIC, FLATTEN_INCOMPLETE.</value></data>
   <data name="ApiDocSignTitle" xml:space="preserve"><value>Finalize signing</value></data>
   <data name="ApiDocSignPurpose" xml:space="preserve"><value>Finalize presigned PDF</value></data>
   <data name="ApiDocSignCredits" xml:space="preserve"><value>1</value></data>
@@ -640,9 +641,12 @@
   <data name="Error_TOO_MANY_TEMPLATES" xml:space="preserve"><value>Se ha alcanzado el número máximo de plantillas almacenadas.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Una página del PDF es demasiado grande para buscar códigos (más de unos 1,6 m² o un lado de más de 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>El PDF contiene contenido activo (una acción Launch o JavaScript que se ejecuta al abrir) y fue rechazado.</value></data>
-  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>El documento ya está firmado, por lo que su formulario no se puede aplanar sin invalidar la firma existente.</value></data>
+  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>El documento ya está firmado; aplanar su formulario o convertirlo a PDF/A invalidaría la firma existente.</value></data>
   <data name="Error_PDF_XFA_DYNAMIC" xml:space="preserve"><value>Se trata de un formulario dinámico (XFA) que no se puede aplanar. Guárdelo como formulario PDF estático o imprímalo en PDF y firme ese archivo.</value></data>
   <data name="Error_FLATTEN_INCOMPLETE" xml:space="preserve"><value>El documento sigue conteniendo contenido activo después del aplanado y fue rechazado.</value></data>
+  <data name="Error_PDFA_CONFORMANCE_UNSUPPORTED" xml:space="preserve"><value>Conformidad PDF/A no admitida. Use PDF/A-2B o PDF/A-3B.</value></data>
+  <data name="Error_PDFA_NOT_PRESERVED" xml:space="preserve"><value>La firma con esta configuración (página QR, campos rellenados, imágenes) rompería la conformidad PDF/A del documento.</value></data>
+  <data name="Error_PDFA_CONVERSION_FAILED" xml:space="preserve"><value>El documento no se puede convertir a PDF/A (por ejemplo, una fuente no incrustada o archivos incrustados). Conviértalo en el programa de origen y firme ese archivo.</value></data>
   <data name="FlattenFormError" xml:space="preserve"><value>Se produjo un error al aplanar el formulario</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>El archivo adjunto supera el tamaño máximo permitido.</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>El contenido del PDF es obligatorio.</value></data>

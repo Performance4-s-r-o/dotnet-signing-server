@@ -507,6 +507,39 @@ namespace DotNetSigningServer.Controllers
             return Ok(result.Body);
         }
 
+        /// <summary>
+        /// Unpaid work under the deadline of <paramref name="operation"/> (#72), for a step that runs
+        /// outside <see cref="RunOperationAsync"/> — the preparation of a presign (#184). Same refusals:
+        /// 429/503 while the user's abandoned work runs, 504 <c>OPERATION_DEADLINE_EXCEEDED</c>.
+        /// Nobody can ask for the result later, so the caller leaving stops it too.
+        /// </summary>
+        protected async Task<(T? Result, IActionResult? Refused)> RunWithDeadlineAsync<T>(
+            Guid userId, string operation, Func<CancellationToken, Task<T>> work)
+        {
+            if (AbandonedWork.IsOverLimit(userId, Operations.Options.MaxAbandonedPerUser, Operations.Options.MaxAbandonedTotal, out var globalLimit))
+            {
+                Response.Headers.RetryAfter = "10";
+                return (default, StatusCode(
+                    globalLimit ? StatusCodes.Status503ServiceUnavailable : StatusCodes.Status429TooManyRequests,
+                    new { message = Localizer[globalLimit ? "ServerAtCapacity" : "TooManyRequests"].Value, retryAfter = 10 }));
+            }
+
+            var deadline = new OperationDeadline(Operations.Options.DeadlineFor(operation), HttpContext.RequestAborted);
+            try
+            {
+                return (await AwaitWithDeadlineAsync(deadline, userId, work), null);
+            }
+            catch (OperationDeadlineExceededException)
+            {
+                Logger.LogWarning("{Operation} exceeded its deadline of {Seconds} s", operation, deadline.Limit.TotalSeconds);
+                return (default, StatusCode(StatusCodes.Status504GatewayTimeout, new
+                {
+                    code = "OPERATION_DEADLINE_EXCEEDED",
+                    message = Localizer["Error_OPERATION_DEADLINE_EXCEEDED"].Value,
+                }));
+            }
+        }
+
         public const string TenantMismatchCode = "TENANT_MISMATCH";
 
         /// <summary>403 for a presign or operation of another tenant (#78). Logs ids only.</summary>
@@ -551,8 +584,8 @@ namespace DotNetSigningServer.Controllers
         /// token is cancelled first and the work gets a short grace to unwind (it shares this
         /// request's database context), then the operation is settled whatever it is still doing.
         /// </summary>
-        private static async Task<PaidResult> AwaitWithDeadlineAsync(
-            OperationDeadline deadline, Guid userId, Func<CancellationToken, Task<PaidResult>> work)
+        private static async Task<T> AwaitWithDeadlineAsync<T>(
+            OperationDeadline deadline, Guid userId, Func<CancellationToken, Task<T>> work)
         {
             var running = deadline.Run(work);
             var abandoned = false;

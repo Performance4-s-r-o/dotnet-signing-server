@@ -36,6 +36,12 @@ namespace DotNetSigningServer.Models
         public string? SignerName { get; set; }
         /// <summary>Custom fillable text fields stamped into the PDF before the hash is computed, so they fall under this signature.</summary>
         public List<PreSignFieldInput>? Fields { get; set; }
+        /// <summary>Flatten the form and remove active content before anything else (#184); skipped on a signed document.</summary>
+        public bool FlattenForm { get; set; }
+        /// <summary>Convert to PDF/A before the signature is prepared (#184). A signed document must already be PDF/A.</summary>
+        public bool ConvertToPdfa { get; set; }
+        /// <summary>"PDF/A-2B" (default) or "PDF/A-3B"; anything else is refused.</summary>
+        public string? PdfaConformance { get; set; }
     }
 
     public class SignRect

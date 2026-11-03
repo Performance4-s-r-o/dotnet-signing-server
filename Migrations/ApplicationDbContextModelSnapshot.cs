@@ -743,6 +743,9 @@ namespace dotnetsigningserver.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("PreparationCredits")
+                        .HasColumnType("integer");
+
                     b.Property<string>("PresignedPdfPath")
                         .IsRequired()
                         .HasColumnType("text");

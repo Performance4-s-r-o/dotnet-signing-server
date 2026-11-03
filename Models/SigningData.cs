@@ -24,6 +24,8 @@ namespace DotNetSigningServer.Models
         /// <summary>The portal's <c>X-Request-Id</c> of the presign (#78).</summary>
         [MaxLength(128)]
         public string? RequestId { get; set; }
+        /// <summary>Credits of the presign's preparation (flattening, PDF/A, #184), charged with the signature.</summary>
+        public int PreparationCredits { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

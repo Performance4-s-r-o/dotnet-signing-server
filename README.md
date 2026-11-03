@@ -76,6 +76,44 @@ The two-step `presign` → `sign` flow exists so the private key never leaves th
 signer's device: the server returns a digest, the client signs it locally, and
 the server injects the resulting PKCS#7 container into the prepared placeholder.
 
+#### Presign with flattening and PDF/A (#184)
+
+`presign` can prepare the document in the same call, so it does not have to make
+a round trip through `flatten-form` or `convert/pdfa` first. Both switches are
+optional; without them presign is unchanged.
+
+| Field | Meaning |
+|---|---|
+| `flattenForm` | Flatten the form and remove active content (the step of `flatten-form`). Skipped on a signed document (`preparation.flatten: "skipped-signed"`); the input is then checked as without the switch |
+| `convertToPdfa` | Convert to PDF/A after flattening, before the signature is prepared. A signed document is not converted: if it already declares PDF/A it is signed on as it is (`preparation.pdfa: "already-pdfa"`), otherwise `409 PDF_ALREADY_SIGNED` |
+| `pdfaConformance` | `PDF/A-2B` (default) or `PDF/A-3B`. Anything else is `400 PDFA_CONFORMANCE_UNSUPPORTED`, never a default |
+
+The answer gains `preparation`: `flatten` (`flattened` / `unchanged` / `skipped-signed`),
+`flattenedFields`, `removed[]`, `pdfa` (`converted` / `already-pdfa`), `conformance`,
+`credits`. The credits are charged by `/api/sign` together with the signature:
+`FLATTEN_FORM_CREDIT_COST` for flattening, one per started three pages for the
+conversion (as `convert/pdfa`); free for the trusted caller. Presign refuses with
+`402` when the balance does not cover the signature with them.
+
+| Answer | When |
+|---|---|
+| `409 PDFA_CONVERSION_FAILED` | The document cannot become PDF/A: iText refused it, a font is not embedded, or it has embedded files (they would be dropped) |
+| `409 PDFA_NOT_PRESERVED` | The signature as asked would break PDF/A (a stamped field in a font that is not embedded, an appearance iText refuses) |
+| `409 PDF_ALREADY_SIGNED` / `PDF_XFA_DYNAMIC` / `FLATTEN_INCOMPLETE` | As in `flatten-form` |
+| `503 FEATURE_DISABLED` | The operator switched off `pdfa` or `flatten-form` |
+| `504 OPERATION_DEADLINE_EXCEEDED` | Flattening and conversion ran past `OPERATION_DEADLINE_DOCUMENT_SECONDS` |
+
+Nothing falls back to the unconverted document. The result is checked after the
+conversion and again after the signature placeholder: the XMP must declare the
+asked part and level and every font reachable from the pages must be embedded
+(iText does not check fonts of content it only copies). It is not a full
+validator: the other rules are left to iText's own checks while it writes, and
+the fixtures of the tests (flattened form, QR page, stamped field, signature
+image with transparency, PDF/A-2B and -3B) were checked once with veraPDF, which
+is not part of the suite. The signature is an incremental update (CAdES), so the
+signed result keeps the declaration; the presigned placeholder itself is not a
+valid PDF/A until `/api/sign` fills `/Contents`.
+
 ### Retries, operation state and credits
 
 Every paid call (`sign`, `sign-pfx`, `timestamp`, `extend-signature`,
@@ -143,7 +181,7 @@ for any other client. Two limits of that:
 |---|---|
 | `GET POST PUT DELETE /api/pdf-template[/{id}]` | Template CRUD |
 | `POST /api/fill-pdf` | Render a template with supplied field data |
-| `POST /api/convert/pdfa` | Convert a PDF to PDF/A |
+| `POST /api/convert/pdfa` | Convert a PDF to PDF/A. Before signing prefer `presign` with `convertToPdfa` (one call, checked result) |
 | `POST /api/flatten-form` | Flatten filled form fields into the page and remove active content (JavaScript, Launch, trigger actions), so the document can be signed. `409` `PDF_ALREADY_SIGNED` / `PDF_XFA_DYNAMIC` / `FLATTEN_INCOMPLETE`. Answers `result`, `sourceSha256`, `resultSha256`, `changed`, `flattenedFields`, `removed[]`. Price `FLATTEN_FORM_CREDIT_COST` (default 1) |
 | `POST /api/find-codes` | Detect barcodes and QR codes |
 | `POST /api/ai/detect-fields` | Suggest template fields from a PDF (optional, needs `AI__Enabled`) |

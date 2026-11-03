@@ -503,6 +503,7 @@
   <data name="ApiDocPresignMeta" xml:space="preserve"><value>Bereiten Sie ein PDF für die externe Signatur vor und erhalten Sie den zu signierenden Hash zurück. Der private Schlüssel verlässt Ihr Gerät nie — Performance4PDF sieht immer nur den Hash.</value></data>
   <data name="ApiDocPresignIntro" xml:space="preserve"><value>Startet den zweistufigen Signaturablauf. Performance4PDF bettet einen Signatur-Platzhalter in das PDF ein, berechnet den Digest über die signierten Byte-Bereiche und gibt ihn zurück. Sie signieren diesen Digest dort, wo der Schlüssel liegt — Smartcard, HSM, WebCrypto im Browser — und schließen mit /api/sign ab. Der private Schlüssel wird nie hochgeladen.</value></data>
   <data name="ApiDocPresignNote1" xml:space="preserve"><value>Kostenlos — ein Credit wird erst berechnet, wenn die Signatur mit /api/sign abgeschlossen wird.</value></data>
+  <data name="ApiDocPresignNotePdfa" xml:space="preserve"><value>Optional bereiten flattenForm (Formular abflachen und aktive Inhalte entfernen; bei einem signierten Dokument übersprungen) und convertToPdfa mit pdfaConformance (Standard PDF/A-2B, oder PDF/A-3B) das Dokument im selben Aufruf vor. Die Antwort enthält dann preparation (flatten, pdfa, conformance, credits); die Credits werden mit /api/sign berechnet. 409 PDFA_CONVERSION_FAILED, PDFA_NOT_PRESERVED, PDF_ALREADY_SIGNED (signiert und nicht PDF/A), PDF_XFA_DYNAMIC, FLATTEN_INCOMPLETE.</value></data>
   <data name="ApiDocSignTitle" xml:space="preserve"><value>Finalize signing</value></data>
   <data name="ApiDocSignPurpose" xml:space="preserve"><value>Finalize presigned PDF</value></data>
   <data name="ApiDocSignCredits" xml:space="preserve"><value>1</value></data>
@@ -640,9 +641,12 @@
   <data name="Error_TOO_MANY_TEMPLATES" xml:space="preserve"><value>Die maximale Anzahl gespeicherter Vorlagen ist erreicht.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Eine Seite des PDF ist zu groß für die Codesuche (mehr als etwa 1,6 m² oder eine Seite länger als 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>Das PDF enthält aktive Inhalte (eine Launch-Aktion oder beim Öffnen ausgeführtes JavaScript) und wurde abgelehnt.</value></data>
-  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>Das Dokument ist bereits signiert; das Formular kann nicht reduziert werden, ohne die vorhandene Signatur zu zerstören.</value></data>
+  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>Das Dokument ist bereits signiert; das Formular abzuflachen oder es in PDF/A umzuwandeln würde die vorhandene Signatur ungültig machen.</value></data>
   <data name="Error_PDF_XFA_DYNAMIC" xml:space="preserve"><value>Dies ist ein dynamisches (XFA-)Formular, das nicht reduziert werden kann. Speichern Sie es als statisches PDF-Formular oder drucken Sie es in eine PDF-Datei und signieren Sie diese.</value></data>
   <data name="Error_FLATTEN_INCOMPLETE" xml:space="preserve"><value>Das Dokument enthält nach dem Reduzieren weiterhin aktive Inhalte und wurde abgelehnt.</value></data>
+  <data name="Error_PDFA_CONFORMANCE_UNSUPPORTED" xml:space="preserve"><value>Nicht unterstützte PDF/A-Konformität. Verwenden Sie PDF/A-2B oder PDF/A-3B.</value></data>
+  <data name="Error_PDFA_NOT_PRESERVED" xml:space="preserve"><value>Die Signatur mit diesen Einstellungen (QR-Seite, ausgefüllte Felder, Bilder) würde die PDF/A-Konformität des Dokuments verletzen.</value></data>
+  <data name="Error_PDFA_CONVERSION_FAILED" xml:space="preserve"><value>Das Dokument kann nicht in PDF/A umgewandelt werden (zum Beispiel eine nicht eingebettete Schrift oder eingebettete Dateien). Wandeln Sie es im Ursprungsprogramm um und signieren Sie diese Datei.</value></data>
   <data name="FlattenFormError" xml:space="preserve"><value>Beim Reduzieren des Formulars ist ein Fehler aufgetreten</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>Der Anhang überschreitet die maximal zulässige Größe.</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>PDF-Inhalt ist erforderlich.</value></data>

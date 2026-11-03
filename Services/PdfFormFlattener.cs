@@ -52,6 +52,40 @@ public static class PdfFormFlattener
 
     private const int MaxDepth = 32;
 
+    /// <summary>The result still has active content; the guard refuses it (409, not 400).</summary>
+    public const string IncompleteCode = "FLATTEN_INCOMPLETE";
+
+    /// <summary>
+    /// Any signature, document timestamps and a certification (DocMDP) included: what a full
+    /// rewrite of the document (flattening, PDF/A conversion) would break.
+    /// </summary>
+    public static bool CarriesSignature(PdfDocument document)
+    {
+        var catalog = document.GetCatalog().GetPdfObject();
+        return new SignatureUtil(document).GetSignatureNames().Count > 0
+            || catalog.GetAsDictionary(PdfName.Perms)?.ContainsKey(PdfName.DocMDP) == true
+            || HasSignatureValue(catalog.GetAsDictionary(PdfName.AcroForm)?.GetAsArray(PdfName.Fields), null, 0);
+    }
+
+    /// <summary>
+    /// <see cref="Flatten"/> plus the full <see cref="PdfSafetyGuard"/> check of the result, the
+    /// step shared by <c>/api/flatten-form</c> and presign (#180, #184): a result that still has
+    /// active content is <see cref="IncompleteCode"/>, never handed out.
+    /// </summary>
+    public static Result FlattenVerified(byte[] source, LimitsOptions limits, PdfSafetyGuard guard, string context)
+    {
+        var flattened = Flatten(source, limits);
+        try
+        {
+            guard.EnsureSafePdf(flattened.Pdf, context + " result");
+        }
+        catch (ApiValidationException ex) when (ex.Code == "PDF_ACTIVE_CONTENT")
+        {
+            throw new ApiValidationException(IncompleteCode, ex.Message);
+        }
+        return flattened;
+    }
+
     /// <summary>
     /// Flattens <paramref name="source"/>. Throws <see cref="ApiValidationException"/> with
     /// <see cref="AlreadySignedCode"/> or <see cref="XfaDynamicCode"/> before any change. When there
@@ -76,12 +110,9 @@ public static class PdfFormFlattener
             var completed = false;
             try
             {
-                // Any signature, document timestamps and a certification (DocMDP) included: the
-                // rewrite would break it.
+                // The rewrite would break any signature.
                 var catalog = document.GetCatalog().GetPdfObject();
-                if (new SignatureUtil(document).GetSignatureNames().Count > 0
-                    || catalog.GetAsDictionary(PdfName.Perms)?.ContainsKey(PdfName.DocMDP) == true
-                    || HasSignatureValue(catalog.GetAsDictionary(PdfName.AcroForm)?.GetAsArray(PdfName.Fields), null, 0))
+                if (CarriesSignature(document))
                 {
                     throw new ApiValidationException(AlreadySignedCode, "document carries a signature");
                 }
