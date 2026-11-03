@@ -58,7 +58,8 @@ namespace DotNetSigningServer.Controllers
             byte[] pdf;
             try
             {
-                pdf = GuardedPdfFromBase64(input.PdfContent, "Presign");
+                // Active content is what flattening removes; the prepared document gets the full check.
+                pdf = GuardedPdfFromBase64(input.PdfContent, "Presign", checkActiveContent: !input.FlattenForm);
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }
             catch (ApiValidationException ex)
@@ -89,8 +90,8 @@ namespace DotNetSigningServer.Controllers
             if (refused != null) return refused;
             try
             {
-                SafetyGuard.EnsureSafePdf(pdf!, "Presign");
-                LimitGuard.EnsureImageWithinLimit(input!.SignImageContent, "Signature image");
+                SafetyGuard.EnsureSafePdf(pdf!, "Presign", checkActiveContent: !input!.FlattenForm);
+                LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }
             catch (ApiValidationException ex)
             {
@@ -114,6 +115,17 @@ namespace DotNetSigningServer.Controllers
                 });
             }
 
+            PresignPreparation.Result? prepared = null;
+            var preparationCredits = 0;
+            if (PresignPreparation.Requested(input))
+            {
+                var (result, credits, refused) = await PrepareAsync(user, input, pdf);
+                if (refused != null) return refused;
+                prepared = result!;
+                preparationCredits = credits;
+                pdf = prepared.Pdf;
+            }
+
             string? writtenPath = null;
             string? presignId = null;
             try
@@ -134,7 +146,7 @@ namespace DotNetSigningServer.Controllers
                     ? $"Signature_{signingData.Id.Replace("-", string.Empty)}"
                     : input.FieldName;
 
-                var (presignedPdfPath, hashToSign) = _signingService.HandlePreSign(input, pdf, fieldName);
+                var (presignedPdfPath, hashToSign) = _signingService.HandlePreSign(input, pdf, fieldName, prepared?.KeepPdfA);
                 writtenPath = presignedPdfPath;
                 signingData.FieldName = fieldName;
                 signingData.PresignedPdfPath = presignedPdfPath;
@@ -153,6 +165,7 @@ namespace DotNetSigningServer.Controllers
                 signingData.TsaBackupPassword = !string.IsNullOrEmpty(input.TsaBackupPassword)
                     ? _dataProtector.Protect(input.TsaBackupPassword) : null;
 
+                signingData.PreparationCredits = preparationCredits;
                 signingData.UserId = user.Id;
                 // The portal's tenant and request id (#78); null for anybody else, whatever they sent.
                 var caller = PortalTrust.CallerOf(HttpContext);
@@ -163,7 +176,31 @@ namespace DotNetSigningServer.Controllers
                 await DbContext.SaveChangesAsync();
                 writtenPath = null; // the row now owns the file
 
-                return Ok(new { id = signingData.Id, hashToSign = signingData.HashToSign });
+                if (prepared == null)
+                {
+                    return Ok(new { id = signingData.Id, hashToSign = signingData.HashToSign });
+                }
+                var report = prepared.Report;
+                return Ok(new
+                {
+                    id = signingData.Id,
+                    hashToSign = signingData.HashToSign,
+                    preparation = new
+                    {
+                        flatten = report.Flatten,
+                        flattenedFields = report.FlattenedFields,
+                        removed = report.Removed,
+                        pdfa = report.Pdfa,
+                        conformance = report.Conformance,
+                        credits = preparationCredits,
+                    },
+                });
+            }
+            catch (ApiValidationException ex) when (PresignRefusalCodes.Contains(ex.Code))
+            {
+                // Thrown before the file is written: nothing to clean up.
+                Logger.LogInformation("Presign refused: {Code} ({Detail})", ex.Code, ex.Message);
+                return Conflict(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
             catch (Exception ex)
             {
@@ -183,6 +220,81 @@ namespace DotNetSigningServer.Controllers
                 }
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Presign failed");
                 return SafeProblem(Localizer["PresignError"], ex);
+            }
+        }
+
+        /// <summary>The document as it is cannot be presigned as asked (409): retrying the same request will not help.</summary>
+        internal static readonly IReadOnlySet<string> PresignRefusalCodes = new HashSet<string>(StringComparer.Ordinal)
+        {
+            PdfFormFlattener.AlreadySignedCode, PdfFormFlattener.XfaDynamicCode, PdfFormFlattener.IncompleteCode,
+            PresignPreparation.ConversionFailedCode, PresignPreparation.NotPreservedCode,
+        };
+
+        /// <summary>
+        /// Flattening and PDF/A conversion before the signature (#184), under the document deadline
+        /// and the operator's switches of the two features. Priced like <c>/api/flatten-form</c> and
+        /// <c>/api/convert/pdfa</c>, free for the trusted caller; charged by <c>/api/sign</c>.
+        /// </summary>
+        private async Task<(PresignPreparation.Result? Result, int Credits, IActionResult? Refused)> PrepareAsync(
+            User user, PreSignInput input, byte[] pdf)
+        {
+            foreach (var (asked, feature) in new[] { (input.ConvertToPdfa, "pdfa"), (input.FlattenForm, "flatten-form") })
+            {
+                if (asked && await DotNetSigningServer.Middleware.ApiGateMiddleware.IsFeatureOffAsync(HttpContext.RequestServices, feature))
+                {
+                    Response.Headers.RetryAfter = "60";
+                    return (null, 0, StatusCode(StatusCodes.Status503ServiceUnavailable,
+                        new { code = "FEATURE_DISABLED", message = Localizer["Error_FEATURE_DISABLED"].Value }));
+                }
+            }
+
+            var guard = SafetyGuard;
+            var limits = LimitGuard.Limits;
+            var conversion = HttpContext.RequestServices.GetRequiredService<PdfConversionService>();
+            try
+            {
+                if (input.ConvertToPdfa) PresignPreparation.ResolveConformance(input.PdfaConformance);
+                var (result, refused) = await RunWithDeadlineAsync(user.Id, input.ConvertToPdfa ? "pdfa" : "flatten-form",
+                    _ => Task.FromResult(PresignPreparation.Prepare(pdf, input, limits, guard, conversion)));
+                if (refused != null) return (null, 0, refused);
+
+                var report = result!.Report;
+                Logger.LogInformation("Presign preparation: flatten {Flatten} ({Fields} fields, removed [{Removed}]), PDF/A {Pdfa} {Conformance}",
+                    report.Flatten ?? "-", report.FlattenedFields, string.Join(",", report.Removed), report.Pdfa ?? "-", report.Conformance ?? "-");
+
+                var credits = 0;
+                if (!PortalTrust.IsTrustedCaller(HttpContext))
+                {
+                    if (report.Flatten is PresignPreparation.FlattenOutcome.Flattened or PresignPreparation.FlattenOutcome.Unchanged)
+                        credits += BillingOptions.FlattenFormCredits;
+                    if (report.Pdfa == PresignPreparation.PdfaOutcome.Converted)
+                        credits += CalculateCreditsForPages(result.Pages);
+                }
+                // The signature pays for it: a presign that /api/sign could never charge is refused now.
+                if (LacksCredits(user, 1 + credits))
+                {
+                    Logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Credits insufficient for presign preparation of user {UserId}", user.Id);
+                    return (null, 0, StatusCode(StatusCodes.Status402PaymentRequired, new
+                    {
+                        code = ApiOperationService.InsufficientCreditsCode,
+                        message = Localizer["NotEnoughCredits", 1 + credits].Value,
+                    }));
+                }
+                return (result, credits, null);
+            }
+            catch (ApiValidationException ex) when (PresignRefusalCodes.Contains(ex.Code))
+            {
+                Logger.LogInformation("Presign preparation refused: {Code} ({Detail})", ex.Code, ex.Message);
+                return (null, 0, Conflict(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value }));
+            }
+            catch (ApiValidationException ex)
+            {
+                return (null, 0, InputRefused(ex));
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Presign preparation failed");
+                return (null, 0, SafeProblem(Localizer["PresignError"], ex));
             }
         }
 
@@ -242,7 +354,8 @@ namespace DotNetSigningServer.Controllers
                     // The presign is the identity: a client that signs the same hash again
                     // (ECDSA is randomised) is still the same signature.
                     ApiOperationService.Fingerprint("sign", input.Id),
-                    baseCost: 1,
+                    // The presign's flattening and PDF/A conversion are paid with the signature (#184).
+                    baseCost: 1 + (presign?.PreparationCredits ?? 0),
                     work: async _ =>
                     {
                         var signingData = await DbContext.SigningData.AsNoTracking().FirstOrDefaultAsync(x => x.Id == input.Id)

@@ -74,7 +74,7 @@ Response:
 { "id": "ef2c4d7a-…", "hashToSign": "6c3d…9f" }
 """,
                 Curl: $$"""curl -X POST {{b}}/presign -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"pdfContent":"base64-pdf","location":"Prague, CZ","reason":"Approving contract","signRect":{"x":50,"y":120,"width":200,"height":50},"signPageNumber":1,"fieldName":"Signature1","tsaUrl":"https://freetsa.org/tsr"}'""",
-                NoteKeys: new[] { "ApiDocPresignNote1" }),
+                NoteKeys: new[] { "ApiDocPresignNote1", "ApiDocPresignNotePdfa" }),
 
             new ApiEndpointDoc(
                 Slug: "sign",

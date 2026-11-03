@@ -513,6 +513,7 @@
   <data name="ApiDocPresignMeta" xml:space="preserve"><value>Připravte PDF k externímu podpisu a získejte hash k podepsání. Privátní klíč neopustí vaše zařízení — Performance4PDF vidí jen hash.</value></data>
   <data name="ApiDocPresignIntro" xml:space="preserve"><value>Zahajuje dvoukrokový podpisový tok. Performance4PDF vloží do PDF zástupné místo pro podpis, spočítá otisk podepisovaných rozsahů bajtů a vrátí ho. Ten otisk podepíšete tam, kde klíč leží — čipová karta, HSM, WebCrypto v prohlížeči — a dokončíte přes /api/sign. Privátní klíč se nikdy neodesílá.</value></data>
   <data name="ApiDocPresignNote1" xml:space="preserve"><value>Zdarma — kredit se strhne až při dokončení podpisu přes /api/sign.</value></data>
+  <data name="ApiDocPresignNotePdfa" xml:space="preserve"><value>Nepovinné flattenForm (zploštění formuláře a odstranění aktivního obsahu; u podepsaného dokumentu se přeskočí) a convertToPdfa s pdfaConformance (výchozí PDF/A-2B, nebo PDF/A-3B) připraví dokument v tomtéž volání. Odpověď pak nese preparation (flatten, pdfa, conformance, credits); kredity se strhnou s /api/sign. 409 PDFA_CONVERSION_FAILED, PDFA_NOT_PRESERVED, PDF_ALREADY_SIGNED (podepsaný a ne PDF/A), PDF_XFA_DYNAMIC, FLATTEN_INCOMPLETE.</value></data>
   <data name="ApiDocSignTitle" xml:space="preserve"><value>Dokončení podpisu</value></data>
   <data name="ApiDocSignPurpose" xml:space="preserve"><value>Dokončí předpodepsané PDF</value></data>
   <data name="ApiDocSignCredits" xml:space="preserve"><value>1</value></data>
@@ -650,9 +651,12 @@
   <data name="Error_TOO_MANY_TEMPLATES" xml:space="preserve"><value>Byl dosažen maximální počet uložených šablon.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Stránka PDF je pro hledání kódů příliš velká (víc než asi 1,6 m² nebo strana delší než 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>PDF obsahuje aktivní obsah (akci Launch nebo JavaScript spouštěný při otevření) a bylo odmítnuto.</value></data>
-  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>Dokument už je podepsaný, formulář proto nejde zploštit bez porušení dosavadního podpisu.</value></data>
+  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>Dokument už je podepsaný; zploštění formuláře ani převod na PDF/A nejdou bez porušení dosavadního podpisu.</value></data>
   <data name="Error_PDF_XFA_DYNAMIC" xml:space="preserve"><value>Jde o dynamický formulář (XFA), který nejde zploštit. Uložte ho jako statický PDF formulář nebo ho vytiskněte do PDF a podepište ten.</value></data>
   <data name="Error_FLATTEN_INCOMPLETE" xml:space="preserve"><value>Dokument i po zploštění obsahuje aktivní obsah, a byl proto odmítnut.</value></data>
+  <data name="Error_PDFA_CONFORMANCE_UNSUPPORTED" xml:space="preserve"><value>Nepodporovaná úroveň PDF/A. Použijte PDF/A-2B nebo PDF/A-3B.</value></data>
+  <data name="Error_PDFA_NOT_PRESERVED" xml:space="preserve"><value>Podpis s tímto nastavením (stránka s QR kódem, vyplněná pole, obrázky) by porušil shodu dokumentu s PDF/A.</value></data>
+  <data name="Error_PDFA_CONVERSION_FAILED" xml:space="preserve"><value>Dokument nejde převést na PDF/A (například nevložené písmo nebo vložené soubory). Převeďte ho v programu, ze kterého pochází, a podepište ten.</value></data>
   <data name="FlattenFormError" xml:space="preserve"><value>Při zplošťování formuláře došlo k chybě</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>Příloha překračuje maximální povolenou velikost.</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>Obsah PDF je povinný.</value></data>

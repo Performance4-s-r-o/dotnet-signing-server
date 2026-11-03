@@ -36,7 +36,9 @@ namespace DotNetSigningServer.Services
         /// Presign nad bajty, které už prošly vstupní kontrolou; <c>input.PdfContent</c> se nečte.
         /// Oba kanály (JSON i binární, #74) končí tady.
         /// </summary>
-        public (string PresignedPdfPath, string HashToSign) HandlePreSign(PreSignInput input, byte[] originalPdf, string fieldName)
+        /// <param name="keepPdfA">Set when the document is PDF/A and must stay so (#184): the presigned
+        /// document is checked, and one that is not is refused as <see cref="PresignPreparation.NotPreservedCode"/>.</param>
+        public (string PresignedPdfPath, string HashToSign) HandlePreSign(PreSignInput input, byte[] originalPdf, string fieldName, PdfAConformance? keepPdfA = null)
         {
             // Add verification metadata/QR page before signing
             if (!string.IsNullOrWhiteSpace(input.VerificationUrl) && input.VerificationMode != "disabled")
@@ -57,25 +59,44 @@ namespace DotNetSigningServer.Services
             preSignContainer.SetChain(chain);
             fieldName = PdfCryptoHelper.EnsureFieldName(fieldName);
 
-            byte[] pdfWithPlaceholder = CreatePreSignedPdf(
-                originalPdf,
-                preSignContainer,
-                fieldName,
-                input.SignRect,
-                input.Reason,
-                input.Location,
-                input.SignPageNumber,
-                input.SignImageContent,
-                chain,
-                input.Appearance,
-                input.StampImageContent,
-                input.BackgroundImageContent,
-                input.CompanyLogoContent,
-                visible: true,
-                designWidth: input.DesignWidth,
-                designHeight: input.DesignHeight,
-                autoHeight: input.AutoHeight,
-                signerNameOverride: input.SignerName);
+            byte[] pdfWithPlaceholder;
+            try
+            {
+                pdfWithPlaceholder = CreatePreSignedPdf(
+                    originalPdf,
+                    preSignContainer,
+                    fieldName,
+                    input.SignRect,
+                    input.Reason,
+                    input.Location,
+                    input.SignPageNumber,
+                    input.SignImageContent,
+                    chain,
+                    input.Appearance,
+                    input.StampImageContent,
+                    input.BackgroundImageContent,
+                    input.CompanyLogoContent,
+                    visible: true,
+                    designWidth: input.DesignWidth,
+                    designHeight: input.DesignHeight,
+                    autoHeight: input.AutoHeight,
+                    signerNameOverride: input.SignerName);
+            }
+            catch (iText.Pdfa.Exceptions.PdfAConformanceException ex) when (keepPdfA != null)
+            {
+                // iText checks the signature appearance of a PDF/A document as it writes it.
+                throw new ApiValidationException(PresignPreparation.NotPreservedCode, ex.Message);
+            }
+
+            if (keepPdfA != null)
+            {
+                // The QR page and stamped fields are written without iText's PDF/A checks.
+                var problems = PdfAConformanceCheck.Problems(pdfWithPlaceholder, keepPdfA);
+                if (problems.Count > 0)
+                {
+                    throw new ApiValidationException(PresignPreparation.NotPreservedCode, string.Join(",", problems));
+                }
+            }
 
             string preSignedPdfPath = IOPath.Combine(IOPath.GetTempPath(), $"presigned_{Guid.NewGuid():N}.pdf");
             File.WriteAllBytes(preSignedPdfPath, pdfWithPlaceholder);
@@ -463,6 +484,12 @@ namespace DotNetSigningServer.Services
             int resolvedPage = pageNumber <= 0 ? 1 : pageNumber;
             var signerPageSize = signer.GetDocument().GetPage(resolvedPage).GetPageSize();
 
+            // PDF/A wants every font embedded; without a family iText falls back to plain Helvetica and fails.
+            if (signer.GetDocument().GetConformance().IsPdfA() && string.IsNullOrWhiteSpace(appearance?.FontFamily))
+            {
+                appearance = WithFontFamily(appearance, "Helvetica");
+            }
+
             SignerProperties signerProperties = PdfVisualSigningService.BuildSignerProperties(
                 fieldName,
                 signRect,
@@ -488,6 +515,28 @@ namespace DotNetSigningServer.Services
             signer.SignExternalContainer(container, 32768);
 
             return msOut.ToArray();
+        }
+
+        /// <summary>A copy with the font family set; the caller's options stay untouched.</summary>
+        private static SignatureAppearanceOptions WithFontFamily(SignatureAppearanceOptions? source, string fontFamily)
+        {
+            var s = source ?? new SignatureAppearanceOptions();
+            return new SignatureAppearanceOptions
+            {
+                DescriptionText = s.DescriptionText,
+                ForegroundColor = s.ForegroundColor,
+                BackgroundColor = s.BackgroundColor,
+                FontFamily = fontFamily,
+                FontSize = s.FontSize,
+                ShowReason = s.ShowReason,
+                ShowLocation = s.ShowLocation,
+                ShowDate = s.ShowDate,
+                ShowSignerName = s.ShowSignerName,
+                ShowCompanyName = s.ShowCompanyName,
+                BackgroundRepeat = s.BackgroundRepeat,
+                AutoFontSize = s.AutoFontSize,
+                Labels = s.Labels,
+            };
         }
 
         private static byte[] InjectFinalSignature(byte[] pdfWithPlaceholder, byte[] signatureBytes, IX509Certificate[] chain, string fieldName, ITSAClient? tsaClient, string? tsaUrlForErrorContext = null)

@@ -513,6 +513,7 @@
   <data name="ApiDocPresignMeta" xml:space="preserve"><value>Prepare a PDF for external signing and get back the hash to sign. The private key never leaves your device — Performance4PDF only ever sees the hash.</value></data>
   <data name="ApiDocPresignIntro" xml:space="preserve"><value>Starts the two-step signing flow. Performance4PDF embeds a signature placeholder in the PDF, computes the digest over the signed byte ranges, and returns it. You sign that digest wherever the key lives — smart card, HSM, browser WebCrypto — and finish with /api/sign. The private key is never uploaded.</value></data>
   <data name="ApiDocPresignNote1" xml:space="preserve"><value>Free — no credit is charged until the signature is finalised with /api/sign.</value></data>
+  <data name="ApiDocPresignNotePdfa" xml:space="preserve"><value>Optional flattenForm (flatten the form and remove active content; skipped on a signed document) and convertToPdfa with pdfaConformance (PDF/A-2B default, or PDF/A-3B) prepare the document in the same call. The answer then carries preparation (flatten, pdfa, conformance, credits); the credits are charged with /api/sign. 409 PDFA_CONVERSION_FAILED, PDFA_NOT_PRESERVED, PDF_ALREADY_SIGNED (signed and not PDF/A), PDF_XFA_DYNAMIC, FLATTEN_INCOMPLETE.</value></data>
   <data name="ApiDocSignTitle" xml:space="preserve"><value>Finalize signing</value></data>
   <data name="ApiDocSignPurpose" xml:space="preserve"><value>Finalize presigned PDF</value></data>
   <data name="ApiDocSignCredits" xml:space="preserve"><value>1</value></data>
@@ -650,9 +651,12 @@
   <data name="Error_TOO_MANY_TEMPLATES" xml:space="preserve"><value>The maximum number of stored templates has been reached.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>A page of the PDF is too large to scan for codes (more than about 1.6 m², or one side longer than 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>The PDF contains active content (a launch action or JavaScript that runs on open) and was refused.</value></data>
-  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>The document is already signed, so its form cannot be flattened without breaking the existing signature.</value></data>
+  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>The document is already signed; flattening its form or converting it to PDF/A would break the existing signature.</value></data>
   <data name="Error_PDF_XFA_DYNAMIC" xml:space="preserve"><value>This is a dynamic (XFA) form, which cannot be flattened. Save it as a static PDF form or print it to PDF and sign that.</value></data>
   <data name="Error_FLATTEN_INCOMPLETE" xml:space="preserve"><value>The document still contains active content after flattening and was refused.</value></data>
+  <data name="Error_PDFA_CONFORMANCE_UNSUPPORTED" xml:space="preserve"><value>Unsupported PDF/A conformance. Use PDF/A-2B or PDF/A-3B.</value></data>
+  <data name="Error_PDFA_NOT_PRESERVED" xml:space="preserve"><value>The signature with these settings (QR page, filled fields, images) would break the PDF/A conformance of the document.</value></data>
+  <data name="Error_PDFA_CONVERSION_FAILED" xml:space="preserve"><value>The document cannot be converted to PDF/A (for example a font that is not embedded, or embedded files). Convert it in the program it came from and sign that.</value></data>
   <data name="FlattenFormError" xml:space="preserve"><value>An error occurred while flattening the form</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>The attachment exceeds the maximum allowed size.</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>PDF content is required.</value></data>

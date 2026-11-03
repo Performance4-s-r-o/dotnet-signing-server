@@ -47,14 +47,15 @@ namespace DotNetSigningServer.Services
             using var inputStream = new MemoryStream(originalPdf);
             using var iccStream = File.OpenRead(_iccProfilePath);
 
+            PdfADocument? pdfaDoc = null;
+            PdfDocument? sourceDoc = null;
             try
             {
                 var outputIntent = new PdfOutputIntent("Custom", "", null, "sRGB IEC61966-2.1", iccStream);
                 var writerProperties = new WriterProperties().AddXmpMetadata();
 
-                using var writer = new PdfWriter(outputStream, writerProperties);
-                using var pdfaDoc = new PdfADocument(writer, conformance, outputIntent);
-                using var sourceDoc = new PdfDocument(new PdfReader(inputStream));
+                pdfaDoc = new PdfADocument(new PdfWriter(outputStream, writerProperties), conformance, outputIntent);
+                sourceDoc = new PdfDocument(new PdfReader(inputStream));
 
                 pdfaDoc.SetTagged();
                 pdfaDoc.GetCatalog().SetLang(new PdfString("en-US"));
@@ -62,12 +63,16 @@ namespace DotNetSigningServer.Services
                 var copier = new PdfPageFormCopier();
                 sourceDoc.CopyPagesTo(1, sourceDoc.GetNumberOfPages(), pdfaDoc, copier);
 
+                sourceDoc.Close();
                 pdfaDoc.Close();
                 return Convert.ToBase64String(outputStream.ToArray());
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to convert PDF to PDF/A");
+                // Closing after a failure throws on its own and would hide the cause (#184).
+                try { sourceDoc?.Close(); } catch (Exception) { }
+                try { if (pdfaDoc != null && !pdfaDoc.IsClosed()) pdfaDoc.Close(); } catch (Exception) { }
                 throw;
             }
         }

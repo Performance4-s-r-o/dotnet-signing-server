@@ -175,6 +175,13 @@ public class ApiGateMiddleware
         return Guid.TryParse(claim, out var id) ? id : null;
     }
 
+    /// <summary>
+    /// Whether the operator switched a feature off, for work that rides on another route — PDF/A
+    /// conversion and flattening inside presign (#184) — and so is not stopped here.
+    /// </summary>
+    internal static async Task<bool> IsFeatureOffAsync(IServiceProvider services, string feature) =>
+        (await SwitchesAsync(services)).Contains(OperatorSwitches.Feature(feature));
+
     private static async Task<HashSet<string>> SwitchesAsync(IServiceProvider services)
     {
         var cached = _switches;
