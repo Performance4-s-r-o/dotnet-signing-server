@@ -23,6 +23,12 @@ public class ServerCapabilities
 
     /// <summary>/api/flatten-form exists (#180): a caller can check before offering it.</summary>
     public bool FormFlatten { get; set; } = true;
+
+    /// <summary>
+    /// /api/presign reads flattenForm, convertToPdfa and pdfaConformance (#184). An older server
+    /// ignores them and signs the document as it is, so a caller asking for PDF/A checks this first.
+    /// </summary>
+    public bool PresignPreparation { get; set; } = true;
 }
 
 public class SealCapability

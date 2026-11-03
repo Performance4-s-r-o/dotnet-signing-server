@@ -610,6 +610,8 @@ public class BinaryChannelEndpointsTests
         Assert.False(seal.Enabled);
         // Switch off (nothing configured): AI is reported as off.
         Assert.False(Assert.IsType<ServerCapabilities>(result.Value).Ai.Enabled);
+        // The portal refuses PDF/A in presign without this flag (#184).
+        Assert.True(Assert.IsType<ServerCapabilities>(result.Value).PresignPreparation);
     }
 
     [Fact]
