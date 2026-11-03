@@ -164,7 +164,8 @@ Content-Type: application/json
 Response:
 { "result": "base64-pdf-with-timestamp" }
 """,
-                Curl: $$"""curl -X POST {{b}}/timestamp -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"pdfContent":"base64-pdf","fieldName":"Timestamp1","tsaUrl":"https://freetsa.org/tsr"}'"""),
+                Curl: $$"""curl -X POST {{b}}/timestamp -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"pdfContent":"base64-pdf","fieldName":"Timestamp1","tsaUrl":"https://freetsa.org/tsr"}'""",
+                NoteKeys: new[] { "ApiDocTimestampNotePdfa" }),
 
             new ApiEndpointDoc(
                 Slug: "timestamp-digest",

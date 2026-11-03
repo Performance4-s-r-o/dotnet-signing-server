@@ -25,7 +25,9 @@ namespace DotNetSigningServer.Services
             ApplyVisualSign(input, Convert.FromBase64String(input.PdfContent));
 
         /// <summary>Vizuální podpis nad bajty, které už prošly vstupní kontrolou; <c>input.PdfContent</c> se nečte.</summary>
-        public string ApplyVisualSign(VisualSignInput input, byte[] pdfBytes)
+        /// <param name="keepPdfA">Set when the document was prepared as PDF/A (#184): it is written as a
+        /// PDF/A document, so iText checks what is drawn (fonts, images) and keeps the metadata in step.</param>
+        public string ApplyVisualSign(VisualSignInput input, byte[] pdfBytes, PdfAConformance? keepPdfA = null)
         {
 
             using var msIn = new MemoryStream(pdfBytes);
@@ -33,12 +35,16 @@ namespace DotNetSigningServer.Services
 
             var reader = new PdfReader(msIn);
             var writer = new PdfWriter(msOut);
-            var pdfDoc = new PdfDocument(reader, writer, new StampingProperties().UseAppendMode());
+            var stamping = new StampingProperties().UseAppendMode();
+            var pdfDoc = keepPdfA != null
+                ? new iText.Pdfa.PdfADocument(reader, writer, stamping)
+                : new PdfDocument(reader, writer, stamping);
 
             int pageNumber = input.SignPageNumber <= 0 ? 1 : input.SignPageNumber;
             var page = pdfDoc.GetPage(pageNumber);
 
-            var appearanceOptions = input.Appearance ?? new SignatureAppearanceOptions();
+            // PDF/A wants every font embedded; without a family the layout draws in plain Helvetica.
+            var appearanceOptions = DocumentPreparation.AppearanceFor(pdfDoc, input.Appearance) ?? new SignatureAppearanceOptions();
 
             var layoutInput = BuildLayoutInput(
                 signRect: input.SignRect,

@@ -1,6 +1,6 @@
 namespace DotNetSigningServer.Models
 {
-    public class DocumentTimestampInput
+    public class DocumentTimestampInput : IDocumentPreparationRequest
     {
         public string PdfContent { get; set; } = "";
         public string Location { get; set; } = "";
@@ -39,5 +39,11 @@ namespace DotNetSigningServer.Models
         /// timestamp is still listed in the viewer's signature panel.
         /// </summary>
         public bool Visible { get; set; } = true;
+        /// <summary>Flatten the form and remove active content first (#184); skipped on a signed document.</summary>
+        public bool FlattenForm { get; set; }
+        /// <summary>Convert to PDF/A before signing (#184). A signed document must already be PDF/A.</summary>
+        public bool ConvertToPdfa { get; set; }
+        /// <summary>"PDF/A-2B" (default) or "PDF/A-3B"; anything else is refused.</summary>
+        public string? PdfaConformance { get; set; }
     }
 }

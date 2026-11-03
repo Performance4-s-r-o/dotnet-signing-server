@@ -203,6 +203,22 @@ public class FlattenFormEndpointTests
     }
 
     [Fact]
+    public async Task Conflicting_fields_with_one_name_are_409_PDF_FORM_INVALID_not_500()
+    {
+        var pdf = DotNetSigningServer.Tests.Services.PdfFormFlattenerTests.DuplicateNamedFields();
+
+        var json = Describe(await Controller().FlattenForm(new FlattenFormInput { PdfContent = Convert.ToBase64String(pdf) }));
+        var binary = Describe(await Controller(Multipart(pdf)).FlattenFormBinary());
+
+        foreach (var (status, code, body) in new[] { json, binary })
+        {
+            Assert.Equal(409, status);
+            Assert.Equal("PDF_FORM_INVALID", code);
+            Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("message").GetString()));
+        }
+    }
+
+    [Fact]
     public async Task Dynamic_xfa_is_409_PDF_XFA_DYNAMIC()
     {
         var pdf = Pdf(doc =>
