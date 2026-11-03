@@ -172,6 +172,7 @@
   <data name="VisualSignError" xml:space="preserve"><value>Se produjo un error al aplicar la firma visual</value></data>
   <data name="SealCertificateRequired" xml:space="preserve"><value>El servidor no tiene certificado de sello propio. Aporte usted el certificado (presign/sign con su clave o sign-pfx).</value></data>
   <data name="SealNotPermitted" xml:space="preserve"><value>El sellado no está habilitado para esta cuenta.</value></data>
+  <data name="AttachmentBypassNotPermitted" xml:space="preserve"><value>Solo el llamador de confianza puede omitir el cargo del adjunto.</value></data>
   <data name="SealAllowed" xml:space="preserve"><value>Sellado</value></data>
   <data name="SealAllowedDescription" xml:space="preserve"><value>Desbloquea /api/seal para esta cuenta. El servidor no tiene certificado propio, por lo que el endpoint solo responde 422 SEAL_CERTIFICATE_REQUIRED; selle con su propio certificado mediante presign/sign o sign-pfx. Desactivado por defecto.</value></data>
   <data name="EnableSealAllowed" xml:space="preserve"><value>Habilitar sellado</value></data>

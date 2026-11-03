@@ -116,7 +116,6 @@ services:
       - Database__RunMigrationsOnStart=${RUN_MIGRATIONS_ON_START:-}
       - Token__Secret=${TOKEN_SECRET:-}
       # Internal preprocessing bypass — must match the same key on the calling service
-      - Billing__AttachmentDebitBypassKey=${BILLING_ATTACHMENT_DEBIT_BYPASS_KEY:-}
       - PrivateServer__Enabled=${PRIVATE_SERVER:-false}
       - SeedAdmin__Email=${SEED_ADMIN_EMAIL:-}
       - SeedAdmin__Password=${SEED_ADMIN_PASSWORD:-}

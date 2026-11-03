@@ -614,34 +614,23 @@ public class PortalTrustTests : IDisposable
 
     // ── Billing bypass ──────────────────────────────────────────────────────────────────────────
 
-    private const string BypassKey = "bypass-key-for-tests";
-
-    private static HttpContext BypassContext(bool trusted, string header, string key)
+    private static HttpContext BypassContext(bool trusted)
     {
         var context = CallerContext(trusted);
-        context.Request.Headers[header] = key;
+        context.Request.Headers[PdfSigningApiController.AttachmentDebitBypassHeader] = "true";
         return context;
     }
 
     [Fact]
-    public void Bypass_is_honoured_for_the_portal()
+    public void Bypass_is_honoured_for_the_trusted_caller_without_any_key()
     {
-        Assert.True(PdfSigningApiController.IsAttachmentDebitBypassAuthorized(
-            BypassContext(true, PdfSigningApiController.AttachmentDebitBypassHeader, BypassKey), BypassKey));
+        Assert.True(PdfSigningApiController.IsAttachmentDebitBypassAuthorized(BypassContext(true)));
     }
 
     [Fact]
-    public void Bypass_with_the_right_key_from_another_token_is_refused()
+    public void Bypass_from_another_token_is_refused()
     {
-        Assert.False(PdfSigningApiController.IsAttachmentDebitBypassAuthorized(
-            BypassContext(false, PdfSigningApiController.AttachmentDebitBypassHeader, BypassKey), BypassKey));
-    }
-
-    [Fact]
-    public void Bypass_with_a_wrong_key_is_refused()
-    {
-        Assert.False(PdfSigningApiController.IsAttachmentDebitBypassAuthorized(
-            BypassContext(true, PdfSigningApiController.AttachmentDebitBypassHeader, "wrong"), BypassKey));
+        Assert.False(PdfSigningApiController.IsAttachmentDebitBypassAuthorized(BypassContext(false)));
     }
 
     [Fact]

@@ -1155,7 +1155,7 @@ namespace DotNetSigningServer.Controllers
             var bypassDebitRequested = BypassDebitRequested();
             if (!AttachmentBypassAllowed(user, bypassDebitRequested))
             {
-                return Forbid();
+                return AttachmentBypassNotPermitted();
             }
 
             try
@@ -1189,7 +1189,7 @@ namespace DotNetSigningServer.Controllers
             var bypassDebitRequested = BypassDebitRequested();
             if (!AttachmentBypassAllowed(user, bypassDebitRequested))
             {
-                return Forbid();
+                return AttachmentBypassNotPermitted();
             }
 
             var (input, pdf, refused) = await ReadBinaryPdfAsync<AddAttachmentInput>(
@@ -1214,21 +1214,21 @@ namespace DotNetSigningServer.Controllers
 
         private bool AttachmentBypassAllowed(User user, bool bypassDebitRequested)
         {
-            // Never log any part of the bypass key — not the caller's, not the
-            // configured one. head+tail+length+hash-prefix of a shared secret, emitted
-            // on every request and shipped to Loki, narrows brute-force considerably.
-            Logger.LogInformation(
-                "[attachment] user={UserId} bypassHeaderPresent={HeaderPresent} bypassKeyConfigured={KeyConfigured}",
-                user.Id,
-                bypassDebitRequested,
-                !string.IsNullOrWhiteSpace(BillingOptions.AttachmentDebitBypassKey));
-            if (bypassDebitRequested && !IsAttachmentDebitBypassAuthorized(HttpContext, BillingOptions.AttachmentDebitBypassKey))
+            if (bypassDebitRequested && !IsAttachmentDebitBypassAuthorized(HttpContext))
             {
-                Logger.LogWarning("Attachment billing bypass rejected for user {UserId}", user.Id);
+                Logger.LogWarning(
+                    Logging.LoggingEvents.AuthFailed,
+                    "Attachment billing bypass refused for user {UserId}: not the trusted caller on the internal listener",
+                    user.Id);
                 return false;
             }
             return true;
         }
+
+        private IActionResult AttachmentBypassNotPermitted() =>
+            StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { code = "ATTACHMENT_BYPASS_NOT_PERMITTED", message = Localizer["AttachmentBypassNotPermitted"].Value });
 
         /// <summary>attachment po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
         private async Task<IActionResult> AttachmentCoreAsync(User user, AddAttachmentInput input, byte[]? pdf, bool bypassDebitRequested, string fingerprint)
@@ -1254,39 +1254,12 @@ namespace DotNetSigningServer.Controllers
         }
 
         /// <summary>
-        /// The portal's token (#78) with the shared key, in the X-P4PDF-Attachment-Billing-Bypass header. Any other token
-        /// is refused even with the right key: the key alone is a secret that can leak, the token
-        /// on the internal listener is the portal.
+        /// Skipping the attachment debit (#78, #176): only the trusted caller (the portal's account on the
+        /// internal listener) may send X-P4PDF-Attachment-Billing-Bypass. The header is a flag, not a secret;
+        /// any other token is refused. No shared key: the trusted-caller account already is the portal.
         /// </summary>
-        internal static bool IsAttachmentDebitBypassAuthorized(HttpContext context, string? configuredBypassKey)
-        {
-            if (!PortalTrust.IsTrustedCaller(context))
-            {
-                return false;
-            }
-
-            var configuredKey = configuredBypassKey?.Trim();
-            if (string.IsNullOrWhiteSpace(configuredKey))
-            {
-                return false;
-            }
-
-            var providedKey = context.Request.Headers[AttachmentDebitBypassHeader].ToString().Trim();
-            if (string.IsNullOrWhiteSpace(providedKey))
-            {
-                return false;
-            }
-
-            return FixedTimeEquals(providedKey, configuredKey);
-        }
-
-        private static bool FixedTimeEquals(string left, string right)
-        {
-            using var hmac = new System.Security.Cryptography.HMACSHA256(System.Text.Encoding.UTF8.GetBytes("comparison-key"));
-            var leftHash = hmac.ComputeHash(System.Text.Encoding.UTF8.GetBytes(left));
-            var rightHash = hmac.ComputeHash(System.Text.Encoding.UTF8.GetBytes(right));
-            return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(leftHash, rightHash);
-        }
+        internal static bool IsAttachmentDebitBypassAuthorized(HttpContext context) =>
+            PortalTrust.IsTrustedCaller(context);
 
     }
 }

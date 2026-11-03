@@ -7,7 +7,6 @@ public class BillingOptions
     public decimal Discount300 { get; set; } = 0.05m; // 5%
     public decimal Discount500 { get; set; } = 0.10m; // 10%
     public decimal Discount1000 { get; set; } = 0.15m; // 15%
-    public string? AttachmentDebitBypassKey { get; set; }
 
     /// <summary>
     /// Credits charged per AI call (/api/ai/detect-fields, /api/ai/extract-data).
