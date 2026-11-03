@@ -12,7 +12,9 @@ namespace DotNetSigningServer.Services;
 /// <list type="bullet">
 /// <item>the XMP declares the expected part and level (<c>pdfaid</c>);</item>
 /// <item>every font reachable from the pages (content, form XObjects, patterns, Type3 glyphs,
-/// annotation appearances) is embedded.</item>
+/// annotation appearances) is embedded;</item>
+/// <item>embedded files: none below PDF/A-3, associated files with a MIME type in PDF/A-3
+/// (<see cref="EmbeddedFiles.Conform"/>).</item>
 /// </list>
 ///
 /// What it does not see is listed in README.md (presign with PDF/A conversion).
@@ -21,6 +23,7 @@ public static class PdfAConformanceCheck
 {
     public const string NotDeclared = "pdfa-not-declared";
     public const string FontNotEmbedded = "font-not-embedded";
+    public const string EmbeddedFileNotAllowed = "embedded-file-not-allowed";
 
     private const int MaxDepth = 32;
 
@@ -40,6 +43,8 @@ public static class PdfAConformanceCheck
         {
             problems.Add(NotDeclared);
         }
+
+        if (!EmbeddedFiles.Conform(document, expected.GetPart())) problems.Add(EmbeddedFileNotAllowed);
 
         var seen = new HashSet<PdfIndirectReference>();
         for (var i = 1; i <= document.GetNumberOfPages(); i++)

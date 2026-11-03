@@ -37,7 +37,7 @@ namespace DotNetSigningServer.Services
         /// Oba kanály (JSON i binární, #74) končí tady.
         /// </summary>
         /// <param name="keepPdfA">Set when the document is PDF/A and must stay so (#184): the presigned
-        /// document is checked, and one that is not is refused as <see cref="PresignPreparation.NotPreservedCode"/>.</param>
+        /// document is checked, and one that is not is refused as <see cref="DocumentPreparation.NotPreservedCode"/>.</param>
         public (string PresignedPdfPath, string HashToSign) HandlePreSign(PreSignInput input, byte[] originalPdf, string fieldName, PdfAConformance? keepPdfA = null)
         {
             // Add verification metadata/QR page before signing
@@ -59,44 +59,28 @@ namespace DotNetSigningServer.Services
             preSignContainer.SetChain(chain);
             fieldName = PdfCryptoHelper.EnsureFieldName(fieldName);
 
-            byte[] pdfWithPlaceholder;
-            try
-            {
-                pdfWithPlaceholder = CreatePreSignedPdf(
-                    originalPdf,
-                    preSignContainer,
-                    fieldName,
-                    input.SignRect,
-                    input.Reason,
-                    input.Location,
-                    input.SignPageNumber,
-                    input.SignImageContent,
-                    chain,
-                    input.Appearance,
-                    input.StampImageContent,
-                    input.BackgroundImageContent,
-                    input.CompanyLogoContent,
-                    visible: true,
-                    designWidth: input.DesignWidth,
-                    designHeight: input.DesignHeight,
-                    autoHeight: input.AutoHeight,
-                    signerNameOverride: input.SignerName);
-            }
-            catch (iText.Pdfa.Exceptions.PdfAConformanceException ex) when (keepPdfA != null)
-            {
-                // iText checks the signature appearance of a PDF/A document as it writes it.
-                throw new ApiValidationException(PresignPreparation.NotPreservedCode, ex.Message);
-            }
-
-            if (keepPdfA != null)
-            {
-                // The QR page and stamped fields are written without iText's PDF/A checks.
-                var problems = PdfAConformanceCheck.Problems(pdfWithPlaceholder, keepPdfA);
-                if (problems.Count > 0)
-                {
-                    throw new ApiValidationException(PresignPreparation.NotPreservedCode, string.Join(",", problems));
-                }
-            }
+            // iText checks the signature appearance of a PDF/A document as it writes it; the QR page
+            // and stamped fields are written without its checks and are checked afterwards.
+            byte[] pdfWithPlaceholder = DocumentPreparation.KeepPdfA(keepPdfA, () => CreatePreSignedPdf(
+                originalPdf,
+                preSignContainer,
+                fieldName,
+                input.SignRect,
+                input.Reason,
+                input.Location,
+                input.SignPageNumber,
+                input.SignImageContent,
+                chain,
+                input.Appearance,
+                input.StampImageContent,
+                input.BackgroundImageContent,
+                input.CompanyLogoContent,
+                visible: true,
+                designWidth: input.DesignWidth,
+                designHeight: input.DesignHeight,
+                autoHeight: input.AutoHeight,
+                signerNameOverride: input.SignerName));
+            DocumentPreparation.EnsurePreserved(pdfWithPlaceholder, keepPdfA);
 
             string preSignedPdfPath = IOPath.Combine(IOPath.GetTempPath(), $"presigned_{Guid.NewGuid():N}.pdf");
             File.WriteAllBytes(preSignedPdfPath, pdfWithPlaceholder);
@@ -177,7 +161,12 @@ namespace DotNetSigningServer.Services
         /// Časové razítko nad bajty, které už prošly vstupní kontrolou (#74, binární kanál);
         /// <c>input.PdfContent</c> se nečte. Stejné chyby ve stejném pořadí jako verze s base64.
         /// </summary>
-        public virtual string ApplyDocumentTimestamp(DocumentTimestampInput input, byte[] pdf)
+        public virtual string ApplyDocumentTimestamp(DocumentTimestampInput input, byte[] pdf) =>
+            ApplyDocumentTimestamp(input, pdf, keepPdfA: null);
+
+        /// <param name="keepPdfA">Set when the document was prepared as PDF/A (#184): the result must stay so,
+        /// otherwise <see cref="DocumentPreparation.NotPreservedCode"/>.</param>
+        public virtual string ApplyDocumentTimestamp(DocumentTimestampInput input, byte[] pdf, PdfAConformance? keepPdfA)
         {
             ITSAClient? tsaClient = PdfCryptoHelper.CreateTsaClient(
                 input.TsaUrl, input.TsaUsername, input.TsaPassword,
@@ -187,7 +176,7 @@ namespace DotNetSigningServer.Services
                 throw new ApiValidationException("TSA_NOT_CONFIGURED");
             }
 
-            return ApplyDocumentTimestamp(input, tsaClient, pdf);
+            return ApplyDocumentTimestamp(input, tsaClient, pdf, keepPdfA);
         }
 
         /// <summary>
@@ -198,7 +187,14 @@ namespace DotNetSigningServer.Services
         internal string ApplyDocumentTimestamp(DocumentTimestampInput input, ITSAClient tsaClient) =>
             ApplyDocumentTimestamp(input, tsaClient, Convert.FromBase64String(input.PdfContent));
 
-        internal string ApplyDocumentTimestamp(DocumentTimestampInput input, ITSAClient tsaClient, byte[] pdf)
+        internal string ApplyDocumentTimestamp(DocumentTimestampInput input, ITSAClient tsaClient, byte[] pdf, PdfAConformance? keepPdfA = null)
+        {
+            var result = DocumentPreparation.KeepPdfA(keepPdfA, () => WriteDocumentTimestamp(input, tsaClient, pdf));
+            DocumentPreparation.EnsurePreserved(result, keepPdfA);
+            return Convert.ToBase64String(result);
+        }
+
+        private static byte[] WriteDocumentTimestamp(DocumentTimestampInput input, ITSAClient tsaClient, byte[] pdf)
         {
             string fieldName = PdfCryptoHelper.EnsureFieldName(input.FieldName, $"Timestamp_{Guid.NewGuid():N}");
             using var msIn = new MemoryStream(pdf);
@@ -217,7 +213,7 @@ namespace DotNetSigningServer.Services
                 input.SignPageNumber,
                 input.SignImageContent,
                 null,
-                input.Appearance,
+                DocumentPreparation.AppearanceFor(signer.GetDocument(), input.Appearance),
                 input.StampImageContent,
                 input.BackgroundImageContent,
                 input.CompanyLogoContent,
@@ -242,7 +238,7 @@ namespace DotNetSigningServer.Services
                     ex);
             }
 
-            return Convert.ToBase64String(msOut.ToArray());
+            return msOut.ToArray();
         }
 
         /// <summary>
@@ -308,6 +304,15 @@ namespace DotNetSigningServer.Services
         public virtual string ApplyVisualSign(VisualSignInput input, byte[] pdf)
         {
             return _visualSigningService.ApplyVisualSign(input, pdf);
+        }
+
+        /// <param name="keepPdfA">Set when the document was prepared as PDF/A (#184): the result must stay so,
+        /// otherwise <see cref="DocumentPreparation.NotPreservedCode"/>.</param>
+        public virtual string ApplyVisualSign(VisualSignInput input, byte[] pdf, PdfAConformance? keepPdfA)
+        {
+            var result = DocumentPreparation.KeepPdfA(keepPdfA, () => _visualSigningService.ApplyVisualSign(input, pdf, keepPdfA));
+            DocumentPreparation.EnsurePreserved(Convert.FromBase64String(result), keepPdfA);
+            return result;
         }
 
         public virtual string AddAttachment(AddAttachmentInput input) =>
@@ -376,6 +381,14 @@ namespace DotNetSigningServer.Services
                         counter++;
                     uniqueFileName = $"{baseName}-{counter}{ext}";
                 }
+            }
+
+            if (pdfDoc.GetConformance().GetAConformance()?.GetPart() == "3")
+            {
+                // A PDF/A-3 document stays one (#184): the file goes in as an associated file with a MIME type.
+                EmbeddedFiles.Add(pdfDoc, uniqueFileName, attachmentBytes, input.Description, uniqueFileName, attachmentMimeType, PdfName.Unspecified);
+                pdfDoc.Close();
+                return Convert.ToBase64String(msOut.ToArray());
             }
 
             var afRelationship = PdfName.Unspecified;
@@ -485,10 +498,7 @@ namespace DotNetSigningServer.Services
             var signerPageSize = signer.GetDocument().GetPage(resolvedPage).GetPageSize();
 
             // PDF/A wants every font embedded; without a family iText falls back to plain Helvetica and fails.
-            if (signer.GetDocument().GetConformance().IsPdfA() && string.IsNullOrWhiteSpace(appearance?.FontFamily))
-            {
-                appearance = WithFontFamily(appearance, "Helvetica");
-            }
+            appearance = DocumentPreparation.AppearanceFor(signer.GetDocument(), appearance);
 
             SignerProperties signerProperties = PdfVisualSigningService.BuildSignerProperties(
                 fieldName,
@@ -515,28 +525,6 @@ namespace DotNetSigningServer.Services
             signer.SignExternalContainer(container, 32768);
 
             return msOut.ToArray();
-        }
-
-        /// <summary>A copy with the font family set; the caller's options stay untouched.</summary>
-        private static SignatureAppearanceOptions WithFontFamily(SignatureAppearanceOptions? source, string fontFamily)
-        {
-            var s = source ?? new SignatureAppearanceOptions();
-            return new SignatureAppearanceOptions
-            {
-                DescriptionText = s.DescriptionText,
-                ForegroundColor = s.ForegroundColor,
-                BackgroundColor = s.BackgroundColor,
-                FontFamily = fontFamily,
-                FontSize = s.FontSize,
-                ShowReason = s.ShowReason,
-                ShowLocation = s.ShowLocation,
-                ShowDate = s.ShowDate,
-                ShowSignerName = s.ShowSignerName,
-                ShowCompanyName = s.ShowCompanyName,
-                BackgroundRepeat = s.BackgroundRepeat,
-                AutoFontSize = s.AutoFontSize,
-                Labels = s.Labels,
-            };
         }
 
         private static byte[] InjectFinalSignature(byte[] pdfWithPlaceholder, byte[] signatureBytes, IX509Certificate[] chain, string fieldName, ITSAClient? tsaClient, string? tsaUrlForErrorContext = null)

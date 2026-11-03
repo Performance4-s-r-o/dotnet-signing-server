@@ -96,8 +96,8 @@ public class PresignPdfaTests : IDisposable
         return Convert.FromBase64String(signed);
     }
 
-    private static PresignPreparation.Result Prepare(byte[] pdf, bool flatten, bool convert, string? conformance = null) =>
-        PresignPreparation.Prepare(pdf, new PreSignInput { FlattenForm = flatten, ConvertToPdfa = convert, PdfaConformance = conformance },
+    private static DocumentPreparation.Result Prepare(byte[] pdf, bool flatten, bool convert, string? conformance = null) =>
+        DocumentPreparation.Prepare(pdf, new PreSignInput { FlattenForm = flatten, ConvertToPdfa = convert, PdfaConformance = conformance },
             Limits, Guard, Conversion);
 
     private static string Code(Action action) => Assert.Throws<ApiValidationException>(action).Code;
@@ -115,10 +115,10 @@ public class PresignPdfaTests : IDisposable
     {
         var result = Prepare(ScriptedFormEmbedded(), flatten: true, convert: true);
 
-        Assert.Equal(PresignPreparation.FlattenOutcome.Flattened, result.Report.Flatten);
+        Assert.Equal(DocumentPreparation.FlattenOutcome.Flattened, result.Report.Flatten);
         Assert.Equal(1, result.Report.FlattenedFields);
         Assert.Contains(PdfFormFlattener.RemovedKinds.DocumentJavaScript, result.Report.Removed);
-        Assert.Equal(PresignPreparation.PdfaOutcome.Converted, result.Report.Pdfa);
+        Assert.Equal(DocumentPreparation.PdfaOutcome.Converted, result.Report.Pdfa);
         Assert.Equal("PDF/A-2B", result.Report.Conformance);
         Assert.Equal(PdfAConformance.PDF_A_2B, result.KeepPdfA);
         Assert.Equal(PdfAConformance.PDF_A_2B, Declared(result.Pdf));
@@ -131,7 +131,7 @@ public class PresignPdfaTests : IDisposable
     public void Conversion_alone_does_not_strip_active_content()
     {
         // The endpoint refuses it earlier (400 PDF_ACTIVE_CONTENT); the conversion would not pass it either.
-        Assert.Equal(PresignPreparation.ConversionFailedCode, Code(() => Prepare(ScriptedFormEmbedded(), flatten: false, convert: true)));
+        Assert.Equal(DocumentPreparation.ConversionFailedCode, Code(() => Prepare(ScriptedFormEmbedded(), flatten: false, convert: true)));
     }
 
     [Theory]
@@ -141,7 +141,7 @@ public class PresignPdfaTests : IDisposable
     [InlineData("", "PDF/A-2B")]
     public void Conformance_aliases_resolve(string? requested, string expected)
     {
-        Assert.Equal(expected, PresignPreparation.ResolveConformance(requested).Name);
+        Assert.Equal(expected, DocumentPreparation.ResolveConformance(requested).Name);
     }
 
     [Theory]
@@ -152,19 +152,28 @@ public class PresignPdfaTests : IDisposable
     [InlineData("nonsense")]
     public void Other_conformances_are_refused_not_mapped_to_a_default(string requested)
     {
-        Assert.Equal(PresignPreparation.ConformanceUnsupportedCode, Code(() => PresignPreparation.ResolveConformance(requested)));
+        Assert.Equal(DocumentPreparation.ConformanceUnsupportedCode, Code(() => DocumentPreparation.ResolveConformance(requested)));
     }
 
     [Fact]
     public void A_font_that_is_not_embedded_is_refused_not_passed_off_as_PDFA()
     {
-        Assert.Equal(PresignPreparation.ConversionFailedCode, Code(() => Prepare(HelveticaText(), flatten: false, convert: true)));
+        Assert.Equal(DocumentPreparation.ConversionFailedCode, Code(() => Prepare(HelveticaText(), flatten: false, convert: true)));
     }
 
     [Fact]
-    public void Embedded_files_are_refused_rather_than_dropped()
+    public void Embedded_files_are_refused_by_PDFA_2B_rather_than_dropped()
     {
-        Assert.Equal(PresignPreparation.ConversionFailedCode, Code(() => Prepare(WithAttachment(), flatten: false, convert: true)));
+        Assert.Equal(DocumentPreparation.EmbeddedFilesCode, Code(() => Prepare(WithAttachment(), flatten: false, convert: true)));
+    }
+
+    [Fact]
+    public void Embedded_files_are_kept_by_PDFA_3B()
+    {
+        var result = Prepare(WithAttachment(), flatten: false, convert: true, conformance: "PDF/A-3B");
+        Assert.Empty(PdfAConformanceCheck.Problems(result.Pdf, PdfAConformance.PDF_A_3B));
+        using var doc = new PdfDocument(new PdfReader(new MemoryStream(result.Pdf)));
+        Assert.Equal("a.txt", Assert.Single(EmbeddedFiles.Of(doc)).Key);
     }
 
     [Fact]
@@ -181,8 +190,8 @@ public class PresignPdfaTests : IDisposable
         var result = Prepare(signed, flatten: true, convert: true);
 
         Assert.Same(signed, result.Pdf);
-        Assert.Equal(PresignPreparation.FlattenOutcome.SkippedSigned, result.Report.Flatten);
-        Assert.Equal(PresignPreparation.PdfaOutcome.AlreadyPdfa, result.Report.Pdfa);
+        Assert.Equal(DocumentPreparation.FlattenOutcome.SkippedSigned, result.Report.Flatten);
+        Assert.Equal(DocumentPreparation.PdfaOutcome.AlreadyPdfa, result.Report.Pdfa);
         Assert.Equal("PDF/A-3B", result.Report.Conformance);
         Assert.Equal(PdfAConformance.PDF_A_3B, result.KeepPdfA);
     }
@@ -193,7 +202,7 @@ public class PresignPdfaTests : IDisposable
         var signed = SignedWithPfx(EmbeddedText());
         var result = Prepare(signed, flatten: true, convert: false);
         Assert.Same(signed, result.Pdf);
-        Assert.Equal(PresignPreparation.FlattenOutcome.SkippedSigned, result.Report.Flatten);
+        Assert.Equal(DocumentPreparation.FlattenOutcome.SkippedSigned, result.Report.Flatten);
         Assert.Null(result.Report.Pdfa);
         Assert.Null(result.KeepPdfA);
     }
@@ -300,7 +309,7 @@ public class PresignPdfaTests : IDisposable
                     Value = "4",
                 },
             }));
-        Assert.Equal(PresignPreparation.NotPreservedCode, ex.Code);
+        Assert.Equal(DocumentPreparation.NotPreservedCode, ex.Code);
     }
 
     [Fact]

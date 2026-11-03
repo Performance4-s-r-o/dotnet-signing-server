@@ -567,4 +567,37 @@ public class PdfFormFlattenerTests
         Assert.True(Read(result.Pdf, d => d.IsTagged()));
         Assert.Contains("Jane Roe", PageText(result.Pdf));
     }
+
+    /// <summary>Two root fields with the same full name and different values (#182).</summary>
+    internal static byte[] DuplicateNamedFields() => Build(doc =>
+    {
+        var form = PdfAcroForm.GetAcroForm(doc, true);
+        var fields = new PdfArray();
+        foreach (var (value, y) in new[] { ("Jana", 700f), ("Petr", 650f) })
+        {
+            var widget = new PdfDictionary();
+            widget.Put(PdfName.Type, PdfName.Annot);
+            widget.Put(PdfName.Subtype, PdfName.Widget);
+            widget.Put(PdfName.FT, PdfName.Tx);
+            widget.Put(PdfName.T, new PdfString("name"));
+            widget.Put(PdfName.V, new PdfString(value));
+            widget.Put(PdfName.Rect, new PdfArray(new Rectangle(50, y, 300, 24)));
+            widget.Put(PdfName.P, doc.GetFirstPage().GetPdfObject());
+            widget.MakeIndirect(doc);
+            doc.GetFirstPage().GetPdfObject().GetAsArray(PdfName.Annots)?.Add(widget);
+            if (doc.GetFirstPage().GetPdfObject().GetAsArray(PdfName.Annots) == null)
+            {
+                doc.GetFirstPage().GetPdfObject().Put(PdfName.Annots, new PdfArray(widget));
+            }
+            fields.Add(widget);
+        }
+        form.GetPdfObject().Put(PdfName.Fields, fields);
+    });
+
+    [Fact]
+    public void Two_fields_with_one_name_and_different_values_are_PDF_FORM_INVALID()
+    {
+        var ex = Assert.Throws<ApiValidationException>(() => PdfFormFlattener.Flatten(DuplicateNamedFields(), Limits));
+        Assert.Equal(PdfFormFlattener.FormInvalidCode, ex.Code);
+    }
 }

@@ -115,11 +115,11 @@ namespace DotNetSigningServer.Controllers
                 });
             }
 
-            PresignPreparation.Result? prepared = null;
+            DocumentPreparation.Result? prepared = null;
             var preparationCredits = 0;
-            if (PresignPreparation.Requested(input))
+            if (DocumentPreparation.Requested(input))
             {
-                var (result, credits, refused) = await PrepareAsync(user, input, pdf);
+                var (result, credits, refused) = await PrepareAsync(user, input, pdf, "Presign", "PresignError", checkCredits: true);
                 if (refused != null) return refused;
                 prepared = result!;
                 preparationCredits = credits;
@@ -180,23 +180,14 @@ namespace DotNetSigningServer.Controllers
                 {
                     return Ok(new { id = signingData.Id, hashToSign = signingData.HashToSign });
                 }
-                var report = prepared.Report;
                 return Ok(new
                 {
                     id = signingData.Id,
                     hashToSign = signingData.HashToSign,
-                    preparation = new
-                    {
-                        flatten = report.Flatten,
-                        flattenedFields = report.FlattenedFields,
-                        removed = report.Removed,
-                        pdfa = report.Pdfa,
-                        conformance = report.Conformance,
-                        credits = preparationCredits,
-                    },
+                    preparation = PreparationBody(prepared.Report, preparationCredits),
                 });
             }
-            catch (ApiValidationException ex) when (PresignRefusalCodes.Contains(ex.Code))
+            catch (ApiValidationException ex) when (PreparationRefusalCodes.Contains(ex.Code))
             {
                 // Thrown before the file is written: nothing to clean up.
                 Logger.LogInformation("Presign refused: {Code} ({Detail})", ex.Code, ex.Message);
@@ -223,20 +214,34 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
-        /// <summary>The document as it is cannot be presigned as asked (409): retrying the same request will not help.</summary>
-        internal static readonly IReadOnlySet<string> PresignRefusalCodes = new HashSet<string>(StringComparer.Ordinal)
+        /// <summary>The document as it is cannot be prepared or signed as asked (409): retrying the same request will not help.</summary>
+        internal static readonly IReadOnlySet<string> PreparationRefusalCodes = new HashSet<string>(StringComparer.Ordinal)
         {
-            PdfFormFlattener.AlreadySignedCode, PdfFormFlattener.XfaDynamicCode, PdfFormFlattener.IncompleteCode,
-            PresignPreparation.ConversionFailedCode, PresignPreparation.NotPreservedCode,
+            PdfFormFlattener.AlreadySignedCode, PdfFormFlattener.XfaDynamicCode, PdfFormFlattener.IncompleteCode, PdfFormFlattener.FormInvalidCode,
+            DocumentPreparation.ConversionFailedCode, DocumentPreparation.NotPreservedCode, DocumentPreparation.EmbeddedFilesCode,
+        };
+
+        /// <summary>What the preparation did, in the answer of presign, timestamp and visual-sign (#184).</summary>
+        private static object PreparationBody(DocumentPreparation.Report report, int credits) => new
+        {
+            flatten = report.Flatten,
+            flattenedFields = report.FlattenedFields,
+            removed = report.Removed,
+            pdfa = report.Pdfa,
+            conformance = report.Conformance,
+            credits,
         };
 
         /// <summary>
-        /// Flattening and PDF/A conversion before the signature (#184), under the document deadline
-        /// and the operator's switches of the two features. Priced like <c>/api/flatten-form</c> and
-        /// <c>/api/convert/pdfa</c>, free for the trusted caller; charged by <c>/api/sign</c>.
+        /// Flattening and PDF/A conversion before the signature (#184), one step for presign, timestamp
+        /// and visual-sign, under the document deadline and the operator's switches of the two
+        /// features. Priced like <c>/api/flatten-form</c> and <c>/api/convert/pdfa</c>, free for the
+        /// trusted caller. Presign is charged by <c>/api/sign</c> and so checks the balance here
+        /// (<paramref name="checkCredits"/>); timestamp and visual-sign add the credits to their own
+        /// reservation, which answers 402 itself.
         /// </summary>
-        private async Task<(PresignPreparation.Result? Result, int Credits, IActionResult? Refused)> PrepareAsync(
-            User user, PreSignInput input, byte[] pdf)
+        private async Task<(DocumentPreparation.Result? Result, int Credits, IActionResult? Refused)> PrepareAsync(
+            User user, IDocumentPreparationRequest input, byte[] pdf, string context, string errorKey, bool checkCredits)
         {
             foreach (var (asked, feature) in new[] { (input.ConvertToPdfa, "pdfa"), (input.FlattenForm, "flatten-form") })
             {
@@ -253,27 +258,27 @@ namespace DotNetSigningServer.Controllers
             var conversion = HttpContext.RequestServices.GetRequiredService<PdfConversionService>();
             try
             {
-                if (input.ConvertToPdfa) PresignPreparation.ResolveConformance(input.PdfaConformance);
+                if (input.ConvertToPdfa) DocumentPreparation.ResolveConformance(input.PdfaConformance);
                 var (result, refused) = await RunWithDeadlineAsync(user.Id, input.ConvertToPdfa ? "pdfa" : "flatten-form",
-                    _ => Task.FromResult(PresignPreparation.Prepare(pdf, input, limits, guard, conversion)));
+                    _ => Task.FromResult(DocumentPreparation.Prepare(pdf, input, limits, guard, conversion, context)));
                 if (refused != null) return (null, 0, refused);
 
                 var report = result!.Report;
-                Logger.LogInformation("Presign preparation: flatten {Flatten} ({Fields} fields, removed [{Removed}]), PDF/A {Pdfa} {Conformance}",
-                    report.Flatten ?? "-", report.FlattenedFields, string.Join(",", report.Removed), report.Pdfa ?? "-", report.Conformance ?? "-");
+                Logger.LogInformation("{Context} preparation: flatten {Flatten} ({Fields} fields, removed [{Removed}]), PDF/A {Pdfa} {Conformance}",
+                    context, report.Flatten ?? "-", report.FlattenedFields, string.Join(",", report.Removed), report.Pdfa ?? "-", report.Conformance ?? "-");
 
                 var credits = 0;
                 if (!PortalTrust.IsTrustedCaller(HttpContext))
                 {
-                    if (report.Flatten is PresignPreparation.FlattenOutcome.Flattened or PresignPreparation.FlattenOutcome.Unchanged)
+                    if (report.Flatten is DocumentPreparation.FlattenOutcome.Flattened or DocumentPreparation.FlattenOutcome.Unchanged)
                         credits += BillingOptions.FlattenFormCredits;
-                    if (report.Pdfa == PresignPreparation.PdfaOutcome.Converted)
+                    if (report.Pdfa == DocumentPreparation.PdfaOutcome.Converted)
                         credits += CalculateCreditsForPages(result.Pages);
                 }
                 // The signature pays for it: a presign that /api/sign could never charge is refused now.
-                if (LacksCredits(user, 1 + credits))
+                if (checkCredits && LacksCredits(user, 1 + credits))
                 {
-                    Logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Credits insufficient for presign preparation of user {UserId}", user.Id);
+                    Logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Credits insufficient for {Context} preparation of user {UserId}", context, user.Id);
                     return (null, 0, StatusCode(StatusCodes.Status402PaymentRequired, new
                     {
                         code = ApiOperationService.InsufficientCreditsCode,
@@ -282,9 +287,9 @@ namespace DotNetSigningServer.Controllers
                 }
                 return (result, credits, null);
             }
-            catch (ApiValidationException ex) when (PresignRefusalCodes.Contains(ex.Code))
+            catch (ApiValidationException ex) when (PreparationRefusalCodes.Contains(ex.Code))
             {
-                Logger.LogInformation("Presign preparation refused: {Code} ({Detail})", ex.Code, ex.Message);
+                Logger.LogInformation("{Context} preparation refused: {Code} ({Detail})", context, ex.Code, ex.Message);
                 return (null, 0, Conflict(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value }));
             }
             catch (ApiValidationException ex)
@@ -293,9 +298,28 @@ namespace DotNetSigningServer.Controllers
             }
             catch (Exception ex)
             {
-                Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Presign preparation failed");
-                return (null, 0, SafeProblem(Localizer["PresignError"], ex));
+                Logger.LogError(Logging.LoggingEvents.ApiError, ex, "{Context} preparation failed", context);
+                return (null, 0, SafeProblem(Localizer[errorKey], ex));
             }
+        }
+
+        /// <summary>
+        /// Preparation for a paid operation that runs it before the reservation (timestamp,
+        /// visual-sign). A completed operation under the same <c>Idempotency-Key</c> is answered from
+        /// its stored result without new work, so its preparation is not run again either: a retry
+        /// after a lost answer must not be refused for the credits the first call already took.
+        /// </summary>
+        private async Task<(DocumentPreparation.Result? Result, int Credits, IActionResult? Refused)> PrepareForOperationAsync(
+            User user, IDocumentPreparationRequest input, Func<byte[]> pdf, string context, string errorKey)
+        {
+            if (!DocumentPreparation.Requested(input)) return (null, 0, null);
+            if (Request.Headers.TryGetValue(IdempotencyKeyHeader, out var key)
+                && ApiOperationService.IsValidOperationId(key.ToString())
+                && await Operations.FindAsync(user.Id, key.ToString(), HttpContext.RequestAborted) is { State: ApiOperationState.Completed })
+            {
+                return (null, 0, null);
+            }
+            return await PrepareAsync(user, input, pdf(), context, errorKey, checkCredits: false);
         }
 
         [CapacityPool(CapacityPoolKind.Heavy)]
@@ -551,10 +575,19 @@ namespace DotNetSigningServer.Controllers
             var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
 
+            byte[]? pdf = null;
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Timestamp");
-                SafetyGuard.EnsureSafePdf(input.PdfContent, "Timestamp");
+                if (DocumentPreparation.Requested(input))
+                {
+                    // Active content is what flattening removes; the prepared document gets the full check.
+                    pdf = GuardedPdfFromBase64(input.PdfContent, "Timestamp", checkActiveContent: !input.FlattenForm);
+                }
+                else
+                {
+                    SafetyGuard.EnsureSafePdf(input.PdfContent, "Timestamp");
+                }
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }
             catch (ApiValidationException ex)
@@ -562,7 +595,7 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
-            return await TimestampCoreAsync(user, input, null, ApiOperationService.Fingerprint("timestamp", input));
+            return await TimestampCoreAsync(user, input, pdf, ApiOperationService.Fingerprint("timestamp", input));
         }
 
         /// <summary><c>/api/timestamp</c> v interním binárním kanálu (#74), viz <see cref="SignWithPfxBinary"/>.</summary>
@@ -579,8 +612,8 @@ namespace DotNetSigningServer.Controllers
             if (refused != null) return refused;
             try
             {
-                SafetyGuard.EnsureSafePdf(pdf!, "Timestamp");
-                LimitGuard.EnsureImageWithinLimit(input!.SignImageContent, "Signature image");
+                SafetyGuard.EnsureSafePdf(pdf!, "Timestamp", checkActiveContent: !input!.FlattenForm);
+                LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }
             catch (ApiValidationException ex)
             {
@@ -593,10 +626,16 @@ namespace DotNetSigningServer.Controllers
         /// <summary>timestamp po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
         private async Task<IActionResult> TimestampCoreAsync(User user, DocumentTimestampInput input, byte[]? pdf, string fingerprint)
         {
+            // Flattening and PDF/A before the timestamp (#184), the step of presign.
+            var (prepared, preparationCredits, refused) = await PrepareForOperationAsync(
+                user, input, () => pdf ?? Convert.FromBase64String(input.PdfContent), "Timestamp", "TimestampError");
+            if (refused != null) return refused;
             try
             {
-                return await RunOperationAsync(user, "timestamp", fingerprint, baseCost: 1, async _ =>
+                return await RunOperationAsync(user, "timestamp", fingerprint, baseCost: 1 + preparationCredits, async _ =>
                 {
+                    // Never the unconverted document in place of the prepared one (only a replay skips preparation, and it never runs this).
+                    if (prepared == null && DocumentPreparation.Requested(input)) throw new InvalidOperationException("Document preparation did not run.");
                     if (input.TemplateId.HasValue)
                     {
                         var signatureField = await GetSignatureFieldAsync(input.TemplateId.Value, user.Id);
@@ -606,9 +645,19 @@ namespace DotNetSigningServer.Controllers
                             ? input.FieldName
                             : signatureField.FieldName;
                     }
+                    if (prepared != null)
+                    {
+                        var stamped = _signingService.ApplyDocumentTimestamp(input, prepared.Pdf, prepared.KeepPdfA);
+                        return new PaidResult(new { result = stamped, preparation = PreparationBody(prepared.Report, preparationCredits) }, stamped);
+                    }
                     var result = pdf == null ? _signingService.ApplyDocumentTimestamp(input) : _signingService.ApplyDocumentTimestamp(input, pdf);
                     return new PaidResult(new { result }, result);
                 });
+            }
+            catch (ApiValidationException ex) when (PreparationRefusalCodes.Contains(ex.Code))
+            {
+                Logger.LogInformation("Timestamp refused: {Code} ({Detail})", ex.Code, ex.Message);
+                return Conflict(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
             catch (TsaCommunicationException ex)
             {
@@ -970,10 +1019,19 @@ namespace DotNetSigningServer.Controllers
             }
             Logger.LogInformation("[visual-sign] Authenticated as {UserId}", user.Id);
 
+            byte[]? pdf = null;
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Visual sign");
-                SafetyGuard.EnsureSafePdf(input.PdfContent, "Visual sign");
+                if (DocumentPreparation.Requested(input))
+                {
+                    // Active content is what flattening removes; the prepared document gets the full check.
+                    pdf = GuardedPdfFromBase64(input.PdfContent, "Visual sign", checkActiveContent: !input.FlattenForm);
+                }
+                else
+                {
+                    SafetyGuard.EnsureSafePdf(input.PdfContent, "Visual sign");
+                }
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }
             catch (ApiValidationException ex)
@@ -982,7 +1040,7 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
-            return await VisualSignCoreAsync(user, input, null, ApiOperationService.Fingerprint("visual-sign", input));
+            return await VisualSignCoreAsync(user, input, pdf, ApiOperationService.Fingerprint("visual-sign", input));
         }
 
         /// <summary><c>/api/visual-sign</c> v interním binárním kanálu (#74), viz <see cref="SignWithPfxBinary"/>.</summary>
@@ -999,8 +1057,8 @@ namespace DotNetSigningServer.Controllers
             if (refused != null) return refused;
             try
             {
-                SafetyGuard.EnsureSafePdf(pdf!, "Visual sign");
-                LimitGuard.EnsureImageWithinLimit(input!.SignImageContent, "Signature image");
+                SafetyGuard.EnsureSafePdf(pdf!, "Visual sign", checkActiveContent: !input!.FlattenForm);
+                LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
             }
             catch (ApiValidationException ex)
             {
@@ -1013,10 +1071,16 @@ namespace DotNetSigningServer.Controllers
         /// <summary>visual-sign po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
         private async Task<IActionResult> VisualSignCoreAsync(User user, VisualSignInput input, byte[]? pdf, string fingerprint)
         {
+            // Flattening and PDF/A before the visual signature (#184), the step of presign.
+            var (prepared, preparationCredits, refused) = await PrepareForOperationAsync(
+                user, input, () => pdf ?? Convert.FromBase64String(input.PdfContent), "Visual sign", "VisualSignError");
+            if (refused != null) return refused;
             try
             {
-                return await RunOperationAsync(user, "visual-sign", fingerprint, baseCost: 1, async _ =>
+                return await RunOperationAsync(user, "visual-sign", fingerprint, baseCost: 1 + preparationCredits, async _ =>
                 {
+                    // Never the unconverted document in place of the prepared one (only a replay skips preparation, and it never runs this).
+                    if (prepared == null && DocumentPreparation.Requested(input)) throw new InvalidOperationException("Document preparation did not run.");
                     if (input.TemplateId.HasValue)
                     {
                         Logger.LogInformation("[visual-sign] Resolving template {TemplateId}", input.TemplateId.Value);
@@ -1027,10 +1091,20 @@ namespace DotNetSigningServer.Controllers
                             input.SignRect?.X, input.SignRect?.Y, input.SignRect?.Width, input.SignRect?.Height, input.SignPageNumber);
                     }
                     Logger.LogInformation("[visual-sign] Applying visual signature...");
+                    if (prepared != null)
+                    {
+                        var drawn = _signingService.ApplyVisualSign(input, prepared.Pdf, prepared.KeepPdfA);
+                        return new PaidResult(new { result = drawn, preparation = PreparationBody(prepared.Report, preparationCredits) }, drawn);
+                    }
                     var result = pdf == null ? _signingService.ApplyVisualSign(input) : _signingService.ApplyVisualSign(input, pdf);
                     Logger.LogInformation("[visual-sign] Success, result length={Len}", result?.Length ?? 0);
                     return new PaidResult(new { result }, result);
                 });
+            }
+            catch (ApiValidationException ex) when (PreparationRefusalCodes.Contains(ex.Code))
+            {
+                Logger.LogInformation("[visual-sign] Refused: {Code} ({Detail})", ex.Code, ex.Message);
+                return Conflict(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
             catch (Exception ex)
             {

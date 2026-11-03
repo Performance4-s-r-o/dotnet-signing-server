@@ -612,6 +612,7 @@ public class BinaryChannelEndpointsTests
         Assert.False(Assert.IsType<ServerCapabilities>(result.Value).Ai.Enabled);
         // The portal refuses PDF/A in presign without this flag (#184).
         Assert.True(Assert.IsType<ServerCapabilities>(result.Value).PresignPreparation);
+        Assert.True(Assert.IsType<ServerCapabilities>(result.Value).SigningPreparation);
     }
 
     [Fact]

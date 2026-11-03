@@ -98,7 +98,9 @@ conversion (as `convert/pdfa`); free for the trusted caller. Presign refuses wit
 
 | Answer | When |
 |---|---|
-| `409 PDFA_CONVERSION_FAILED` | The document cannot become PDF/A: iText refused it, a font is not embedded, or it has embedded files (they would be dropped) |
+| `409 PDFA_CONVERSION_FAILED` | The document cannot become PDF/A: iText refused it or a font is not embedded |
+| `409 PDFA_EMBEDDED_FILES` | The document has embedded files (an attachment, the evidence of a seal) and the target is PDF/A-2B, which does not allow them. Use PDF/A-3B: it keeps every file byte for byte as an associated file (`/AF`, `/AFRelationship`, MIME type) |
+| `409 PDF_FORM_INVALID` | The form cannot be read: two fields with one full name and different values (#182) |
 | `409 PDFA_NOT_PRESERVED` | The signature as asked would break PDF/A (a stamped field in a font that is not embedded, an appearance iText refuses) |
 | `409 PDF_ALREADY_SIGNED` / `PDF_XFA_DYNAMIC` / `FLATTEN_INCOMPLETE` | As in `flatten-form` |
 | `503 FEATURE_DISABLED` | The operator switched off `pdfa` or `flatten-form` |
@@ -114,6 +116,22 @@ image with transparency, PDF/A-2B and -3B) were checked once with veraPDF, which
 is not part of the suite. The signature is an incremental update (CAdES), so the
 signed result keeps the declaration; the presigned placeholder itself is not a
 valid PDF/A until `/api/sign` fills `/Contents`.
+
+The same switches work on `timestamp` and `visual-sign` (same step, same refusals,
+same deadline); the answer gains the same `preparation`, and the credits of the
+preparation are added to the operation's own price (reserved with it, charged
+once; a replay under the same `Idempotency-Key` does not prepare again).
+`GET /api/capabilities` reports `signingPreparation: true` where they are read.
+The timestamp and the visual signature are written into a PDF/A document with
+iText's PDF/A checks on and checked afterwards like the presign (`409
+PDFA_NOT_PRESERVED`); without a font family an embedded font is used.
+
+Embedded files in PDF/A-3B: the conversion carries them over, and `attachment`
+on a document that declares PDF/A-3 adds the file as an associated file, so a
+second signer's attachment or evidence keeps the document PDF/A-3B. On a signed
+PDF/A-2B document `attachment` still adds a plain file; the following presign
+with `convertToPdfa` refuses it with `409 PDFA_NOT_PRESERVED` instead of signing
+a broken PDF/A.
 
 ### Retries, operation state and credits
 
@@ -182,8 +200,8 @@ for any other client. Two limits of that:
 |---|---|
 | `GET POST PUT DELETE /api/pdf-template[/{id}]` | Template CRUD |
 | `POST /api/fill-pdf` | Render a template with supplied field data |
-| `POST /api/convert/pdfa` | Convert a PDF to PDF/A. Before signing prefer `presign` with `convertToPdfa` (one call, checked result) |
-| `POST /api/flatten-form` | Flatten filled form fields into the page and remove active content (JavaScript, Launch, trigger actions), so the document can be signed. `409` `PDF_ALREADY_SIGNED` / `PDF_XFA_DYNAMIC` / `FLATTEN_INCOMPLETE`. Answers `result`, `sourceSha256`, `resultSha256`, `changed`, `flattenedFields`, `removed[]`. Price `FLATTEN_FORM_CREDIT_COST` (default 1) |
+| `POST /api/convert/pdfa` | Convert a PDF to PDF/A. Before signing prefer `presign` with `convertToPdfa` (one call, checked result). PDF/A-3 targets keep embedded files as associated files; other targets still drop them |
+| `POST /api/flatten-form` | Flatten filled form fields into the page and remove active content (JavaScript, Launch, trigger actions), so the document can be signed. `409` `PDF_ALREADY_SIGNED` / `PDF_XFA_DYNAMIC` / `FLATTEN_INCOMPLETE` / `PDF_FORM_INVALID`. Answers `result`, `sourceSha256`, `resultSha256`, `changed`, `flattenedFields`, `removed[]`. Price `FLATTEN_FORM_CREDIT_COST` (default 1) |
 | `POST /api/find-codes` | Detect barcodes and QR codes |
 | `POST /api/ai/detect-fields` | Suggest template fields from a PDF (optional, needs `AI__Enabled`) |
 | `POST /api/ai/extract-data` | Extract structured data from a PDF (optional) |

@@ -186,7 +186,7 @@ namespace DotNetSigningServer.Controllers
         /// <summary>Refusals of the document as it is (409): flattening it would break a signature or lose the form.</summary>
         internal static readonly IReadOnlySet<string> FlattenRefusalCodes = new HashSet<string>(StringComparer.Ordinal)
         {
-            PdfFormFlattener.AlreadySignedCode, PdfFormFlattener.XfaDynamicCode, FlattenIncompleteCode,
+            PdfFormFlattener.AlreadySignedCode, PdfFormFlattener.XfaDynamicCode, FlattenIncompleteCode, PdfFormFlattener.FormInvalidCode,
         };
 
         public const string FlattenIncompleteCode = PdfFormFlattener.IncompleteCode;

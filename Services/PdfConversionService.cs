@@ -62,6 +62,11 @@ namespace DotNetSigningServer.Services
 
                 var copier = new PdfPageFormCopier();
                 sourceDoc.CopyPagesTo(1, sourceDoc.GetNumberOfPages(), pdfaDoc, copier);
+                if (conformance.GetPart() == "3")
+                {
+                    // Pages are copied, the name tree is not: without this the files would be lost.
+                    EmbeddedFiles.CarryOver(sourceDoc, pdfaDoc);
+                }
 
                 sourceDoc.Close();
                 pdfaDoc.Close();

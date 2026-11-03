@@ -52,6 +52,8 @@ public class PresignPdfaEndpointTests : IDisposable
     private sealed class Harness : PdfSigningApiController
     {
         public readonly List<(string Operation, int BaseCost)> Calls = new();
+        /// <summary>Run the paid work and answer its body (timestamp, visual-sign); otherwise only record the price.</summary>
+        public bool RunWork { get; init; }
 
         public Harness(ApplicationDbContext db, LimitsOptions limits, BillingOptions billing, IStringLocalizer<SharedStrings> localizer)
             : base(db, new PdfSigningService(), null!, Mock.Of<IApiAuthService>(), NullLogger<PdfSigningApiController>.Instance,
@@ -65,11 +67,15 @@ public class PresignPdfaEndpointTests : IDisposable
             Func<CancellationToken, Task<PaidResult>> work, string? presignId = null, Func<Task>? afterCompleted = null)
         {
             Calls.Add((operation, baseCost));
-            return Task.FromResult<IActionResult>(Ok());
+            if (!RunWork) return Task.FromResult<IActionResult>(Ok());
+            return RunAsync(work);
         }
+
+        private async Task<IActionResult> RunAsync(Func<CancellationToken, Task<PaidResult>> work) =>
+            Ok((await work(CancellationToken.None)).Body);
     }
 
-    private Harness Controller(bool trusted = false, BillingOptions? billing = null, HttpContent? multipart = null)
+    private Harness Controller(bool trusted = false, BillingOptions? billing = null, HttpContent? multipart = null, bool runWork = false)
     {
         var limits = new LimitsOptions { RejectActiveContent = true };
         var services = new ServiceCollection();
@@ -100,6 +106,7 @@ public class PresignPdfaEndpointTests : IDisposable
         localizer.Setup(l => l[It.IsAny<string>(), It.IsAny<object[]>()]).Returns((string k, object[] _) => new LocalizedString(k, k));
         return new Harness(_db, limits, billing ?? new BillingOptions(), localizer.Object)
         {
+            RunWork = runWork,
             ControllerContext = new ControllerContext { HttpContext = http },
         };
     }
@@ -191,7 +198,7 @@ public class PresignPdfaEndpointTests : IDisposable
     {
         var (status, code, _) = Describe(await Controller().PreSign(Input(PresignPdfaTests.HelveticaText(), convert: true)));
         Assert.Equal(409, status);
-        Assert.Equal(PresignPreparation.ConversionFailedCode, code);
+        Assert.Equal(DocumentPreparation.ConversionFailedCode, code);
         Assert.Empty(_db.SigningData);
     }
 
@@ -209,7 +216,7 @@ public class PresignPdfaEndpointTests : IDisposable
     {
         var (status, code, _) = Describe(await Controller().PreSign(Input(PresignPdfaTests.Pdf(_ => { }), convert: true, conformance: "PDF/A-1A")));
         Assert.Equal(400, status);
-        Assert.Equal(PresignPreparation.ConformanceUnsupportedCode, code);
+        Assert.Equal(DocumentPreparation.ConformanceUnsupportedCode, code);
     }
 
     [Fact]
@@ -239,5 +246,115 @@ public class PresignPdfaEndpointTests : IDisposable
         Assert.Equal(200, status);
         Assert.Equal("PDF/A-3B", body.GetProperty("preparation").GetProperty("conformance").GetString());
         Assert.Equal(PdfAConformance.PDF_A_3B, DeclaredIn((await _db.SigningData.SingleAsync()).PresignedPdfPath));
+    }
+
+    // ── timestamp and visual-sign: the same step (#184) ─────────────────────────────────────────
+
+    private static VisualSignInput VisualInput(byte[] pdf, bool flatten = false, bool convert = false, string? conformance = null) => new()
+    {
+        PdfContent = Convert.ToBase64String(pdf),
+        SignerName = "Jana Nováková",
+        SignRect = new SignRect { X = 50, Y = 100, Width = 200, Height = 60 },
+        FlattenForm = flatten,
+        ConvertToPdfa = convert,
+        PdfaConformance = conformance,
+    };
+
+    private static DocumentTimestampInput TimestampInput(byte[] pdf, bool flatten = false, bool convert = false, string? conformance = null) => new()
+    {
+        PdfContent = Convert.ToBase64String(pdf),
+        SignRect = new SignRect { X = 50, Y = 100, Width = 200, Height = 60 },
+        TsaUrl = "https://tsa.invalid/",
+        FlattenForm = flatten,
+        ConvertToPdfa = convert,
+        PdfaConformance = conformance,
+    };
+
+    [Fact]
+    public async Task Visual_sign_prepares_draws_into_the_PDFA_and_adds_the_preparation_to_its_price()
+    {
+        var controller = Controller(billing: new BillingOptions { FlattenFormCredits = 1 }, runWork: true);
+        var (status, _, body) = Describe(await controller.ApplyVisualSign(VisualInput(PresignPdfaTests.ScriptedFormEmbedded(), flatten: true, convert: true, conformance: "PDF/A-3B")));
+
+        Assert.Equal(200, status);
+        var prep = body.GetProperty("preparation");
+        Assert.Equal("flattened", prep.GetProperty("flatten").GetString());
+        Assert.Equal("converted", prep.GetProperty("pdfa").GetString());
+        Assert.Equal("PDF/A-3B", prep.GetProperty("conformance").GetString());
+        Assert.Equal(2, prep.GetProperty("credits").GetInt32());
+        Assert.Equal(("visual-sign", 3), controller.Calls.Single());
+        var result = Convert.FromBase64String(body.GetProperty("result").GetString()!);
+        Assert.Empty(PdfAConformanceCheck.Problems(result, PdfAConformance.PDF_A_3B));
+    }
+
+    [Fact]
+    public async Task Visual_sign_without_the_switches_answers_as_before()
+    {
+        var controller = Controller(runWork: true);
+        var (status, _, body) = Describe(await controller.ApplyVisualSign(VisualInput(PresignPdfaTests.Pdf(_ => { }))));
+
+        Assert.Equal(200, status);
+        Assert.Equal(new[] { "result" }, body.EnumerateObject().Select(p => p.Name));
+        Assert.Equal(("visual-sign", 1), controller.Calls.Single());
+    }
+
+    [Fact]
+    public async Task Timestamp_takes_the_preparation_into_its_reservation_and_trusted_caller_pays_only_the_timestamp()
+    {
+        var paying = Controller(billing: new BillingOptions { FlattenFormCredits = 1 });
+        Assert.Equal(200, Describe(await paying.ApplyTimestamp(TimestampInput(PresignPdfaTests.ScriptedFormEmbedded(), flatten: true, convert: true))).Status);
+        Assert.Equal(("timestamp", 3), paying.Calls.Single());
+
+        var trusted = Controller(trusted: true, billing: new BillingOptions { FlattenFormCredits = 5 });
+        await trusted.ApplyTimestamp(TimestampInput(PresignPdfaTests.ScriptedFormEmbedded(), flatten: true, convert: true));
+        Assert.Equal(("timestamp", 1), trusted.Calls.Single());
+    }
+
+    [Fact]
+    public async Task Timestamp_and_visual_sign_refuse_like_presign_before_any_reservation()
+    {
+        var withFile = PresignPdfaTests.Pdf(doc => doc.AddFileAttachment("a.txt",
+            iText.Kernel.Pdf.Filespec.PdfFileSpec.CreateEmbeddedFileSpec(doc, new byte[] { 1 }, "a", "a.txt", null, null, null)));
+        var cases = new (Func<Harness, Task<IActionResult>> Call, int Status, string Code)[]
+        {
+            (c => c.ApplyTimestamp(TimestampInput(PresignPdfaTests.HelveticaText(), convert: true)), 409, DocumentPreparation.ConversionFailedCode),
+            (c => c.ApplyVisualSign(VisualInput(PresignPdfaTests.HelveticaText(), convert: true)), 409, DocumentPreparation.ConversionFailedCode),
+            (c => c.ApplyVisualSign(VisualInput(withFile, convert: true)), 409, DocumentPreparation.EmbeddedFilesCode),
+            (c => c.ApplyVisualSign(VisualInput(PresignPdfaTests.Pdf(_ => { }), convert: true, conformance: "PDF/A-1B")), 400, DocumentPreparation.ConformanceUnsupportedCode),
+            (c => c.ApplyTimestamp(TimestampInput(PdfFormFlattenerTests.DuplicateNamedFields(), flatten: true)), 409, PdfFormFlattener.FormInvalidCode),
+            // Active content without flattening is still refused at the door.
+            (c => c.ApplyVisualSign(VisualInput(PresignPdfaTests.ScriptedFormEmbedded(), convert: true)), 400, "PDF_ACTIVE_CONTENT"),
+        };
+        foreach (var (call, expectedStatus, expectedCode) in cases)
+        {
+            var controller = Controller();
+            var (status, code, _) = Describe(await call(controller));
+            Assert.Equal((expectedStatus, expectedCode), (status, code));
+            Assert.Empty(controller.Calls);
+        }
+    }
+
+    [Fact]
+    public async Task A_completed_operation_under_the_same_key_is_not_prepared_again()
+    {
+        (await _db.Users.SingleAsync()).CreditsRemaining = 0;
+        await _db.SaveChangesAsync();
+        var key = Guid.NewGuid().ToString();
+        _db.ApiOperations.Add(new ApiOperation
+        {
+            UserId = _user.Id,
+            OperationId = key,
+            ClientKey = true,
+            Operation = "visual-sign",
+            State = ApiOperationState.Completed,
+            RequestFingerprint = "x",
+        });
+        await _db.SaveChangesAsync();
+        var controller = Controller();
+        controller.HttpContext.Request.Headers[PdfSigningApiController.IdempotencyKeyHeader] = key;
+
+        // A document that would fail the conversion: a replay must reach the stored answer instead.
+        await controller.ApplyVisualSign(VisualInput(PresignPdfaTests.HelveticaText(), convert: true));
+        Assert.Equal(("visual-sign", 1), controller.Calls.Single());
     }
 }

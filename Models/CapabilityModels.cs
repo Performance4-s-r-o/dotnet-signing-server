@@ -29,6 +29,13 @@ public class ServerCapabilities
     /// ignores them and signs the document as it is, so a caller asking for PDF/A checks this first.
     /// </summary>
     public bool PresignPreparation { get; set; } = true;
+
+    /// <summary>
+    /// /api/timestamp and /api/visual-sign read the same switches as presign (#184), and a PDF/A-3
+    /// conversion keeps embedded files (an attachment, the evidence of a seal) as associated files.
+    /// An older server signs the document as it is, so a caller asking for PDF/A checks this first.
+    /// </summary>
+    public bool SigningPreparation { get; set; } = true;
 }
 
 public class SealCapability

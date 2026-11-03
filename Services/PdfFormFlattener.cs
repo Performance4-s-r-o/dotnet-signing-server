@@ -27,6 +27,8 @@ public static class PdfFormFlattener
 {
     public const string AlreadySignedCode = "PDF_ALREADY_SIGNED";
     public const string XfaDynamicCode = "PDF_XFA_DYNAMIC";
+    /// <summary>The AcroForm itself is broken (two fields with one full name and different values, #182).</summary>
+    public const string FormInvalidCode = "PDF_FORM_INVALID";
 
     /// <summary>What was done; never field names or values (they are the signer's data).</summary>
     public sealed record Report(int FlattenedFields, IReadOnlyList<string> Removed)
@@ -61,10 +63,28 @@ public static class PdfFormFlattener
     /// </summary>
     public static bool CarriesSignature(PdfDocument document)
     {
+        EnsureFormReadable(document);
         var catalog = document.GetCatalog().GetPdfObject();
         return new SignatureUtil(document).GetSignatureNames().Count > 0
             || catalog.GetAsDictionary(PdfName.Perms)?.ContainsKey(PdfName.DocMDP) == true
             || HasSignatureValue(catalog.GetAsDictionary(PdfName.AcroForm)?.GetAsArray(PdfName.Fields), null, 0);
+    }
+
+    /// <summary>
+    /// iText reads the whole AcroForm before anything else and throws on a form it cannot merge —
+    /// two fields with one full name and different values (#182). That is the document, not us:
+    /// <see cref="FormInvalidCode"/> instead of a 500. No field name in the message (signer's data).
+    /// </summary>
+    public static void EnsureFormReadable(PdfDocument document)
+    {
+        try
+        {
+            PdfAcroForm.GetAcroForm(document, false);
+        }
+        catch (PdfException)
+        {
+            throw new ApiValidationException(FormInvalidCode, "form fields cannot be read (conflicting fields with one name)");
+        }
     }
 
     /// <summary>

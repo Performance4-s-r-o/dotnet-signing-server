@@ -1,6 +1,6 @@
 namespace DotNetSigningServer.Models
 {
-    public class PreSignInput
+    public class PreSignInput : IDocumentPreparationRequest
     {
         public string CertificatePem { get; set; } = "";
         public string PdfContent { get; set; } = "";
