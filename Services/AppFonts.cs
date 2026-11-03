@@ -44,7 +44,15 @@ namespace DotNetSigningServer.Services
             _ => "LiberationSans",
         };
 
-        public static PdfFont Load(AppFontFamily family, bool bold = false, bool italic = false)
+        public static PdfFont Load(AppFontFamily family, bool bold = false, bool italic = false) =>
+            Load(family, bold, italic, PdfEncodings.IDENTITY_H);
+
+        /// <summary>The same font as a WinAnsi simple font (what a non-embedded Helvetica used, #189).</summary>
+        public static PdfTrueTypeFont LoadSimple(AppFontFamily family, bool bold = false, bool italic = false) =>
+            (PdfTrueTypeFont)Load(family, bold, italic, PdfEncodings.WINANSI, PdfFontFactory.EmbeddingStrategy.FORCE_EMBEDDED);
+
+        private static PdfFont Load(AppFontFamily family, bool bold, bool italic, string encoding,
+            PdfFontFactory.EmbeddingStrategy strategy = PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED)
         {
             // Italic TTFs aren't guaranteed for every shipped family — fall
             // back to the upright variant so a missing italic file doesn't
@@ -65,7 +73,7 @@ namespace DotNetSigningServer.Services
             var preferred = Path.Combine(FontsDir, Filename(italic));
             var fallback = Path.Combine(FontsDir, Filename(false));
             var path = italic && !File.Exists(preferred) ? fallback : preferred;
-            return PdfFontFactory.CreateFont(path, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
+            return PdfFontFactory.CreateFont(path, encoding, strategy);
         }
 
         public static AppFontFamily FamilyFromLegacyName(string? name) => name switch

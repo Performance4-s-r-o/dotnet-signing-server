@@ -196,7 +196,7 @@ public class PresignPdfaEndpointTests : IDisposable
     [Fact]
     public async Task A_document_that_cannot_be_converted_is_409_and_leaves_no_presign()
     {
-        var (status, code, _) = Describe(await Controller().PreSign(Input(PresignPdfaTests.HelveticaText(), convert: true)));
+        var (status, code, _) = Describe(await Controller().PreSign(Input(PresignPdfaTests.SymbolText(), convert: true)));
         Assert.Equal(409, status);
         Assert.Equal(DocumentPreparation.ConversionFailedCode, code);
         Assert.Empty(_db.SigningData);
@@ -317,8 +317,8 @@ public class PresignPdfaEndpointTests : IDisposable
             iText.Kernel.Pdf.Filespec.PdfFileSpec.CreateEmbeddedFileSpec(doc, new byte[] { 1 }, "a", "a.txt", null, null, null)));
         var cases = new (Func<Harness, Task<IActionResult>> Call, int Status, string Code)[]
         {
-            (c => c.ApplyTimestamp(TimestampInput(PresignPdfaTests.HelveticaText(), convert: true)), 409, DocumentPreparation.ConversionFailedCode),
-            (c => c.ApplyVisualSign(VisualInput(PresignPdfaTests.HelveticaText(), convert: true)), 409, DocumentPreparation.ConversionFailedCode),
+            (c => c.ApplyTimestamp(TimestampInput(PresignPdfaTests.SymbolText(), convert: true)), 409, DocumentPreparation.ConversionFailedCode),
+            (c => c.ApplyVisualSign(VisualInput(PresignPdfaTests.SymbolText(), convert: true)), 409, DocumentPreparation.ConversionFailedCode),
             (c => c.ApplyVisualSign(VisualInput(withFile, convert: true)), 409, DocumentPreparation.EmbeddedFilesCode),
             (c => c.ApplyVisualSign(VisualInput(PresignPdfaTests.Pdf(_ => { }), convert: true, conformance: "PDF/A-1B")), 400, DocumentPreparation.ConformanceUnsupportedCode),
             (c => c.ApplyTimestamp(TimestampInput(PdfFormFlattenerTests.DuplicateNamedFields(), flatten: true)), 409, PdfFormFlattener.FormInvalidCode),
@@ -354,7 +354,7 @@ public class PresignPdfaEndpointTests : IDisposable
         controller.HttpContext.Request.Headers[PdfSigningApiController.IdempotencyKeyHeader] = key;
 
         // A document that would fail the conversion: a replay must reach the stored answer instead.
-        await controller.ApplyVisualSign(VisualInput(PresignPdfaTests.HelveticaText(), convert: true));
+        await controller.ApplyVisualSign(VisualInput(PresignPdfaTests.SymbolText(), convert: true));
         Assert.Equal(("visual-sign", 1), controller.Calls.Single());
     }
 }
