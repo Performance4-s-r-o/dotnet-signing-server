@@ -21,13 +21,23 @@ internal static class PinnedIpHttp
 {
     internal static readonly TimeSpan DnsTimeout = TimeSpan.FromSeconds(3);
 
+    /// <summary>DNS lookup used by the guards; replaced only by tests.</summary>
+    internal static Func<string, CancellationToken, Task<IPAddress[]>> Resolver { get; set; } =
+        (host, ct) => Dns.GetHostAddressesAsync(host, ct);
+
     /// <param name="errorCode">
     /// Thrown as <see cref="ApiValidationException"/> when the resolved address is
     /// private. Callers pass their own code so the refusal stays legible to whoever
     /// asked — a TSA problem and a revocation problem need different answers.
     /// </param>
-    internal static HttpClient CreateClient(string errorCode, TimeSpan timeout)
+    /// <param name="acceptable">
+    /// Which resolved address may be used for a host; default = public only. The TSA client
+    /// passes <see cref="TsaPrivateHosts.IsAcceptable"/>.
+    /// </param>
+    internal static HttpClient CreateClient(
+        string errorCode, TimeSpan timeout, Func<string, IPAddress, bool>? acceptable = null)
     {
+        acceptable ??= (_, ip) => !PdfCryptoHelper.IsPrivateOrLocalAddress(ip);
         var handler = new SocketsHttpHandler
         {
             // SocketsHttpHandler pools connections; one handler per request would
@@ -41,7 +51,7 @@ internal static class PinnedIpHttp
             ConnectCallback = async (context, cancellationToken) =>
             {
                 var target = await ResolvePublicAddressAsync(
-                    context.DnsEndPoint.Host, errorCode, cancellationToken).ConfigureAwait(false);
+                    context.DnsEndPoint.Host, errorCode, acceptable, cancellationToken).ConfigureAwait(false);
 
                 var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
                 try
@@ -66,8 +76,8 @@ internal static class PinnedIpHttp
     /// Picks an address to connect to, failing closed: a host with no public address
     /// is refused rather than silently falling back to whatever DNS returned first.
     /// </summary>
-    private static async Task<IPAddress> ResolvePublicAddressAsync(
-        string host, string errorCode, CancellationToken cancellationToken)
+    internal static async Task<IPAddress> ResolvePublicAddressAsync(
+        string host, string errorCode, Func<string, IPAddress, bool> acceptable, CancellationToken cancellationToken)
     {
         IPAddress[] addresses;
         if (IPAddress.TryParse(host, out var literal))
@@ -81,7 +91,7 @@ internal static class PinnedIpHttp
             dnsDeadline.CancelAfter(DnsTimeout);
             try
             {
-                addresses = await Dns.GetHostAddressesAsync(host, dnsDeadline.Token).ConfigureAwait(false);
+                addresses = await Resolver(host, dnsDeadline.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
@@ -89,8 +99,8 @@ internal static class PinnedIpHttp
             }
         }
 
-        var target = addresses.FirstOrDefault(a => !PdfCryptoHelper.IsPrivateOrLocalAddress(a));
-        if (target is null || PdfCryptoHelper.IsPrivateOrLocalAddress(target))
+        var target = addresses.FirstOrDefault(a => acceptable(host, a));
+        if (target is null || !acceptable(host, target))
         {
             throw new ApiValidationException(errorCode);
         }

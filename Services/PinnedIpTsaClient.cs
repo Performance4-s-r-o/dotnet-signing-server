@@ -199,5 +199,5 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
     internal static HttpClient SharedClient { get; set; } = CreateGuardedClient();
 
     private static HttpClient CreateGuardedClient() =>
-        PinnedIpHttp.CreateClient("TSA_HOST_NOT_ALLOWED", MaxRequestTimeout);
+        PinnedIpHttp.CreateClient("TSA_HOST_NOT_ALLOWED", MaxRequestTimeout, TsaPrivateHosts.IsAcceptable);
 }

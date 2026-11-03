@@ -135,8 +135,9 @@ namespace DotNetSigningServer.Services
             }
 
             // SSRF guard: the URL must not point at an internal/loopback/link-local
-            // address. Public TSAs are unaffected.
-            if (ResolvesToPrivateAddress(parsedUri.DnsSafeHost))
+            // address. Public TSAs are unaffected; a name on TSA_PRIVATE_HOST_ALLOWLIST
+            // may resolve to a private range, never to loopback or link-local.
+            if (ResolvesToDisallowedTsaAddress(parsedUri.DnsSafeHost))
             {
                 throw new ApiValidationException("TSA_HOST_NOT_ALLOWED");
             }
@@ -152,7 +153,17 @@ namespace DotNetSigningServer.Services
         /// unique-local address — blocked to prevent SSRF into the internal network.
         /// Fails closed (returns true) if the host cannot be resolved.
         /// </summary>
-        internal static bool ResolvesToPrivateAddress(string host)
+        internal static bool ResolvesToPrivateAddress(string host) =>
+            ResolvesToDisallowedAddress(host, ip => !IsPrivateOrLocal(ip));
+
+        /// <summary>
+        /// <see cref="ResolvesToPrivateAddress"/> for a TSA host, with the operator's
+        /// <see cref="TsaPrivateHosts"/> exception. An IP literal is never on the allowlist.
+        /// </summary>
+        internal static bool ResolvesToDisallowedTsaAddress(string host) =>
+            ResolvesToDisallowedAddress(host, ip => TsaPrivateHosts.IsAcceptable(host, ip));
+
+        private static bool ResolvesToDisallowedAddress(string host, Func<System.Net.IPAddress, bool> acceptable)
         {
             System.Net.IPAddress[] addresses;
             if (System.Net.IPAddress.TryParse(host, out var literal))
@@ -164,7 +175,7 @@ namespace DotNetSigningServer.Services
                 try
                 {
                     // Bounded: the resolver's own timeout is tens of seconds (#72).
-                    var lookup = System.Net.Dns.GetHostAddressesAsync(host);
+                    var lookup = PinnedIpHttp.Resolver(host, CancellationToken.None);
                     if (!lookup.Wait(PinnedIpHttp.DnsTimeout)) return true;
                     addresses = lookup.Result;
                 }
@@ -177,7 +188,7 @@ namespace DotNetSigningServer.Services
 
             foreach (var ip in addresses)
             {
-                if (IsPrivateOrLocal(ip)) return true;
+                if (!acceptable(ip)) return true;
             }
             return false;
         }
