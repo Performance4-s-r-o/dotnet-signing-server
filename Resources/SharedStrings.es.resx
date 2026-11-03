@@ -167,6 +167,8 @@
   <data name="Error_TSA_REQUIRED_FOR_ARCHIVE_TIMESTAMP" xml:space="preserve"><value>Un sello de archivo requiere una autoridad de sellado de tiempo: indique tsaUrl o ponga addArchiveTimestamp en false para obtener solo B-LT.</value></data>
   <data name="Error_NO_SIGNATURE_TO_EXTEND" xml:space="preserve"><value>El documento no contiene ninguna firma que ampliar.</value></data>
   <data name="Error_NO_REVOCATION_DATA_AVAILABLE" xml:space="preserve"><value>No se pudieron obtener datos de revocación para los certificados de firma, por lo que no se incrustó información de validación a largo plazo.</value></data>
+  <data name="Error_INCOMPLETE_REVOCATION_DATA" xml:space="preserve"><value>No se pudieron obtener datos de revocación para todos los certificados de la firma requerida o de su sello de tiempo, por lo que no sería verificable a largo plazo.</value></data>
+  <data name="Error_SIGNATURE_NOT_FOUND" xml:space="preserve"><value>El documento no contiene ninguna firma con el nombre indicado.</value></data>
   <data name="VisualSignError" xml:space="preserve"><value>Se produjo un error al aplicar la firma visual</value></data>
   <data name="SealCertificateRequired" xml:space="preserve"><value>El servidor no tiene certificado de sello propio. Aporte usted el certificado (presign/sign con su clave o sign-pfx).</value></data>
   <data name="SealNotPermitted" xml:space="preserve"><value>El sellado no está habilitado para esta cuenta.</value></data>
@@ -547,7 +549,8 @@
   <data name="ApiDocExtendIntro" xml:space="preserve"><value>Un sello de tiempo demuestra cuándo se firmó un documento, no que el certificado fuera válido en ese momento. Para eso hacen falta datos de revocación, que solo están disponibles en línea y que las autoridades de certificación dejan de publicar cuando un certificado caduca. Esta llamada congela esa evidencia dentro del documento (B-LT) y sella el resultado (B-LTA), de modo que pueda verificarse años después solo con el archivo. Ejecútela de nuevo antes de que caduque el certificado del sello de archivo para renovar la cadena.</value></data>
   <data name="ApiDocExtendNote1" xml:space="preserve"><value>Cuesta 1 crédito más el recargo del sello de tiempo cuando se solicita un sello de archivo.</value></data>
   <data name="ApiDocExtendNote2" xml:space="preserve"><value>Ponga addArchiveTimestamp en false para obtener solo B-LT; con true, tsaUrl es obligatorio y la solicitud se rechaza en lugar de degradarse en silencio.</value></data>
-  <data name="ApiDocExtendNote3" xml:space="preserve"><value>Falla cuando no se pueden obtener datos de revocación, en vez de devolver un documento que aparenta validez a largo plazo sin tenerla.</value></data>
+  <data name="ApiDocExtendNote3" xml:space="preserve"><value>Falla cuando no se pueden obtener datos de revocación para ninguna firma. Sin requireCompleteRevocationFor bastan los datos de algunas firmas.</value></data>
+  <data name="ApiDocExtendNote4" xml:space="preserve"><value>El parámetro opcional requireCompleteRevocationFor nombra un campo de firma (normalmente el recién añadido): cada certificado de su cadena y de su sello de tiempo, salvo los anclajes de confianza, debe obtener OCSP o una CRL; si no, la llamada falla con INCOMPLETE_REVOCATION_DATA.</value></data>
   <data name="ApiDocAttachmentTitle" xml:space="preserve"><value>Embed a file attachment</value></data>
   <data name="ApiDocAttachmentPurpose" xml:space="preserve"><value>Embed attachment</value></data>
   <data name="ApiDocAttachmentCredits" xml:space="preserve"><value>1</value></data>

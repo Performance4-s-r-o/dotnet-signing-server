@@ -167,6 +167,8 @@
   <data name="Error_TSA_REQUIRED_FOR_ARCHIVE_TIMESTAMP" xml:space="preserve"><value>Archivní razítko vyžaduje autoritu časových razítek — zadejte tsaUrl, nebo nastavte addArchiveTimestamp na false pro pouhé B-LT.</value></data>
   <data name="Error_NO_SIGNATURE_TO_EXTEND" xml:space="preserve"><value>Dokument neobsahuje žádný podpis, který by šlo rozšířit.</value></data>
   <data name="Error_NO_REVOCATION_DATA_AVAILABLE" xml:space="preserve"><value>Pro podpisové certifikáty se nepodařilo získat revokační data, takže nebyly vloženy žádné informace pro dlouhodobé ověřování.</value></data>
+  <data name="Error_INCOMPLETE_REVOCATION_DATA" xml:space="preserve"><value>Pro některý certifikát požadovaného podpisu nebo jeho časového razítka se nepodařilo získat data o odvolání, podpis by proto nebyl dlouhodobě ověřitelný.</value></data>
+  <data name="Error_SIGNATURE_NOT_FOUND" xml:space="preserve"><value>Dokument neobsahuje podpis se zadaným názvem.</value></data>
   <data name="VisualSignError" xml:space="preserve"><value>Při aplikaci vizuálního podpisu došlo k chybě</value></data>
   <data name="SealCertificateRequired" xml:space="preserve"><value>Server nemá vlastní pečetní certifikát. Certifikát dodejte sami (presign/sign s vaším klíčem, nebo sign-pfx).</value></data>
   <data name="SealNotPermitted" xml:space="preserve"><value>Pečetění není pro tento účet povoleno.</value></data>
@@ -557,7 +559,8 @@
   <data name="ApiDocExtendIntro" xml:space="preserve"><value>Časové razítko dokazuje, kdy byl dokument podepsán; nedokazuje, že certifikát byl v tu chvíli platný. K tomu jsou potřeba revokační data, která jsou dostupná jen online a která certifikační autority po vypršení certifikátu přestanou vydávat. Toto volání ty důkazy zmrazí přímo do dokumentu (B-LT) a výsledek orazítkuje (B-LTA), takže ho lze ověřit i za mnoho let jen ze souboru. Spusťte je znovu dřív, než vyprší certifikát archivního razítka, a řetěz se obnoví.</value></data>
   <data name="ApiDocExtendNote1" xml:space="preserve"><value>Stojí 1 kredit plus příplatek za razítko, pokud je archivní razítko požadováno.</value></data>
   <data name="ApiDocExtendNote2" xml:space="preserve"><value>Pro pouhé B-LT nastavte addArchiveTimestamp na false; při true je tsaUrl povinné a požadavek se odmítne, místo aby se tiše snížila úroveň.</value></data>
-  <data name="ApiDocExtendNote3" xml:space="preserve"><value>Když se nepodaří získat žádná revokační data, volání selže — místo aby vrátilo dokument, který dlouhodobou platnost jen předstírá.</value></data>
+  <data name="ApiDocExtendNote3" xml:space="preserve"><value>Selže, když se nepodaří získat revokační data pro žádný podpis. Bez requireCompleteRevocationFor stačí data jen k některým podpisům.</value></data>
+  <data name="ApiDocExtendNote4" xml:space="preserve"><value>Nepovinné requireCompleteRevocationFor jmenuje jedno podpisové pole (obvykle právě přidané): každý certifikát jeho řetězu i jeho časového razítka, kromě kořenů důvěry, musí dostat OCSP nebo CRL, jinak volání selže s INCOMPLETE_REVOCATION_DATA.</value></data>
   <data name="ApiDocAttachmentTitle" xml:space="preserve"><value>Vložení přílohy</value></data>
   <data name="ApiDocAttachmentPurpose" xml:space="preserve"><value>Vloží přílohu do PDF</value></data>
   <data name="ApiDocAttachmentCredits" xml:space="preserve"><value>1</value></data>
