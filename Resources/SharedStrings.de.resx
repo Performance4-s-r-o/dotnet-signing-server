@@ -172,6 +172,7 @@
   <data name="VisualSignError" xml:space="preserve"><value>Beim Anbringen der visuellen Signatur ist ein Fehler aufgetreten</value></data>
   <data name="SealCertificateRequired" xml:space="preserve"><value>Der Server hat kein eigenes Siegelzertifikat. Stellen Sie das Zertifikat selbst bereit (presign/sign mit Ihrem Schlüssel oder sign-pfx).</value></data>
   <data name="SealNotPermitted" xml:space="preserve"><value>Das Siegeln ist für dieses Konto nicht freigeschaltet.</value></data>
+  <data name="AttachmentBypassNotPermitted" xml:space="preserve"><value>Nur der vertrauenswürdige Aufrufer darf die Berechnung des Anhangs überspringen.</value></data>
   <data name="SealAllowed" xml:space="preserve"><value>Siegeln</value></data>
   <data name="SealAllowedDescription" xml:space="preserve"><value>Schaltet /api/seal für dieses Konto frei. Der Server hat kein eigenes Zertifikat, der Endpunkt antwortet daher nur mit 422 SEAL_CERTIFICATE_REQUIRED; siegeln Sie mit Ihrem eigenen Zertifikat über presign/sign oder sign-pfx. Standardmäßig aus.</value></data>
   <data name="EnableSealAllowed" xml:space="preserve"><value>Siegeln aktivieren</value></data>

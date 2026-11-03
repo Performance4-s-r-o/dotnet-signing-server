@@ -414,7 +414,6 @@ builder.Services.AddOptions<BillingOptions>()
     .PostConfigure(options =>
     {
         if (currencyProblem != null) options.Currency = "EUR";
-        options.AttachmentDebitBypassKey = builder.Configuration["ATTACHMENT_DEBIT_BYPASS_KEY"] ?? options.AttachmentDebitBypassKey;
         options.FlattenFormCredits = EnvValues.Int(builder.Configuration, "FLATTEN_FORM_CREDIT_COST") ?? options.FlattenFormCredits;
         if (options.FlattenFormCredits < 0)
         {
