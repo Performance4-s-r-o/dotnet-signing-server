@@ -381,20 +381,19 @@ namespace DotNetSigningServer.Controllers
             // presign is gone and the operation itself carries the owner.
             var existing = await Operations.FindByPresignAsync(input.Id);
             var presign = await DbContext.SigningData.AsNoTracking().FirstOrDefaultAsync(x => x.Id == input.Id);
+            // Another account's presign or signature is answered as missing (#131): Forbid() redirected
+            // an API caller to the sign-in page, and a 403 would confirm that the id exists.
             if (existing == null)
             {
-                if (presign == null)
+                if (presign == null || presign.UserId != user.Id)
                 {
-                    return NotFound(new { message = Localizer["SigningDataNotFound"].Value });
-                }
-                if (presign.UserId != user.Id)
-                {
-                    return Forbid();
+                    return NotFound(new { code = SigningDataNotFoundCode, message = Localizer["SigningDataNotFound"].Value });
                 }
             }
             else if (existing.UserId != user.Id)
             {
-                return Forbid();
+                Logger.LogWarning(Logging.LoggingEvents.AuthFailed, "Sign refused for user {UserId}: presign {PresignId} belongs to another account", user.Id, input.Id);
+                return NotFound(new { code = SigningDataNotFoundCode, message = Localizer["SigningDataNotFound"].Value });
             }
 
             // The presign is NOT deleted before the work any more (#77): the operation row,
