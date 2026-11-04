@@ -127,9 +127,13 @@ public sealed class PricingSnapshotWorker : BackgroundService
     private readonly PricingSnapshotRefresher _refresher;
     private readonly TimeProvider _time;
     private readonly ILogger<PricingSnapshotWorker> _logger;
+    private readonly DotNetSigningServer.Services.Ops.IJobHeartbeat _heartbeat;
 
-    public PricingSnapshotWorker(PricingSnapshotRefresher refresher, TimeProvider time, ILogger<PricingSnapshotWorker> logger)
+    public PricingSnapshotWorker(PricingSnapshotRefresher refresher, TimeProvider time, ILogger<PricingSnapshotWorker> logger,
+        DotNetSigningServer.Services.Ops.IJobHeartbeat? heartbeat = null)
     {
+        _heartbeat = heartbeat ?? DotNetSigningServer.Services.Ops.JobHeartbeat.Disabled;
+        _heartbeat.Register(DotNetSigningServer.Services.Ops.HeartbeatJobs.PricingRefresh);
         _refresher = refresher;
         _time = time;
         _logger = logger;
@@ -141,12 +145,12 @@ public sealed class PricingSnapshotWorker : BackgroundService
         {
             if (!await _refresher.LoadStoredAsync(cancellationToken))
             {
-                _logger.LogInformation("[pricing] no stored price list yet; configured prices until the first refresh");
+                _logger.LogInformation("[pricing] no stored price list yet; nothing is sold until the first refresh");
             }
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
-            _logger.LogWarning(ex, "[pricing] stored price list could not be loaded; configured prices until the first refresh");
+            _logger.LogWarning(ex, "[pricing] stored price list could not be loaded; nothing is sold until the first refresh");
         }
         await base.StartAsync(cancellationToken);
     }
@@ -160,7 +164,8 @@ public sealed class PricingSnapshotWorker : BackgroundService
             var delay = Interval;
             try
             {
-                await _refresher.RefreshAsync(reason, conditional: true, stoppingToken);
+                await _heartbeat.RunAsync(DotNetSigningServer.Services.Ops.HeartbeatJobs.PricingRefresh,
+                    ct => _refresher.RefreshAsync(reason, conditional: true, ct), stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

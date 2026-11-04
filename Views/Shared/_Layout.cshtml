@@ -3,6 +3,7 @@
 @inject Microsoft.Extensions.Options.IOptions<DotNetSigningServer.Options.P4BackofficeProductOptions> Backoffice
 @inject Microsoft.Extensions.Options.IOptions<DotNetSigningServer.Options.AppOptions> App
 @inject DotNetSigningServer.Services.Consents.ConsentNoticeProvider ConsentNotices
+@inject DotNetSigningServer.Services.Pricing.ICreditPricingProvider Pricing
 @{
     var supportEnabled = OsTicket.Value.IsConfigured
         || Backoffice.Value.ModeFor(DotNetSigningServer.Services.Backoffice.BackofficeModule.Support) == DotNetSigningServer.Services.Backoffice.BackofficeMode.On;
@@ -118,7 +119,7 @@
     }
     @* Entity signals: tells search engines that "Performance4PDF" is this product, published
        by this company. Pages may add their own graph via ViewData["JsonLd"]. *@
-    <script type="application/ld+json">@Html.Raw(DotNetSigningServer.Services.StructuredData.SiteJsonLd(origin, metaDescription))</script>
+    <script type="application/ld+json">@Html.Raw(DotNetSigningServer.Services.StructuredData.SiteJsonLd(origin, metaDescription, Pricing.Currency))</script>
     @if (ViewData["JsonLd"] is string extraJsonLd && !string.IsNullOrWhiteSpace(extraJsonLd))
     {
         <script type="application/ld+json">@Html.Raw(extraJsonLd)</script>

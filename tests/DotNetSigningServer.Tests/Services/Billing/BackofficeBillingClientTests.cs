@@ -208,7 +208,7 @@ public class BackofficeBillingClientTests
         Assert.Empty(await Gateway().ListInvoicesAsync(_user, 10));
         var invoice = Assert.Single(await Gateway().ListInvoicesAsync(_user, 10));
 
-        Assert.Equal(new InvoiceSummary("A-1", 1500, "paid", "https://invoice.test/1", new DateTime(2026, 10, 1, 10, 0, 0, DateTimeKind.Utc)), invoice);
+        Assert.Equal(new InvoiceSummary("A-1", 1500, "paid", "https://invoice.test/1", new DateTime(2026, 10, 1, 10, 0, 0, DateTimeKind.Utc), "EUR"), invoice);
         Assert.Contains("customer_ref=user%3A6f9619ff", _service.Requests[0].Request.RequestUri!.Query);
     }
 }

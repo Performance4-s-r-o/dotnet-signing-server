@@ -36,18 +36,10 @@ public class BillingCheckoutTests : IDisposable
 
     public void Dispose() => _db.Dispose();
 
-    private sealed class Monitor<T>(T value) : IOptionsMonitor<T>
-    {
-        public T CurrentValue => value;
-        public T Get(string? name) => value;
-        public IDisposable? OnChange(Action<T, string?> listener) => null;
-    }
-
     private BillingController Controller(ICreditPricingProvider pricing)
     {
         var controller = new BillingController(
             _db,
-            new BillingService(TestHelpers.WrapOptions(new BillingOptions())),
             pricing,
             _checkout.Object,
             Mock.Of<IAutoRechargeService>(),
@@ -70,8 +62,7 @@ public class BillingCheckoutTests : IDisposable
     {
         var holder = new PricingSnapshotHolder();
         holder.Set(PricingTestData.Snapshot(json));
-        return new BackofficeCreditPricingProvider(holder, new ConfigCreditPricingProvider(new BillingOptions()),
-            new Monitor<BillingOptions>(new BillingOptions()), NullLogger<BackofficeCreditPricingProvider>.Instance);
+        return new BackofficeCreditPricingProvider(holder, NullLogger<BackofficeCreditPricingProvider>.Instance);
     }
 
     [Fact]
@@ -94,26 +85,46 @@ public class BillingCheckoutTests : IDisposable
     }
 
     [Fact]
-    public async Task ConfiguredPrices_ChargeTheSameAmountAsBefore()
+    public async Task NoPriceList_CheckoutIsRefused()
     {
-        CreditPack? charged = null;
-        _checkout.Setup(c => c.StartCheckoutAsync(It.IsAny<User>(), It.IsAny<CreditPack>(), It.IsAny<string>(), It.IsAny<string>(),
-                It.IsAny<IDictionary<string, string>>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-            .Callback<User, CreditPack, string, string, IDictionary<string, string>, bool, CancellationToken>((_, p, _, _, _, _, _) => charged = p)
-            .ReturnsAsync("https://checkout.test/2");
-        var controller = Controller(new ConfigCreditPricingProvider(new BillingOptions()));
+        var controller = Controller(new NoCreditPricingProvider());
 
-        await controller.Checkout(1000);
+        var result = await controller.Checkout(100);
 
-        Assert.Equal(4250, charged!.UnitAmountMinor);
-        Assert.Equal("EUR", charged.Currency);
-        Assert.Null(charged.LookupKey);
+        Assert.IsType<RedirectToActionResult>(result);
+        Assert.Equal("InvalidDocumentBundle", controller.TempData["Error"]);
+        _checkout.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task NoPriceList_BillingPageHasNoPrice()
+    {
+        var controller = Controller(new NoCreditPricingProvider());
+
+        var view = Assert.IsType<ViewResult>(await controller.Index());
+
+        var model = Assert.IsType<BillingController.BillingViewModel>(view.Model);
+        Assert.Empty(model.Packs);
+        Assert.Null(model.PricePer100);
+        Assert.Null(model.Currency);
+    }
+
+    [Fact]
+    public async Task NoPriceList_AutoRechargeIsRefused()
+    {
+        var controller = Controller(new NoCreditPricingProvider());
+
+        var result = await controller.EnableAutoRecharge(100);
+
+        Assert.IsType<RedirectToActionResult>(result);
+        Assert.Equal("InvalidDocumentBundle", controller.TempData["Error"]);
+        _checkout.VerifyNoOtherCalls();
     }
 
     [Fact]
     public async Task UnsoldQuantity_IsRefused()
     {
-        var controller = Controller(new ConfigCreditPricingProvider(new BillingOptions()));
+        var controller = Controller(PriceListProvider(PricingTestData.ImportedJson(1)));
 
         var result = await controller.Checkout(200);
 
@@ -132,7 +143,7 @@ public class BillingCheckoutTests : IDisposable
             new CreditGrant { GrantKey = CreditGrants.AutoRechargeKey("pi_1"), UserId = _user.Id, Credits = 300, Source = "test", GrantedAt = now.AddDays(-1) },
             new CreditGrant { GrantKey = "cs_other", UserId = Guid.NewGuid(), Credits = 1000, Source = "test", GrantedAt = now });
         await _db.SaveChangesAsync();
-        var controller = Controller(new ConfigCreditPricingProvider(new BillingOptions()));
+        var controller = Controller(PriceListProvider(PricingTestData.ImportedJson(1)));
 
         var view = Assert.IsType<ViewResult>(await controller.Index());
 

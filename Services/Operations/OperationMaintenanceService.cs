@@ -1,3 +1,5 @@
+using DotNetSigningServer.Services.Ops;
+
 namespace DotNetSigningServer.Services.Operations;
 
 /// <summary>
@@ -10,15 +12,18 @@ namespace DotNetSigningServer.Services.Operations;
 /// </summary>
 public class OperationMaintenanceService : BackgroundService
 {
-    private static readonly TimeSpan Interval = TimeSpan.FromMinutes(1);
+    internal static readonly TimeSpan Interval = TimeSpan.FromMinutes(1);
 
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<OperationMaintenanceService> _logger;
+    private readonly IJobHeartbeat _heartbeat;
 
-    public OperationMaintenanceService(IServiceProvider serviceProvider, ILogger<OperationMaintenanceService> logger)
+    public OperationMaintenanceService(IServiceProvider serviceProvider, ILogger<OperationMaintenanceService> logger, IJobHeartbeat? heartbeat = null)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _heartbeat = heartbeat ?? JobHeartbeat.Disabled;
+        _heartbeat.Register(HeartbeatJobs.OperationMaintenance);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -27,9 +32,12 @@ public class OperationMaintenanceService : BackgroundService
         {
             try
             {
-                using var scope = _serviceProvider.CreateScope();
-                var operations = scope.ServiceProvider.GetRequiredService<ApiOperationService>();
-                await operations.SweepAsync(DateTimeOffset.UtcNow, stoppingToken);
+                await _heartbeat.RunAsync(HeartbeatJobs.OperationMaintenance, async ct =>
+                {
+                    using var scope = _serviceProvider.CreateScope();
+                    var operations = scope.ServiceProvider.GetRequiredService<ApiOperationService>();
+                    await operations.SweepAsync(DateTimeOffset.UtcNow, ct);
+                }, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

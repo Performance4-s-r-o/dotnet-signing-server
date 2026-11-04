@@ -1,5 +1,6 @@
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Services.Billing;
+using DotNetSigningServer.Services.Ops;
 using Microsoft.EntityFrameworkCore;
 
 namespace DotNetSigningServer.Services;
@@ -18,11 +19,19 @@ namespace DotNetSigningServer.Services;
 /// The backoffice inbox/outbox are cleaned by their own workers
 /// (<c>BackofficeInboxProcessor</c>, <c>OutboxHealth</c>). Invoices and payments stay (10 years).
 /// </summary>
-public sealed class DataRetentionService(IServiceProvider services, TimeProvider time, ILogger<DataRetentionService> logger) : BackgroundService
+public sealed class DataRetentionService(IServiceProvider services, TimeProvider time, ILogger<DataRetentionService> logger, IJobHeartbeat? heartbeat = null) : BackgroundService
 {
+    private readonly IJobHeartbeat _heartbeat = Registered(heartbeat ?? JobHeartbeat.Disabled);
+
+    private static IJobHeartbeat Registered(IJobHeartbeat heartbeat)
+    {
+        heartbeat.Register(HeartbeatJobs.DataRetention);
+        return heartbeat;
+    }
+
     public static readonly TimeSpan WebhookEventRetention = TimeSpan.FromDays(30);
     public static readonly TimeSpan DocumentRetention = TimeSpan.FromDays(90);
-    private static readonly TimeSpan Interval = TimeSpan.FromHours(24);
+    internal static readonly TimeSpan Interval = TimeSpan.FromHours(24);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -32,9 +41,12 @@ public sealed class DataRetentionService(IServiceProvider services, TimeProvider
         {
             try
             {
-                using var scope = services.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                var (events, documents) = await RunAsync(db, time.GetUtcNow(), stoppingToken);
+                var (events, documents) = await _heartbeat.RunAsync(HeartbeatJobs.DataRetention, async ct =>
+                {
+                    using var scope = services.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                    return await RunAsync(db, time.GetUtcNow(), ct);
+                }, stoppingToken);
                 if (events + documents > 0)
                     logger.LogInformation("Retention removed {Events} webhook event(s) and {Documents} document(s)", events, documents);
             }

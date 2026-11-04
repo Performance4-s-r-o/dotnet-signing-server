@@ -79,7 +79,6 @@ public class StripeCustomerOwnershipTests : IClassFixture<OutboxPostgresFixture>
         pricing.SetupGet(p => p.PricePer100).Returns(5m);
         var controller = new BillingController(
             db,
-            new BillingService(TestHelpers.WrapOptions(new BillingOptions())),
             pricing.Object,
             checkout.Object,
             _autoRecharge.Object,

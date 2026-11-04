@@ -4,7 +4,9 @@
     ViewData["Title"] = "Billing";
     var culture = System.Globalization.CultureInfo.CurrentUICulture;
     string money(decimal v) => DotNetSigningServer.Services.Pricing.CreditPricing.FormatAmount(v, culture);
-    int discount(DotNetSigningServer.Services.Pricing.CreditPack p) => p.DiscountPercentVersus(Model.PricePer100);
+    int discount(DotNetSigningServer.Services.Pricing.CreditPack p) => p.DiscountPercentVersus(Model.PricePer100 ?? 0m);
+    // Without a price list nothing is sold: no prices and no checkout, never a price of 0 (#175).
+    bool hasPacks = Model.Packs.Count > 0;
     var pm = Model.SavedPaymentMethod;
     bool hasCard = pm != null;
 }
@@ -123,18 +125,21 @@ else
             <p class="billing-credits-remaining"><strong>Remaining:</strong> @Model.CreditsRemaining</p>
             <p class="billing-credits-note">Includes the first 10 free credits on your account.</p>
 
-            <h3 class="billing-pricing-title" id="pricing">Pricing</h3>
-            <div class="billing-pricing-list">
-                @foreach (var pack in Model.Packs)
-                {
-                    <p class="billing-pricing-item">@pack.Quantity credits: @money(pack.Amount) @pack.Currency
-                        @if (discount(pack) > 0)
-                        {
-                            <span class="discount">(@discount(pack)% off)</span>
-                        }
-                    </p>
-                }
-            </div>
+            @if (hasPacks)
+            {
+                <h3 class="billing-pricing-title" id="pricing">Pricing</h3>
+                <div class="billing-pricing-list">
+                    @foreach (var pack in Model.Packs)
+                    {
+                        <p class="billing-pricing-item">@pack.Quantity credits: @money(pack.Amount) @pack.Currency
+                            @if (discount(pack) > 0)
+                            {
+                                <span class="discount">(@discount(pack)% off)</span>
+                            }
+                        </p>
+                    }
+                </div>
+            }
 
             <h3 class="billing-pricing-title" style="margin-top:1.25rem">@L["ConcurrencyPricingTitle"]</h3>
             <p class="muted" style="font-size:0.875rem;margin-bottom:0.5rem">@L["ConcurrencyPricingDescription"]</p>
@@ -195,10 +200,10 @@ else
                     <strong>@Model.AutoRechargeQuantity credits</strong> will be purchased automatically when your balance drops below
                     <strong>@DotNetSigningServer.Services.AutoRechargeService.ThresholdCredits</strong> credits.
                 </p>
-                @if (Model.PricePer100 != Model.AutoRechargePricePer100)
+                @if (Model.PricePer100 is { } nowPer100 && Model.AutoRechargePricePer100 > 0 && nowPer100 != Model.AutoRechargePricePer100)
                 {
                     <p style="font-size:0.875rem;color:#dc2626;margin-bottom:0.5rem">
-                        Price has changed since enrollment (@money(Model.AutoRechargePricePer100) @Model.Currency &rarr; @money(Model.PricePer100) @Model.Currency / 100 credits).
+                        Price has changed since enrollment (@money(Model.AutoRechargePricePer100) @Model.Currency &rarr; @money(nowPer100) @Model.Currency / 100 credits).
                     </p>
                 }
                 <form method="post" action="/Billing/AutoRecharge/Disable" style="margin-top:0.5rem">
@@ -232,50 +237,53 @@ else
             }
         </div>
 
-        <div class="card">
-            <h2 class="card-title">Buy more credits</h2>
-            <p class="billing-buy-description">Purchase credits to use on your account.</p>
-            <form method="post" action="/Billing/Checkout" style="display:flex;flex-direction:column;gap:0.5rem;">
-                @Html.AntiForgeryToken()
-                <p class="billing-buy-label">Credits to buy</p>
+        @if (hasPacks)
+        {
+            <div class="card">
+                <h2 class="card-title">Buy more credits</h2>
+                <p class="billing-buy-description">Purchase credits to use on your account.</p>
+                <form method="post" action="/Billing/Checkout" style="display:flex;flex-direction:column;gap:0.5rem;">
+                    @Html.AntiForgeryToken()
+                    <p class="billing-buy-label">Credits to buy</p>
 
-                <div class="billing-options">
-                    @for (var i = 0; i < Model.Packs.Count; i++)
-                    {
-                        var pack = Model.Packs[i];
-                        <div class="billing-option">
-                            <input type="radio" id="credits-@pack.Quantity" name="documentsToBuy" value="@pack.Quantity" checked="@(i == 0)">
-                            <label for="credits-@pack.Quantity" class="billing-option-label">
-                                <span class="billing-option-radio"></span>
-                                <span class="billing-option-credits">@pack.Quantity credits</span>
-                                <span class="billing-option-price">for @money(pack.Amount) @pack.Currency</span>
-                                @if (discount(pack) > 0)
-                                {
-                                    <span class="billing-option-discount">(@discount(pack)% off)</span>
-                                }
-                            </label>
-                        </div>
-                    }
-                </div>
+                    <div class="billing-options">
+                        @for (var i = 0; i < Model.Packs.Count; i++)
+                        {
+                            var pack = Model.Packs[i];
+                            <div class="billing-option">
+                                <input type="radio" id="credits-@pack.Quantity" name="documentsToBuy" value="@pack.Quantity" checked="@(i == 0)">
+                                <label for="credits-@pack.Quantity" class="billing-option-label">
+                                    <span class="billing-option-radio"></span>
+                                    <span class="billing-option-credits">@pack.Quantity credits</span>
+                                    <span class="billing-option-price">for @money(pack.Amount) @pack.Currency</span>
+                                    @if (discount(pack) > 0)
+                                    {
+                                        <span class="billing-option-discount">(@discount(pack)% off)</span>
+                                    }
+                                </label>
+                            </div>
+                        }
+                    </div>
 
-                <label class="billing-save-card" style="display:flex;align-items:flex-start;gap:0.5rem;margin-top:0.75rem;cursor:pointer">
-                    <input type="checkbox" name="autoRecharge" value="true" style="margin-top:0.2rem" @(hasCard ? "checked" : "") />
-                    <span>
-                        <span style="font-weight:500">@L["SaveCardLabel"]</span>
-                        <span class="muted" style="display:block;font-size:0.8rem;margin-top:0.125rem">@L["SaveCardHint"]</span>
-                    </span>
-                </label>
+                    <label class="billing-save-card" style="display:flex;align-items:flex-start;gap:0.5rem;margin-top:0.75rem;cursor:pointer">
+                        <input type="checkbox" name="autoRecharge" value="true" style="margin-top:0.2rem" @(hasCard ? "checked" : "") />
+                        <span>
+                            <span style="font-weight:500">@L["SaveCardLabel"]</span>
+                            <span class="muted" style="display:block;font-size:0.8rem;margin-top:0.125rem">@L["SaveCardHint"]</span>
+                        </span>
+                    </label>
 
-                <p class="billing-payment-note">You will provide your payment information in the next step.</p>
+                    <p class="billing-payment-note">You will provide your payment information in the next step.</p>
 
-                <button class="full-w btn-secondary" type="submit">Place order</button>
+                    <button class="full-w btn-secondary" type="submit">Place order</button>
 
-                <p class="muted">
-                    Stripe Checkout is used for secure prepaid purchases. By clicking "Place order", you agree to our
-                    <a href="/Legal/TermsOfService">terms</a> and <a href="/Legal/PrivacyPolicy">privacy policy</a>.
-                </p>
-            </form>
-        </div>
+                    <p class="muted">
+                        Stripe Checkout is used for secure prepaid purchases. By clicking "Place order", you agree to our
+                        <a href="/Legal/TermsOfService">terms</a> and <a href="/Legal/PrivacyPolicy">privacy policy</a>.
+                    </p>
+                </form>
+            </div>
+        }
     </div>
 }
 
@@ -288,7 +296,7 @@ else
                 <thead>
                     <tr>
                         <th>Invoice number</th>
-                        <th>Price (@Model.Currency)</th>
+                        <th>Price</th>
                         <th>Status</th>
                         <th>Download</th>
                         <th>Date</th>
@@ -299,7 +307,7 @@ else
                     {
                         <tr>
                             <td>@(invoice.Number ?? "-")</td>
-                            <td>@(invoice.AmountDueMinor / 100.0m)</td>
+                            <td>@(invoice.AmountDueMinor / 100.0m) @invoice.Currency</td>
                             <td><span
                                     class="billing-status billing-status--@invoice.Status.ToLower()">@char.ToUpper(invoice.Status[0])@invoice.Status.Substring(1)</span>
                             </td>

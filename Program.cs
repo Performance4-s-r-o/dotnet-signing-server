@@ -148,7 +148,6 @@ builder.Services.AddScoped<PdfVisualSigningService>();
 builder.Services.AddScoped<PdfSigningService>();
 builder.Services.AddScoped<PdfLtvService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
-builder.Services.AddScoped<IBillingService, BillingService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IApiAuthService, ApiAuthService>();
 // SizeLimit counts entries: every cache.Set must carry Size = 1 (#74). Without a limit the
@@ -174,6 +173,10 @@ PinnedIpTsaClient.RequestTimeout = TimeSpan.FromSeconds(builder.Configuration.Ge
 // TSA names allowed to resolve to a private range; an invalid entry stops the start.
 TsaPrivateHosts.Configure(builder.Configuration["TSA_PRIVATE_HOST_ALLOWLIST"]);
 PinnedIpTsaClient.SetMaxConcurrentCalls(EnvValues.Int(builder.Configuration, "TSA_MAX_CONCURRENT_CALLS") ?? PinnedIpTsaClient.MaxConcurrentCalls);
+// Thread-pool minimum (#69): CPUs + authority-call limit unless set; 0 = .NET default, nonsense stops the start.
+var minWorkerThreads = DotNetSigningServer.Services.ThreadPoolSizing.Apply(DotNetSigningServer.Services.ThreadPoolSizing.Resolve(
+    EnvValues.Int(builder.Configuration, DotNetSigningServer.Services.ThreadPoolSizing.ConfigKey),
+    Environment.ProcessorCount, PinnedIpTsaClient.CallLimit));
 // Circuit breaker per TSA host (#72). Invalid values throw here: startup fails closed rather
 // than running with the protection silently off.
 TsaCircuitBreaker.Default = new TsaCircuitBreaker(new TsaCircuitBreakerOptions
@@ -191,8 +194,6 @@ DotNetSigningServer.Services.PfxGuard.MaxBytes =
     builder.Configuration.GetValue<int?>("Limits:PfxMaxBytes") ?? DotNetSigningServer.Services.PfxGuard.MaxBytes;
 DotNetSigningServer.Services.PfxGuard.MaxIterations =
     builder.Configuration.GetValue<long?>("Limits:PfxMaxIterations") ?? DotNetSigningServer.Services.PfxGuard.MaxIterations;
-// PriceChangeMonitorService is registered by AddP4BackofficeIntegration, only while
-// P4Backoffice:Modules:Pricing is not On (then the price.* events replace it).
 builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();
 builder.Services.AddSingleton<IIpWhitelistService, IpWhitelistService>();
 // LokiClient is a singleton (it owns a batching queue + background flush
@@ -202,6 +203,8 @@ builder.Services.AddSingleton<LokiClient>();
 builder.Services.Configure<DotNetSigningServer.Middleware.CspOptions>(builder.Configuration.GetSection(DotNetSigningServer.Middleware.CspOptions.SectionName));
 // Alerts that must not travel through the system they report on (OPS_ALERT_WEBHOOK_URL).
 DotNetSigningServer.Services.Ops.OpsAlertRegistration.AddOpsAlerts(builder.Services, builder.Configuration);
+// Dead man's switch around every periodic job (#167); empty HEARTBEAT_BASE_URL = off.
+DotNetSigningServer.Services.Ops.JobHeartbeatRegistration.AddJobHeartbeats(builder.Services, builder.Configuration);
 // Ship all ILogger output (not just unhandled exceptions) to Loki.
 builder.Services.AddSingleton<ILoggerProvider, DotNetSigningServer.Logging.LokiLoggerProvider>();
 // The model gets 60 s; the caller's RequestAborted is passed on per call (#72).
@@ -397,18 +400,10 @@ builder.Services.AddOptions<EvidenceOptions>()
         }
     });
 
-// A currency that is not a code would reach the price list and the payment: stop in production,
-// fall back to EUR with a warning elsewhere.
-var currencyProblem = DotNetSigningServer.Services.Pricing.ConfigCreditPricingProvider.CurrencyProblem(builder.Configuration["Billing:Currency"]);
-if (currencyProblem != null && builder.Environment.IsProduction())
-{
-    throw new InvalidOperationException(currencyProblem);
-}
 builder.Services.AddOptions<BillingOptions>()
     .Bind(builder.Configuration.GetSection("Billing"))
     .PostConfigure(options =>
     {
-        if (currencyProblem != null) options.Currency = "EUR";
         options.FlattenFormCredits = EnvValues.Int(builder.Configuration, "FLATTEN_FORM_CREDIT_COST") ?? options.FlattenFormCredits;
         if (options.FlattenFormCredits < 0)
         {
@@ -482,18 +477,6 @@ if (!migrateOnly)
 }
 
 var appLogger = app.Services.GetRequiredService<ILogger<Program>>();
-if (currencyProblem != null) appLogger.LogWarning("{Problem} Using EUR.", currencyProblem);
-
-// #80: in Production the CORS list no longer falls back to the origins of every user's
-// browser tokens. Without Cors:AllowedOrigins only the server's own origin passes.
-if (!migrateOnly && app.Environment.IsProduction()
-    && app.Services.GetRequiredService<IAllowedOriginService>() is AllowedOriginService origins
-    && !origins.HasConfiguredCorsOrigins)
-{
-    appLogger.LogWarning(
-        "Cors:AllowedOrigins is empty: browser calls to /api are accepted only from this server's own origin. "
-        + "Set CORS_ALLOWED_ORIGINS (Cors__AllowedOrigins) to the sites that use browser tokens.");
-}
 
 // #513: bez certifikátu evidence padá každý SES podpis, který si ho nepošle sám. Start se nezastaví,
 // protože portál může certifikát posílat v požadavku (varianta B, Key Vault).
@@ -581,39 +564,8 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-app.Use(async (context, next) =>
-{
-    // Apply CORS only to API routes
-    if (context.Request.Path.HasValue && context.Request.Path.Value!.StartsWith("/api", StringComparison.OrdinalIgnoreCase))
-    {
-        var origin = context.Request.Headers["Origin"].ToString();
-        if (!string.IsNullOrWhiteSpace(origin))
-        {
-            var originService = context.RequestServices.GetRequiredService<IAllowedOriginService>();
-            if (!originService.IsOriginAllowed(origin, context))
-            {
-                var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-                logger.LogWarning("CORS origin not allowed: {Origin}", origin);
-                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                return;
-            }
-            context.Response.Headers["Access-Control-Allow-Origin"] = origin;
-            context.Response.Headers["Vary"] = "Origin";
-            // No billing-bypass header (#78): only the portal sends it, server to server, never a browser.
-            context.Response.Headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type,Idempotency-Key";
-            context.Response.Headers["Access-Control-Expose-Headers"] = "X-Operation-Id,X-Operation-State,Idempotent-Replayed,Retry-After,X-Signature-Verified";
-            context.Response.Headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS";
-        }
-
-        if (string.Equals(context.Request.Method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
-        {
-            context.Response.StatusCode = StatusCodes.Status204NoContent;
-            return;
-        }
-    }
-
-    await next();
-});
+// CORS on /api by the origins of browser tokens (#177); Cors:AllowedOrigins only narrows it.
+app.UseMiddleware<DotNetSigningServer.Middleware.ApiCorsMiddleware>();
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/ApiTokens", StringComparison.OrdinalIgnoreCase)
@@ -702,9 +654,10 @@ app.MapGet(ConcurrencyDiagnostics.Path, (HttpContext context,
     CodeScanRaster.UsePool(pools.Raster, pools.RasterWait);
     app.Logger.LogInformation(
         "Concurrency pools (0 = off): global {Global}, heavy {Heavy}, ai {Ai}, raster {Raster}; suggested for {Cpus} CPUs: "
-        + "global {SuggestedGlobal}, heavy {SuggestedHeavy}, ai {SuggestedAi}",
+        + "global {SuggestedGlobal}, heavy {SuggestedHeavy}, ai {SuggestedAi}; thread-pool minimum {MinWorkers}",
         pools.Global.Limit, pools.Heavy.Limit, pools.Ai.Limit, pools.Raster.Limit, cpus,
-        BillingOptions.SuggestedGlobalLimit(cpus), BillingOptions.SuggestedHeavyLimit(cpus), BillingOptions.SuggestedAiLimit);
+        BillingOptions.SuggestedGlobalLimit(cpus), BillingOptions.SuggestedHeavyLimit(cpus), BillingOptions.SuggestedAiLimit,
+        minWorkerThreads);
 }
 
 // Loki test endpoint (Development only, #80: it is anonymous and writes to the log store)

@@ -70,8 +70,7 @@ services:
       # arrives empty or as the placeholder and the code default applies (Options/EnvValues.cs).
       # Live API tokens per account; 0 = no limit (default 100).
       - MAX_API_TOKENS_PER_USER=${MAX_API_TOKENS_PER_USER:-}
-      # Browser origins allowed to call /api (comma-separated). Production no longer falls back
-      # to the origins of every user's browser tokens: list the sites that use them.
+      # Optional restriction of browser origins on /api; empty = the origins of browser tokens decide.
       - Cors__AllowedOrigins=${CORS_ALLOWED_ORIGINS:-}
       # Step-up re-auth: minutes since the last password/2FA confirmation before an API token
       # can be created or billing changed (default 15); wrong 2FA codes before a code is void (5).
@@ -129,8 +128,6 @@ services:
       # Evidence encryption certificate (for SES evidence attachment encryption)
       - EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64=${EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64:-}
       - EVIDENCE_ENCRYPTION_CERTIFICATE_PEM=${EVIDENCE_ENCRYPTION_CERTIFICATE_PEM:-}
-      # Currency the product sells in (price list and configured fallback prices).
-      - Billing__Currency=${BILLING_CURRENCY:-}
       # Credits per document for /api/flatten-form (#180); empty = 1, 0 = free, negative stops the start.
       - FLATTEN_FORM_CREDIT_COST=${FLATTEN_FORM_CREDIT_COST:-}
       # All e-mail goes through the backoffice outbox (P4_BACKOFFICE_URL + SECRET_KEY below).
@@ -197,6 +194,8 @@ services:
       - P4Backoffice__Keys__Billing=${P4_BACKOFFICE_BILLING_SECRET_KEY:-}
       # Alert channel independent of the backoffice (https webhook, POST {"text": ...}); empty = log only.
       - OpsAlert__WebhookUrl=${OPS_ALERT_WEBHOOK_URL:-}
+      # Healthchecks pings around every periodic job (#167); empty = off.
+      - HEARTBEAT_BASE_URL=${HEARTBEAT_BASE_URL:-}
       - P4Backoffice__CookieWidget__Url=${P4_BACKOFFICE_WIDGET_URL:-}
       - P4Backoffice__CookieWidget__PublishableKey=${P4_BACKOFFICE_PK:-}
       - P4Backoffice__SupportForm__Product=${P4_BACKOFFICE_SUPPORT_FORM_PRODUCT:-}
@@ -222,6 +221,8 @@ services:
       - Tsa__TimeoutSeconds=${TSA_TIMEOUT_SECONDS:-10}
       # Authority calls in flight at once (#72); empty or an unresolved placeholder = 24.
       - TSA_MAX_CONCURRENT_CALLS=${TSA_MAX_CONCURRENT_CALLS:-}
+      # Thread-pool minimum (#69); empty = CPUs + TSA limit, 0 = .NET default.
+      - THREADPOOL_MIN_WORKER_THREADS=${THREADPOOL_MIN_WORKER_THREADS:-}
       # Exact TSA host names allowed to resolve to a private range (not loopback/link-local). Empty = public only.
       - TSA_PRIVATE_HOST_ALLOWLIST=${TSA_PRIVATE_HOST_ALLOWLIST:-}
       # Circuit breaker per TSA host (#72): failures in a row that open it (0 = off), seconds open.

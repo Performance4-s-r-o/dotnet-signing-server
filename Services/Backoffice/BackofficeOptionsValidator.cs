@@ -65,9 +65,10 @@ public static class BackofficeOptionsValidator
         {
             problems.Add($"{Setting("Outbox:GiveUpAfter")} must be positive and under 24 h (the service keeps an Idempotency-Key 24 h).");
         }
-        if (options.Polling.Interval is { } interval && interval <= TimeSpan.Zero)
+        if (options.Polling.Interval is { } interval
+            && (interval <= TimeSpan.Zero || interval > P4BackofficeProductOptions.PollingOptions.MaxInterval))
         {
-            problems.Add($"{Setting("Polling:Interval")} must be positive.");
+            problems.Add($"{Setting("Polling:Interval")} must be positive and at most {P4BackofficeProductOptions.PollingOptions.MaxInterval.TotalMinutes} min.");
         }
         CheckConsentDocuments(problems, options.Consents, options.RequestedModeFor(BackofficeModule.Docs));
         CheckBilling(problems, options);

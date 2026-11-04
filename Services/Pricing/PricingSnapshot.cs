@@ -61,17 +61,43 @@ public sealed class PricingSnapshot
     }
 }
 
-/// <summary>A pack found in a price list, or why a sold pack was not.</summary>
-public sealed record PriceListMapping(IReadOnlyDictionary<int, CreditPack> Packs, IReadOnlyList<string> Problems);
+/// <summary>The packs found in a price list and their currency, or why a sold pack was not.</summary>
+/// <param name="Currency">Currency of the packs (upper case); null when the price list prices no pack.</param>
+public sealed record PriceListMapping(IReadOnlyDictionary<int, CreditPack> Packs, IReadOnlyList<string> Problems, string? Currency = null);
 
 /// <summary>
 /// Maps a price list (<c>PriceBookVersion</c>) to credit packs: items of kind <c>credits</c>
 /// with an integer <c>attributes.quantity</c>, and of each such item the one-time, non-tiered
-/// price in the wanted currency. Items for quantities the product does not sell are ignored.
+/// price in the product currency. Items for quantities the product does not sell are ignored.
 /// Pure; no I/O.
+///
+/// The product currency is the price list's own (#175): the currency in which the most sold
+/// packs have such a price (ties: the one that prices the 100-pack, then alphabetical). A price
+/// list in several currencies is reported as a problem.
 /// </summary>
 public static class PriceListMapper
 {
+    /// <summary>The packs in the price list's own currency (<see cref="ProductCurrency"/>).</summary>
+    public static PriceListMapping Map(JsonElement body)
+    {
+        var currencies = PricedCurrencies(body);
+        var currency = ProductCurrency(currencies);
+        if (currency is null)
+        {
+            var empty = Map(body, "");
+            return new PriceListMapping(empty.Packs, ["the price list prices no credit pack"], null);
+        }
+        var mapping = Map(body, currency);
+        if (currencies.Count > 1)
+        {
+            var problems = mapping.Problems.ToList();
+            problems.Add($"credit packs are priced in {string.Join(", ", currencies.Keys.Order(StringComparer.Ordinal))}; using {currency}");
+            return mapping with { Problems = problems };
+        }
+        return mapping;
+    }
+
+    /// <summary>The packs priced in <paramref name="currency"/>.</summary>
     public static PriceListMapping Map(JsonElement body, string currency)
     {
         var packs = new Dictionary<int, CreditPack>();
@@ -83,7 +109,7 @@ public static class PriceListMapper
             || items.ValueKind != JsonValueKind.Array)
         {
             problems.Add("the price list has no items");
-            return new PriceListMapping(packs, problems);
+            return new PriceListMapping(packs, problems, null);
         }
 
         foreach (var item in items.EnumerateArray())
@@ -98,7 +124,7 @@ public static class PriceListMapper
             }
             if (!CreditPricing.IsSoldQuantity(quantity.Value) || packs.ContainsKey(quantity.Value)) continue;
 
-            var pack = PackFrom(item, quantity.Value, wanted);
+            var pack = wanted.Length == 0 ? null : PackFrom(item, quantity.Value, wanted);
             if (pack is null)
             {
                 problems.Add($"item {key} has no one-time price in {wanted.ToUpperInvariant()}");
@@ -111,8 +137,43 @@ public static class PriceListMapper
         {
             problems.Add($"no credits item for {quantity} credits in {wanted.ToUpperInvariant()}");
         }
-        return new PriceListMapping(packs, problems);
+        return new PriceListMapping(packs, problems, packs.Count > 0 ? CreditPricing.NormalizeCurrency(wanted) : null);
     }
+
+    /// <summary>Upper-case currency → sold quantities with a usable one-time price in it.</summary>
+    private static Dictionary<string, HashSet<int>> PricedCurrencies(JsonElement body)
+    {
+        var result = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
+        if (body.ValueKind != JsonValueKind.Object
+            || !body.TryGetProperty("items", out var items)
+            || items.ValueKind != JsonValueKind.Array)
+        {
+            return result;
+        }
+        foreach (var item in items.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object || String(item, "kind") != "credits") continue;
+            if (Quantity(item) is not { } quantity || !CreditPricing.IsSoldQuantity(quantity)) continue;
+            if (!item.TryGetProperty("prices", out var prices) || prices.ValueKind != JsonValueKind.Array) continue;
+            foreach (var price in prices.EnumerateArray())
+            {
+                if (price.ValueKind != JsonValueKind.Object || String(price, "currency") is not { } raw || string.IsNullOrWhiteSpace(raw)) continue;
+                var currency = CreditPricing.NormalizeCurrency(raw);
+                if (PackFrom(item, quantity, currency) is null) continue;
+                if (!result.TryGetValue(currency, out var set)) result[currency] = set = [];
+                set.Add(quantity);
+            }
+        }
+        return result;
+    }
+
+    private static string? ProductCurrency(Dictionary<string, HashSet<int>> currencies) =>
+        currencies
+            .OrderByDescending(c => c.Value.Count)
+            .ThenByDescending(c => c.Value.Contains(100))
+            .ThenBy(c => c.Key, StringComparer.Ordinal)
+            .Select(c => c.Key)
+            .FirstOrDefault();
 
     private static CreditPack? PackFrom(JsonElement item, int quantity, string currency)
     {
@@ -135,7 +196,7 @@ public static class PriceListMapper
             return new CreditPack(
                 quantity,
                 minor,
-                ConfigCreditPricingProvider.NormalizeCurrency(currency),
+                CreditPricing.NormalizeCurrency(currency),
                 NullIfEmpty(String(price, "lookup_key")),
                 NullIfEmpty(String(price, "stripe_price_id")));
         }

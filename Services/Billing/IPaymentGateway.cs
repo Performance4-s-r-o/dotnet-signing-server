@@ -76,4 +76,5 @@ public sealed record InvoiceSummary(
     long AmountDueMinor,
     string Status,
     string? HostedInvoiceUrl,
-    DateTime Created);
+    DateTime Created,
+    string? Currency = null);

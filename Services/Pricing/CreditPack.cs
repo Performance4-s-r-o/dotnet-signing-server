@@ -8,7 +8,7 @@ namespace DotNetSigningServer.Services.Pricing;
 /// <param name="Quantity">Credits granted by one purchase.</param>
 /// <param name="UnitAmountMinor">Price of the whole pack in minor units (cents).</param>
 /// <param name="Currency">ISO 4217 code, upper case (<c>EUR</c>).</param>
-/// <param name="LookupKey">Stripe Price lookup key from the price list; null for the configured price.</param>
+/// <param name="LookupKey">Stripe Price lookup key from the price list; null when the price list has none.</param>
 /// <param name="StripePriceId">Stripe Price id the service reported for this environment; informational only.</param>
 public sealed record CreditPack(int Quantity, long UnitAmountMinor, string Currency, string? LookupKey, string? StripePriceId)
 {
@@ -44,13 +44,10 @@ public static class CreditPricing
     /// <summary>The packs the product sells, smallest first. Checkout accepts nothing else.</summary>
     public static readonly IReadOnlyList<int> Quantities = [100, 300, 500, 1000];
 
-    /// <summary><see cref="ICreditPricingProvider.Source"/> of the service's price list.</summary>
-    public const string SourceBackoffice = "backoffice";
-
-    /// <summary><see cref="ICreditPricingProvider.Source"/> of <c>Billing:*</c> in appsettings.</summary>
-    public const string SourceConfig = "config";
-
     public static bool IsSoldQuantity(int quantity) => Quantities.Contains(quantity);
+
+    /// <summary>A currency code as the product keeps it: trimmed, upper case.</summary>
+    public static string NormalizeCurrency(string currency) => currency.Trim().ToUpperInvariant();
 
     /// <summary>Formats a price the way the pages always did (<c>0.##</c>), in the UI culture by default.</summary>
     public static string FormatAmount(decimal amount, IFormatProvider? culture = null) =>

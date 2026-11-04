@@ -186,6 +186,7 @@ public class PriceScheduledHandlerTests
     public async Task ScheduledChangeOf300_NotifiesEachAffectedUserOnce_ViaWebhookAndPolling()
     {
         using var host = new PricingTestHost("On");
+        host.Holder.Set(PricingTestData.Snapshot(PricingTestData.ImportedJson(1)));
         var u300 = await host.AddUserAsync(u => { u.AutoRechargeEnabled = true; u.AutoRechargeQuantity = 300; u.AutoRechargeCancelToken = "tok"; u.Locale = "cs"; });
         var u100 = await host.AddUserAsync(u => { u.AutoRechargeEnabled = true; u.AutoRechargeQuantity = 100; });
         var enterprise = await host.AddUserAsync(u => { u.AutoRechargeEnabled = true; u.AutoRechargeQuantity = 300; u.IsEnterprise = true; });
@@ -213,6 +214,7 @@ public class PriceScheduledHandlerTests
     public async Task EmailOn_QueuesTheNoticeWithTheVersion()
     {
         using var host = new PricingTestHost("On");
+        host.Holder.Set(PricingTestData.Snapshot(PricingTestData.ImportedJson(1)));
         host.Email.Queue = true;
         var user = await host.AddUserAsync(u => { u.AutoRechargeEnabled = true; u.AutoRechargeQuantity = 300; });
 
@@ -226,6 +228,7 @@ public class PriceScheduledHandlerTests
     public async Task FailedSend_ThrowsAndTheRetryNotifiesOnlyTheRest()
     {
         using var host = new PricingTestHost("On");
+        host.Holder.Set(PricingTestData.Snapshot(PricingTestData.ImportedJson(1)));
         var ok = await host.AddUserAsync(u => { u.AutoRechargeEnabled = true; u.AutoRechargeQuantity = 300; });
         var failing = await host.AddUserAsync(u => { u.AutoRechargeEnabled = true; u.AutoRechargeQuantity = 300; });
         host.Email.Failing.Add(failing.Email);
@@ -244,6 +247,7 @@ public class PriceScheduledHandlerTests
     public async Task Unscheduled_ResetsTheVersion_SoANewScheduleNotifiesAgain()
     {
         using var host = new PricingTestHost("On");
+        host.Holder.Set(PricingTestData.Snapshot(PricingTestData.ImportedJson(1)));
         var user = await host.AddUserAsync(u => { u.AutoRechargeEnabled = true; u.AutoRechargeQuantity = 300; });
         await host.HandleAsync(BackofficeEventTypes.PriceScheduled, PriceEvents.Scheduled(), "msg_1");
 
@@ -334,6 +338,7 @@ public class PricingUpcomingCheckTests
     public async Task MissedScheduledEvent_SendsTheNoticesFromUpcoming()
     {
         using var host = new PricingTestHost("On");
+        host.Holder.Set(PricingTestData.Snapshot(PricingTestData.ImportedJson(1)));
         var user = await host.AddUserAsync(u => { u.AutoRechargeEnabled = true; u.AutoRechargeQuantity = 300; });
         EnqueueJson(host, Upcoming(2, "2026-10-20T00:00:00Z", 1500));
 
@@ -375,6 +380,17 @@ public class PricingUpcomingCheckTests
     }
 
     [Fact]
+    public async Task NoPriceListInForce_SendsNothing()
+    {
+        using var host = new PricingTestHost("On");
+        await host.AddUserAsync(u => { u.AutoRechargeEnabled = true; u.AutoRechargeQuantity = 300; });
+        EnqueueJson(host, Upcoming(2, "2026-10-20T00:00:00Z", 1500));
+
+        Assert.Null(await Check(host).RunOnceAsync(CancellationToken.None));
+        Assert.Empty(host.Email.Sent);
+    }
+
+    [Fact]
     public async Task NothingUpcoming_DoesNothing()
     {
         using var host = new PricingTestHost("On");
@@ -386,9 +402,6 @@ public class PricingUpcomingCheckTests
 
 public class PriceNoticeRegistrationTests
 {
-    private static bool Monitor(PricingTestHost host) =>
-        host.Services.GetServices<IHostedService>().OfType<PriceChangeMonitorService>().Any();
-
     private static IReadOnlyList<Type> Handlers(PricingTestHost host)
     {
         using var scope = host.Services.CreateScope();
@@ -396,21 +409,21 @@ public class PriceNoticeRegistrationTests
     }
 
     [Fact]
-    public void Off_RunsTheMonitorAndNoPriceHandlers()
+    public void Off_SellsNothingAndRunsNoPriceHandlers()
     {
         using var host = new PricingTestHost("Off");
 
-        Assert.True(Monitor(host));
+        Assert.IsType<NoCreditPricingProvider>(host.Provider);
+        Assert.Empty(host.Services.GetServices<IHostedService>());
         Assert.Empty(Handlers(host));
         Assert.Empty(host.Services.GetServices<IHostedService>().OfType<PricingUpcomingCheck>());
     }
 
     [Fact]
-    public void On_ReplacesTheMonitorWithTheHandlers()
+    public void On_RegistersThePriceHandlers()
     {
         using var host = new PricingTestHost("On");
 
-        Assert.False(Monitor(host));
         Assert.Equal(
             [typeof(PriceEffectiveHandler), typeof(PriceScheduledHandler), typeof(PriceSyncFailedHandler), typeof(PriceUnscheduledHandler)],
             Handlers(host).OrderBy(t => t.Name).ToArray());
@@ -426,9 +439,9 @@ public class PriceNoticeRegistrationTests
     [InlineData(false, "Off")]
     [InlineData(false, "On")]
     [InlineData(true, "On")] // PrivateServer forces Off
-    public void Integration_RegistersTheMonitorWhenPricingIsNotOn(bool privateServer, string pricing)
+    public void Integration_SellsNothingWhenPricingIsNotOn(bool privateServer, string pricing)
     {
-        var monitor = privateServer || pricing != "On";
+        var none = privateServer || pricing != "On";
 
         var services = BackofficeRegistrationTests.Register(new()
         {
@@ -438,6 +451,7 @@ public class PriceNoticeRegistrationTests
             ["P4Backoffice:Environment"] = "test",
         }, privateServer);
 
-        Assert.Equal(monitor, services.Any(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType == typeof(PriceChangeMonitorService)));
+        var provider = services.Last(d => d.ServiceType == typeof(ICreditPricingProvider));
+        Assert.Equal(none, provider.ImplementationType == typeof(NoCreditPricingProvider));
     }
 }

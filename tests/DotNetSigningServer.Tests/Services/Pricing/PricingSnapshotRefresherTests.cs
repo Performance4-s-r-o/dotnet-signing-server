@@ -31,7 +31,7 @@ internal sealed class PricingTestHost : IDisposable
     /// <summary>Stands in for e-mail (price-change notices).</summary>
     public FakeTemplatedEmailSender Email { get; } = new();
 
-    public PricingTestHost(string mode, BillingOptions? billing = null)
+    public PricingTestHost(string mode)
     {
         var options = new P4BackofficeProductOptions
         {
@@ -47,12 +47,6 @@ internal sealed class PricingTestHost : IDisposable
         services.AddLogging(b => b.SetMinimumLevel(LogLevel.Warning));
         services.AddDbContext<ApplicationDbContext>(o => o.UseInMemoryDatabase(dbName));
         services.AddSingleton<TimeProvider>(Time);
-        services.Configure<BillingOptions>(o =>
-        {
-            var b = billing ?? new BillingOptions();
-            o.PricePer100 = b.PricePer100;
-            o.Currency = b.Currency;
-        });
         services.Configure<AppOptions>(o => o.FqdnServerName = "https://app.example.com");
         services.AddSingleton<DotNetSigningServer.Services.Email.ITemplatedEmailSender>(Email);
         BackofficeRegistration.AddPricing(services, options);
@@ -148,7 +142,7 @@ public class PricingSnapshotRefresherTests
         Assert.Equal("v1/pricing/current", host.Request(0).RequestUri!.PathAndQuery.TrimStart('/'));
         Assert.Equal(4, host.Holder.Current!.Version);
         Assert.Equal(1500, host.Provider.GetPack(300)!.UnitAmountMinor);
-        Assert.Equal(CreditPricing.SourceBackoffice, host.Provider.Source);
+        Assert.Equal("EUR", host.Provider.Currency);
         var stored = PricingSnapshot.TryDeserialize(await host.StoredAsync());
         Assert.Equal("\"v4\"", stored!.ETag);
         Assert.Equal(4, stored.Version);
@@ -207,14 +201,14 @@ public class PricingSnapshotRefresherTests
     }
 
     [Fact]
-    public async Task WithoutSnapshot_OnServesTheConfiguredPrices()
+    public async Task WithoutSnapshot_OnSellsNothing()
     {
-        using var host = new PricingTestHost("On", new BillingOptions { PricePer100 = 5m });
+        using var host = new PricingTestHost("On");
 
         Assert.False(await host.Refresher.LoadStoredAsync(CancellationToken.None));
 
-        Assert.Equal(CreditPricing.SourceConfig, host.Provider.Source);
-        Assert.Equal(1425, host.Provider.GetPack(300)!.UnitAmountMinor);
+        Assert.Empty(host.Provider.GetPacks());
+        Assert.Null(host.Provider.Currency);
         Assert.Equal(0, host.RequestCount);
     }
 
@@ -279,13 +273,12 @@ public class PricingSnapshotRefresherTests
 public class PricingRegistrationTests
 {
     [Fact]
-    public void Off_UsesTheConfigurationAndStartsNothing()
+    public void Off_SellsNothingAndStartsNothing()
     {
         using var host = new PricingTestHost("Off");
 
-        Assert.IsType<ConfigCreditPricingProvider>(host.Provider);
-        // Only the local price-change monitor (see PriceNoticeRegistrationTests).
-        Assert.IsType<PriceChangeMonitorService>(Assert.Single(host.Services.GetServices<IHostedService>()));
+        Assert.IsType<NoCreditPricingProvider>(host.Provider);
+        Assert.Empty(host.Services.GetServices<IHostedService>());
         using var scope = host.Services.CreateScope();
         Assert.Empty(scope.ServiceProvider.GetServices<IBackofficeEventHandler>());
         Assert.Empty(scope.ServiceProvider.GetServices<IBackofficeResync>());
@@ -302,12 +295,11 @@ public class PricingRegistrationTests
     }
 
     [Fact]
-    public void Integration_WithoutSection_RegistersTheConfiguredPrices()
+    public void Integration_WithoutSection_SellsNothing()
     {
         var services = DotNetSigningServer.Tests.Services.Backoffice.BackofficeRegistrationTests.Register(new());
-        services.Configure<BillingOptions>(_ => { });
         using var provider = services.BuildServiceProvider();
 
-        Assert.IsType<ConfigCreditPricingProvider>(provider.GetRequiredService<ICreditPricingProvider>());
+        Assert.IsType<NoCreditPricingProvider>(provider.GetRequiredService<ICreditPricingProvider>());
     }
 }

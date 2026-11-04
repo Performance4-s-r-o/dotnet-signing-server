@@ -30,9 +30,13 @@ public sealed class PricingUpcomingCheck : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly TimeProvider _time;
     private readonly ILogger<PricingUpcomingCheck> _logger;
+    private readonly DotNetSigningServer.Services.Ops.IJobHeartbeat _heartbeat;
 
-    public PricingUpcomingCheck(BackofficePricingClient client, IServiceScopeFactory scopes, TimeProvider time, ILogger<PricingUpcomingCheck> logger)
+    public PricingUpcomingCheck(BackofficePricingClient client, IServiceScopeFactory scopes, TimeProvider time, ILogger<PricingUpcomingCheck> logger,
+        DotNetSigningServer.Services.Ops.IJobHeartbeat? heartbeat = null)
     {
+        _heartbeat = heartbeat ?? DotNetSigningServer.Services.Ops.JobHeartbeat.Disabled;
+        _heartbeat.Register(DotNetSigningServer.Services.Ops.HeartbeatJobs.PricingUpcoming);
         _client = client;
         _scopes = scopes;
         _time = time;
@@ -56,7 +60,7 @@ public sealed class PricingUpcomingCheck : BackgroundService
             delay = Interval;
             try
             {
-                await RunOnceAsync(stoppingToken);
+                await _heartbeat.RunAsync(DotNetSigningServer.Services.Ops.HeartbeatJobs.PricingUpcoming, RunOnceAsync, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -102,7 +106,8 @@ public sealed class PricingUpcomingCheck : BackgroundService
         }
 
         var pricing = scope.ServiceProvider.GetRequiredService<ICreditPricingProvider>();
-        var currency = PriceScheduledHandler.ProductCurrency(scope.ServiceProvider.GetRequiredService<IOptionsMonitor<BillingOptions>>().CurrentValue);
+        // Compared in the currency in force; without a price list there is nothing to announce.
+        if (pricing.Currency is not { } currency) return null;
         var changes = Changes(PriceListMapper.Map(upcoming, currency), pricing.GetPacks(), currency);
         var data = new PriceChangeEvent(version, effectiveFrom, noticeDays, changes, []);
 

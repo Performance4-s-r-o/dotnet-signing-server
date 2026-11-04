@@ -53,6 +53,7 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
         if (!gate.Wait(GateWait, OperationDeadline.CurrentToken))
         {
             if (OperationDeadline.CurrentToken.IsCancellationRequested) OperationDeadline.CurrentToken.ThrowIfCancellationRequested();
+            Interlocked.Increment(ref _busyRefusals);
             throw new TsaCommunicationException(tsaURL, "Too many timestamp authority calls are in flight.",
                 new TsaBusyException());
         }
@@ -182,7 +183,19 @@ public class PinnedIpTsaClient : TSAClientBouncyCastle
     {
         if (limit < 1 || limit > 1000) throw new InvalidOperationException("TSA_MAX_CONCURRENT_CALLS must be within 1..1000.");
         CallGate = new SemaphoreSlim(limit, limit);
+        CallLimit = limit;
     }
+
+    /// <summary>Size of <see cref="CallGate"/>.</summary>
+    internal static int CallLimit { get; private set; } = MaxConcurrentCalls;
+
+    private static long _busyRefusals;
+
+    /// <summary>Calls refused as busy since start (#69 metrics).</summary>
+    internal static long BusyRefusals => Interlocked.Read(ref _busyRefusals);
+
+    /// <summary>Authority calls in flight now.</summary>
+    internal static int CallsInFlight => Math.Max(0, CallLimit - CallGate.CurrentCount);
 
     /// <summary>How long a call waits for a free place before it is refused as busy.</summary>
     internal static TimeSpan GateWait { get; set; } = TimeSpan.FromSeconds(2);

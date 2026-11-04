@@ -219,9 +219,9 @@ public static class BackofficeRegistration
     }
 
     /// <summary>
-    /// Credit prices by <c>Modules:Pricing</c>: Off serves <c>Billing:*</c> as before; On serves the snapshot (configured prices as the
-    /// fallback) and the billing service charges the Stripe Price of the pack's lookup key.
-    /// Price-change notices: <see cref="PriceChangeMonitorService"/> while Off; On replaces it by
+    /// Credit prices by <c>Modules:Pricing</c>: Off sells nothing (<see cref="NoCreditPricingProvider"/>,
+    /// on-prem has no price list, #175); On serves the snapshot and the billing service charges the
+    /// Stripe Price of the pack's lookup key. Price-change notices only while On:
     /// <see cref="PriceScheduledHandler"/> / <see cref="PriceEffectiveHandler"/> and the daily
     /// <see cref="PricingUpcomingCheck"/>. <c>price.sync_failed</c> is logged as an error.
     /// <see cref="ICreditPricingProvider"/> is always registered.
@@ -229,14 +229,11 @@ public static class BackofficeRegistration
     internal static void AddPricing(IServiceCollection services, P4BackofficeProductOptions options)
     {
         services.TryAddSingleton(TimeProvider.System);
-        services.TryAddSingleton(sp => new ConfigCreditPricingProvider(sp.GetRequiredService<IOptionsMonitor<BillingOptions>>()));
 
         var mode = options.ModeFor(BackofficeModule.Pricing);
-        // Price-change notices: the local monitor while Pricing is Off, the price.* events when On.
         if (mode == BackofficeMode.Off)
         {
-            services.AddHostedService<PriceChangeMonitorService>();
-            services.TryAddSingleton<ICreditPricingProvider>(sp => sp.GetRequiredService<ConfigCreditPricingProvider>());
+            services.TryAddSingleton<ICreditPricingProvider, NoCreditPricingProvider>();
             return;
         }
 

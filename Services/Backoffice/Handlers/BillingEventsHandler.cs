@@ -83,7 +83,7 @@ public sealed class BillingEventsHandler : IBackofficeEventHandler
                 if (purchase.AutoRecharge)
                 {
                     var pricing = _services.GetRequiredService<ICreditPricingProvider>();
-                    await _services.GetRequiredService<IAutoRechargeService>().EnableAsync(user, purchase.Documents, pricing.PricePer100);
+                    await _services.GetRequiredService<IAutoRechargeService>().EnableAsync(user, purchase.Documents, pricing.PricePer100 ?? 0m);
                 }
                 _db.Payments.Add(new Payment
                 {

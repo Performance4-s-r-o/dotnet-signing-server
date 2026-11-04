@@ -21,6 +21,7 @@ public static class ConcurrencyDiagnostics
         var cpus = Environment.ProcessorCount;
         ThreadPool.GetAvailableThreads(out var freeWorkers, out _);
         ThreadPool.GetMaxThreads(out var maxWorkers, out _);
+        ThreadPool.GetMinThreads(out var minWorkers, out var minIo);
         var gc = GC.GetGCMemoryInfo();
         using var process = Process.GetCurrentProcess();
 
@@ -50,12 +51,26 @@ public static class ConcurrencyDiagnostics
                 gcHeapBytes = GC.GetTotalMemory(false),
                 gcCommittedBytes = gc.TotalCommittedBytes,
                 gcTotalAvailableBytes = gc.TotalAvailableMemoryBytes,
+                gcPauseTimePercentage = gc.PauseTimePercentage,
+                gen0Collections = GC.CollectionCount(0),
+                gen1Collections = GC.CollectionCount(1),
+                gen2Collections = GC.CollectionCount(2),
             },
             threadPool = new
             {
                 threads = ThreadPool.ThreadCount,
                 busyWorkers = maxWorkers - freeWorkers,
                 pendingWorkItems = ThreadPool.PendingWorkItemCount,
+                completedWorkItems = ThreadPool.CompletedWorkItemCount,
+                minWorkers,
+                minIoThreads = minIo,
+                maxWorkers,
+            },
+            tsa = new
+            {
+                limit = PinnedIpTsaClient.CallLimit,
+                inFlight = PinnedIpTsaClient.CallsInFlight,
+                busyRefusals = PinnedIpTsaClient.BusyRefusals,
             },
         };
     }

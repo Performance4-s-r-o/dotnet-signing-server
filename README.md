@@ -249,12 +249,13 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `Token__Secret` | yes | Signing key for issued API tokens |
 | `FqdnServerName` | yes | Public hostname, used in generated links |
 | `AllowedHosts` | recommended | Host filtering, `*` by default |
-| `CORS_ALLOWED_ORIGINS` (`Cors__AllowedOrigins`) | in production, when browser tokens are used | Comma-separated browser origins allowed on `/api`. In Production an empty list means only the server's own origin (it no longer falls back to the origins of every user's browser tokens) and startup logs a warning |
+| `CORS_ALLOWED_ORIGINS` (`Cors__AllowedOrigins`) | no | Optional operator restriction of browser origins on `/api` (#177), comma-separated. Empty = a preflight passes an origin that an active browser token lists (cached 30 s), the server's own origin, or localhost in Development; set = the origin must also be in this list. The real request is always checked against the origin of its own token. `Access-Control-Allow-Credentials` is never sent and a cross-origin request loses its session cookie |
 | `AUTH_REAUTH_MINUTES` | no (15) | Step-up re-authentication: creating an API token and changing billing need a password or e-mailed code confirmed within this many minutes; otherwise `403 REAUTH_REQUIRED` and a confirmation form (`/Account/Reauth`) |
 | `AUTH_OTP_MAX_FAILED_ATTEMPTS` | no (5) | Wrong 2FA codes after which the code is void. The count is cleared only by a successful code or a password reset, not by signing in again |
 | `AUTH_ACCOUNT_MAX_ATTEMPTS` / `AUTH_ACCOUNT_WINDOW_MINUTES` | no (30 / 15) | Sign-in and 2FA attempts per account whatever the IP (on top of the per-IP+address limit), counted in PostgreSQL |
 | `MAX_API_TOKENS_PER_USER` | no (100) | Live API tokens per account; 0 = no limit |
 | `GLOBAL_CONCURRENCY_LIMIT` / `GLOBAL_CONCURRENCY_WAIT_MS` | no (off / 2000) | Cap on concurrent operations of the whole server (#69), taken after the user's own slot. Empty or `0` = off; a start hypothesis is H + R + A (logged at startup), to be set only once every caller's own limit is below it (otherwise the caller gets `503`). A request waits up to the given milliseconds for a slot of the global, heavy or AI pool, then gets `503` + `Retry-After`. Negative values stop the server at start; this variable wins over `Billing__GlobalConcurrencyLimit`. Note: a flood of find-codes scans holds a slot of G and of the user's limit for up to `RASTER_WAIT_MS` (30 s) per page while it waits for pool R |
+| `THREADPOOL_MIN_WORKER_THREADS` | no (CPUs + TSA call limit) | Minimum worker threads of the thread pool (#69): below it the pool adds threads at once, above it about one or two a second, and every timestamp-authority call blocks a thread. Empty = CPUs + `TSA_MAX_CONCURRENT_CALLS`; `0` = the .NET default; `1`-`10000` as given; anything else stops the start. It only raises the .NET default. The value in force is logged at startup and shown on `/internal/concurrency` |
 | `HEAVY_OPERATIONS_LIMIT` / `AI_OPERATIONS_LIMIT` | no (off / off) | Pools H and A (#69): presign, sign, sign-pfx, visual-sign, timestamp, extend-signature, fill-pdf and PDF/A at once, and AI calls at once. Empty or `0` = off. Start hypotheses: H = the CPU count, A = 4. Full after `GLOBAL_CONCURRENCY_WAIT_MS` = `503` + `Retry-After: 10`. Negative or above 10000 stops the server at start |
 | `RASTER_OPERATIONS_LIMIT` / `RASTER_WAIT_MS` | no (CPUs / 2, at least 1 / 30000) | Pool R (#69): PDF pages rasterised at once (find-codes). The limit counts pages, not requests: a slot is taken per page, so one scan of 30 pages needs 30 turns. Unlike H and A it is on by default, because the limit existed before as a fixed one; `0` = off. A page that finds R full waits `RASTER_WAIT_MS`, then the request gets `503` + `Retry-After: 10` and the charge is released. Negative, or a wait above 600000, stops the server at start |
 | `USER_QUEUE_MAX_SECONDS` / `USER_QUEUE_LENGTH_FACTOR` | no (30 / 2) | A user's queue (#69): the longest wait whatever the account stores (0–600), and requests that may wait per slot of the user's limit (1–100); the next one gets `429` at once. `Retry-After` after a `429` is the queue wait, at least 5 and at most 60 s. Every account, provisioned ones included. Out of range stops the server at start |
@@ -268,8 +269,8 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `TRUSTED_PROXIES` | no | Reverse proxy (Traefik/Caddy) addresses / CIDRs (#106): whose `X-Forwarded-For` is applied. An explicit `ForwardedHeaders__KnownProxies` / `__KnownNetworks` wins; empty = the private ranges and loopback (as before); `none` = nobody's. A reverse proxy alone never vouches for `CF-Connecting-IP` |
 | `DataProtection__CertificateBase64` / `__CertificatePassword` (compose: `DATA_PROTECTION_CERTIFICATE_BASE64` / `_PASSWORD`) | in production, unless the next row is `true` | Base64 PFX that encrypts the Data Protection key ring, which also protects stored TSA credentials |
 | `DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS` | no | `true` = a Production start without the certificate is allowed, with a warning (single host, protected volume). Otherwise Production refuses to start with an unencrypted key ring; with `true` it starts and prints a warning. Outside Production nothing is checked or printed. Back up the certificate: adding it does not encrypt keys already written in plaintext (they are replaced when the ring rotates, about every 90 days), and a lost certificate makes the ring unreadable |
+| `HEARTBEAT_BASE_URL` | no | Dead man's switch of the periodic jobs (#167), Healthchecks URL shape `<base>/<check>/start`, `<base>/<check>`, `<base>/<check>/fail`. Empty = off; http(s) without a query, anything else stops the start; the URL can carry the ping key and is never logged. The jobs share four checks (map `HeartbeatJobs.Groups` in `Services/Ops/JobHeartbeat.cs`): `dotnet-maintenance` (presign-cleanup, operation-maintenance; cycle 30 min), `dotnet-backoffice-sync` (backoffice-outbox, -inbox, -polling; 30 min), `dotnet-backoffice-hourly` (consent-reconcile, pricing-refresh, support-categories; 2 h), `dotnet-daily` (data-retention, pricing-upcoming; 2 days); cycles are aligned to UTC. Success once every job of the group registered in this process succeeded in the cycle (a job whose module is Off is not waited for); a failure is `/fail` at once with the job's name and exception type (once per job and cycle); an incomplete cycle is `/fail` (`incomplete, missing: …`) when the next begins; the cycle running at process start is not judged. A job outside the map gets a check of its own name. Every instance pings the same checks with its own state. `P4Backoffice__Polling__Interval` is capped at 20 min for that reason. A ping waits at most 5 s in the background; an outage of the service never stops or slows a job |
 | `P4Backoffice__Modules__Billing` | in production (startup fails otherwise) | `On`: payments go through the billing service; this product holds no payment provider key. See *Payments* below |
-| `Billing__Currency` (compose: `BILLING_CURRENCY`) | no (`EUR`; empty or an unresolved placeholder = `EUR`) | Three-letter ISO 4217 code (anything else stops a production start). Currency the product sells in: selects the price list's prices and is the currency of the configured fallback prices |
 | `P4Backoffice__BaseUrl` + `P4Backoffice__SecretKey` | in production (startup fails otherwise) | All e-mail (2FA, password reset, notifications) goes through the backoffice outbox; there is no other provider. Without them outside production messages are only logged |
 | `P4Backoffice__Email__From` / `__ReplyTo` (compose: `P4_BACKOFFICE_EMAIL_FROM` / `_REPLY_TO`) | | Sender and Reply-To of every message; the sender's domain must be the one configured for the environment in the service. Empty = the service's default |
 | `EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64` / `EVIDENCE_ENCRYPTION_CERTIFICATE_PEM` | no, but see purpose | Public RSA certificate that encrypts the SES evidence attachment (CMS, key transport RSA PKCS#1 v1.5 + AES-256-CBC) when `/api/attachment` asks for `UseConfiguredEncryptionCertificate` (#513). A certificate sent in the request (`EncryptForCertificatePem`) wins; the SaaS portal sends one from Key Vault (`EVIDENCE_ENCRYPTION_SOURCE=keyvault`), so this is for TEST, a standalone server and on-prem. Neither one = `503 EVIDENCE_CERT_NOT_CONFIGURED` before any operation or charge, and a Production start logs an error (it does not stop: the caller may send the certificate). Never put the private key here |
@@ -295,8 +296,9 @@ default; any other value that does not parse stops the server at startup.
 
 `GET /internal/concurrency` shows what the limits are doing (#69): occupancy, waits and
 rejections of the global, heavy and AI pools, the users' queues together (no user ids), the
-rasterisation pool, process memory and the thread pool, plus the start hypotheses for this
-machine. The pools show p95/p99 of the wait for a slot, and `operations` shows p50/p95/p99 and
+rasterisation pool, process memory and GC (pause share, collections per generation), the
+thread pool (threads, busy, queued, completed, minimum), the timestamp-authority calls (limit,
+in flight, refused as busy), plus the start hypotheses for this machine. The pools show p95/p99 of the wait for a slot, and `operations` shows p50/p95/p99 and
 the outcome counts (completed, failed, deadline) of each paid operation, from the last 512 calls
 of each since start. Counts only, and no token of its own: it answers on the `INTERNAL_API_PORT` listener
 and is `404` everywhere else (and everywhere while that port is not set).
@@ -594,38 +596,36 @@ again). Queued items are never lost by that.
 
 Credit packs are 100, 300, 500 and 1000 credits. Every price the app shows or
 charges (`/pricing`, `/Billing`, Checkout, auto-recharge, the price-change
-monitor) comes from `ICreditPricingProvider` (`Services/Pricing/`); nothing on
-those paths calls the service.
+notices) comes from `ICreditPricingProvider` (`Services/Pricing/`); nothing on
+those paths calls the service. Prices **and their currency** come only from the
+service's price list (#175): there is no configured price list and no currency
+setting.
 
-- `P4Backoffice__Modules__Pricing=Off` (default): `Billing__PricePer100` and the
-  `Billing__Discount*` volume discounts, in `Billing__Currency`. They are what a private
-  server shows; a payment is taken only with `Modules:Billing=On`, which needs this module `On`.
+- `P4Backoffice__Modules__Pricing=Off` (development, private server): no price
+  list, nothing is sold. The pricing and billing pages show no price at all
+  (never a price of 0), Checkout and card setup are refused. A private server has
+  no price list by design.
 - `On`: prices from the snapshot of `GET /v1/pricing/current` (items of kind
-  `credits` with `attributes.quantity`, the one-time price in `Billing__Currency`),
-  kept in `BackofficeStates` (`pricing:current`) and in memory, refreshed hourly
-  (with `ETag`), right after `price.effective` and on `window_clamped`. Without a
-  snapshot, or for a pack missing from it, the configured price is used and a
-  warning logged. The billing service charges the pack's Stripe Price by its
-  `lookup_key` (see *Payments* below); checkout metadata (`documents`) is unchanged.
+  `credits` with `attributes.quantity` and a one-time price), kept in
+  `BackofficeStates` (`pricing:current`) and in memory, refreshed hourly (with
+  `ETag`), right after `price.effective` and on `window_clamped`. The product
+  currency is the price list's own: the currency in which the most packs are
+  priced (a list in several currencies is logged as a warning). Without a
+  snapshot nothing is sold until one arrives; a pack missing from it is not sold;
+  both are logged as warnings. The billing service charges the pack's Stripe
+  Price by its `lookup_key` (see *Payments* below); checkout metadata
+  (`documents`) is unchanged.
 
-Price-change notices (`price_change_notice` to users with auto-recharge):
-
-- `Off`: `PriceChangeMonitorService` compares the price of 100
-  credits with each user's stored price once a day, as before.
-- `On`: the monitor does not run. `price.scheduled` notifies every non-Enterprise
-  user with auto-recharge on a pack whose price changes, once per price-list
-  version (`Users.PriceChangeNotifiedVersion`, stored with the queued e-mail);
-  `price.effective` stores the new price of 100 credits in
-  `AutoRechargePricePer100` and clears the notice markers; `price.unscheduled`
-  clears the marker of that version (no e-mail); `price.sync_failed` is logged as
-  an error. A daily check of `GET /v1/pricing/upcoming` sends the notices itself
-  (with a warning) when a version takes effect in less than its notice period and
-  nobody has been notified yet.
-
-Rollback: `P4Backoffice__Modules__Pricing=Off`. Keep `Billing__*` in line with
-the price list while the module is `On`: it is the fallback, and after a rollback
-the monitor compares against `Billing__PricePer100` again
-(`PriceChangeNotifiedVersion` is then ignored).
+Price-change notices (`price_change_notice` to users with auto-recharge), only
+with `On`: `price.scheduled` notifies every non-Enterprise user with
+auto-recharge on a pack whose price changes, once per price-list version
+(`Users.PriceChangeNotifiedVersion`, stored with the queued e-mail);
+`price.effective` stores the new price of 100 credits in
+`AutoRechargePricePer100` and clears the notice markers; `price.unscheduled`
+clears the marker of that version (no e-mail); `price.sync_failed` is logged as
+an error. A daily check of `GET /v1/pricing/upcoming` sends the notices itself
+(with a warning) when a version takes effect in less than its notice period and
+nobody has been notified yet.
 
 #### Support form (`Modules:Support`)
 

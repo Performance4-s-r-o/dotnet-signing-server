@@ -124,9 +124,9 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
         db.StoredPdfTemplates.Add(new StoredPdfTemplate { UserId = id, Base64Content = "JVBERi0=", FieldsJson = "[]", Name = "t" });
         db.ApiOperations.Add(new ApiOperation { UserId = id, OperationId = "op-" + id.ToString("N"), Operation = "sign", RequestFingerprint = "f", State = ApiOperationState.Completed, ResultProtected = [1, 2, 3] });
         db.ApiTokens.Add(new ApiToken { UserId = id, Label = "t", TokenHash = [1, 2, 3], TokenPrefix = "p4_" + id.ToString("N")[..5] });
-        var invoice = new Invoice { UserId = id, AmountCents = 1000, StripeInvoiceId = "in_" + id.ToString("N") };
+        var invoice = new Invoice { UserId = id, AmountCents = 1000, Currency = "EUR", StripeInvoiceId = "in_" + id.ToString("N") };
         db.Invoices.Add(invoice);
-        db.Payments.Add(new Payment { UserId = id, InvoiceId = invoice.Id, AmountCents = 1000 });
+        db.Payments.Add(new Payment { UserId = id, InvoiceId = invoice.Id, AmountCents = 1000, Currency = "EUR" });
         db.ConsentRecords.Add(new ConsentRecord
         {
             UserId = id,

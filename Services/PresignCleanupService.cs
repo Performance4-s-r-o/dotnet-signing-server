@@ -1,4 +1,5 @@
 using DotNetSigningServer.Data;
+using DotNetSigningServer.Services.Ops;
 using Microsoft.EntityFrameworkCore;
 
 namespace DotNetSigningServer.Services;
@@ -11,13 +12,16 @@ public class PresignCleanupService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<PresignCleanupService> _logger;
-    private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(10);
+    private readonly IJobHeartbeat _heartbeat;
+    internal static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan MaxPresignAge = TimeSpan.FromMinutes(30);
 
-    public PresignCleanupService(IServiceProvider serviceProvider, ILogger<PresignCleanupService> logger)
+    public PresignCleanupService(IServiceProvider serviceProvider, ILogger<PresignCleanupService> logger, IJobHeartbeat? heartbeat = null)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _heartbeat = heartbeat ?? JobHeartbeat.Disabled;
+        _heartbeat.Register(HeartbeatJobs.PresignCleanup);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -26,7 +30,7 @@ public class PresignCleanupService : BackgroundService
         {
             try
             {
-                await CleanupAbandonedPresignsAsync(stoppingToken);
+                await _heartbeat.RunAsync(HeartbeatJobs.PresignCleanup, CleanupAbandonedPresignsAsync, stoppingToken);
             }
             catch (Exception ex)
             {
@@ -37,7 +41,7 @@ public class PresignCleanupService : BackgroundService
         }
     }
 
-    private async Task CleanupAbandonedPresignsAsync(CancellationToken cancellationToken)
+    private async Task<int> CleanupAbandonedPresignsAsync(CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -49,7 +53,7 @@ public class PresignCleanupService : BackgroundService
 
         SweepOrphanFiles(cutoff);
 
-        if (staleRecords.Count == 0) return;
+        if (staleRecords.Count == 0) return 0;
 
         foreach (var record in staleRecords)
         {
@@ -71,6 +75,7 @@ public class PresignCleanupService : BackgroundService
 
         await dbContext.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Cleaned up {Count} abandoned presign record(s)", staleRecords.Count);
+        return staleRecords.Count;
     }
 
     /// <summary>
