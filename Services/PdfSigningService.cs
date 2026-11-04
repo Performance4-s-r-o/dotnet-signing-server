@@ -167,9 +167,11 @@ namespace DotNetSigningServer.Services
         /// <summary>DocMDP level of a certified document (1–3), null when it is not certified.</summary>
         internal static int? CertificationLevel(PdfDocument doc)
         {
-            var references = doc.GetCatalog().GetPdfObject()
-                .GetAsDictionary(PdfName.Perms)?.GetAsDictionary(PdfName.DocMDP)?.GetAsArray(PdfName.Reference);
-            if (references == null) return null;
+            var docMdp = doc.GetCatalog().GetPdfObject().GetAsDictionary(PdfName.Perms)?.GetAsDictionary(PdfName.DocMDP);
+            if (docMdp == null) return null;
+            // Certified without a readable /Reference: assume the strictest level.
+            var references = docMdp.GetAsArray(PdfName.Reference);
+            if (references == null) return 1;
             for (int i = 0; i < references.Size(); i++)
             {
                 var reference = references.GetAsDictionary(i);

@@ -205,6 +205,21 @@ public class ContentStampPresignTests : IDisposable
         Assert.True(placement!.Annotation);
     }
 
+    [Fact]
+    public void A_DocMDP_entry_without_a_reference_counts_as_the_strictest_certification()
+    {
+        var certified = Certified(AccessPermissions.ANNOTATION_MODIFICATION);
+        using var stripped = new MemoryStream();
+        using (var edit = new PdfDocument(new PdfReader(new MemoryStream(certified)), new PdfWriter(stripped)))
+        {
+            edit.GetCatalog().GetPdfObject().GetAsDictionary(PdfName.Perms)!.GetAsDictionary(PdfName.DocMDP)!.Remove(PdfName.Reference);
+        }
+        using var doc = new PdfDocument(new PdfReader(new MemoryStream(stripped.ToArray())));
+        Assert.Equal(1, PdfSigningService.CertificationLevel(doc));
+        using var plain = new PdfDocument(new PdfReader(new MemoryStream(Blank())));
+        Assert.Null(PdfSigningService.CertificationLevel(plain));
+    }
+
     // ── no room (review: signatures must not cover each other) ─────────────────────────────────
 
     [Fact]
