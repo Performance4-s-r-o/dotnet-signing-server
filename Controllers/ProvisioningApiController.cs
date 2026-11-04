@@ -182,20 +182,36 @@ public sealed class ProvisionedAccountApiController : ProvisioningControllerBase
         _logger = logger;
     }
 
-    /// <summary>The calling provisioned account and its token; null for any other caller.</summary>
-    private async Task<(User Account, Guid TokenId)?> ProvisionedCallerAsync()
+    /// <summary>
+    /// The calling provisioned account and its token, or the refusal: 403 <c>TOKEN_SCOPE</c> for any
+    /// other caller, 401 for an account that is gone or inactive (a repeat after a lost answer of
+    /// <c>DELETE</c> may still pass a cached token on this or another instance).
+    /// </summary>
+    private async Task<((User Account, Guid TokenId)? Caller, IActionResult? Refusal)> ProvisionedCallerAsync()
     {
-        if (ApiKeyCaller() is not { Kind: SessionClaims.ServerTokenKind } caller) return null;
+        if (ApiKeyCaller() is not { Kind: SessionClaims.ServerTokenKind } caller)
+        {
+            return (null, Error(StatusCodes.Status403Forbidden, BrowserTokenScope.ScopeErrorCode));
+        }
         var account = await _db.Users.Include(u => u.Parent).FirstOrDefaultAsync(u => u.Id == caller.UserId);
-        if (account is not { ParentUserId: not null } || !account.EffectiveActive || account.ErasedAt != null) return null;
-        return (account, caller.TokenId);
+        if (account == null || account.ErasedAt != null || (account.ParentUserId != null && !account.EffectiveActive))
+        {
+            Response.Headers.WWWAuthenticate = "Bearer";
+            return (null, Error(StatusCodes.Status401Unauthorized, "UNAUTHENTICATED"));
+        }
+        if (account.ParentUserId == null)
+        {
+            return (null, Error(StatusCodes.Status403Forbidden, BrowserTokenScope.ScopeErrorCode));
+        }
+        return ((account, caller.TokenId), null);
     }
 
     /// <summary>Adds a token the integrator generated; the current one keeps working until <c>revoke-others</c>.</summary>
     [HttpPost("tokens/rotate")]
     public async Task<IActionResult> Rotate([FromBody] RotateTokenInput? input)
     {
-        if (await ProvisionedCallerAsync() is not { } caller) return Error(StatusCodes.Status403Forbidden, BrowserTokenScope.ScopeErrorCode);
+        var (found, refusal) = await ProvisionedCallerAsync();
+        if (found is not { } caller) return refusal!;
         if (await _provisioner.IsRateLimitedAsync("rotate", caller.Account.Id, HttpContext.RequestAborted)) return Limited(60);
 
         var value = input?.NewToken;
@@ -237,7 +253,8 @@ public sealed class ProvisionedAccountApiController : ProvisioningControllerBase
     [HttpPost("tokens/revoke-others")]
     public async Task<IActionResult> RevokeOthers()
     {
-        if (await ProvisionedCallerAsync() is not { } caller) return Error(StatusCodes.Status403Forbidden, BrowserTokenScope.ScopeErrorCode);
+        var (found, refusal) = await ProvisionedCallerAsync();
+        if (found is not { } caller) return refusal!;
 
         var now = DateTimeOffset.UtcNow;
         var others = await _db.ApiTokens
@@ -254,7 +271,8 @@ public sealed class ProvisionedAccountApiController : ProvisioningControllerBase
     [HttpDelete("")]
     public async Task<IActionResult> Delete()
     {
-        if (await ProvisionedCallerAsync() is not { } caller) return Error(StatusCodes.Status403Forbidden, BrowserTokenScope.ScopeErrorCode);
+        var (found, refusal) = await ProvisionedCallerAsync();
+        if (found is not { } caller) return refusal!;
 
         // Not RequestAborted: a dropped connection must not stop the erasure halfway.
         var result = await _erasure.DeleteProvisionedAccountAsync(caller.Account.Id, CancellationToken.None);

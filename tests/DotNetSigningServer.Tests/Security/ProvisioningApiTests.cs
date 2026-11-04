@@ -557,6 +557,32 @@ public class ProvisioningApiTests : IClassFixture<WebUiAuthFixture>
     }
 
     [DockerFact]
+    public async Task A_repeat_on_an_account_already_erased_is_401_even_with_a_cached_token()
+    {
+        await using var app = App();
+        var (_, mainKey) = await NewParentAsync(app);
+        var token = NewToken();
+        var accountId = (await JsonAsync(await ProvisionAsync(app, mainKey, NewExternalId(), token))).GetProperty("accountId").GetGuid();
+        // The token is now in the positive auth cache, as on an instance that did not do the erasure.
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(app, HttpMethod.Get, "/api/pdf-template", token)).StatusCode);
+        await using (var db = _fx.Postgres.CreateContext())
+        {
+            await db.Users.Where(u => u.Id == accountId).ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.ErasedAt, DateTimeOffset.UtcNow).SetProperty(u => u.IsActive, false));
+        }
+
+        foreach (var (method, path) in new[]
+                 {
+                     (HttpMethod.Delete, "/api/account"), (HttpMethod.Post, "/api/account/tokens/revoke-others"), (HttpMethod.Post, "/api/account/tokens/rotate"),
+                 })
+        {
+            var response = await SendAsync(app, method, path, token, method == HttpMethod.Delete ? null : new { newToken = NewToken() });
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            Assert.Equal("UNAUTHENTICATED", await CodeAsync(response));
+        }
+    }
+
+    [DockerFact]
     public async Task Ordinary_accounts_cannot_use_the_provisioned_account_endpoints()
     {
         await using var app = App();
@@ -588,6 +614,7 @@ public class ProvisioningApiTests : IClassFixture<WebUiAuthFixture>
         Assert.Equal(HttpStatusCode.OK, delete.StatusCode);
         Assert.Equal("erased", (await JsonAsync(delete)).GetProperty("status").GetString());
         // Its tokens are gone: a repeat is 401, which the integrator takes as done.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(app, HttpMethod.Delete, "/api/account", token)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(app, HttpMethod.Delete, "/api/account", token)).StatusCode);
 
         await using (var db = _fx.Postgres.CreateContext())
