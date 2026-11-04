@@ -18,14 +18,8 @@ public class PortalTrustOptions
 {
     public const string InternalPortVariable = "INTERNAL_API_PORT";
 
-    /// <summary>Removed: the trusted account is a flag in the administration now. Read only to warn.</summary>
-    public const string RemovedTrustedCallerUserIdsVariable = "TRUSTED_CALLER_USER_IDS";
-
     /// <summary>The internal listener's port; null = no internal listener.</summary>
     public int? InternalPort { get; set; }
-
-    /// <summary>True when the removed id list is still set: it is ignored, and the start says so.</summary>
-    public bool RemovedVariableSet { get; set; }
 
     /// <summary>
     /// The listen URLs with the internal port added (once). Empty <paramref name="urls"/> means
@@ -54,7 +48,6 @@ public class PortalTrustOptions
         return new PortalTrustOptions
         {
             InternalPort = port,
-            RemovedVariableSet = !EnvValues.IsUnset(configuration[RemovedTrustedCallerUserIdsVariable]),
         };
     }
 }

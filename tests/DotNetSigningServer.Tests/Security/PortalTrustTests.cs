@@ -165,16 +165,13 @@ public class PortalTrustTests : IDisposable
     {
         var options = PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086")));
         Assert.Equal(8086, options.InternalPort);
-        Assert.False(options.RemovedVariableSet);
     }
 
     [Fact]
     public void Unset_and_placeholder_values_mean_no_internal_listener()
     {
-        var options = PortalTrustOptions.From(Config(
-            ("INTERNAL_API_PORT", null), ("TRUSTED_CALLER_USER_IDS", "{{project.DOTNET_TRUSTED_CALLER_USER_IDS}}")));
+        var options = PortalTrustOptions.From(Config(("INTERNAL_API_PORT", null)));
         Assert.Null(options.InternalPort);
-        Assert.False(options.RemovedVariableSet);
     }
 
     [Fact]
@@ -182,18 +179,6 @@ public class PortalTrustTests : IDisposable
     {
         var options = PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "{{project.DOTNET_INTERNAL_API_PORT}}")));
         Assert.Null(options.InternalPort);
-    }
-
-    [Fact]
-    public void The_removed_id_list_is_ignored_and_reported()
-    {
-        // Even a valid id must not make anybody trusted: the flag on the account decides.
-        var options = PortalTrustOptions.From(Config(("INTERNAL_API_PORT", "8086"), ("TRUSTED_CALLER_USER_IDS", PortalUserId.ToString())));
-        Assert.True(options.RemovedVariableSet);
-        Assert.Equal(PortalCallKind.Ordinary, PortalTrust.Classify(options, InternalPort, trustedCallerAccount: false, isBrowserToken: false));
-        Assert.Equal(PortalCallKind.Ordinary, PortalTrust.Classify(options, PublicPort, trustedCallerAccount: false, isBrowserToken: false));
-        // Not valid any more either: garbage there does not stop the start.
-        Assert.True(PortalTrustOptions.From(Config(("TRUSTED_CALLER_USER_IDS", "not-a-guid"))).RemovedVariableSet);
     }
 
     // ── Trusted caller headers without the flag on the internal port ────────────────────────────

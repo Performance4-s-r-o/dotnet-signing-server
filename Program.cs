@@ -103,12 +103,6 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 var portalTrust = migrateOnly ? new PortalTrustOptions() : PortalTrustOptions.From(builder.Configuration);
 builder.Services.AddSingleton(portalTrust);
 builder.Services.AddSingleton<DotNetSigningServer.Services.MissingTrustedCallerFlag>();
-if (portalTrust.RemovedVariableSet)
-{
-    Console.Error.WriteLine(
-        $"WARN: {PortalTrustOptions.RemovedTrustedCallerUserIdsVariable} is set but no longer read and has no effect: "
-        + "mark the trusted account in the administration (Trusted caller) instead, then remove the variable.");
-}
 if (portalTrust.InternalPort is int internalPort)
 {
     // A second listener next to whatever ASPNETCORE_URLS names (Kestrel's default otherwise).
