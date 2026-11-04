@@ -200,7 +200,7 @@ public class PresignPdfaEndpointTests : IDisposable
         free.Occupied = null;
         var (okStatus, _, body) = Describe(await controller.PresignPlacement(free));
         Assert.Equal(200, okStatus);
-        Assert.Equal(2, body.GetProperty("contentStamp").GetProperty("version").GetInt32());
+        Assert.Equal(ContentStampPlacement.CurrentVersion, body.GetProperty("contentStamp").GetProperty("version").GetInt32());
         Assert.Empty(_db.SigningData);
     }
 
