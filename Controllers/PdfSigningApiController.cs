@@ -3,6 +3,7 @@ using DotNetSigningServer.Data;
 using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Services.SignatureLayout;
 using DotNetSigningServer.Services.Operations;
 using iText.Signatures;
 using DotNetSigningServer.Options;
@@ -197,6 +198,12 @@ namespace DotNetSigningServer.Controllers
                     contentStamp = stampPlacement,
                 });
             }
+            catch (ApiValidationException ex) when (StampRefusalCodes.Contains(ex.Code))
+            {
+                // Planned before anything is written: nothing to clean up (portál #511).
+                Logger.LogInformation("Presign refused: {Code} ({Detail})", ex.Code, ex.Message);
+                return StampRefused(ex);
+            }
             catch (ApiValidationException ex) when (PreparationRefusalCodes.Contains(ex.Code))
             {
                 // Thrown before the file is written: nothing to clean up.
@@ -221,6 +228,43 @@ namespace DotNetSigningServer.Controllers
                 }
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Presign failed");
                 return SafeProblem(Localizer["PresignError"], ex);
+            }
+        }
+
+        /// <summary>The stamp or the seal beside it has no place, or the certification forbids it (422, portál #511).</summary>
+        internal static readonly IReadOnlySet<string> StampRefusalCodes = new HashSet<string>(StringComparer.Ordinal)
+        {
+            SealPlacement.NoRoomCode, PdfSigningService.CertifiedNoChangesCode,
+        };
+
+        private IActionResult StampRefused(ApiValidationException ex) =>
+            UnprocessableEntity(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
+
+        /// <summary>
+        /// Where presign would put the content stamp and the seal beside it, without writing anything
+        /// (portál #511): the portal asks before it reserves credits or spends an SMS. Same input and
+        /// the same 422 refusals as <c>/api/presign</c>; free.
+        /// </summary>
+        [CapacityPool(CapacityPoolKind.Heavy)]
+        [HttpPost("/api/presign/placement")]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> PresignPlacement([FromBody] PreSignInput input)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+            try
+            {
+                var pdf = GuardedPdfFromBase64(input.PdfContent, "Presign", checkActiveContent: !input.FlattenForm);
+                input.PdfContent = string.Empty;
+                return Ok(new { contentStamp = PdfSigningService.PlanContentStamp(input, pdf).Placement });
+            }
+            catch (ApiValidationException ex) when (StampRefusalCodes.Contains(ex.Code))
+            {
+                return StampRefused(ex);
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
             }
         }
 

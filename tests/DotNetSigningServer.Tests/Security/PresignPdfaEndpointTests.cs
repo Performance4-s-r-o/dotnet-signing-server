@@ -174,6 +174,37 @@ public class PresignPdfaEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task A_stamp_without_room_is_422_from_presign_and_the_placement_check_and_writes_nothing()
+    {
+        var controller = Controller(trusted: true);
+        PreSignInput Blocked()
+        {
+            var input = Input(PresignPdfaTests.Pdf(_ => { }));
+            input.SignRect = new SignRect { Width = 150, Height = 50 };
+            input.ContentStamp = new ContentStampInput { SignRect = new SignRect { X = 50, Y = 100, Width = 200, Height = 60 }, SignerName = "Jana" };
+            input.PlaceBesideContentStamp = true;
+            input.Occupied = new List<OccupiedRect> { new() { Page = 1, X = 0, Y = 0, Width = 595, Height = 842 } };
+            return input;
+        }
+
+        var (status, code, _) = Describe(await controller.PreSign(Blocked()));
+        Assert.Equal(422, status);
+        Assert.Equal("SEAL_PLACEMENT_NO_ROOM", code);
+        Assert.Empty(_db.SigningData);
+
+        (status, code, _) = Describe(await controller.PresignPlacement(Blocked()));
+        Assert.Equal(422, status);
+        Assert.Equal("SEAL_PLACEMENT_NO_ROOM", code);
+
+        var free = Blocked();
+        free.Occupied = null;
+        var (okStatus, _, body) = Describe(await controller.PresignPlacement(free));
+        Assert.Equal(200, okStatus);
+        Assert.Equal(2, body.GetProperty("contentStamp").GetProperty("version").GetInt32());
+        Assert.Empty(_db.SigningData);
+    }
+
+    [Fact]
     public async Task Placing_beside_without_a_stamp_is_400()
     {
         var input = Input(PresignPdfaTests.Pdf(_ => { }));
