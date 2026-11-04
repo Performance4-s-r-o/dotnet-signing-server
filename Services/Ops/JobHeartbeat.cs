@@ -2,48 +2,92 @@ using System.Text;
 
 namespace DotNetSigningServer.Services.Ops;
 
-/// <summary>
-/// A periodic job as Healthchecks knows it (#167).
-/// </summary>
-/// <param name="Name">Stable check slug, the last segment of the ping URL.</param>
-/// <param name="MinPingInterval">Fewer pings for a loop that runs every few seconds: start and
-/// success go out at most this often; a failure and the first success after it always go out.</param>
-public sealed record HeartbeatJob(string Name, TimeSpan MinPingInterval)
-{
-    public HeartbeatJob(string name) : this(name, TimeSpan.Zero) { }
-}
+/// <summary>A periodic job (#167).</summary>
+/// <param name="Name">Stable job name; the check name too when the job is in no group.</param>
+/// <param name="Interval">How often the job runs at most apart; a group's cycle must leave room for it.</param>
+public sealed record HeartbeatJob(string Name, TimeSpan Interval);
 
-/// <summary>Every check the server pings; the names are what the Healthchecks checks are created with.</summary>
+/// <summary>One Healthchecks check shared by several jobs.</summary>
+/// <param name="Cycle">Length of a cycle, aligned to UTC (multiples since 1970-01-01).</param>
+public sealed record HeartbeatGroup(string Name, TimeSpan Cycle, IReadOnlyList<HeartbeatJob> Jobs);
+
+/// <summary>
+/// Every periodic job and the one map job → check (#167). The free Healthchecks tier is shared
+/// with the portal and the backoffice, so the jobs share four checks.
+/// </summary>
 public static class HeartbeatJobs
 {
-    public static readonly HeartbeatJob PresignCleanup = new("dotnet-presign-cleanup");
-    public static readonly HeartbeatJob OperationMaintenance = new("dotnet-operation-maintenance");
-    public static readonly HeartbeatJob DataRetention = new("dotnet-data-retention");
-    public static readonly HeartbeatJob BackofficeOutbox = new("dotnet-backoffice-outbox", TimeSpan.FromMinutes(1));
-    public static readonly HeartbeatJob BackofficeInbox = new("dotnet-backoffice-inbox", TimeSpan.FromMinutes(1));
-    public static readonly HeartbeatJob BackofficePolling = new("dotnet-backoffice-polling");
-    public static readonly HeartbeatJob ConsentReconciliation = new("dotnet-consent-reconcile");
-    public static readonly HeartbeatJob PricingRefresh = new("dotnet-pricing-refresh");
-    public static readonly HeartbeatJob PricingUpcoming = new("dotnet-pricing-upcoming");
-    public static readonly HeartbeatJob SupportCategories = new("dotnet-support-categories");
+    public static readonly HeartbeatJob PresignCleanup = new("presign-cleanup", PresignCleanupService.CleanupInterval);
+    public static readonly HeartbeatJob OperationMaintenance = new("operation-maintenance", Operations.OperationMaintenanceService.Interval);
+    public static readonly HeartbeatJob DataRetention = new("data-retention", DataRetentionService.Interval);
+    public static readonly HeartbeatJob BackofficeOutbox = new("backoffice-outbox", Backoffice.Outbox.BackofficeOutboxDispatcher.PollInterval);
+    public static readonly HeartbeatJob BackofficeInbox = new("backoffice-inbox", Backoffice.Inbox.BackofficeInboxProcessor.PollInterval);
+    public static readonly HeartbeatJob BackofficePolling = new("backoffice-polling", DotNetSigningServer.Options.P4BackofficeProductOptions.PollingOptions.MaxInterval);
+    public static readonly HeartbeatJob ConsentReconciliation = new("consent-reconcile", Consents.ConsentReconciliationService.CheckEvery);
+    public static readonly HeartbeatJob PricingRefresh = new("pricing-refresh", Pricing.PricingSnapshotWorker.Interval);
+    public static readonly HeartbeatJob PricingUpcoming = new("pricing-upcoming", Pricing.PricingUpcomingCheck.Interval);
+    public static readonly HeartbeatJob SupportCategories = new("support-categories", Support.SupportCategoriesWorker.Interval);
 
     public static IReadOnlyList<HeartbeatJob> All { get; } =
     [
         PresignCleanup, OperationMaintenance, DataRetention, BackofficeOutbox, BackofficeInbox,
         BackofficePolling, ConsentReconciliation, PricingRefresh, PricingUpcoming, SupportCategories,
     ];
+
+    /// <summary>The checks. A job left out gets a check of its own name, never none.</summary>
+    public static IReadOnlyList<HeartbeatGroup> Groups { get; } =
+    [
+        new("dotnet-maintenance", TimeSpan.FromMinutes(30), [PresignCleanup, OperationMaintenance]),
+        new("dotnet-backoffice-sync", TimeSpan.FromMinutes(30), [BackofficeOutbox, BackofficeInbox, BackofficePolling]),
+        // Hourly jobs drift by their own run time, so a 1 h cycle would now and then see none: 2 h.
+        new("dotnet-backoffice-hourly", TimeSpan.FromHours(2), [ConsentReconciliation, PricingRefresh, SupportCategories]),
+        new("dotnet-daily", TimeSpan.FromDays(1), [DataRetention, PricingUpcoming]),
+    ];
+
+    /// <summary>The check a job pings: its group, otherwise its own name.</summary>
+    public static string CheckNameFor(HeartbeatJob job) =>
+        Groups.FirstOrDefault(g => g.Jobs.Any(j => j.Name == job.Name))?.Name ?? job.Name;
+
+    /// <summary>Problems of the map (empty = fine): a job in two groups, a group named like a job, an empty group.</summary>
+    public static IReadOnlyList<string> Validate(IReadOnlyList<HeartbeatGroup> groups, IReadOnlyList<HeartbeatJob> jobs)
+    {
+        var problems = new List<string>();
+        var seen = new Dictionary<string, string>();
+        foreach (var group in groups)
+        {
+            if (jobs.Any(j => j.Name == group.Name)) problems.Add($"group {group.Name} has the name of a job");
+            if (group.Jobs.Count == 0) problems.Add($"group {group.Name} is empty");
+            if (group.Cycle <= TimeSpan.Zero) problems.Add($"group {group.Name} has no cycle");
+            foreach (var job in group.Jobs)
+            {
+                if (seen.TryGetValue(job.Name, out var other)) problems.Add($"job {job.Name} is in {other} and {group.Name}");
+                seen[job.Name] = group.Name;
+            }
+        }
+        return problems;
+    }
 }
 
 /// <summary>
-/// Pings a dead man's switch around each run of a periodic job (#167): <c>&lt;base&gt;/&lt;job&gt;/start</c>,
-/// <c>&lt;base&gt;/&lt;job&gt;</c> on success and <c>&lt;base&gt;/&lt;job&gt;/fail</c> on an exception, the
-/// Healthchecks URL shape. The job never waits for a ping and never fails because of one.
+/// Pings a dead man's switch around the periodic jobs (#167), the Healthchecks URL shape
+/// <c>&lt;base&gt;/&lt;check&gt;/start</c>, <c>&lt;base&gt;/&lt;check&gt;</c>, <c>&lt;base&gt;/&lt;check&gt;/fail</c>.
+/// The same rules as the portal's worker (<c>scripts/cron-heartbeat.js</c>) for a group:
+/// <list type="bullet">
+/// <item>a run belongs to the cycle it began in; <c>/start</c> at the first run of a cycle;</item>
+/// <item>success only once every job of the group registered in this process succeeded in the cycle;</item>
+/// <item>a failure of any job is <c>/fail</c> at once with the job's name and the exception type (once per job and cycle);</item>
+/// <item>a cycle that ended without that is <c>/fail</c> (<c>incomplete, missing: …</c>) when the next one begins;</item>
+/// <item>a cycle that began before this process is not judged: no <c>/start</c>, no incomplete.</item>
+/// </list>
+/// State is in memory only. The job never waits for a ping and never fails because of one.
 /// </summary>
 public interface IJobHeartbeat
 {
+    /// <summary>The job runs in this process; its group waits for it. Call from the constructor.</summary>
+    void Register(HeartbeatJob job);
+
     /// <summary>Runs <paramref name="work"/> between the pings; its exception is rethrown after the fail ping.</summary>
-    /// <param name="summarize">A short summary of the result for the success ping; no personal data.</param>
-    Task<T> RunAsync<T>(HeartbeatJob job, Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken, Func<T, string?>? summarize = null);
+    Task<T> RunAsync<T>(HeartbeatJob job, Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken);
 
     /// <summary>A job without a result.</summary>
     Task RunAsync(HeartbeatJob job, Func<CancellationToken, Task> work, CancellationToken cancellationToken);
@@ -55,10 +99,10 @@ public sealed class JobHeartbeat : IJobHeartbeat
     public const string HttpClientName = "Heartbeat";
     public const string ConfigKey = "HEARTBEAT_BASE_URL";
     public static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
-    internal const int MaxBodyLength = 200;
+    internal const int MaxBodyLength = 500;
 
-    /// <summary>Pings of one job waiting behind a slow service; more are dropped.</summary>
-    internal const int MaxPendingPerJob = 5;
+    /// <summary>Pings of one check waiting behind a slow service; more are dropped.</summary>
+    internal const int MaxPendingPerCheck = 5;
 
     /// <summary>No base URL: no ping, the job just runs.</summary>
     public static readonly IJobHeartbeat Disabled = new JobHeartbeat(null, null!, TimeProvider.System, null);
@@ -67,24 +111,49 @@ public sealed class JobHeartbeat : IJobHeartbeat
     private readonly IHttpClientFactory _httpClients;
     private readonly TimeProvider _time;
     private readonly ILogger<JobHeartbeat>? _logger;
+    private readonly DateTimeOffset _processStart;
     private readonly object _gate = new();
-    private readonly Dictionary<string, JobState> _jobs = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, GroupState> _groups = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, GroupState> _groupOf = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Sender> _senders = new(StringComparer.Ordinal);
 
-    private sealed class JobState
+    private sealed class GroupState(HeartbeatGroup group)
     {
-        public DateTimeOffset? LastReported;
-        public bool Failed;
-        public DateTimeOffset? LastFail;
+        public HeartbeatGroup Group { get; } = group;
+        public HashSet<string> Registered { get; } = new(StringComparer.Ordinal);
+        public Cycle? Current;
+    }
+
+    private sealed class Cycle(DateTimeOffset start, bool full)
+    {
+        public DateTimeOffset Start { get; } = start;
+        public bool Full { get; } = full;
+        public HashSet<string> Done { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> FailedJobs { get; } = new(StringComparer.Ordinal);
+        public bool Started;
+        public bool Succeeded;
+    }
+
+    private sealed class Sender
+    {
         public Task Chain = Task.CompletedTask;
         public int Pending;
     }
 
-    public JobHeartbeat(Uri? baseUrl, IHttpClientFactory httpClients, TimeProvider time, ILogger<JobHeartbeat>? logger)
+    public JobHeartbeat(Uri? baseUrl, IHttpClientFactory httpClients, TimeProvider time, ILogger<JobHeartbeat>? logger,
+        IReadOnlyList<HeartbeatGroup>? groups = null)
     {
         _base = baseUrl?.ToString().TrimEnd('/');
         _httpClients = httpClients;
         _time = time;
         _logger = logger;
+        _processStart = time.GetUtcNow();
+        foreach (var group in groups ?? HeartbeatJobs.Groups)
+        {
+            var state = new GroupState(group);
+            _groups[group.Name] = state;
+            foreach (var job in group.Jobs) _groupOf[job.Name] = state;
+        }
     }
 
     public bool Enabled => _base != null;
@@ -102,6 +171,14 @@ public sealed class JobHeartbeat : IJobHeartbeat
         return uri;
     }
 
+    public void Register(HeartbeatJob job)
+    {
+        lock (_gate)
+        {
+            if (_groupOf.TryGetValue(job.Name, out var group)) group.Registered.Add(job.Name);
+        }
+    }
+
     public Task RunAsync(HeartbeatJob job, Func<CancellationToken, Task> work, CancellationToken cancellationToken) =>
         RunAsync<bool>(job, async ct =>
         {
@@ -109,16 +186,14 @@ public sealed class JobHeartbeat : IJobHeartbeat
             return true;
         }, cancellationToken);
 
-    public async Task<T> RunAsync<T>(HeartbeatJob job, Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken, Func<T, string?>? summarize = null)
+    public async Task<T> RunAsync<T>(HeartbeatJob job, Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken)
     {
         if (_base == null)
         {
             return await work(cancellationToken);
         }
 
-        var report = BeginRun(job);
-        if (report) Enqueue(job, "/start", null);
-
+        var cycle = Begin(job);
         T result;
         try
         {
@@ -130,23 +205,10 @@ public sealed class JobHeartbeat : IJobHeartbeat
         }
         catch (Exception ex)
         {
-            if (RecordFailure(job)) Enqueue(job, "/fail", Describe(ex));
+            Finish(job, cycle, Describe(ex));
             throw;
         }
-
-        if (RecordSuccess(job, report))
-        {
-            string? summary = null;
-            try
-            {
-                summary = summarize?.Invoke(result);
-            }
-            catch (Exception)
-            {
-                // A summary is a nicety; the success ping goes out without it.
-            }
-            Enqueue(job, "", summary);
-        }
+        Finish(job, cycle, null);
         return result;
     }
 
@@ -155,7 +217,7 @@ public sealed class JobHeartbeat : IJobHeartbeat
     {
         lock (_gate)
         {
-            return Task.WhenAll(_jobs.Values.Select(s => s.Chain));
+            return Task.WhenAll(_senders.Values.Select(s => s.Chain));
         }
     }
 
@@ -167,97 +229,121 @@ public sealed class JobHeartbeat : IJobHeartbeat
         return text.ToString();
     }
 
-    private JobState State(HeartbeatJob job)
-    {
-        if (!_jobs.TryGetValue(job.Name, out var state))
-        {
-            _jobs[job.Name] = state = new JobState();
-        }
-        return state;
-    }
+    private static DateTimeOffset CycleStartOf(HeartbeatGroup group, DateTimeOffset at) =>
+        DateTimeOffset.FromUnixTimeMilliseconds(at.ToUnixTimeMilliseconds() / (long)group.Cycle.TotalMilliseconds * (long)group.Cycle.TotalMilliseconds);
 
-    private bool BeginRun(HeartbeatJob job)
-    {
-        var now = _time.GetUtcNow();
-        lock (_gate)
-        {
-            var state = State(job);
-            var due = state.LastReported is not { } last || now - last >= job.MinPingInterval;
-            if (due) state.LastReported = now;
-            return due;
-        }
-    }
-
-    private bool RecordFailure(HeartbeatJob job)
-    {
-        var now = _time.GetUtcNow();
-        lock (_gate)
-        {
-            var state = State(job);
-            var send = !state.Failed || state.LastFail is not { } last || now - last >= job.MinPingInterval;
-            state.Failed = true;
-            if (send) state.LastFail = now;
-            return send;
-        }
-    }
-
-    private bool RecordSuccess(HeartbeatJob job, bool reported)
-    {
-        var now = _time.GetUtcNow();
-        lock (_gate)
-        {
-            var state = State(job);
-            var send = reported || state.Failed;
-            if (state.Failed) state.LastReported = now;
-            state.Failed = false;
-            return send;
-        }
-    }
-
-    /// <summary>Queues a ping behind the earlier ones of the same job, so they arrive in order.</summary>
-    private void Enqueue(HeartbeatJob job, string suffix, string? body)
+    /// <summary>A run begins; returns the start of its group's cycle (null for a job in no group).</summary>
+    private DateTimeOffset? Begin(HeartbeatJob job)
     {
         lock (_gate)
         {
-            var state = State(job);
-            if (state.Pending >= MaxPendingPerJob)
+            if (!_groupOf.TryGetValue(job.Name, out var group))
             {
-                _logger?.LogWarning("Heartbeat {Job}{Suffix} dropped: earlier pings are still pending", job.Name, suffix);
+                Enqueue(job.Name, "/start", job.Name);
+                return null;
+            }
+
+            group.Registered.Add(job.Name); // a job that runs is registered, whatever its constructor did
+            var start = CycleStartOf(group.Group, _time.GetUtcNow());
+            Advance(group, start);
+            var cycle = group.Current!;
+            if (cycle.Start == start && cycle.Full && !cycle.Started)
+            {
+                cycle.Started = true;
+                Enqueue(group.Group.Name, "/start", $"first: {job.Name}");
+            }
+            return start;
+        }
+    }
+
+    /// <summary>Moves the group to the cycle at <paramref name="start"/>, judging the one that ends.</summary>
+    private void Advance(GroupState group, DateTimeOffset start)
+    {
+        var current = group.Current;
+        if (current != null && start <= current.Start) return;
+        if (current is { Full: true, Succeeded: false } && current.FailedJobs.Count == 0)
+        {
+            var missing = group.Registered.Where(j => !current.Done.Contains(j)).Order(StringComparer.Ordinal);
+            Enqueue(group.Group.Name, "/fail", $"cycle {current.Start:yyyy-MM-ddTHH:mm:ssZ} incomplete, missing: {string.Join(", ", missing)}");
+        }
+        else if (current is { Full: false, Succeeded: false } && current.FailedJobs.Count == 0)
+        {
+            _logger?.LogInformation("Heartbeat {Check}: cycle {Start:u} began before this process, not judged", group.Group.Name, current.Start);
+        }
+        group.Current = new Cycle(start, start >= _processStart);
+    }
+
+    /// <summary>A run ended: <paramref name="failure"/> is the exception type, null on success.</summary>
+    private void Finish(HeartbeatJob job, DateTimeOffset? cycleStart, string? failure)
+    {
+        lock (_gate)
+        {
+            if (cycleStart is not { } started || !_groupOf.TryGetValue(job.Name, out var group))
+            {
+                Enqueue(job.Name, failure is null ? "" : "/fail", failure is null ? job.Name : $"{job.Name}: {failure}");
                 return;
             }
-            state.Pending++;
-            state.Chain = state.Chain.ContinueWith(
-                _ => SendAsync(job, suffix, body, state),
-                CancellationToken.None,
-                TaskContinuationOptions.None,
-                TaskScheduler.Default).Unwrap();
+
+            var cycle = group.Current;
+            var current = cycle != null && cycle.Start == started;
+            if (failure != null)
+            {
+                // Reported for a closed cycle too; once per job and cycle.
+                if (current && !cycle!.FailedJobs.Add(job.Name)) return;
+                Enqueue(group.Group.Name, "/fail", $"{job.Name}: {failure}");
+                return;
+            }
+            if (!current) return; // finished for a closed cycle
+            cycle!.Done.Add(job.Name);
+            if (cycle.FailedJobs.Count == 0 && !cycle.Succeeded && group.Registered.All(cycle.Done.Contains))
+            {
+                cycle.Succeeded = true;
+                Enqueue(group.Group.Name, "", "all ok: " + string.Join(", ", group.Registered.Order(StringComparer.Ordinal)));
+            }
         }
     }
 
-    private async Task SendAsync(HeartbeatJob job, string suffix, string? body, JobState state)
+    /// <summary>Queues a ping behind the earlier ones of the same check, so they arrive in order. Under the lock.</summary>
+    private void Enqueue(string check, string suffix, string body)
+    {
+        if (!_senders.TryGetValue(check, out var sender)) _senders[check] = sender = new Sender();
+        if (sender.Pending >= MaxPendingPerCheck)
+        {
+            _logger?.LogWarning("Heartbeat {Check}{Suffix} dropped: earlier pings are still pending", check, suffix);
+            return;
+        }
+        sender.Pending++;
+        sender.Chain = sender.Chain.ContinueWith(
+            _ => SendAsync(check, suffix, body, sender),
+            CancellationToken.None,
+            TaskContinuationOptions.None,
+            TaskScheduler.Default).Unwrap();
+    }
+
+    private async Task SendAsync(string check, string suffix, string body, Sender sender)
     {
         try
         {
             using var cts = new CancellationTokenSource(RequestTimeout);
-            var text = body is null ? "" : body.Length > MaxBodyLength ? body[..MaxBodyLength] : body;
+            var text = body.Length > MaxBodyLength ? body[..MaxBodyLength] : body;
             using var content = new StringContent(text, Encoding.UTF8, "text/plain");
             using var response = await _httpClients.CreateClient(HttpClientName)
-                .PostAsync($"{_base}/{Uri.EscapeDataString(job.Name)}{suffix}", content, cts.Token);
+                .PostAsync($"{_base}/{Uri.EscapeDataString(check)}{suffix}", content, cts.Token);
             if (!response.IsSuccessStatusCode)
             {
-                _logger?.LogWarning("Heartbeat {Job}{Suffix}: HTTP {Status}", job.Name, suffix, (int)response.StatusCode);
+                _logger?.LogWarning("Heartbeat {Check}{Suffix}: HTTP {Status}", check, suffix, (int)response.StatusCode);
             }
         }
         catch (Exception ex)
         {
             // The exception text can carry the URL (it holds the ping key); log the type only.
-            _logger?.LogWarning("Heartbeat {Job}{Suffix} not delivered ({Error})", job.Name, suffix, ex.GetType().Name);
+            _logger?.LogWarning("Heartbeat {Check}{Suffix} not delivered ({Error})", check, suffix, ex.GetType().Name);
         }
         finally
         {
             lock (_gate)
             {
-                state.Pending--;
+                sender.Pending--;
             }
         }
     }
@@ -267,8 +353,10 @@ public static class JobHeartbeatRegistration
 {
     public static IServiceCollection AddJobHeartbeats(this IServiceCollection services, IConfiguration configuration)
     {
-        // Fail at start on a malformed URL: a dead switch is noticed only when it is needed.
+        // Fail at start on a malformed URL or map: a dead switch is noticed only when it is needed.
         var url = JobHeartbeat.ParseUrl(configuration[JobHeartbeat.ConfigKey]);
+        var problems = HeartbeatJobs.Validate(HeartbeatJobs.Groups, HeartbeatJobs.All);
+        if (problems.Count > 0) throw new InvalidOperationException("Heartbeat groups: " + string.Join("; ", problems));
         services.AddHttpClient(JobHeartbeat.HttpClientName, c => c.Timeout = JobHeartbeat.RequestTimeout).RemoveAllLoggers();
         services.AddSingleton<IJobHeartbeat>(sp => url is null
             ? JobHeartbeat.Disabled

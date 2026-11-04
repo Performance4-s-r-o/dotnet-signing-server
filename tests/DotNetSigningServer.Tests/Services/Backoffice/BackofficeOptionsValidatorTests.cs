@@ -96,6 +96,17 @@ public class BackofficeOptionsValidatorTests
     }
 
     [Theory]
+    [InlineData(20, false)]
+    [InlineData(21, true)] // the heartbeat group dotnet-backoffice-sync needs a poll every 30 min cycle
+    public void PollingInterval_IsCapped(int minutes, bool rejected)
+    {
+        var options = Options();
+        options.Polling.Interval = TimeSpan.FromMinutes(minutes);
+
+        Assert.Equal(rejected, BackofficeOptionsValidator.Validate(options).Any(p => p.Contains("Polling__Interval")));
+    }
+
+    [Theory]
     [InlineData(0, false)]
     [InlineData(24, false)] // the service forgets the Idempotency-Key after 24 h
     [InlineData(72, false)]

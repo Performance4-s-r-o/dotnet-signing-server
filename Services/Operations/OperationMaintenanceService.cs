@@ -12,7 +12,7 @@ namespace DotNetSigningServer.Services.Operations;
 /// </summary>
 public class OperationMaintenanceService : BackgroundService
 {
-    private static readonly TimeSpan Interval = TimeSpan.FromMinutes(1);
+    internal static readonly TimeSpan Interval = TimeSpan.FromMinutes(1);
 
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<OperationMaintenanceService> _logger;
@@ -23,6 +23,7 @@ public class OperationMaintenanceService : BackgroundService
         _serviceProvider = serviceProvider;
         _logger = logger;
         _heartbeat = heartbeat ?? JobHeartbeat.Disabled;
+        _heartbeat.Register(HeartbeatJobs.OperationMaintenance);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

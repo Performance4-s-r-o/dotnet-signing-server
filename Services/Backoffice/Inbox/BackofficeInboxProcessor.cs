@@ -66,6 +66,7 @@ public sealed class BackofficeInboxProcessor : BackgroundService
         DotNetSigningServer.Services.Ops.IJobHeartbeat? heartbeat = null)
     {
         _heartbeat = heartbeat ?? DotNetSigningServer.Services.Ops.JobHeartbeat.Disabled;
+        _heartbeat.Register(DotNetSigningServer.Services.Ops.HeartbeatJobs.BackofficeInbox);
         _alerter = alerter;
         _scopes = scopes;
         _signal = signal;

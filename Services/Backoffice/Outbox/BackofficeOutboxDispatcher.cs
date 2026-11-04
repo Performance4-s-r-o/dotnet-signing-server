@@ -46,6 +46,7 @@ public sealed class BackofficeOutboxDispatcher : BackgroundService
         Ops.IJobHeartbeat? heartbeat = null)
     {
         _heartbeat = heartbeat ?? Ops.JobHeartbeat.Disabled;
+        _heartbeat.Register(Ops.HeartbeatJobs.BackofficeOutbox);
         _pollInterval = pollInterval ?? PollInterval;
         _processor = processor;
         _signal = signal;

@@ -303,6 +303,9 @@ public class P4BackofficeProductOptions
         /// <summary>Polling interval without a webhook secret (polling is then the only channel).</summary>
         public static readonly TimeSpan DefaultIntervalWithoutWebhooks = TimeSpan.FromMinutes(2);
 
+        /// <summary>Longest interval allowed: the heartbeat group <c>dotnet-backoffice-sync</c> needs a poll every 30 min cycle.</summary>
+        public static readonly TimeSpan MaxInterval = TimeSpan.FromMinutes(20);
+
         /// <summary>
         /// How often <c>GET /v1/events</c> is polled. Empty = <see cref="DefaultInterval"/>, or
         /// <see cref="DefaultIntervalWithoutWebhooks"/> when no webhook secret is set.

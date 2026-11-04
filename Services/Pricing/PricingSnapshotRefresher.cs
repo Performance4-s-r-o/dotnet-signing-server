@@ -133,6 +133,7 @@ public sealed class PricingSnapshotWorker : BackgroundService
         DotNetSigningServer.Services.Ops.IJobHeartbeat? heartbeat = null)
     {
         _heartbeat = heartbeat ?? DotNetSigningServer.Services.Ops.JobHeartbeat.Disabled;
+        _heartbeat.Register(DotNetSigningServer.Services.Ops.HeartbeatJobs.PricingRefresh);
         _refresher = refresher;
         _time = time;
         _logger = logger;
@@ -164,7 +165,7 @@ public sealed class PricingSnapshotWorker : BackgroundService
             try
             {
                 await _heartbeat.RunAsync(DotNetSigningServer.Services.Ops.HeartbeatJobs.PricingRefresh,
-                    ct => _refresher.RefreshAsync(reason, conditional: true, ct), stoppingToken, outcome => outcome.ToString());
+                    ct => _refresher.RefreshAsync(reason, conditional: true, ct), stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

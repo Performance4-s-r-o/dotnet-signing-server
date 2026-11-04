@@ -159,6 +159,7 @@ public sealed class SupportCategoriesWorker : BackgroundService
         DotNetSigningServer.Services.Ops.IJobHeartbeat? heartbeat = null)
     {
         _heartbeat = heartbeat ?? DotNetSigningServer.Services.Ops.JobHeartbeat.Disabled;
+        _heartbeat.Register(DotNetSigningServer.Services.Ops.HeartbeatJobs.SupportCategories);
         _client = client;
         _holder = holder;
         _scopes = scopes;

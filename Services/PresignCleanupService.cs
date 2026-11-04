@@ -13,7 +13,7 @@ public class PresignCleanupService : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<PresignCleanupService> _logger;
     private readonly IJobHeartbeat _heartbeat;
-    private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(10);
+    internal static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan MaxPresignAge = TimeSpan.FromMinutes(30);
 
     public PresignCleanupService(IServiceProvider serviceProvider, ILogger<PresignCleanupService> logger, IJobHeartbeat? heartbeat = null)
@@ -21,6 +21,7 @@ public class PresignCleanupService : BackgroundService
         _serviceProvider = serviceProvider;
         _logger = logger;
         _heartbeat = heartbeat ?? JobHeartbeat.Disabled;
+        _heartbeat.Register(HeartbeatJobs.PresignCleanup);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -29,8 +30,7 @@ public class PresignCleanupService : BackgroundService
         {
             try
             {
-                await _heartbeat.RunAsync(HeartbeatJobs.PresignCleanup, CleanupAbandonedPresignsAsync, stoppingToken,
-                    count => $"removed {count}");
+                await _heartbeat.RunAsync(HeartbeatJobs.PresignCleanup, CleanupAbandonedPresignsAsync, stoppingToken);
             }
             catch (Exception ex)
             {

@@ -63,6 +63,7 @@ public sealed class ConsentReconciliationService : BackgroundService
         DotNetSigningServer.Services.Ops.IJobHeartbeat? heartbeat = null)
     {
         _heartbeat = heartbeat ?? DotNetSigningServer.Services.Ops.JobHeartbeat.Disabled;
+        _heartbeat.Register(DotNetSigningServer.Services.Ops.HeartbeatJobs.ConsentReconciliation);
         _scopes = scopes;
         _httpClients = httpClients;
         _options = options;
