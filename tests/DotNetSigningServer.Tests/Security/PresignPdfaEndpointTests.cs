@@ -152,6 +152,39 @@ public class PresignPdfaEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task A_content_stamp_is_reported_with_the_seal_box_and_costs_the_same()
+    {
+        var controller = Controller(trusted: true);
+        var input = Input(PresignPdfaTests.Pdf(_ => { }));
+        input.SignRect = new SignRect { Width = 150, Height = 50 };
+        input.ContentStamp = new ContentStampInput { SignRect = new SignRect { X = 50, Y = 100, Width = 200, Height = 60 }, SignerName = "Jana" };
+        input.PlaceBesideContentStamp = true;
+
+        var (status, _, body) = Describe(await controller.PreSign(input));
+
+        Assert.Equal(200, status);
+        var stamp = body.GetProperty("contentStamp");
+        Assert.Equal(1, stamp.GetProperty("page").GetInt32());
+        Assert.Equal(50, stamp.GetProperty("stamp").GetProperty("x").GetSingle(), 1);
+        Assert.Equal(150, stamp.GetProperty("field").GetProperty("width").GetSingle(), 1);
+        // One signature, one price: the stamp is not a visual-sign of its own (portál #511).
+        var row = await _db.SigningData.SingleAsync();
+        await controller.Sign(new SignInput { Id = row.Id, SignedHash = "00" });
+        Assert.Equal(("sign", 1), controller.Calls.Single());
+    }
+
+    [Fact]
+    public async Task Placing_beside_without_a_stamp_is_400()
+    {
+        var input = Input(PresignPdfaTests.Pdf(_ => { }));
+        input.PlaceBesideContentStamp = true;
+        var (status, code, _) = Describe(await Controller().PreSign(input));
+        Assert.Equal(400, status);
+        Assert.Equal("CONTENT_STAMP_REQUIRED", code);
+        Assert.Empty(_db.SigningData);
+    }
+
+    [Fact]
     public async Task Without_the_switches_active_content_is_still_refused()
     {
         var (status, code, _) = Describe(await Controller().PreSign(Input(PresignPdfaTests.ScriptedFormEmbedded())));

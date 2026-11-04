@@ -27,9 +27,17 @@ namespace DotNetSigningServer.Services
         /// <summary>Vizuální podpis nad bajty, které už prošly vstupní kontrolou; <c>input.PdfContent</c> se nečte.</summary>
         /// <param name="keepPdfA">Set when the document was prepared as PDF/A (#184): it is written as a
         /// PDF/A document, so iText checks what is drawn (fonts, images) and keeps the metadata in step.</param>
-        public string ApplyVisualSign(VisualSignInput input, byte[] pdfBytes, PdfAConformance? keepPdfA = null)
-        {
+        public string ApplyVisualSign(VisualSignInput input, byte[] pdfBytes, PdfAConformance? keepPdfA = null) =>
+            Convert.ToBase64String(Draw(input, pdfBytes, keepPdfA, companyName: null).Pdf);
 
+        /// <summary>
+        /// Content stamp of presign (portál #511): the same drawing as visual-sign, with the box where it landed.
+        /// </summary>
+        public static (byte[] Pdf, int Page, Rectangle Rect) StampContent(ContentStampInput input, byte[] pdfBytes, PdfAConformance? keepPdfA) =>
+            Draw(input.ToVisualSign(), pdfBytes, keepPdfA, string.IsNullOrWhiteSpace(input.CompanyName) ? null : input.CompanyName);
+
+        private static (byte[] Pdf, int Page, Rectangle Rect) Draw(VisualSignInput input, byte[] pdfBytes, PdfAConformance? keepPdfA, string? companyName)
+        {
             using var msIn = new MemoryStream(pdfBytes);
             using var msOut = new MemoryStream();
 
@@ -58,7 +66,7 @@ namespace DotNetSigningServer.Services
                 reason: input.Reason,
                 location: input.Location,
                 signerName: input.SignerName,
-                companyName: null,
+                companyName: companyName,
                 description: appearanceOptions.DescriptionText,
                 dateUtcNow: DateTime.UtcNow);
 
@@ -113,7 +121,7 @@ namespace DotNetSigningServer.Services
             canvas.Close();
             pdfDoc.Close();
 
-            return Convert.ToBase64String(msOut.ToArray());
+            return (msOut.ToArray(), pageNumber, rect);
         }
 
         public static SignerProperties BuildSignerProperties(

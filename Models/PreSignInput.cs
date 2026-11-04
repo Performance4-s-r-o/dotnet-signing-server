@@ -36,6 +36,13 @@ namespace DotNetSigningServer.Models
         public string? SignerName { get; set; }
         /// <summary>Custom fillable text fields stamped into the PDF before the hash is computed, so they fall under this signature.</summary>
         public List<PreSignFieldInput>? Fields { get; set; }
+        /// <summary>Image signature drawn into the page content before the field, covered by this signature (portál #511).</summary>
+        public ContentStampInput? ContentStamp { get; set; }
+        /// <summary>
+        /// The field goes beside <see cref="ContentStamp"/> on its page: <c>SignRect</c> gives only its size,
+        /// the position and <c>SignPageNumber</c> are computed. Requires <see cref="ContentStamp"/>.
+        /// </summary>
+        public bool PlaceBesideContentStamp { get; set; }
         /// <summary>Flatten the form and remove active content before anything else (#184); skipped on a signed document.</summary>
         public bool FlattenForm { get; set; }
         /// <summary>Convert to PDF/A before the signature is prepared (#184). A signed document must already be PDF/A.</summary>

@@ -7,6 +7,7 @@ using iText.Kernel.Pdf.Filespec;
 using iText.Signatures;
 using DotNetSigningServer.ExternalSignatures;
 using DotNetSigningServer.Options;
+using DotNetSigningServer.Services.SignatureLayout;
 using Microsoft.Extensions.Options;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Tsp;
@@ -40,6 +41,19 @@ namespace DotNetSigningServer.Services
         /// document is checked, and one that is not is refused as <see cref="DocumentPreparation.NotPreservedCode"/>.</param>
         public (string PresignedPdfPath, string HashToSign) HandlePreSign(PreSignInput input, byte[] originalPdf, string fieldName, PdfAConformance? keepPdfA = null)
         {
+            var (path, hash, _) = HandlePreSignWithStamp(input, originalPdf, fieldName, keepPdfA);
+            return (path, hash);
+        }
+
+        /// <summary>Presign that also reports where the content stamp and the field went (portál #511).</summary>
+        public (string PresignedPdfPath, string HashToSign, ContentStampPlacement? Placement) HandlePreSignWithStamp(
+            PreSignInput input, byte[] originalPdf, string fieldName, PdfAConformance? keepPdfA = null)
+        {
+            if (input.PlaceBesideContentStamp && input.ContentStamp == null)
+            {
+                throw new ApiValidationException("CONTENT_STAMP_REQUIRED");
+            }
+
             // Add verification metadata/QR page before signing
             if (!string.IsNullOrWhiteSpace(input.VerificationUrl) && input.VerificationMode != "disabled")
             {
@@ -54,6 +68,32 @@ namespace DotNetSigningServer.Services
                 originalPdf = PdfTemplateService.StampTextFields(originalPdf, input.Fields);
             }
 
+            // Image signature in the page content, before the field, so the signature covers it (portál #511).
+            ContentStampPlacement? placement = null;
+            var signRect = input.SignRect;
+            var signPage = input.SignPageNumber;
+            var autoHeight = input.AutoHeight;
+            if (input.ContentStamp != null)
+            {
+                var stamped = DocumentPreparation.KeepPdfA(keepPdfA, () => PdfVisualSigningService.StampContent(input.ContentStamp, originalPdf, keepPdfA));
+                originalPdf = stamped.Pdf;
+                if (input.PlaceBesideContentStamp)
+                {
+                    using var doc = new PdfDocument(new PdfReader(new MemoryStream(originalPdf)));
+                    var field = SealPlacement.Beside(
+                        stamped.Rect, input.SignRect.Width, input.SignRect.Height,
+                        doc.GetPage(stamped.Page).GetPageSize(), SealPlacement.SignatureFieldsOn(doc, stamped.Page));
+                    signRect = new SignRect { X = field.GetX(), Y = field.GetY(), Width = field.GetWidth(), Height = field.GetHeight() };
+                    signPage = stamped.Page;
+                    // The computed box is final: growing it could cover the stamp.
+                    autoHeight = false;
+                }
+                placement = new ContentStampPlacement(
+                    stamped.Page,
+                    new SignRect { X = stamped.Rect.GetX(), Y = stamped.Rect.GetY(), Width = stamped.Rect.GetWidth(), Height = stamped.Rect.GetHeight() },
+                    signRect);
+            }
+
             var preSignContainer = new DigestCalcBlankSigner(PdfName.Adobe_PPKLite, PdfCryptoHelper.SignatureSubFilter);
             var chain = PdfCryptoHelper.LoadCertificatesFromPemString(input.CertificatePem);
             preSignContainer.SetChain(chain);
@@ -65,10 +105,10 @@ namespace DotNetSigningServer.Services
                 originalPdf,
                 preSignContainer,
                 fieldName,
-                input.SignRect,
+                signRect,
                 input.Reason,
                 input.Location,
-                input.SignPageNumber,
+                signPage,
                 input.SignImageContent,
                 chain,
                 input.Appearance,
@@ -78,7 +118,7 @@ namespace DotNetSigningServer.Services
                 visible: true,
                 designWidth: input.DesignWidth,
                 designHeight: input.DesignHeight,
-                autoHeight: input.AutoHeight,
+                autoHeight: autoHeight,
                 signerNameOverride: input.SignerName));
             DocumentPreparation.EnsurePreserved(pdfWithPlaceholder, keepPdfA);
 
@@ -86,7 +126,7 @@ namespace DotNetSigningServer.Services
             File.WriteAllBytes(preSignedPdfPath, pdfWithPlaceholder);
 
             string hashToSign = BitConverter.ToString(preSignContainer.GetDocBytesHash()).Replace("-", "").ToLowerInvariant();
-            return (preSignedPdfPath, hashToSign);
+            return (preSignedPdfPath, hashToSign, placement);
         }
 
         public virtual string HandleSign(SignInput input, string presignedPdfPath, string certificatePem, string fieldName, string? tsaUrl = null, string? tsaUsername = null, string? tsaPassword = null, TsaEndpoint? tsaBackup = null)

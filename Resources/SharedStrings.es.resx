@@ -637,6 +637,7 @@
   <data name="Error_FEATURE_DISABLED" xml:space="preserve"><value>Esta función no está disponible temporalmente.</value></data>
   <data name="Error_AI_DISABLED" xml:space="preserve"><value>Las funciones de IA están desactivadas en este servidor.</value></data>
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Demasiadas solicitudes. Inténtelo más tarde.</value></data>
+  <data name="Error_CONTENT_STAMP_REQUIRED" xml:space="preserve"><value>El campo de firma debe colocarse junto a la firma de imagen, pero la solicitud no incluye ninguna firma de imagen.</value></data>
   <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Demasiados documentos esperan la firma. Termínelos o espere a que caduquen.</value></data>
   <data name="Error_TENANT_MISMATCH" xml:space="preserve"><value>Este documento se preparó para la firma de otra organización.</value></data>
   <data name="Error_SIGNATURE_INVALID" xml:space="preserve"><value>La firma no corresponde al documento preparado para firmar o al certificado. No se firmó ni se cobró nada.</value></data>

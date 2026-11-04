@@ -647,6 +647,7 @@
   <data name="Error_FEATURE_DISABLED" xml:space="preserve"><value>This function is temporarily unavailable.</value></data>
   <data name="Error_AI_DISABLED" xml:space="preserve"><value>AI features are disabled on this server.</value></data>
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Too many requests. Try again later.</value></data>
+  <data name="Error_CONTENT_STAMP_REQUIRED" xml:space="preserve"><value>The signature field is to be placed beside the image signature, but the request carries no image signature.</value></data>
   <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Too many documents are waiting to be signed. Finish or wait for them to expire.</value></data>
   <data name="Error_TENANT_MISMATCH" xml:space="preserve"><value>This document was prepared for signing for a different organisation.</value></data>
   <data name="Error_SIGNATURE_INVALID" xml:space="preserve"><value>The signature does not match the document prepared for signing or the certificate. Nothing was signed or charged.</value></data>

@@ -61,6 +61,7 @@ namespace DotNetSigningServer.Controllers
                 // Active content is what flattening removes; the prepared document gets the full check.
                 pdf = GuardedPdfFromBase64(input.PdfContent, "Presign", checkActiveContent: !input.FlattenForm);
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
+                LimitGuard.EnsureImageWithinLimit(input.ContentStamp?.SignImageContent, "Signature image");
             }
             catch (ApiValidationException ex)
             {
@@ -92,6 +93,7 @@ namespace DotNetSigningServer.Controllers
             {
                 SafetyGuard.EnsureSafePdf(pdf!, "Presign", checkActiveContent: !input!.FlattenForm);
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
+                LimitGuard.EnsureImageWithinLimit(input.ContentStamp?.SignImageContent, "Signature image");
             }
             catch (ApiValidationException ex)
             {
@@ -103,6 +105,10 @@ namespace DotNetSigningServer.Controllers
         /// <summary>Presign po vstupní kontrole, společný oběma kanálům.</summary>
         private async Task<IActionResult> PreSignCoreAsync(User user, PreSignInput input, byte[] pdf)
         {
+            if (input.PlaceBesideContentStamp && input.ContentStamp == null)
+            {
+                return InputRefused(new ApiValidationException("CONTENT_STAMP_REQUIRED"));
+            }
             var maxPending = HttpContext.RequestServices.GetRequiredService<IOptions<LimitsOptions>>().Value.MaxPendingPresignsPerUser;
             if (maxPending > 0 && !PortalTrust.IsTrustedCaller(HttpContext) && await DbContext.SigningData.CountAsync(x => x.UserId == user.Id) >= maxPending)
             {
@@ -146,7 +152,7 @@ namespace DotNetSigningServer.Controllers
                     ? $"Signature_{signingData.Id.Replace("-", string.Empty)}"
                     : input.FieldName;
 
-                var (presignedPdfPath, hashToSign) = _signingService.HandlePreSign(input, pdf, fieldName, prepared?.KeepPdfA);
+                var (presignedPdfPath, hashToSign, stampPlacement) = _signingService.HandlePreSignWithStamp(input, pdf, fieldName, prepared?.KeepPdfA);
                 writtenPath = presignedPdfPath;
                 signingData.FieldName = fieldName;
                 signingData.PresignedPdfPath = presignedPdfPath;
@@ -176,15 +182,19 @@ namespace DotNetSigningServer.Controllers
                 await DbContext.SaveChangesAsync();
                 writtenPath = null; // the row now owns the file
 
+                // The caller checks contentStamp: an older server would drop the stamp without a word (portál #511).
                 if (prepared == null)
                 {
-                    return Ok(new { id = signingData.Id, hashToSign = signingData.HashToSign });
+                    return stampPlacement == null
+                        ? Ok(new { id = signingData.Id, hashToSign = signingData.HashToSign })
+                        : Ok(new { id = signingData.Id, hashToSign = signingData.HashToSign, contentStamp = stampPlacement });
                 }
                 return Ok(new
                 {
                     id = signingData.Id,
                     hashToSign = signingData.HashToSign,
                     preparation = PreparationBody(prepared.Report, preparationCredits),
+                    contentStamp = stampPlacement,
                 });
             }
             catch (ApiValidationException ex) when (PreparationRefusalCodes.Contains(ex.Code))
