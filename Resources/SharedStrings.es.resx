@@ -816,4 +816,6 @@
   <data name="AccountDeleteLastAdmin" xml:space="preserve"><value>You are the only administrator. Make another account an administrator before deleting yours.</value></data>
   <data name="AccountDeleteRechargeInProgress" xml:space="preserve"><value>An automatic top-up is being processed right now. Please try again in a few minutes.</value></data>
   <data name="AccountDeleteRechargeInProgressStopped" xml:space="preserve"><value>An automatic top-up was being processed, so your account was not deleted. Auto-recharge has been switched off. Please try again in a few minutes.</value></data>
+  <data name="Error_SEAL_PLACEMENT_NO_ROOM" xml:space="preserve"><value>La firma no cabe aquí: la imagen de la firma o el sello a su lado cubriría otra firma o se saldría de la página. Mueva la firma a un lugar libre.</value></data>
+  <data name="Error_DOCUMENT_CERTIFIED_NO_CHANGES" xml:space="preserve"><value>El documento está certificado y su certificación no permite añadir una imagen de firma. No se ha firmado nada.</value></data>
 </root>

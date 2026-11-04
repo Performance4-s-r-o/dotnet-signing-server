@@ -68,31 +68,13 @@ namespace DotNetSigningServer.Services
                 originalPdf = PdfTemplateService.StampTextFields(originalPdf, input.Fields);
             }
 
-            // Image signature in the page content, before the field, so the signature covers it (portál #511).
-            ContentStampPlacement? placement = null;
-            var signRect = input.SignRect;
-            var signPage = input.SignPageNumber;
-            var autoHeight = input.AutoHeight;
-            if (input.ContentStamp != null)
-            {
-                var stamped = DocumentPreparation.KeepPdfA(keepPdfA, () => PdfVisualSigningService.StampContent(input.ContentStamp, originalPdf, keepPdfA));
-                originalPdf = stamped.Pdf;
-                if (input.PlaceBesideContentStamp)
-                {
-                    using var doc = new PdfDocument(new PdfReader(new MemoryStream(originalPdf)));
-                    var field = SealPlacement.Beside(
-                        stamped.Rect, input.SignRect.Width, input.SignRect.Height,
-                        doc.GetPage(stamped.Page).GetPageSize(), SealPlacement.SignatureFieldsOn(doc, stamped.Page));
-                    signRect = new SignRect { X = field.GetX(), Y = field.GetY(), Width = field.GetWidth(), Height = field.GetHeight() };
-                    signPage = stamped.Page;
-                    // The computed box is final: growing it could cover the stamp.
-                    autoHeight = false;
-                }
-                placement = new ContentStampPlacement(
-                    stamped.Page,
-                    new SignRect { X = stamped.Rect.GetX(), Y = stamped.Rect.GetY(), Width = stamped.Rect.GetWidth(), Height = stamped.Rect.GetHeight() },
-                    signRect);
-            }
+            // Image signature and the field beside it, planned before anything is written (portál #511).
+            var stampPlan = input.ContentStamp == null ? null : PlanContentStamp(input, originalPdf);
+            ContentStampPlacement? placement = stampPlan?.Placement;
+            var signRect = stampPlan?.SignRect ?? input.SignRect;
+            var signPage = stampPlan?.SignPage ?? input.SignPageNumber;
+            // The computed box is final: growing it could cover the stamp.
+            var autoHeight = stampPlan?.SignRect != null ? false : input.AutoHeight;
 
             var preSignContainer = new DigestCalcBlankSigner(PdfName.Adobe_PPKLite, PdfCryptoHelper.SignatureSubFilter);
             var chain = PdfCryptoHelper.LoadCertificatesFromPemString(input.CertificatePem);
@@ -119,7 +101,8 @@ namespace DotNetSigningServer.Services
                 designWidth: input.DesignWidth,
                 designHeight: input.DesignHeight,
                 autoHeight: autoHeight,
-                signerNameOverride: input.SignerName));
+                signerNameOverride: input.SignerName,
+                stamp: stampPlan));
             DocumentPreparation.EnsurePreserved(pdfWithPlaceholder, keepPdfA);
 
             string preSignedPdfPath = IOPath.Combine(IOPath.GetTempPath(), $"presigned_{Guid.NewGuid():N}.pdf");
@@ -127,6 +110,75 @@ namespace DotNetSigningServer.Services
 
             string hashToSign = BitConverter.ToString(preSignContainer.GetDocBytesHash()).Replace("-", "").ToLowerInvariant();
             return (preSignedPdfPath, hashToSign, placement);
+        }
+
+        /// <summary>Refusal of a stamp on a certified document that allows no such change (portál #511).</summary>
+        public const string CertifiedNoChangesCode = "DOCUMENT_CERTIFIED_NO_CHANGES";
+
+        /// <summary>A planned content stamp: where it lands, how it is drawn and where the field goes.</summary>
+        public sealed record ContentStampPlan(
+            PdfVisualSigningService.StampPlan Stamp, bool AsAnnotation, SignRect? SignRect, int? SignPage, ContentStampPlacement Placement);
+
+        /// <summary>
+        /// Where the stamp and the seal beside it go, without writing anything (portál #511). Neither
+        /// may cover another signature, a stamp of an earlier signer or a box in <c>occupied</c>, and both
+        /// stay inside the CropBox; otherwise <see cref="SealPlacement.NoRoomCode"/>, nothing is moved.
+        /// A document that is already signed gets the stamp as an annotation; a certified one that
+        /// allows no annotation is refused as <see cref="CertifiedNoChangesCode"/>.
+        /// </summary>
+        public static ContentStampPlan PlanContentStamp(PreSignInput input, byte[] pdf)
+        {
+            if (input.ContentStamp == null) throw new ApiValidationException("CONTENT_STAMP_REQUIRED");
+            using var doc = new PdfDocument(new PdfReader(new MemoryStream(pdf)));
+
+            bool signed = new SignatureUtil(doc).GetSignatureNames().Count > 0;
+            if (signed && CertificationLevel(doc) is 1 or 2)
+            {
+                throw new ApiValidationException(CertifiedNoChangesCode);
+            }
+
+            var stamp = PdfVisualSigningService.PlanStamp(
+                input.ContentStamp.ToVisualSign(), doc, PdfVisualSigningService.CompanyOf(input.ContentStamp));
+            var occupied = SealPlacement.OccupiedOn(doc, stamp.Page, input.Occupied);
+            if (occupied.Any(o => SealPlacement.Overlaps(stamp.Rect, o)))
+            {
+                throw new ApiValidationException(SealPlacement.NoRoomCode, "the stamp covers another signature");
+            }
+
+            SignRect? signRect = null;
+            int? signPage = null;
+            if (input.PlaceBesideContentStamp)
+            {
+                var field = SealPlacement.Beside(
+                    stamp.Rect, input.SignRect.Width, input.SignRect.Height, doc.GetPage(stamp.Page).GetCropBox(), occupied)
+                    ?? throw new ApiValidationException(SealPlacement.NoRoomCode, "no free spot beside the stamp");
+                signRect = new SignRect { X = field.GetX(), Y = field.GetY(), Width = field.GetWidth(), Height = field.GetHeight() };
+                signPage = stamp.Page;
+            }
+
+            var placement = new ContentStampPlacement(
+                stamp.Page,
+                new SignRect { X = stamp.Rect.GetX(), Y = stamp.Rect.GetY(), Width = stamp.Rect.GetWidth(), Height = stamp.Rect.GetHeight() },
+                signRect ?? input.SignRect,
+                Annotation: signed);
+            return new ContentStampPlan(stamp, signed, signRect, signPage, placement);
+        }
+
+        /// <summary>DocMDP level of a certified document (1–3), null when it is not certified.</summary>
+        internal static int? CertificationLevel(PdfDocument doc)
+        {
+            var references = doc.GetCatalog().GetPdfObject()
+                .GetAsDictionary(PdfName.Perms)?.GetAsDictionary(PdfName.DocMDP)?.GetAsArray(PdfName.Reference);
+            if (references == null) return null;
+            for (int i = 0; i < references.Size(); i++)
+            {
+                var reference = references.GetAsDictionary(i);
+                if (reference == null || !PdfName.DocMDP.Equals(reference.GetAsName(PdfName.TransformMethod))) continue;
+                // An absent /P means 2 (ISO 32000-1, 12.8.2.2).
+                return reference.GetAsDictionary(PdfName.TransformParams)?.GetAsNumber(PdfName.P)?.IntValue() ?? 2;
+            }
+            // A /DocMDP entry without a readable reference is still a certification: assume the strict level.
+            return 1;
         }
 
         public virtual string HandleSign(SignInput input, string presignedPdfPath, string certificatePem, string fieldName, string? tsaUrl = null, string? tsaUsername = null, string? tsaPassword = null, TsaEndpoint? tsaBackup = null)
@@ -542,7 +594,8 @@ namespace DotNetSigningServer.Services
             float? designWidth = null,
             float? designHeight = null,
             bool? autoHeight = null,
-            string? signerNameOverride = null)
+            string? signerNameOverride = null,
+            ContentStampPlan? stamp = null)
         {
             using var msIn = new MemoryStream(originalPdf);
             using var msOut = new MemoryStream();
@@ -551,7 +604,14 @@ namespace DotNetSigningServer.Services
             var signer = new PdfSigner(reader, msOut, new StampingProperties().UseAppendMode());
 
             int resolvedPage = pageNumber <= 0 ? 1 : pageNumber;
-            var signerPageSize = signer.GetDocument().GetPage(resolvedPage).GetPageSize();
+            var signerPageSize = signer.GetDocument().GetPage(resolvedPage).GetCropBox();
+
+            // The stamp goes into the signature's own revision, before the field, so the signature covers it (portál #511).
+            if (stamp != null)
+            {
+                if (stamp.AsAnnotation) PdfVisualSigningService.AddAsAnnotation(stamp.Stamp, signer.GetDocument());
+                else PdfVisualSigningService.DrawIntoContent(stamp.Stamp, signer.GetDocument());
+            }
 
             // PDF/A wants every font embedded; without a family iText falls back to plain Helvetica and fails.
             appearance = DocumentPreparation.AppearanceFor(signer.GetDocument(), appearance);
@@ -576,7 +636,7 @@ namespace DotNetSigningServer.Services
                 signerNameOverride: signerNameOverride);
 
             signer.SetSignerProperties(signerProperties);
-            ApplySignerName(signer, signerNameOverride);
+            ApplySignerName(signer, signerNameOverride, stamp == null ? null : SealPlacement.StampMarker(stamp.Stamp.Page, stamp.Stamp.Rect));
             // Reserve extra space so the deferred signature can include TSA timestamp tokens when present.
             signer.SignExternalContainer(container, 32768);
 
@@ -620,10 +680,10 @@ namespace DotNetSigningServer.Services
         /// at least true, whereas a blank one says the document was signed by
         /// nobody.
         /// </summary>
-        private static void ApplySignerName(PdfSigner signer, string? signerName)
+        private static void ApplySignerName(PdfSigner signer, string? signerName, PdfArray? stampMarker = null)
         {
-            if (string.IsNullOrWhiteSpace(signerName)) return;
-            signer.SetSignatureEvent(new SignerNameEvent(signerName));
+            if (string.IsNullOrWhiteSpace(signerName) && stampMarker == null) return;
+            signer.SetSignatureEvent(new SignerNameEvent(signerName, stampMarker));
         }
 
         private static T? FindInner<T>(Exception ex) where T : Exception

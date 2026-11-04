@@ -817,4 +817,6 @@
   <data name="AccountDeleteLastAdmin" xml:space="preserve"><value>Jste jediný správce. Než svůj účet smažete, udělejte správcem jiný účet.</value></data>
   <data name="AccountDeleteRechargeInProgress" xml:space="preserve"><value>Právě probíhá automatické dobití kreditů. Zkuste to prosím za pár minut.</value></data>
   <data name="AccountDeleteRechargeInProgressStopped" xml:space="preserve"><value>Právě probíhalo automatické dobití kreditů, proto účet smazán nebyl. Automatické dobíjení jsme vypnuli. Zkuste to prosím za pár minut.</value></data>
+  <data name="Error_SEAL_PLACEMENT_NO_ROOM" xml:space="preserve"><value>Podpis se na tomto místě nevejde: obrázek podpisu nebo pečeť vedle něj by překryly jiný podpis nebo by přesáhly stránku. Přesuňte podpis na volné místo.</value></data>
+  <data name="Error_DOCUMENT_CERTIFIED_NO_CHANGES" xml:space="preserve"><value>Dokument je certifikovaný a jeho certifikace nedovoluje přidat obrázek podpisu. Nic nebylo podepsáno.</value></data>
 </root>

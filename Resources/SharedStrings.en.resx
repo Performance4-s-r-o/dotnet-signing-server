@@ -817,4 +817,6 @@
   <data name="AccountDeleteLastAdmin" xml:space="preserve"><value>You are the only administrator. Make another account an administrator before deleting yours.</value></data>
   <data name="AccountDeleteRechargeInProgress" xml:space="preserve"><value>An automatic top-up is being processed right now. Please try again in a few minutes.</value></data>
   <data name="AccountDeleteRechargeInProgressStopped" xml:space="preserve"><value>An automatic top-up was being processed, so your account was not deleted. Auto-recharge has been switched off. Please try again in a few minutes.</value></data>
+  <data name="Error_SEAL_PLACEMENT_NO_ROOM" xml:space="preserve"><value>The signature does not fit here: the signature image or the seal beside it would cover another signature or run off the page. Move the signature to a free spot.</value></data>
+  <data name="Error_DOCUMENT_CERTIFIED_NO_CHANGES" xml:space="preserve"><value>The document is certified and its certification does not allow adding a signature image. Nothing was signed.</value></data>
 </root>

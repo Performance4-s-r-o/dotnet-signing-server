@@ -43,6 +43,8 @@ namespace DotNetSigningServer.Models
         /// the position and <c>SignPageNumber</c> are computed. Requires <see cref="ContentStamp"/>.
         /// </summary>
         public bool PlaceBesideContentStamp { get; set; }
+        /// <summary>Boxes of other signers (PDF points, page coordinates) the stamp and seal must not cover.</summary>
+        public List<OccupiedRect>? Occupied { get; set; }
         /// <summary>Flatten the form and remove active content before anything else (#184); skipped on a signed document.</summary>
         public bool FlattenForm { get; set; }
         /// <summary>Convert to PDF/A before the signature is prepared (#184). A signed document must already be PDF/A.</summary>
