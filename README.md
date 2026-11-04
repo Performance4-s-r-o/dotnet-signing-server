@@ -255,6 +255,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `AUTH_ACCOUNT_MAX_ATTEMPTS` / `AUTH_ACCOUNT_WINDOW_MINUTES` | no (30 / 15) | Sign-in and 2FA attempts per account whatever the IP (on top of the per-IP+address limit), counted in PostgreSQL |
 | `MAX_API_TOKENS_PER_USER` | no (100) | Live API tokens per account; 0 = no limit |
 | `GLOBAL_CONCURRENCY_LIMIT` / `GLOBAL_CONCURRENCY_WAIT_MS` | no (off / 2000) | Cap on concurrent operations of the whole server (#69), taken after the user's own slot. Empty or `0` = off; a start hypothesis is H + R + A (logged at startup), to be set only once every caller's own limit is below it (otherwise the caller gets `503`). A request waits up to the given milliseconds for a slot of the global, heavy or AI pool, then gets `503` + `Retry-After`. Negative values stop the server at start; this variable wins over `Billing__GlobalConcurrencyLimit`. Note: a flood of find-codes scans holds a slot of G and of the user's limit for up to `RASTER_WAIT_MS` (30 s) per page while it waits for pool R |
+| `THREADPOOL_MIN_WORKER_THREADS` | no (CPUs + TSA call limit) | Minimum worker threads of the thread pool (#69): below it the pool adds threads at once, above it about one or two a second, and every timestamp-authority call blocks a thread. Empty = CPUs + `TSA_MAX_CONCURRENT_CALLS`; `0` = the .NET default; `1`-`10000` as given; anything else stops the start. It only raises the .NET default. The value in force is logged at startup and shown on `/internal/concurrency` |
 | `HEAVY_OPERATIONS_LIMIT` / `AI_OPERATIONS_LIMIT` | no (off / off) | Pools H and A (#69): presign, sign, sign-pfx, visual-sign, timestamp, extend-signature, fill-pdf and PDF/A at once, and AI calls at once. Empty or `0` = off. Start hypotheses: H = the CPU count, A = 4. Full after `GLOBAL_CONCURRENCY_WAIT_MS` = `503` + `Retry-After: 10`. Negative or above 10000 stops the server at start |
 | `RASTER_OPERATIONS_LIMIT` / `RASTER_WAIT_MS` | no (CPUs / 2, at least 1 / 30000) | Pool R (#69): PDF pages rasterised at once (find-codes). The limit counts pages, not requests: a slot is taken per page, so one scan of 30 pages needs 30 turns. Unlike H and A it is on by default, because the limit existed before as a fixed one; `0` = off. A page that finds R full waits `RASTER_WAIT_MS`, then the request gets `503` + `Retry-After: 10` and the charge is released. Negative, or a wait above 600000, stops the server at start |
 | `USER_QUEUE_MAX_SECONDS` / `USER_QUEUE_LENGTH_FACTOR` | no (30 / 2) | A user's queue (#69): the longest wait whatever the account stores (0–600), and requests that may wait per slot of the user's limit (1–100); the next one gets `429` at once. `Retry-After` after a `429` is the queue wait, at least 5 and at most 60 s. Every account, provisioned ones included. Out of range stops the server at start |
@@ -295,8 +296,9 @@ default; any other value that does not parse stops the server at startup.
 
 `GET /internal/concurrency` shows what the limits are doing (#69): occupancy, waits and
 rejections of the global, heavy and AI pools, the users' queues together (no user ids), the
-rasterisation pool, process memory and the thread pool, plus the start hypotheses for this
-machine. The pools show p95/p99 of the wait for a slot, and `operations` shows p50/p95/p99 and
+rasterisation pool, process memory and GC (pause share, collections per generation), the
+thread pool (threads, busy, queued, completed, minimum), the timestamp-authority calls (limit,
+in flight, refused as busy), plus the start hypotheses for this machine. The pools show p95/p99 of the wait for a slot, and `operations` shows p50/p95/p99 and
 the outcome counts (completed, failed, deadline) of each paid operation, from the last 512 calls
 of each since start. Counts only, and no token of its own: it answers on the `INTERNAL_API_PORT` listener
 and is `404` everywhere else (and everywhere while that port is not set).

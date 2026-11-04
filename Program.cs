@@ -173,6 +173,10 @@ PinnedIpTsaClient.RequestTimeout = TimeSpan.FromSeconds(builder.Configuration.Ge
 // TSA names allowed to resolve to a private range; an invalid entry stops the start.
 TsaPrivateHosts.Configure(builder.Configuration["TSA_PRIVATE_HOST_ALLOWLIST"]);
 PinnedIpTsaClient.SetMaxConcurrentCalls(EnvValues.Int(builder.Configuration, "TSA_MAX_CONCURRENT_CALLS") ?? PinnedIpTsaClient.MaxConcurrentCalls);
+// Thread-pool minimum (#69): CPUs + authority-call limit unless set; 0 = .NET default, nonsense stops the start.
+var minWorkerThreads = DotNetSigningServer.Services.ThreadPoolSizing.Apply(DotNetSigningServer.Services.ThreadPoolSizing.Resolve(
+    EnvValues.Int(builder.Configuration, DotNetSigningServer.Services.ThreadPoolSizing.ConfigKey),
+    Environment.ProcessorCount, PinnedIpTsaClient.CallLimit));
 // Circuit breaker per TSA host (#72). Invalid values throw here: startup fails closed rather
 // than running with the protection silently off.
 TsaCircuitBreaker.Default = new TsaCircuitBreaker(new TsaCircuitBreakerOptions
@@ -650,9 +654,10 @@ app.MapGet(ConcurrencyDiagnostics.Path, (HttpContext context,
     CodeScanRaster.UsePool(pools.Raster, pools.RasterWait);
     app.Logger.LogInformation(
         "Concurrency pools (0 = off): global {Global}, heavy {Heavy}, ai {Ai}, raster {Raster}; suggested for {Cpus} CPUs: "
-        + "global {SuggestedGlobal}, heavy {SuggestedHeavy}, ai {SuggestedAi}",
+        + "global {SuggestedGlobal}, heavy {SuggestedHeavy}, ai {SuggestedAi}; thread-pool minimum {MinWorkers}",
         pools.Global.Limit, pools.Heavy.Limit, pools.Ai.Limit, pools.Raster.Limit, cpus,
-        BillingOptions.SuggestedGlobalLimit(cpus), BillingOptions.SuggestedHeavyLimit(cpus), BillingOptions.SuggestedAiLimit);
+        BillingOptions.SuggestedGlobalLimit(cpus), BillingOptions.SuggestedHeavyLimit(cpus), BillingOptions.SuggestedAiLimit,
+        minWorkerThreads);
 }
 
 // Loki test endpoint (Development only, #80: it is anonymous and writes to the log store)

@@ -221,6 +221,8 @@ services:
       - Tsa__TimeoutSeconds=${TSA_TIMEOUT_SECONDS:-10}
       # Authority calls in flight at once (#72); empty or an unresolved placeholder = 24.
       - TSA_MAX_CONCURRENT_CALLS=${TSA_MAX_CONCURRENT_CALLS:-}
+      # Thread-pool minimum (#69); empty = CPUs + TSA limit, 0 = .NET default.
+      - THREADPOOL_MIN_WORKER_THREADS=${THREADPOOL_MIN_WORKER_THREADS:-}
       # Exact TSA host names allowed to resolve to a private range (not loopback/link-local). Empty = public only.
       - TSA_PRIVATE_HOST_ALLOWLIST=${TSA_PRIVATE_HOST_ALLOWLIST:-}
       # Circuit breaker per TSA host (#72): failures in a row that open it (0 = off), seconds open.
