@@ -70,9 +70,10 @@ public class AdminController : Controller
                 Email = u.Email,
                 IsActive = u.IsActive,
                 IsAdmin = u.IsAdmin,
-                IsEnterprise = u.IsEnterprise,
-                SealAllowed = u.SealAllowed,
-                TrustedCaller = u.TrustedCaller,
+                // A provisioned account shows what it inherits (#131).
+                IsEnterprise = u.Parent != null ? u.Parent.IsEnterprise : u.IsEnterprise,
+                SealAllowed = u.Parent != null ? u.Parent.SealAllowed : u.SealAllowed,
+                IsProvisioned = u.ParentUserId != null,
                 CreditsRemaining = u.CreditsRemaining,
                 AutoRechargeEnabled = u.AutoRechargeEnabled,
                 CreatedAt = u.CreatedAt,
@@ -179,12 +180,17 @@ public class AdminController : Controller
     [HttpGet("/Admin/Users/{id:guid}")]
     public async Task<IActionResult> Details(Guid id)
     {
-        var user = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
+        var user = await _dbContext.Users.AsNoTracking().Include(u => u.Parent).FirstOrDefaultAsync(u => u.Id == id);
         if (user == null)
         {
             TempData["Error"] = _localizer["UserNotFound"].Value;
             return RedirectToAction(nameof(Index));
         }
+
+        // An integrator's usage includes its provisioned accounts (#131); the split per account is not shown yet.
+        var accountIds = await _dbContext.Users.AsNoTracking()
+            .Where(u => u.Id == id || u.ParentUserId == id).Select(u => u.Id).ToListAsync();
+        var childAccounts = accountIds.Count - 1;
 
         // Aggregate usage for the current month and the last 6 months
         var now = DateTimeOffset.UtcNow;
@@ -193,12 +199,12 @@ public class AdminController : Controller
 
         var usageThisMonth = await _dbContext.UsageRecords
             .AsNoTracking()
-            .Where(r => r.UserId == id && r.CreatedAt >= startOfMonth)
+            .Where(r => accountIds.Contains(r.UserId) && r.CreatedAt >= startOfMonth)
             .SumAsync(r => (int?)r.Count) ?? 0;
 
         var monthlyBreakdown = await _dbContext.UsageRecords
             .AsNoTracking()
-            .Where(r => r.UserId == id && r.CreatedAt >= sixMonthsAgo)
+            .Where(r => accountIds.Contains(r.UserId) && r.CreatedAt >= sixMonthsAgo)
             .GroupBy(r => new { r.CreatedAt.Year, r.CreatedAt.Month })
             .Select(g => new MonthlyUsage
             {
@@ -212,7 +218,7 @@ public class AdminController : Controller
 
         var byOperation = await _dbContext.UsageRecords
             .AsNoTracking()
-            .Where(r => r.UserId == id && r.CreatedAt >= startOfMonth)
+            .Where(r => accountIds.Contains(r.UserId) && r.CreatedAt >= startOfMonth)
             .GroupBy(r => r.Operation)
             .Select(g => new OperationBreakdown
             {
@@ -233,6 +239,7 @@ public class AdminController : Controller
         {
             Audit = audit,
             User = user,
+            ChildAccounts = childAccounts,
             UsageThisMonth = usageThisMonth,
             MonthlyBreakdown = monthlyBreakdown,
             ByOperation = byOperation,
@@ -250,6 +257,12 @@ public class AdminController : Controller
         {
             TempData["Error"] = _localizer["UserNotFound"].Value;
             return RedirectToAction(nameof(Index));
+        }
+        if (user.ParentUserId != null)
+        {
+            // A provisioned account inherits it from its parent (#131); a flag of its own would do nothing.
+            TempData["Error"] = _localizer["AdminInheritedFromParent"].Value;
+            return RedirectToAction(nameof(Details), new { id });
         }
 
         if (!user.IsEnterprise)
@@ -321,6 +334,12 @@ public class AdminController : Controller
             TempData["Error"] = _localizer["UserNotFound"].Value;
             return RedirectToAction(nameof(Index));
         }
+        if (user.ParentUserId != null)
+        {
+            // A provisioned account inherits it from its parent (#131); a flag of its own would do nothing.
+            TempData["Error"] = _localizer["AdminInheritedFromParent"].Value;
+            return RedirectToAction(nameof(Details), new { id });
+        }
 
         user.SealAllowed = !user.SealAllowed;
         user.UpdatedAt = DateTimeOffset.UtcNow;
@@ -340,53 +359,6 @@ public class AdminController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
-    /// <summary>
-    /// Marks or unmarks the trusted internal caller's account (#78). Only an administrator, and
-    /// never on their own account: whoever holds the flag gets the tenant headers believed.
-    /// </summary>
-    [HttpPost("/Admin/Users/{id:guid}/ToggleTrustedCaller")]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ToggleTrustedCaller(Guid id)
-    {
-        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == id);
-        if (user == null)
-        {
-            TempData["Error"] = _localizer["UserNotFound"].Value;
-            return RedirectToAction(nameof(Index));
-        }
-
-        var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!user.TrustedCaller && string.Equals(actorId, user.Id.ToString(), StringComparison.OrdinalIgnoreCase))
-        {
-            TempData["Error"] = _localizer["TrustedCallerNotOnSelf"].Value;
-            return RedirectToAction(nameof(Details), new { id });
-        }
-
-        user.TrustedCaller = !user.TrustedCaller;
-        user.UpdatedAt = DateTimeOffset.UtcNow;
-        AdminAudit.Record(_dbContext, User, user.Id, AdminAudit.Actions.TrustedCaller,
-            new { from = !user.TrustedCaller, to = user.TrustedCaller }, _time.GetUtcNow());
-        await _dbContext.SaveChangesAsync();
-
-        // The token validation cache holds the account as it was: drop it so the change applies now.
-        var apiAuth = HttpContext.RequestServices?.GetService<IApiAuthService>();
-        if (apiAuth != null)
-        {
-            var tokenIds = await _dbContext.ApiTokens.Where(t => t.UserId == user.Id).Select(t => t.Id).ToListAsync();
-            foreach (var tokenId in tokenIds) apiAuth.InvalidateTokenCache(tokenId);
-        }
-
-        _logger.LogWarning(
-            "Trusted caller flag for user {UserId} set to {TrustedCaller} by {ActorId}",
-            user.Id, user.TrustedCaller, actorId);
-
-        TempData["Info"] = user.TrustedCaller
-            ? _localizer["TrustedCallerEnabled"].Value
-            : _localizer["TrustedCallerDisabled"].Value;
-
-        return RedirectToAction(nameof(Details), new { id });
-    }
-
     [HttpPost("/Admin/Users/{id:guid}/SetConcurrencyQueueTimeout")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SetConcurrencyQueueTimeout(Guid id, [FromForm] int? queueTimeoutSeconds)
@@ -398,7 +370,7 @@ public class AdminController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        // An operator may go past the user's cap, which binds only the trusted caller at run time.
+        // An operator may store more than USER_QUEUE_MAX_SECONDS; the run time caps it for every account.
         if (queueTimeoutSeconds is < -1 or > BillingOptions.MaxQueueSeconds)
         {
             TempData["Error"] = _localizer["InvalidQueueTimeout", BillingOptions.MaxQueueSeconds].Value;
@@ -412,6 +384,11 @@ public class AdminController : Controller
         await _dbContext.SaveChangesAsync();
 
         UserConcurrencyMiddleware.InvalidateLimitCache(id);
+        // Provisioned accounts that set none inherit it (#131): their cached limits go too.
+        foreach (var childId in await _dbContext.Users.AsNoTracking().Where(u => u.ParentUserId == id).Select(u => u.Id).ToListAsync())
+        {
+            UserConcurrencyMiddleware.InvalidateLimitCache(childId);
+        }
         TempData["Info"] = _localizer["ConcurrencyQueueTimeoutUpdated"].Value;
         return RedirectToAction(nameof(Details), new { id });
     }
@@ -441,7 +418,7 @@ public class AdminController : Controller
         public bool IsAdmin { get; set; }
         public bool IsEnterprise { get; set; }
         public bool SealAllowed { get; set; }
-        public bool TrustedCaller { get; set; }
+        public bool IsProvisioned { get; set; }
         public int CreditsRemaining { get; set; }
         public bool AutoRechargeEnabled { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
@@ -465,6 +442,8 @@ public class AdminController : Controller
     public class AdminUserDetailViewModel
     {
         public User User { get; set; } = null!;
+        /// <summary>Provisioned accounts of this one, erased included (#131).</summary>
+        public int ChildAccounts { get; set; }
         public int UsageThisMonth { get; set; }
         public List<MonthlyUsage> MonthlyBreakdown { get; set; } = new();
         public List<OperationBreakdown> ByOperation { get; set; } = new();

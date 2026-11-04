@@ -154,7 +154,7 @@ public class AccountDeletionTests : IClassFixture<WebUiAuthFixture>
         "AccountDeleteWhatGoes", "AccountDeleteCredits", "AccountDeleteBilling", "AccountDeleteWhatStays",
         "AccountDeleteElsewhere", "AccountDeleteConfirmLabel", "AccountDeleteButton", "AccountDeleteConfirmRequired",
         "AccountDeleteFailed", "AccountDeleteBillingFailed", "AccountDeleted",
-        "AccountDeletePortalAccount", "AccountDeleteLastAdmin", "AccountDeleteRechargeInProgress", "AccountDeleteRechargeInProgressStopped",
+        "AccountDeleteHasChildAccounts", "AccountDeleteLastAdmin", "AccountDeleteRechargeInProgress", "AccountDeleteRechargeInProgressStopped",
     };
 
     [DockerTheory]

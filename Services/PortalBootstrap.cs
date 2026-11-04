@@ -7,8 +7,8 @@ using System.Security.Cryptography;
 namespace DotNetSigningServer.Services;
 
 /// <summary>
-/// Creates the portal's service account and registers its API token from configuration (#169),
-/// so an installation needs no hand-made user and token. The value itself is never stored or
+/// Creates the integrator's (the portal's) service account and registers its provisioning token
+/// from configuration (#169, #131), so an installation needs no hand-made user and token. The value itself is never stored or
 /// logged, nor does it appear in an error: only its HMAC (<see cref="ITokenService.HashToken"/>).
 /// </summary>
 public static class PortalBootstrap
@@ -17,6 +17,12 @@ public static class PortalBootstrap
     public const string TokenLabel = "bootstrap";
     public const int MinimumTokenLength = 43; // base64 of 32 random bytes
 
+    /// <summary>Parallel operations per provisioned tenant, set on the integrator at creation (#131).</summary>
+    public const int ProvisionedConcurrencyLimit = 49;
+
+    /// <summary>Stored queue wait of the integrator; at run time capped by <c>USER_QUEUE_MAX_SECONDS</c>.</summary>
+    public const int ProvisionedQueueSeconds = 600;
+
     private static readonly HashSet<string> KnownDefaults = new(StringComparer.OrdinalIgnoreCase)
     {
         "change-this-secret", "changeme", "change-me", "secret", "password", "token",
@@ -24,7 +30,8 @@ public static class PortalBootstrap
     };
 
     /// <returns>Every problem found. Never contains the value.</returns>
-    public static IReadOnlyList<string> Validate(string? token)
+    /// <param name="name">What the value is called in the messages.</param>
+    public static IReadOnlyList<string> Validate(string? token, string name = "PortalBootstrap:Token")
     {
         var problems = new List<string>();
         if (string.IsNullOrWhiteSpace(token)) return problems;
@@ -32,23 +39,23 @@ public static class PortalBootstrap
         var value = token.Trim();
         if (EnvValues.IsUnresolvedPlaceholder(value) || value.Contains("{{", StringComparison.Ordinal))
         {
-            problems.Add("PortalBootstrap:Token is an unresolved placeholder.");
+            problems.Add($"{name} is an unresolved placeholder.");
         }
         if (KnownDefaults.Contains(value))
         {
-            problems.Add("PortalBootstrap:Token is a well-known default value.");
+            problems.Add($"{name} is a well-known default value.");
         }
         if (System.Text.Encoding.UTF8.GetByteCount(value) < MinimumTokenLength)
         {
-            problems.Add($"PortalBootstrap:Token is shorter than {MinimumTokenLength} characters (use `openssl rand -base64 32`).");
+            problems.Add($"{name} is shorter than {MinimumTokenLength} characters (use `openssl rand -base64 32`).");
         }
-        if (value.Any(c => char.IsWhiteSpace(c) || c == '"'))
+        if (value.Any(c => char.IsWhiteSpace(c) || c == '"' || c == ','))
         {
-            problems.Add("PortalBootstrap:Token contains whitespace or a quote.");
+            problems.Add($"{name} contains whitespace, a quote or a comma.");
         }
         if (!LooksRandom(value))
         {
-            problems.Add("PortalBootstrap:Token does not look random (too few character kinds, a repeated pattern or a sequence).");
+            problems.Add($"{name} does not look random (too few character kinds, a repeated pattern or a sequence).");
         }
         return problems;
     }
@@ -75,20 +82,48 @@ public static class PortalBootstrap
     }
 
     /// <summary>
-    /// Idempotent. The account is created once; the token is replaced only when the stored
-    /// hash no longer matches the configured value (rotation, or a changed Token:Secret).
+    /// Idempotent. The account is created once, as Enterprise with the seal grant (its provisioned
+    /// accounts inherit both). Every configured value has an active provisioning token; a bootstrap
+    /// token whose value left the list (rotation, or a changed Token:Secret) is revoked.
+    /// Anything ambiguous stops the start: a value that belongs to another account, a revoked one.
     /// </summary>
     public static async Task EnsureAsync(
         PortalBootstrapOptions options,
-        PrivateServerOptions privateServer,
         ITokenService tokenService,
+        IIpWhitelistService ipWhitelist,
         ApplicationDbContext db,
         ILogger logger,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(options.Token)) return;
+        var values = options.Values();
+        if (values.Count == 0) return;
 
-        var problems = Validate(options.Token);
+        var problems = new List<string>();
+        if (values.Count > PortalBootstrapOptions.MaxValues)
+        {
+            problems.Add($"PortalBootstrap:Token holds {values.Count} values; at most {PortalBootstrapOptions.MaxValues} (new,old).");
+        }
+        for (var i = 0; i < values.Count; i++)
+        {
+            problems.AddRange(Validate(values[i], $"PortalBootstrap:Token value {i + 1}"));
+        }
+        if (values.Distinct(StringComparer.Ordinal).Count() != values.Count)
+        {
+            problems.Add("PortalBootstrap:Token lists the same value twice.");
+        }
+        var allowedIps = EnvValues.IsUnset(options.AllowedIps) ? null : options.AllowedIps!.Trim();
+        if (allowedIps != null)
+        {
+            var (valid, invalid) = ipWhitelist.ParseAndValidateIps(allowedIps);
+            if (invalid.Count > 0 || valid.Count == 0)
+            {
+                problems.Add($"PortalBootstrap:AllowedIps has {invalid.Count} entr(y/ies) that are not an IP or CIDR.");
+            }
+            else
+            {
+                allowedIps = string.Join(",", valid);
+            }
+        }
         if (problems.Count > 0)
         {
             throw new InvalidOperationException(
@@ -97,49 +132,37 @@ public static class PortalBootstrap
         }
 
         // The same form the authentication handler looks the presented token up by.
-        var token = ApiAuthService.NormalizeToken(options.Token.Trim());
-        var hash = tokenService.HashToken(token);
+        var hashes = values.Select(v => tokenService.HashToken(ApiAuthService.NormalizeToken(v))).ToList();
 
-        // One hash, one account: a token that exists already (a hand-made portal account, a
-        // revoked one) is never registered a second time.
-        var sameHash = await db.ApiTokens.AsNoTracking()
-            .Where(t => t.TokenHash == hash).ToListAsync(cancellationToken);
         var email = UserEmails.Trim(AccountEmail);
         var existing = await db.Users.FindByEmailAsync(email, cancellationToken);
-        var activeMatch = sameHash.FirstOrDefault(t => t.RevokedAt == null);
-        if (activeMatch != null && (existing == null || activeMatch.UserId != existing.Id))
+
+        // One hash, one account, one kind: nothing configured here may already mean something else.
+        foreach (var hash in hashes)
         {
-            var hasOwnActive = existing != null && await db.ApiTokens.AnyAsync(
-                t => t.UserId == existing.Id && t.Label == TokenLabel && t.RevokedAt == null, cancellationToken);
-            if (hasOwnActive)
+            var sameHash = await db.ApiTokens.AsNoTracking().Where(t => t.TokenHash == hash).ToListAsync(cancellationToken);
+            if (sameHash.Any(t => t.RevokedAt == null && (existing == null || t.UserId != existing.Id)))
             {
-                logger.LogWarning(
-                    "[portal-bootstrap] the new value belongs to another account {UserId}; rotation not performed, the previous bootstrap token stays active",
-                    activeMatch.UserId);
+                throw new InvalidOperationException(
+                    "PortalBootstrap refuses to start: a PORTAL_BOOTSTRAP_TOKEN value is the token of another account. Change the value.");
             }
-            else
+            if (sameHash.Count > 0 && sameHash.All(t => t.RevokedAt != null))
             {
-                logger.LogInformation(
-                    "[portal-bootstrap] the token already belongs to account {UserId}; bootstrap not performed", activeMatch.UserId);
+                throw new InvalidOperationException(
+                    "PortalBootstrap refuses to start: a PORTAL_BOOTSTRAP_TOKEN value was revoked. Change the value.");
             }
-            return;
-        }
-        if (activeMatch == null && sameHash.Count > 0)
-        {
-            throw new InvalidOperationException(
-                "PortalBootstrap refuses to start: this PORTAL_BOOTSTRAP_TOKEN value was revoked. Change the value.");
         }
 
         var user = existing;
         if (user != null && !user.IsServiceAccount)
         {
             throw new InvalidOperationException(
-                "PortalBootstrap refuses to start: an ordinary account already uses the reserved portal address.");
+                "PortalBootstrap refuses to start: an ordinary account already uses the reserved integrator address.");
         }
         if (user != null && (!user.IsActive || user.ErasedAt != null))
         {
             throw new InvalidOperationException(
-                "PortalBootstrap refuses to start: the portal service account is deactivated or erased. Reactivate it in the database.");
+                "PortalBootstrap refuses to start: the integrator's service account is deactivated or erased. Reactivate it in the database.");
         }
 
         if (user == null)
@@ -155,17 +178,19 @@ public static class PortalBootstrap
                 IsActive = true,
                 EmailVerified = false,
                 IsServiceAccount = true,
-                TrustedCaller = true,
                 SealAllowed = true,
-                // No credit limit on a private server; the existing enterprise switch does that.
-                IsEnterprise = privateServer.Enabled,
-                EnterpriseEnabledAt = privateServer.Enabled ? DateTimeOffset.UtcNow : null,
+                // Provisioning needs it (#131): provisioned accounts inherit it and are never debited.
+                IsEnterprise = true,
+                EnterpriseEnabledAt = DateTimeOffset.UtcNow,
+                // Inherited by every provisioned account that sets none: the portal's former limits.
+                MaxConcurrentOperations = ProvisionedConcurrencyLimit,
+                ConcurrencyQueueTimeoutSeconds = ProvisionedQueueSeconds,
             };
             db.Users.Add(user);
             try
             {
                 await db.SaveChangesAsync(cancellationToken);
-                logger.LogInformation("[portal-bootstrap] created the portal service account {UserId}", user.Id);
+                logger.LogInformation("[portal-bootstrap] created the integrator's service account {UserId}", user.Id);
             }
             catch (DbUpdateException)
             {
@@ -175,34 +200,60 @@ public static class PortalBootstrap
                 if (user is not { IsServiceAccount: true }) throw;
             }
         }
-
-        if (activeMatch != null && activeMatch.Label != TokenLabel)
+        else if (!user.IsEnterprise)
         {
-            // The service account holds this value under another label: no second row with one hash.
-            logger.LogInformation(
-                "[portal-bootstrap] the token already exists on the service account as '{Label}'; nothing added", activeMatch.Label);
-            return;
+            // An administrator switched it off: provisioning answers 409 PARENT_NOT_ENTERPRISE until it is back.
+            logger.LogError("[portal-bootstrap] the integrator's account {UserId} is not Enterprise; provisioning is refused until it is", user.Id);
         }
 
         var active = await db.ApiTokens
-            .Where(t => t.UserId == user.Id && t.Label == TokenLabel && t.RevokedAt == null)
+            .Where(t => t.UserId == user.Id && t.RevokedAt == null)
             .ToListAsync(cancellationToken);
-        if (active.Any(t => CryptographicOperations.FixedTimeEquals(t.TokenHash, hash))) return;
-
         var now = DateTimeOffset.UtcNow;
-        foreach (var old in active) old.RevokedAt = now;
-        db.ApiTokens.Add(new ApiToken
+        var added = 0;
+        var changed = 0;
+        foreach (var hash in hashes)
         {
-            UserId = user.Id,
-            Label = TokenLabel,
-            TokenHash = hash,
-            // No prefix: it would leak 8 characters of the value.
-            TokenPrefix = null,
-            IsBrowserToken = false,
-        });
+            var match = active.FirstOrDefault(t => CryptographicOperations.FixedTimeEquals(t.TokenHash, hash));
+            if (match == null)
+            {
+                db.ApiTokens.Add(new ApiToken
+                {
+                    UserId = user.Id,
+                    Label = TokenLabel,
+                    TokenHash = hash,
+                    // No prefix: it would leak 8 characters of the value.
+                    TokenPrefix = null,
+                    IsBrowserToken = false,
+                    IsProvisioningToken = true,
+                    AllowedIps = allowedIps,
+                });
+                added++;
+                continue;
+            }
+            if (!match.IsProvisioningToken || match.IsBrowserToken || match.AllowedIps != allowedIps || match.Label != TokenLabel)
+            {
+                match.IsProvisioningToken = true;
+                match.IsBrowserToken = false;
+                match.AllowedIps = allowedIps;
+                match.Label = TokenLabel;
+                changed++;
+            }
+        }
+
+        // A bootstrap token whose value is no longer configured: the old half of a finished rotation.
+        var revoked = 0;
+        foreach (var old in active.Where(t => (t.Label == TokenLabel || t.IsProvisioningToken)
+                                              && !hashes.Any(h => CryptographicOperations.FixedTimeEquals(t.TokenHash, h))))
+        {
+            old.RevokedAt = now;
+            revoked++;
+        }
+
+        if (added + changed + revoked == 0) return;
         await db.SaveChangesAsync(cancellationToken);
         logger.LogInformation(
-            "[portal-bootstrap] registered the bootstrap token (revoked {Revoked} previous)", active.Count);
+            "[portal-bootstrap] provisioning tokens: {Added} added, {Changed} updated, {Revoked} revoked", added, changed, revoked);
     }
 
     private static (byte[] Hash, byte[] Salt, int Iterations) HashUnknownPassword() =>

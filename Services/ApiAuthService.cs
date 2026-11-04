@@ -123,20 +123,33 @@ public class ApiAuthService : IApiAuthService
     {
         var prefix = token.Length >= 8 ? token[..8] : token;
         var now = DateTimeOffset.UtcNow;
+        var hash = _tokenService.HashToken(token);
 
+        // Found by its HMAC through the index (#131), not by scanning every token without a prefix.
         // AsNoTracking — result is cached in a singleton IMemoryCache across requests/scopes.
-        var candidates = await _dbContext.ApiTokens
+        var active = _dbContext.ApiTokens
             .AsNoTracking()
-            .Include(t => t.User)
-            .Where(t => t.RevokedAt == null && (t.ExpiresAt == null || t.ExpiresAt > now))
-            .Where(t => t.TokenPrefix == null || t.TokenPrefix == prefix)
-            .ToListAsync();
+            .Include(t => t.User).ThenInclude(u => u!.Parent)
+            .Where(t => t.RevokedAt == null && (t.ExpiresAt == null || t.ExpiresAt > now));
+        var candidates = _dbContext.Database.IsNpgsql()
+            ? await active.Where(t => t.TokenHash == hash).ToListAsync()
+            // Providers without bytea equality (tests on the in-memory store) compare in the process.
+            : (await active.Where(t => t.TokenPrefix == null || t.TokenPrefix == prefix).ToListAsync())
+                .Where(t => CryptographicOperations.FixedTimeEquals(t.TokenHash, hash)).ToList();
+        candidates = candidates.Where(t => CryptographicOperations.FixedTimeEquals(t.TokenHash, hash)).ToList();
 
-        var apiToken = candidates.FirstOrDefault(t => _tokenService.VerifyToken(token, t.TokenHash));
+        if (candidates.Count > 1)
+        {
+            // Two accounts behind one value: never guess which tenant this is.
+            _logger.LogError("[auth] token rejected: {Count} active tokens share one hash (tokenIds={TokenIds})",
+                candidates.Count, string.Join(",", candidates.Select(t => t.Id)));
+            return null;
+        }
+
+        var apiToken = candidates.SingleOrDefault();
         if (apiToken == null)
         {
-            _logger.LogWarning("[auth] token rejected: no active token matched prefix={Prefix} candidates={Count}",
-                prefix, candidates.Count);
+            _logger.LogWarning("[auth] token rejected: no active token matched prefix={Prefix}", prefix);
             return new CachedValidation { NotFound = true };
         }
 
@@ -167,13 +180,20 @@ public class ApiAuthService : IApiAuthService
             return null;
         }
 
-        if (apiToken.User != null && !apiToken.User.IsActive)
+        // A provisioned account stops with its parent (#131): deactivating the integrator stops every tenant.
+        if (apiToken.User != null && !apiToken.User.EffectiveActive)
         {
-            _logger.LogWarning("[auth] token rejected: user inactive (tokenId={TokenId} userId={UserId})", apiToken.Id, apiToken.User.Id);
+            _logger.LogWarning("[auth] token rejected: user or its parent inactive (tokenId={TokenId} userId={UserId})", apiToken.Id, apiToken.User.Id);
             return null;
         }
 
-        return new CachedValidation { User = apiToken.User, TokenId = apiToken.Id, IsBrowserToken = apiToken.IsBrowserToken };
+        return new CachedValidation
+        {
+            User = apiToken.User,
+            TokenId = apiToken.Id,
+            IsBrowserToken = apiToken.IsBrowserToken,
+            IsProvisioningToken = apiToken.IsProvisioningToken,
+        };
     }
 
     private static string BuildCacheKey(string token, string? originHeader, IPAddress? clientIp)
@@ -203,8 +223,9 @@ public class ApiAuthService : IApiAuthService
         public Guid? TokenId { get; init; }
         public bool NotFound { get; init; }
         public bool IsBrowserToken { get; init; }
+        public bool IsProvisioningToken { get; init; }
 
         public ApiTokenValidation? ToResult() =>
-            User != null && TokenId is Guid id ? new ApiTokenValidation(User, id, IsBrowserToken) : null;
+            User != null && TokenId is Guid id ? new ApiTokenValidation(User, id, IsBrowserToken, IsProvisioningToken) : null;
     }
 }

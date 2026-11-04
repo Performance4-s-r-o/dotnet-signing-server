@@ -15,11 +15,16 @@ public static class SessionClaims
     /// <summary>API token principal: the token's id.</summary>
     public const string TokenId = "p4:token_id";
 
-    /// <summary>API token principal: <see cref="BrowserTokenKind"/> or <see cref="ServerTokenKind"/>.</summary>
+    /// <summary>API token principal: <see cref="BrowserTokenKind"/>, <see cref="ServerTokenKind"/> or <see cref="ProvisioningTokenKind"/>.</summary>
     public const string TokenKind = "p4:token_kind";
 
     public const string BrowserTokenKind = "browser";
     public const string ServerTokenKind = "server";
+    /// <summary>The integrator's main key (#131): provisioning and capabilities only.</summary>
+    public const string ProvisioningTokenKind = "provisioning";
+
+    /// <summary>API token principal of a provisioned account: its <c>ExternalId</c>, for log scopes.</summary>
+    public const string AccountRef = "p4:account_ref";
 
     public const string AdminRole = "Admin";
 
@@ -43,6 +48,9 @@ public static class SessionClaims
 
     public static bool IsBrowserToken(ClaimsPrincipal? principal) =>
         principal?.FindFirst(TokenKind)?.Value == BrowserTokenKind;
+
+    public static bool IsProvisioningToken(ClaimsPrincipal? principal) =>
+        principal?.FindFirst(TokenKind)?.Value == ProvisioningTokenKind;
 
     public static Guid? TokenIdOf(ClaimsPrincipal? principal) =>
         Guid.TryParse(principal?.FindFirst(TokenId)?.Value, out var id) ? id : null;

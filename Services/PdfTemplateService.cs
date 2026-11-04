@@ -47,7 +47,7 @@ public class PdfTemplateService
         _strings = localizerFactory.Create(typeof(SharedStrings));
     }
 
-    public async Task<CreateTemplateResponse> CreateTemplateAsync(CreateTemplateInput input, Guid userId, CancellationToken cancellationToken = default, bool trustedCaller = false)
+    public async Task<CreateTemplateResponse> CreateTemplateAsync(CreateTemplateInput input, Guid userId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(input.PdfContent))
         {
@@ -62,7 +62,7 @@ public class PdfTemplateService
         _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Template");
 
         var maxTemplates = _limits.MaxTemplatesPerUser;
-        if (maxTemplates > 0 && !trustedCaller
+        if (maxTemplates > 0
             && await _dbContext.StoredPdfTemplates.CountAsync(t => t.UserId == userId, cancellationToken) >= maxTemplates)
         {
             throw new ApiValidationException("TOO_MANY_TEMPLATES");

@@ -67,19 +67,17 @@ public class LimitsOptions
     public long FillImageMaxPixels { get; set; } = 25_000_000;
     public int FillImageMaxSide { get; set; } = 10_000;
 
-    // ── Disk and storage per account (#74). 0 = no limit. A trusted caller (the portal's account,
-    // PortalTrust.IsTrustedCaller) is exempt from both caps below: it works for every tenant,
-    // so a per-account number would cap all of them at once. ──
+    // ── Disk and storage per account (#74), so per provisioned tenant (#131). 0 = no limit. ──
 
-    /// <summary>Presigns waiting for /api/sign, per account. Each holds a PDF of up to 20 MB in /tmp. Default 20; a trusted caller is exempt.</summary>
+    /// <summary>Presigns waiting for /api/sign, per account. Each holds a PDF of up to 20 MB in /tmp. Default 20.</summary>
     public int MaxPendingPresignsPerUser { get; set; } = 20;
 
     /// <summary>
     /// Live (not revoked, not expired) API tokens per account (#80). Unlike the caps above it has a
-    /// default: the portal holds one token, not one per tenant. 0 = no limit.
+    /// default. 0 = no limit.
     /// </summary>
     public int MaxApiTokensPerUser { get; set; } = 100;
 
-    /// <summary>Stored templates (up to 27 MB each), per account. Default 100; a trusted caller is exempt.</summary>
+    /// <summary>Stored templates (up to 27 MB each), per account. Default 100.</summary>
     public int MaxTemplatesPerUser { get; set; } = 100;
 }

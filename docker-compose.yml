@@ -35,7 +35,7 @@ services:
       - /tmp:size=512m
     # Not published on the host (#78): a published port bypasses the host firewall (Docker writes
     # its own iptables rules) and with it Cloudflare. The tunnel / reverse proxy reaches 8085 over
-    # the Docker network; 8086 is the trusted caller's (only when INTERNAL_API_PORT is set), and
+    # the Docker network; 8086 is the internal listener (only when INTERNAL_API_PORT is set), and
     # nothing outside the network reaches either.
     # Local `docker compose up`: add a docker-compose.override.yml with `ports: ["8085:8085"]`.
     expose:
@@ -43,9 +43,8 @@ services:
       - "8086"
     environment:
       - ASPNETCORE_URLS=http://+:8085
-      # Second listener for the trusted caller only (#78), added next to ASPNETCORE_URLS. The token
-      # of an account marked Trusted caller in the administration is accepted on it and refused
-      # (401) on 8085.
+      # Optional second listener (#78, #131), added next to ASPNETCORE_URLS. When set, the
+      # integrator's provisioning token is accepted on it only and refused (401) on 8085.
       # Empty (the default) = one listener, a plain API. When set, it has to be in the `expose`
       # list above too. An unresolved Coolify placeholder counts as empty (#121).
       - INTERNAL_API_PORT=${INTERNAL_API_PORT:-}
@@ -64,13 +63,12 @@ services:
       - DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS=${DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS:-}
       - AllowedHosts=${ALLOWED_HOSTS:-*}
       - UseLocalDb=false
-      # Per-account caps (#74); 0 = no limit. The trusted caller's account
-      # is exempt: it works for every tenant, so a number here would cap the whole platform.
+      # Per-account caps (#74), so per provisioned tenant (#131); 0 = no limit.
       - Limits__MaxPendingPresignsPerUser=${MAX_PENDING_PRESIGNS_PER_USER:-20}
       - Limits__MaxTemplatesPerUser=${MAX_TEMPLATES_PER_USER:-100}
       # #80. Each falls back to a Coolify project-shared variable (DOTNET_*); an unset one
       # arrives empty or as the placeholder and the code default applies (Options/EnvValues.cs).
-      # Live API tokens per account; 0 = no limit (default 100). The portal holds one token.
+      # Live API tokens per account; 0 = no limit (default 100).
       - MAX_API_TOKENS_PER_USER=${MAX_API_TOKENS_PER_USER:-}
       # Browser origins allowed to call /api (comma-separated). Production no longer falls back
       # to the origins of every user's browser tokens: list the sites that use them.
@@ -94,7 +92,7 @@ services:
       - RASTER_OPERATIONS_LIMIT=${RASTER_OPERATIONS_LIMIT:-}
       - RASTER_WAIT_MS=${RASTER_WAIT_MS:-}
       # A user's queue (#69): longest wait whatever the account stores (empty = 30 s, 0-600) and
-      # waiting requests per slot of the user's limit (empty = 2). The trusted caller is exempt.
+      # waiting requests per slot of the user's limit (empty = 2). Every account, provisioned ones included.
       - USER_QUEUE_MAX_SECONDS=${USER_QUEUE_MAX_SECONDS:-}
       - USER_QUEUE_LENGTH_FACTOR=${USER_QUEUE_LENGTH_FACTOR:-}
       - FqdnServerName=${FQDN_SERVER:-}
@@ -115,14 +113,19 @@ services:
       # role then needs DDL rights).
       - Database__RunMigrationsOnStart=${RUN_MIGRATIONS_ON_START:-}
       - Token__Secret=${TOKEN_SECRET:-}
-      # Internal preprocessing bypass — must match the same key on the calling service
       - PrivateServer__Enabled=${PRIVATE_SERVER:-false}
       - SeedAdmin__Email=${SEED_ADMIN_EMAIL:-}
       - SeedAdmin__Password=${SEED_ADMIN_PASSWORD:-}
-      # The portal's server token (#169): at start the portal's service account and an API token
-      # with this value are created; empty = off. Shared Coolify variable DOTNET_PORTAL_BOOTSTRAP_TOKEN,
-      # set on purpose (it is NOT the old SIGN_API_TOKEN: a token already made by hand stays as it is).
+      # The integrator's provisioning token (#169, #131): "new" or "new,old" during a rotation;
+      # empty = off. Coolify links it to the shared P4PDF_SIGN_API_PROVISIONING_TOKEN, which the
+      # portal reads too. It may only provision accounts and read capabilities.
       - PortalBootstrap__Token=${PORTAL_BOOTSTRAP_TOKEN:-}
+      # IPs / CIDRs the provisioning token is accepted from, comma-separated; empty = any.
+      - PortalBootstrap__AllowedIps=${PORTAL_BOOTSTRAP_ALLOWED_IPS:-}
+      # Accounts one integrator may create in 24 h (empty = 50, 0 = no limit) and accounts per hour
+      # that raise an ops alert (empty = 10, 0 = none). Negative or nonsense stops the start.
+      - PROVISIONING_MAX_ACCOUNTS_PER_DAY=${PROVISIONING_MAX_ACCOUNTS_PER_DAY:-}
+      - PROVISIONING_ALERT_ACCOUNTS_PER_HOUR=${PROVISIONING_ALERT_ACCOUNTS_PER_HOUR:-}
       # Evidence encryption certificate (for SES evidence attachment encryption)
       - EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64=${EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64:-}
       - EVIDENCE_ENCRYPTION_CERTIFICATE_PEM=${EVIDENCE_ENCRYPTION_CERTIFICATE_PEM:-}

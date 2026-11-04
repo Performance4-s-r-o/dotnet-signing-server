@@ -1,25 +1,20 @@
 namespace DotNetSigningServer.Options;
 
 /// <summary>
-/// Where a trusted caller may call from (#78). docker-compose passes the raw name
-/// (<c>INTERNAL_API_PORT</c>); see <see cref="EnvValues"/>. Which account is trusted is a flag on
-/// the account (<c>User.TrustedCaller</c>), set by an administrator.
-///
-/// <list type="bullet">
-/// <item><see cref="InternalPort"/> opens a second listener meant for the Docker network only.
-/// A token of a flagged account is accepted there and nowhere else: on the public port it is a
-/// 401, as if it did not exist. Unset = one listener and no trusted caller at all.</item>
-/// <item>Only a flagged account's server token on the internal port is a <i>trusted caller</i>:
-/// its <c>X-P4-Tenant</c> / <c>X-Request-Id</c> are believed and it alone may skip the attachment
-/// debit. Every other caller's copy of those headers is ignored.</item>
-/// </list>
+/// The optional second listener for the Docker network (<c>INTERNAL_API_PORT</c>, #78, #131).
+/// When it is set, a provisioning token is accepted there only (401 elsewhere) and
+/// <c>/internal/concurrency</c> is served there. Every other token works on both listeners.
+/// Unset = one listener; the provisioning token then works on it.
 /// </summary>
-public class PortalTrustOptions
+public class InternalListenerOptions
 {
     public const string InternalPortVariable = "INTERNAL_API_PORT";
 
     /// <summary>The internal listener's port; null = no internal listener.</summary>
     public int? InternalPort { get; set; }
+
+    /// <summary>Whether a request came in on the internal listener.</summary>
+    public bool IsInternal(int localPort) => InternalPort is int port && localPort == port;
 
     /// <summary>
     /// The listen URLs with the internal port added (once). Empty <paramref name="urls"/> means
@@ -37,7 +32,7 @@ public class PortalTrustOptions
         return string.Join(';', listening);
     }
 
-    public static PortalTrustOptions From(IConfiguration configuration)
+    public static InternalListenerOptions From(IConfiguration configuration)
     {
         var port = EnvValues.Int(configuration, InternalPortVariable);
         if (port is <= 0 or > 65535)
@@ -45,7 +40,7 @@ public class PortalTrustOptions
             throw new InvalidOperationException($"{InternalPortVariable} must be a TCP port (1-65535), got '{port}'.");
         }
 
-        return new PortalTrustOptions
+        return new InternalListenerOptions
         {
             InternalPort = port,
         };

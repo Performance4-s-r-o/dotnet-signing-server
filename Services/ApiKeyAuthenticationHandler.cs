@@ -16,22 +16,32 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
     public const string SchemeName = "ApiKey";
 
     private readonly IApiAuthService _apiAuth;
-    private readonly DotNetSigningServer.Options.PortalTrustOptions _portalTrust;
-    private readonly MissingTrustedCallerFlag? _missingFlag;
+    private readonly DotNetSigningServer.Options.InternalListenerOptions _listener;
 
     public ApiKeyAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
         IApiAuthService apiAuth,
-        DotNetSigningServer.Options.PortalTrustOptions portalTrust,
-        MissingTrustedCallerFlag? missingFlag = null)
+        DotNetSigningServer.Options.InternalListenerOptions listener)
         : base(options, logger, encoder)
     {
         _apiAuth = apiAuth;
-        _portalTrust = portalTrust;
-        _missingFlag = missingFlag;
+        _listener = listener;
     }
+
+    /// <summary>
+    /// The provisioning token works on the internal listener only, when there is one (#131).
+    /// Every other token works on any listener.
+    /// </summary>
+    public static bool AcceptedOn(DotNetSigningServer.Options.InternalListenerOptions listener, int localPort, bool isProvisioningToken) =>
+        !isProvisioningToken || listener.InternalPort == null || listener.IsInternal(localPort);
+
+    /// <summary>The kind claim of a validated token.</summary>
+    public static string KindOf(ApiTokenValidation validation) =>
+        validation.IsProvisioningToken ? SessionClaims.ProvisioningTokenKind
+        : validation.IsBrowserToken ? SessionClaims.BrowserTokenKind
+        : SessionClaims.ServerTokenKind;
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
@@ -53,24 +63,13 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
         }
         var user = validation.User;
 
-        // A trusted account's token works on the internal listener only (#78). On the public one it
-        // is refused like an unknown token, so the gate answers 401 before any body is read.
-        var kind = PortalTrust.Classify(_portalTrust, Context.Connection.LocalPort, user.TrustedCaller, validation.IsBrowserToken);
-        if (kind == PortalCallKind.Refused)
+        // Refused like an unknown token, so the gate answers 401 before any body is read.
+        if (!AcceptedOn(_listener, Context.Connection.LocalPort, validation.IsProvisioningToken))
         {
             Logger.LogWarning(Logging.LoggingEvents.AuthFailed,
-                "Portal token {TokenId} refused on port {Port}: it is accepted on the internal listener only",
+                "Provisioning token {TokenId} refused on port {Port}: it is accepted on the internal listener only",
                 validation.TokenId, Context.Connection.LocalPort);
             return AuthenticateResult.NoResult();
-        }
-
-        if (_missingFlag?.ShouldWarn(_portalTrust, Context.Connection.LocalPort, kind, validation.IsBrowserToken,
-                user.Id, Request.Headers, DateTimeOffset.UtcNow) == true)
-        {
-            Logger.LogWarning(Logging.LoggingEvents.AuthFailed,
-                "Account {UserId} sends trusted caller headers on the internal port but is not marked TrustedCaller: "
-                + "the headers are ignored, tenant checks are off and per-account limits apply. Set the flag in the administration.",
-                user.Id);
         }
 
         var claims = new List<Claim>
@@ -80,9 +79,9 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
             // Which token and what kind (#80): ApiGateMiddleware limits browser tokens to their
             // scope, the operation runner to their credit budget.
             new Claim(SessionClaims.TokenId, validation.TokenId.ToString()),
-            new Claim(SessionClaims.TokenKind, validation.IsBrowserToken ? SessionClaims.BrowserTokenKind : SessionClaims.ServerTokenKind),
+            new Claim(SessionClaims.TokenKind, KindOf(validation)),
         };
-        if (kind == PortalCallKind.Trusted) claims.Add(new Claim(PortalTrust.TrustedCallerClaim, "true"));
+        if (user.ExternalId != null) claims.Add(new Claim(SessionClaims.AccountRef, user.ExternalId));
         var identity = new ClaimsIdentity(claims, SchemeName);
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, SchemeName);

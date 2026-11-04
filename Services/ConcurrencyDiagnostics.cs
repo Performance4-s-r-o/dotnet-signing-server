@@ -14,8 +14,7 @@ public static class ConcurrencyDiagnostics
     public const string Path = "/internal/concurrency";
 
     /// <summary>Only on the internal listener; without one the endpoint does not exist.</summary>
-    public static bool IsServedOn(PortalTrustOptions trust, int localPort) =>
-        trust.InternalPort is int internalPort && localPort == internalPort;
+    public static bool IsServedOn(InternalListenerOptions listener, int localPort) => listener.IsInternal(localPort);
 
     public static object Snapshot(CapacityPools pools)
     {

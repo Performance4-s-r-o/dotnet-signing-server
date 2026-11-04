@@ -57,7 +57,7 @@ public class FlattenFormEndpointTests
         }
     }
 
-    private static Harness Controller(HttpContent? multipart = null, BillingOptions? billing = null, bool trusted = false, int maxPages = 5)
+    private static Harness Controller(HttpContent? multipart = null, BillingOptions? billing = null, int maxPages = 5)
     {
         var limitOptions = new LimitsOptions { PdfMaxPages = maxPages, RejectActiveContent = true };
         var limits = new ContentLimitGuard(TestHelpers.WrapOptions(limitOptions));
@@ -77,7 +77,6 @@ public class FlattenFormEndpointTests
             .AddSingleton(Microsoft.Extensions.Options.Options.Create(new Microsoft.AspNetCore.Mvc.JsonOptions()))
             .BuildServiceProvider();
         var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, user.Id.ToString()) };
-        if (trusted) claims.Add(new Claim(PortalTrust.TrustedCallerClaim, "true"));
         var http = new DefaultHttpContext { RequestServices = services };
         http.User = new ClaimsPrincipal(new ClaimsIdentity(claims, ApiKeyAuthenticationHandler.SchemeName));
         if (multipart != null)
@@ -261,16 +260,6 @@ public class FlattenFormEndpointTests
         await controller.FlattenForm(new FlattenFormInput { PdfContent = Convert.ToBase64String(ScriptedForm()) });
 
         Assert.Equal(credits, Assert.Single(controller.Calls).BaseCost);
-    }
-
-    [Fact]
-    public async Task Trusted_caller_is_not_charged()
-    {
-        var controller = Controller(billing: new BillingOptions { FlattenFormCredits = 5 }, trusted: true);
-
-        await controller.FlattenForm(new FlattenFormInput { PdfContent = Convert.ToBase64String(ScriptedForm()) });
-
-        Assert.Equal(0, Assert.Single(controller.Calls).BaseCost);
     }
 
     [Fact]

@@ -36,6 +36,7 @@ public static class AccountErasure
     {
         public const string AccountDeleted = "account_deleted";
         public const string SubjectRequest = "subject_request";
+        public const string IntegratorDeleted = "integrator_deleted";
     }
 
     /// <summary>Values of the ack's <c>status</c>.</summary>

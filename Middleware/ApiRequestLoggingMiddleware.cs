@@ -86,11 +86,8 @@ public class ApiRequestLoggingMiddleware
             return;
         }
 
-        var caller = DotNetSigningServer.Services.PortalTrust.CallerOf(context);
         dbContext.UsageRecords.Add(new UsageRecord
         {
-            TenantId = caller.TenantId,
-            RequestId = caller.RequestId,
             UserId = userId,
             Count = 0,
             BaseCost = 0,

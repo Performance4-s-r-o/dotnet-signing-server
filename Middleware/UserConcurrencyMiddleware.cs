@@ -26,7 +26,7 @@ namespace DotNetSigningServer.Middleware;
 ///
 /// The user's queue is bounded (#69): at most <c>UserQueueMaxSeconds</c> of waiting and
 /// <c>UserQueueLengthFactor</c> × limit waiting requests, then 429 with an honest Retry-After.
-/// The trusted caller is exempt from both bounds; it shares its capacity between tenants itself.
+/// Both bounds apply to every account; a provisioned tenant has a queue of its own (#131).
 /// </summary>
 public class UserConcurrencyMiddleware
 {
@@ -273,11 +273,9 @@ public class UserConcurrencyMiddleware
         var gate = Semaphores.GetOrAdd(userId.Value, _ => new UserGate(limit));
         gate.SetLimit(limit);
 
-        // #69: the queue is bounded in time and length, except for the trusted caller, which
-        // queues its own tenants fairly and keeps what its account has stored.
-        var trusted = PortalTrust.IsTrustedCaller(context);
-        var queueSeconds = BillingOptions.EffectiveQueueSeconds(queueTimeoutSeconds, _billingOptions.UserQueueMaxSeconds, trusted);
-        var maxWaiting = BillingOptions.MaxWaiting(limit, _billingOptions.UserQueueLengthFactor, trusted);
+        // #69: the queue is bounded in time and length for every account, provisioned ones included.
+        var queueSeconds = BillingOptions.EffectiveQueueSeconds(queueTimeoutSeconds, _billingOptions.UserQueueMaxSeconds);
+        var maxWaiting = BillingOptions.MaxWaiting(limit, _billingOptions.UserQueueLengthFactor);
         var waitTimeout = queueSeconds > 0
             ? TimeSpan.FromSeconds(queueSeconds)
             : TimeSpan.Zero;
@@ -398,14 +396,21 @@ public class UserConcurrencyMiddleware
         {
             using var scope = services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            // A provisioned account's own setting, else its parent's, else the default (#131).
             var row = await db.Users
                 .AsNoTracking()
                 .Where(u => u.Id == userId)
-                .Select(u => new { u.MaxConcurrentOperations, u.ConcurrencyQueueTimeoutSeconds })
+                .Select(u => new
+                {
+                    u.MaxConcurrentOperations,
+                    u.ConcurrencyQueueTimeoutSeconds,
+                    ParentMax = u.Parent == null ? null : u.Parent.MaxConcurrentOperations,
+                    ParentQueue = u.Parent == null ? null : u.Parent.ConcurrencyQueueTimeoutSeconds,
+                })
                 .FirstOrDefaultAsync();
 
-            var limit = row?.MaxConcurrentOperations ?? defaultLimit;
-            var queueTimeout = row?.ConcurrencyQueueTimeoutSeconds ?? defaultQueueTimeout;
+            var limit = row?.MaxConcurrentOperations ?? row?.ParentMax ?? defaultLimit;
+            var queueTimeout = row?.ConcurrencyQueueTimeoutSeconds ?? row?.ParentQueue ?? defaultQueueTimeout;
             LimitCache[userId] = (limit, queueTimeout, DateTimeOffset.UtcNow.AddSeconds(LimitCacheDurationSeconds));
             return (limit, queueTimeout);
         }

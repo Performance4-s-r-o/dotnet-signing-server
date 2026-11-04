@@ -23,7 +23,6 @@ namespace DotNetSigningServer.Controllers
         private readonly PdfSigningService _signingService;
         private readonly PdfLtvService _ltvService;
         private readonly IDataProtector _dataProtector;
-        internal const string AttachmentDebitBypassHeader = "X-P4PDF-Attachment-Billing-Bypass";
         private const string SigningDataNotFoundCode = "SIGNING_DATA_NOT_FOUND";
         /// <summary>Set on a raw PDF answer of <c>/api/sign</c>; the JSON answer carries <c>signatureVerified</c>.</summary>
         public const string SignatureVerifiedHeader = "X-Signature-Verified";
@@ -111,9 +110,9 @@ namespace DotNetSigningServer.Controllers
                 return InputRefused(new ApiValidationException("CONTENT_STAMP_REQUIRED"));
             }
             var maxPending = HttpContext.RequestServices.GetRequiredService<IOptions<LimitsOptions>>().Value.MaxPendingPresignsPerUser;
-            if (maxPending > 0 && !PortalTrust.IsTrustedCaller(HttpContext) && await DbContext.SigningData.CountAsync(x => x.UserId == user.Id) >= maxPending)
+            if (maxPending > 0 && await DbContext.SigningData.CountAsync(x => x.UserId == user.Id) >= maxPending)
             {
-                // Each presign is a PDF on disk until it is signed or expires (#74). The portal is exempt: one account for all tenants.
+                // Each presign is a PDF on disk until it is signed or expires (#74); per account, so per tenant (#131).
                 Response.Headers.RetryAfter = "60";
                 return StatusCode(StatusCodes.Status429TooManyRequests, new
                 {
@@ -174,10 +173,6 @@ namespace DotNetSigningServer.Controllers
 
                 signingData.PreparationCredits = preparationCredits;
                 signingData.UserId = user.Id;
-                // The portal's tenant and request id (#78); null for anybody else, whatever they sent.
-                var caller = PortalTrust.CallerOf(HttpContext);
-                signingData.TenantId = caller.TenantId;
-                signingData.RequestId = caller.RequestId;
 
                 DbContext.SigningData.Add(signingData);
                 await DbContext.SaveChangesAsync();
@@ -289,8 +284,8 @@ namespace DotNetSigningServer.Controllers
         /// <summary>
         /// Flattening and PDF/A conversion before the signature (#184), one step for presign, timestamp
         /// and visual-sign, under the document deadline and the operator's switches of the two
-        /// features. Priced like <c>/api/flatten-form</c> and <c>/api/convert/pdfa</c>, free for the
-        /// trusted caller. Presign is charged by <c>/api/sign</c> and so checks the balance here
+        /// features. Priced like <c>/api/flatten-form</c> and <c>/api/convert/pdfa</c> for every caller.
+        /// Presign is charged by <c>/api/sign</c> and so checks the balance here
         /// (<paramref name="checkCredits"/>); timestamp and visual-sign add the credits to their own
         /// reservation, which answers 402 itself.
         /// </summary>
@@ -322,13 +317,10 @@ namespace DotNetSigningServer.Controllers
                     context, report.Flatten ?? "-", report.FlattenedFields, string.Join(",", report.Removed), report.Pdfa ?? "-", report.Conformance ?? "-");
 
                 var credits = 0;
-                if (!PortalTrust.IsTrustedCaller(HttpContext))
-                {
-                    if (report.Flatten is DocumentPreparation.FlattenOutcome.Flattened or DocumentPreparation.FlattenOutcome.Unchanged)
-                        credits += BillingOptions.FlattenFormCredits;
-                    if (report.Pdfa == DocumentPreparation.PdfaOutcome.Converted)
-                        credits += CalculateCreditsForPages(result.Pages);
-                }
+                if (report.Flatten is DocumentPreparation.FlattenOutcome.Flattened or DocumentPreparation.FlattenOutcome.Unchanged)
+                    credits += BillingOptions.FlattenFormCredits;
+                if (report.Pdfa == DocumentPreparation.PdfaOutcome.Converted)
+                    credits += CalculateCreditsForPages(result.Pages);
                 // The signature pays for it: a presign that /api/sign could never charge is refused now.
                 if (checkCredits && LacksCredits(user, 1 + credits))
                 {
@@ -389,35 +381,19 @@ namespace DotNetSigningServer.Controllers
             // presign is gone and the operation itself carries the owner.
             var existing = await Operations.FindByPresignAsync(input.Id);
             var presign = await DbContext.SigningData.AsNoTracking().FirstOrDefaultAsync(x => x.Id == input.Id);
+            // Another account's presign or signature is answered as missing (#131): Forbid() redirected
+            // an API caller to the sign-in page, and a 403 would confirm that the id exists.
             if (existing == null)
             {
-                if (presign == null)
+                if (presign == null || presign.UserId != user.Id)
                 {
-                    return NotFound(new { message = Localizer["SigningDataNotFound"].Value });
-                }
-                if (presign.UserId != user.Id)
-                {
-                    return Forbid();
+                    return NotFound(new { code = SigningDataNotFoundCode, message = Localizer["SigningDataNotFound"].Value });
                 }
             }
             else if (existing.UserId != user.Id)
             {
-                return Forbid();
-            }
-
-            // The portal holds one account for every tenant (#78): the owner check above cannot tell
-            // one tenant's presign from another's. A presign made for a tenant is signed for that
-            // tenant only; one made without (older presigns, other callers) is not checked. Once the
-            // signature is done the presign is gone and the operation carries the tenant: a replay
-            // for another tenant is refused too.
-            var callerTenant = PortalTrust.CallerOf(HttpContext).TenantId;
-            if (presign?.TenantId != null && !string.Equals(presign.TenantId, callerTenant, StringComparison.Ordinal))
-            {
-                return TenantMismatch($"presign {input.Id}");
-            }
-            if (existing != null && PortalTrust.TenantsConflict(existing.TenantId, callerTenant))
-            {
-                return TenantMismatch($"presign {input.Id}");
+                Logger.LogWarning(Logging.LoggingEvents.AuthFailed, "Sign refused for user {UserId}: presign {PresignId} belongs to another account", user.Id, input.Id);
+                return NotFound(new { code = SigningDataNotFoundCode, message = Localizer["SigningDataNotFound"].Value });
             }
 
             // The presign is NOT deleted before the work any more (#77): the operation row,
@@ -848,8 +824,14 @@ namespace DotNetSigningServer.Controllers
         [HttpGet("/api/capabilities")]
         public async Task<IActionResult> Capabilities()
         {
-            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
-            if (error != null || user == null) return error!;
+            // The provisioning token may ask too (#131); it has no account of its own to load here.
+            var provisioning = User?.Identity?.AuthenticationType == ApiKeyAuthenticationHandler.SchemeName
+                               && SessionClaims.IsProvisioningToken(User);
+            if (!provisioning)
+            {
+                var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+                if (error != null || user == null) return error!;
+            }
 
             // No platform seal exists; the field only reports that.
             var ai = HttpContext.RequestServices.GetService<Microsoft.Extensions.Options.IOptions<DotNetSigningServer.Options.AiOptions>>()?.Value;
@@ -1179,7 +1161,7 @@ namespace DotNetSigningServer.Controllers
             var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
 
-            if (!user.SealAllowed)
+            if (!user.EffectiveSealAllowed)
             {
                 return SealNotPermitted(user);
             }
@@ -1206,12 +1188,6 @@ namespace DotNetSigningServer.Controllers
             var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
 
-            var bypassDebitRequested = BypassDebitRequested();
-            if (!AttachmentBypassAllowed(user, bypassDebitRequested))
-            {
-                return AttachmentBypassNotPermitted();
-            }
-
             try
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Attachment PDF");
@@ -1223,8 +1199,7 @@ namespace DotNetSigningServer.Controllers
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
             }
 
-            return await AttachmentCoreAsync(user, input, null, bypassDebitRequested,
-                ApiOperationService.Fingerprint("attachment", input, bypassDebitRequested));
+            return await AttachmentCoreAsync(user, input, null, ApiOperationService.Fingerprint("attachment", input));
         }
 
         /// <summary>
@@ -1240,12 +1215,6 @@ namespace DotNetSigningServer.Controllers
             var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
             if (error != null || user == null) return error!;
 
-            var bypassDebitRequested = BypassDebitRequested();
-            if (!AttachmentBypassAllowed(user, bypassDebitRequested))
-            {
-                return AttachmentBypassNotPermitted();
-            }
-
             var (input, pdf, refused) = await ReadBinaryPdfAsync<AddAttachmentInput>(
                 "Attachment PDF", i => i.PdfContent, extraMetadataBytes: LimitGuard.Limits.AttachmentMaxBytes / 3 * 4 + 1024);
             if (refused != null) return refused;
@@ -1259,33 +1228,11 @@ namespace DotNetSigningServer.Controllers
                 return InputRefused(ex);
             }
 
-            return await AttachmentCoreAsync(user, input, pdf, bypassDebitRequested,
-                BinaryFingerprint("attachment", input, pdf!, bypassDebitRequested));
+            return await AttachmentCoreAsync(user, input, pdf, BinaryFingerprint("attachment", input, pdf!));
         }
-
-        private bool BypassDebitRequested() =>
-            Request.Headers.ContainsKey(AttachmentDebitBypassHeader);
-
-        private bool AttachmentBypassAllowed(User user, bool bypassDebitRequested)
-        {
-            if (bypassDebitRequested && !IsAttachmentDebitBypassAuthorized(HttpContext))
-            {
-                Logger.LogWarning(
-                    Logging.LoggingEvents.AuthFailed,
-                    "Attachment billing bypass refused for user {UserId}: not the trusted caller on the internal listener",
-                    user.Id);
-                return false;
-            }
-            return true;
-        }
-
-        private IActionResult AttachmentBypassNotPermitted() =>
-            StatusCode(
-                StatusCodes.Status403Forbidden,
-                new { code = "ATTACHMENT_BYPASS_NOT_PERMITTED", message = Localizer["AttachmentBypassNotPermitted"].Value });
 
         /// <summary>attachment po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
-        private async Task<IActionResult> AttachmentCoreAsync(User user, AddAttachmentInput input, byte[]? pdf, bool bypassDebitRequested, string fingerprint)
+        private async Task<IActionResult> AttachmentCoreAsync(User user, AddAttachmentInput input, byte[]? pdf, string fingerprint)
         {
             // Bez certifikátu se odmítá dřív, než vznikne operace a rezervace (#513).
             if (_signingService.MissingEvidenceCertificate(input))
@@ -1299,7 +1246,7 @@ namespace DotNetSigningServer.Controllers
                     user,
                     "attachment",
                     fingerprint,
-                    baseCost: bypassDebitRequested ? 0 : 1,
+                    baseCost: 1,
                     _ =>
                     {
                         var result = pdf == null ? _signingService.AddAttachment(input) : _signingService.AddAttachment(input, pdf);
@@ -1332,13 +1279,6 @@ namespace DotNetSigningServer.Controllers
                 });
         }
 
-        /// <summary>
-        /// Skipping the attachment debit (#78, #176): only the trusted caller (the portal's account on the
-        /// internal listener) may send X-P4PDF-Attachment-Billing-Bypass. The header is a flag, not a secret;
-        /// any other token is refused. No shared key: the trusted-caller account already is the portal.
-        /// </summary>
-        internal static bool IsAttachmentDebitBypassAuthorized(HttpContext context) =>
-            PortalTrust.IsTrustedCaller(context);
 
     }
 }

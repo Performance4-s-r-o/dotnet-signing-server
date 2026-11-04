@@ -548,41 +548,6 @@ public class UserConcurrencyMiddlewareTests
         Assert.Equal(0, UserConcurrencyMiddleware.GetInFlightCount(user));
     }
 
-    [Fact]
-    public async Task Trusted_caller_keeps_its_stored_queue_beyond_the_caps()
-    {
-        var billing = Billing(userLimit: 1, queueSeconds: 30, globalLimit: 0, queueFactor: 1, queueMaxSeconds: 0);
-        var services = Services(billing);
-        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var middleware = Create(billing, async ctx => { await release.Task; ctx.Response.StatusCode = 200; });
-        var user = Guid.NewGuid();
-
-        HttpContext Trusted()
-        {
-            var ctx = Request(services, user);
-            ctx.User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-            {
-                new Claim(ClaimTypes.NameIdentifier, user.ToString()),
-                new Claim(DotNetSigningServer.Services.PortalTrust.TrustedCallerClaim, "true"),
-            }, "test"));
-            return ctx;
-        }
-
-        // A plain user with these caps could queue nobody; the trusted caller queues three.
-        var calls = Enumerable.Range(0, 4).Select(_ =>
-        {
-            var ctx = Trusted();
-            return (ctx, task: middleware.InvokeAsync(ctx));
-        }).ToList();
-        Assert.True(await Eventually(() => UserConcurrencyMiddleware.GetInFlightCount(user) == 1));
-        await Task.Delay(50);
-        Assert.All(calls, c => Assert.False(c.task.IsCompleted));
-
-        release.SetResult();
-        await Task.WhenAll(calls.Select(c => c.task)).WaitAsync(Bounded);
-        Assert.All(calls, c => Assert.Equal(200, c.ctx.Response.StatusCode));
-    }
-
     [Theory]
     [InlineData(0, 5)]
     [InlineData(1, 5)]
@@ -594,22 +559,21 @@ public class UserConcurrencyMiddlewareTests
     }
 
     [Theory]
-    [InlineData(600, 30, false, 30)]
-    [InlineData(10, 30, false, 10)]
-    [InlineData(600, 30, true, 600)]
-    [InlineData(-3, 30, false, 0)]
-    public void Queue_wait_is_capped_except_for_the_trusted_caller(int stored, int max, bool trusted, int expected)
+    [InlineData(600, 30, 30)]
+    [InlineData(10, 30, 10)]
+    [InlineData(-3, 30, 0)]
+    public void Queue_wait_is_capped_for_every_account(int stored, int max, int expected)
     {
-        Assert.Equal(expected, BillingOptions.EffectiveQueueSeconds(stored, max, trusted));
+        Assert.Equal(expected, BillingOptions.EffectiveQueueSeconds(stored, max));
     }
 
     [Theory]
-    [InlineData(3, 2, false, 6)]
-    [InlineData(49, 2, true, int.MaxValue)]
-    [InlineData(int.MaxValue, 2, false, int.MaxValue)]
-    public void Queue_length_is_factor_times_limit(int limit, int factor, bool trusted, int expected)
+    [InlineData(3, 2, 6)]
+    [InlineData(49, 2, 98)]
+    [InlineData(int.MaxValue, 2, int.MaxValue)]
+    public void Queue_length_is_factor_times_limit(int limit, int factor, int expected)
     {
-        Assert.Equal(expected, BillingOptions.MaxWaiting(limit, factor, trusted));
+        Assert.Equal(expected, BillingOptions.MaxWaiting(limit, factor));
     }
 
     [Theory]

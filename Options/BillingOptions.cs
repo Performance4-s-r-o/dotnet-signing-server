@@ -20,7 +20,7 @@ public class BillingOptions
 
     /// <summary>
     /// Credits per document for /api/flatten-form (#180). Free would turn it into a free PDF
-    /// rewriter; the portal (trusted caller) is not charged, its signature is. 0 = free, written
+    /// rewriter; an Enterprise account is not debited, the usage record still carries it. 0 = free, written
     /// down on purpose. Env <c>FLATTEN_FORM_CREDIT_COST</c>, empty = 1, negative stops the start.
     /// </summary>
     public int FlattenFormCredits { get; set; } = 1;
@@ -85,14 +85,14 @@ public class BillingOptions
     public int RasterWaitMilliseconds { get; set; } = 30_000;
 
     /// <summary>
-    /// Longest wait in a user's queue, whatever the account has stored (#69). The trusted caller
-    /// is exempt: it queues fairly between its own tenants. Env <c>USER_QUEUE_MAX_SECONDS</c>.
+    /// Longest wait in a user's queue, whatever the account has stored (#69), for every account.
+    /// Env <c>USER_QUEUE_MAX_SECONDS</c>.
     /// </summary>
     public int UserQueueMaxSeconds { get; set; } = 30;
 
     /// <summary>
     /// Requests that may wait per slot of a user's limit (#69): a user with limit 3 queues at
-    /// most 6, the next one gets 429 at once. Trusted caller exempt. Env <c>USER_QUEUE_LENGTH_FACTOR</c>.
+    /// most 6, the next one gets 429 at once. Env <c>USER_QUEUE_LENGTH_FACTOR</c>.
     /// </summary>
     public int UserQueueLengthFactor { get; set; } = 2;
 
@@ -119,13 +119,13 @@ public class BillingOptions
     public static int EffectiveGlobalLimit(BillingOptions options, int processorCount) =>
         options.GlobalConcurrencyLimit is { } configured ? Math.Max(0, configured) : 0;
 
-    /// <summary>The wait in a user's queue: the stored one, capped unless the caller is trusted.</summary>
-    public static int EffectiveQueueSeconds(int stored, int maxSeconds, bool trustedCaller) =>
-        Math.Max(0, trustedCaller ? stored : Math.Min(stored, maxSeconds));
+    /// <summary>The wait in a user's queue: the stored one, capped.</summary>
+    public static int EffectiveQueueSeconds(int stored, int maxSeconds) =>
+        Math.Max(0, Math.Min(stored, maxSeconds));
 
-    /// <summary>How many may wait behind a user's limit; unlimited for the trusted caller.</summary>
-    public static int MaxWaiting(int limit, int factor, bool trustedCaller) =>
-        trustedCaller ? int.MaxValue : (int)Math.Min(int.MaxValue, (long)Math.Max(0, limit) * Math.Max(0, factor));
+    /// <summary>How many may wait behind a user's limit.</summary>
+    public static int MaxWaiting(int limit, int factor) =>
+        (int)Math.Min(int.MaxValue, (long)Math.Max(0, limit) * Math.Max(0, factor));
 
     /// <summary>
     /// Retry-After after a 429 from the user's queue (#69): at least 5 s, and no sooner than the

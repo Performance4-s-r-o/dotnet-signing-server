@@ -110,31 +110,53 @@ public class DatabaseMigratorTests : IClassFixture<EmptyDatabaseFixture>
     }
 
     [DockerFact]
-    public async Task TrustedCaller_column_exists_and_is_off_for_every_account()
+    public async Task Provisioned_accounts_migration_drops_the_tenant_columns_and_enforces_its_constraints()
     {
         await using var db = DatabaseMigrator.CreateContext(await _fixture.NewDatabaseAsync());
         DatabaseMigrator.EnsureSchemaAndMigrate(db, NullLogger.Instance);
 
-        Assert.Contains("20261029000942_AddTrustedCaller", db.Database.GetAppliedMigrations());
+        Assert.Contains("20261104184332_IntegratorChildAccounts", db.Database.GetAppliedMigrations());
         var conn = db.Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync();
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = """
-                SELECT is_nullable || '|' || column_default FROM information_schema.columns
-                WHERE table_schema = 'dotnet_signing' AND table_name = 'Users' AND column_name = 'TrustedCaller'
+                SELECT count(*) FROM information_schema.columns
+                WHERE table_schema = 'dotnet_signing'
+                  AND ((table_name = 'Users' AND column_name = 'TrustedCaller')
+                    OR (table_name IN ('SigningData', 'UsageRecords', 'ApiOperations') AND column_name IN ('TenantId', 'RequestId')))
                 """;
-            Assert.Equal("NO|false", (string?)await cmd.ExecuteScalarAsync());
+            Assert.Equal(0L, (long)(await cmd.ExecuteScalarAsync())!);
         }
 
-        db.Users.Add(new DotNetSigningServer.Models.User { Email = "flag@example.com", IsActive = true });
+        var parent = new DotNetSigningServer.Models.User { Email = "parent@service.invalid", IsActive = true, IsServiceAccount = true };
+        db.Users.Add(parent);
         await db.SaveChangesAsync();
-        Assert.False((await db.Users.AsNoTracking().SingleAsync()).TrustedCaller);
 
-        // No flagged account on the internal port: a warning, not a failed start.
-        var warnings = await PortalTrustStartupChecks.CheckAsync(
-            new DotNetSigningServer.Options.PortalTrustOptions { InternalPort = 8086 }, db);
-        Assert.True(Assert.Single(warnings).IsError);
+        // A provisioned account is a service account with an external id; nothing else passes.
+        db.Users.Add(new DotNetSigningServer.Models.User { Email = "a@example.com", ParentUserId = parent.Id, ExternalId = "t" });
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        db.ChangeTracker.Clear();
+        db.Users.Add(new DotNetSigningServer.Models.User { Email = "b@service.invalid", IsServiceAccount = true, ParentUserId = parent.Id });
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        db.ChangeTracker.Clear();
+
+        // One live account per (parent, external id); a tombstone frees it.
+        db.Users.Add(new DotNetSigningServer.Models.User { Email = "c@service.invalid", IsServiceAccount = true, ParentUserId = parent.Id, ExternalId = "t", ErasedAt = DateTimeOffset.UtcNow });
+        db.Users.Add(new DotNetSigningServer.Models.User { Email = "d@service.invalid", IsServiceAccount = true, ParentUserId = parent.Id, ExternalId = "t" });
+        await db.SaveChangesAsync();
+        db.Users.Add(new DotNetSigningServer.Models.User { Email = "e@service.invalid", IsServiceAccount = true, ParentUserId = parent.Id, ExternalId = "t" });
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        db.ChangeTracker.Clear();
+
+        // A token is a browser token or a provisioning token, never both.
+        db.ApiTokens.Add(new DotNetSigningServer.Models.ApiToken { UserId = parent.Id, Label = "x", TokenHash = [1], IsBrowserToken = true, IsProvisioningToken = true });
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        db.ChangeTracker.Clear();
+
+        // The parent of a live account cannot be deleted from under it.
+        await Assert.ThrowsAsync<Npgsql.PostgresException>(() =>
+            db.Database.ExecuteSqlRawAsync("DELETE FROM dotnet_signing.\"Users\" WHERE \"Id\" = {0}", parent.Id));
     }
 
     [DockerFact]

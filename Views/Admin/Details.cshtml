@@ -34,8 +34,20 @@
                         @:—
                     }</td></tr>
                 <tr><td class="muted">@L["Admin"]</td><td>@(Model.User.IsAdmin ? "✓" : "—")</td></tr>
-                <tr><td class="muted">@L["Enterprise"]</td><td>@(Model.User.IsEnterprise ? "✓" : "—")</td></tr>
-                <tr><td class="muted">@L["Credits"]</td><td>@(Model.User.IsEnterprise ? "∞" : Model.User.CreditsRemaining.ToString())</td></tr>
+                @if (Model.User.Parent is { } parent)
+                {
+                    <tr><td class="muted">@L["AdminProvisionedBy"]</td><td><a href="/Admin/Users/@parent.Id">@parent.Email</a> · @Model.User.ExternalId</td></tr>
+                    @if (!string.IsNullOrEmpty(Model.User.Label))
+                    {
+                        <tr><td class="muted">@L["AdminProvisionedLabel"]</td><td>@Model.User.Label</td></tr>
+                    }
+                }
+                @if (Model.ChildAccounts > 0)
+                {
+                    <tr><td class="muted">@L["AdminChildAccounts"]</td><td>@Model.ChildAccounts</td></tr>
+                }
+                <tr><td class="muted">@L["Enterprise"]</td><td>@(Model.User.EffectiveEnterprise ? "✓" : "—")</td></tr>
+                <tr><td class="muted">@L["Credits"]</td><td>@(Model.User.EffectiveEnterprise ? "∞" : Model.User.CreditsRemaining.ToString())</td></tr>
                 <tr><td class="muted">@L["AutoRecharge"]</td><td>@(Model.User.AutoRechargeEnabled ? $"{Model.User.AutoRechargeQuantity} credits" : "—")</td></tr>
                 <tr><td class="muted">@L["MaxParallelRequests"]</td><td>@(Model.User.MaxConcurrentOperations?.ToString() ?? L["ConcurrencyDefault"].Value)</td></tr>
                 <tr><td class="muted">@L["CreatedAt"]</td><td>@Model.User.CreatedAt.ToLocalTime().ToString("g")</td></tr>
@@ -61,6 +73,13 @@
 
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:1.25rem 0" />
 
+            @if (Model.User.ParentUserId != null)
+            {
+                <h3 class="billing-pricing-title">@L["EnterpriseMode"] · @L["SealAllowed"]</h3>
+                <p class="muted" style="font-size:0.875rem">@L["AdminInheritedFromParent"]</p>
+            }
+            else
+            {
             <h3 class="billing-pricing-title">@L["EnterpriseMode"]</h3>
             <p class="muted" style="font-size:0.875rem;margin-bottom:0.75rem">@L["EnterpriseModeDescription"]</p>
             <form method="post" action="/Admin/Users/@Model.User.Id/ToggleEnterprise">
@@ -102,28 +121,8 @@
                     </button>
                 }
             </form>
+            }
 
-            <hr style="border:none;border-top:1px solid #e5e7eb;margin:1.25rem 0" />
-
-            <h3 class="billing-pricing-title">@L["TrustedCaller"]</h3>
-            <p class="muted" style="font-size:0.875rem;margin-bottom:0.75rem">@L["TrustedCallerDescription"]</p>
-            <form method="post" action="/Admin/Users/@Model.User.Id/ToggleTrustedCaller">
-                @Html.AntiForgeryToken()
-                @if (Model.User.TrustedCaller)
-                {
-                    <button type="submit" class="btn-small btn-secondary" style="color:#dc2626;border-color:#fca5a5"
-                            data-confirm="@L["ConfirmDisableTrustedCaller"]">
-                        @L["DisableTrustedCaller"]
-                    </button>
-                }
-                else
-                {
-                    <button type="submit" class="btn-small btn-secondary"
-                            data-confirm="@L["ConfirmEnableTrustedCaller"]">
-                        @L["EnableTrustedCaller"]
-                    </button>
-                }
-            </form>
         </div>
 
         <div class="card">

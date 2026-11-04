@@ -172,7 +172,6 @@
   <data name="VisualSignError" xml:space="preserve"><value>Beim Anbringen der visuellen Signatur ist ein Fehler aufgetreten</value></data>
   <data name="SealCertificateRequired" xml:space="preserve"><value>Der Server hat kein eigenes Siegelzertifikat. Stellen Sie das Zertifikat selbst bereit (presign/sign mit Ihrem Schlüssel oder sign-pfx).</value></data>
   <data name="SealNotPermitted" xml:space="preserve"><value>Das Siegeln ist für dieses Konto nicht freigeschaltet.</value></data>
-  <data name="AttachmentBypassNotPermitted" xml:space="preserve"><value>Nur der vertrauenswürdige Aufrufer darf die Berechnung des Anhangs überspringen.</value></data>
   <data name="SealAllowed" xml:space="preserve"><value>Siegeln</value></data>
   <data name="SealAllowedDescription" xml:space="preserve"><value>Schaltet /api/seal für dieses Konto frei. Der Server hat kein eigenes Zertifikat, der Endpunkt antwortet daher nur mit 422 SEAL_CERTIFICATE_REQUIRED; siegeln Sie mit Ihrem eigenen Zertifikat über presign/sign oder sign-pfx. Standardmäßig aus.</value></data>
   <data name="EnableSealAllowed" xml:space="preserve"><value>Siegeln aktivieren</value></data>
@@ -181,16 +180,6 @@
   <data name="ConfirmDisableSealAllowed" xml:space="preserve"><value>Diesem Konto den Zugriff auf das Siegeln entziehen?</value></data>
   <data name="SealAllowedEnabled" xml:space="preserve"><value>Siegeln für dieses Konto aktiviert.</value></data>
   <data name="SealAllowedDisabled" xml:space="preserve"><value>Siegeln für dieses Konto deaktiviert.</value></data>
-  <data name="TrustedCaller" xml:space="preserve"><value>Vertrauenswürdiger Aufrufer</value></data>
-  <data name="TrustedCallerDescription" xml:space="preserve"><value>Das Token dieses Kontos wird nur am internen Port (INTERNAL_API_PORT) angenommen; dort werden seine Header X-P4-Tenant / X-Request-Id übernommen und es darf die Abrechnung von Anhängen überspringen. Am öffentlichen Port wird es abgelehnt (401). Ohne internen Port hat das Merkmal keine Wirkung.</value></data>
-  <data name="EnableTrustedCaller" xml:space="preserve"><value>Als vertrauenswürdigen Aufrufer markieren</value></data>
-  <data name="DisableTrustedCaller" xml:space="preserve"><value>Vertrauenswürdigen Aufrufer entfernen</value></data>
-  <data name="ConfirmEnableTrustedCaller" xml:space="preserve"><value>Dieses Konto als vertrauenswürdigen Aufrufer markieren? Sein Token funktioniert dann am öffentlichen Port nicht mehr.</value></data>
-  <data name="ConfirmDisableTrustedCaller" xml:space="preserve"><value>Diesem Konto das Vertrauen entziehen?</value></data>
-  <data name="TrustedCallerEnabled" xml:space="preserve"><value>Das Konto ist als vertrauenswürdiger Aufrufer markiert.</value></data>
-  <data name="TrustedCallerDisabled" xml:space="preserve"><value>Das Konto ist kein vertrauenswürdiger Aufrufer mehr.</value></data>
-  <data name="TrustedCallerNotOnSelf" xml:space="preserve"><value>Das eigene Konto kann nicht als vertrauenswürdiger Aufrufer markiert werden.</value></data>
-  <data name="TrustedCallerBadge" xml:space="preserve"><value>Vertrauenswürdiger Aufrufer</value></data>
   <data name="Error_EVIDENCE_CERT_NOT_CONFIGURED" xml:space="preserve"><value>Das Verschlüsselungszertifikat für die Nachweise ist nicht konfiguriert. Es wurde nichts signiert oder berechnet. Wenden Sie sich an den Betreiber.</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>Beim Hinzufügen des Anhangs ist ein Fehler aufgetreten</value></data>
   <data name="PdfaConversionError" xml:space="preserve"><value>Beim Konvertieren des Dokuments in PDF/A ist ein Fehler aufgetreten</value></data>
@@ -640,7 +629,6 @@
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Zu viele Anfragen. Bitte später erneut versuchen.</value></data>
   <data name="Error_CONTENT_STAMP_REQUIRED" xml:space="preserve"><value>Das Signaturfeld soll neben der Bildsignatur stehen, aber die Anfrage enthält keine Bildsignatur.</value></data>
   <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Zu viele Dokumente warten auf die Signatur. Schließen Sie sie ab oder warten Sie, bis sie ablaufen.</value></data>
-  <data name="Error_TENANT_MISMATCH" xml:space="preserve"><value>Dieses Dokument wurde für eine andere Organisation zur Signatur vorbereitet.</value></data>
   <data name="Error_SIGNATURE_INVALID" xml:space="preserve"><value>Die Signatur passt nicht zum vorbereiteten Dokument oder zum Zertifikat. Es wurde nichts signiert und nichts abgerechnet.</value></data>
   <data name="Error_TOO_MANY_TEMPLATES" xml:space="preserve"><value>Die maximale Anzahl gespeicherter Vorlagen ist erreicht.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Eine Seite des PDF ist zu groß für die Codesuche (mehr als etwa 1,6 m² oder eine Seite länger als 5 m).</value></data>
@@ -783,7 +771,7 @@
   <data name="ReauthCodeHeading" xml:space="preserve"><value>Or confirm with a code sent by e-mail</value></data>
   <data name="ReauthSendCodeButton" xml:space="preserve"><value>Send me a code</value></data>
   <data name="Error_REAUTH_REQUIRED" xml:space="preserve"><value>Confirm your password or an e-mailed code first, then repeat the action.</value></data>
-  <data name="Error_TOKEN_SCOPE" xml:space="preserve"><value>A browser token may only be used for presign, sign and the state of an operation. Use a server token for this endpoint.</value></data>
+  <data name="Error_TOKEN_SCOPE" xml:space="preserve"><value>This token may not be used for this endpoint: a browser token only for presign, sign and the state of an operation, a provisioning token only for provisioning and capabilities.</value></data>
   <data name="Error_TOKEN_CREDIT_LIMIT" xml:space="preserve"><value>This token has reached its credit limit.</value></data>
   <data name="BrowserTokenScopeHint" xml:space="preserve"><value>A browser token can only presign, sign and read the state of its operations. The Origin check is extra protection only: any client can send any Origin, so treat a browser token as public and cap it with a credit limit.</value></data>
   <data name="BrowserTokenCreditLimitLabel" xml:space="preserve"><value>Credit limit (optional)</value></data>
@@ -812,10 +800,24 @@
   <data name="AccountDeleteFailed" xml:space="preserve"><value>Your account could not be deleted. Auto-recharge may already be switched off and saved cards removed; your data is still there. Please try again later.</value></data>
   <data name="AccountDeleteBillingFailed" xml:space="preserve"><value>Your saved cards could not all be removed at the payment provider, so your account was not deleted. Auto-recharge has been switched off and some cards may already be removed. Please try again later or contact support.</value></data>
   <data name="AccountDeleted" xml:space="preserve"><value>Your account has been deleted.</value></data>
-  <data name="AccountDeletePortalAccount" xml:space="preserve"><value>This account is the portal's service account and cannot be deleted here. Contact the administrator.</value></data>
   <data name="AccountDeleteLastAdmin" xml:space="preserve"><value>You are the only administrator. Make another account an administrator before deleting yours.</value></data>
   <data name="AccountDeleteRechargeInProgress" xml:space="preserve"><value>An automatic top-up is being processed right now. Please try again in a few minutes.</value></data>
   <data name="AccountDeleteRechargeInProgressStopped" xml:space="preserve"><value>An automatic top-up was being processed, so your account was not deleted. Auto-recharge has been switched off. Please try again in a few minutes.</value></data>
   <data name="Error_SEAL_PLACEMENT_NO_ROOM" xml:space="preserve"><value>Die Signatur passt hier nicht: Das Signaturbild oder das Siegel daneben würde eine andere Signatur überdecken oder über die Seite hinausragen. Verschieben Sie die Signatur an eine freie Stelle.</value></data>
   <data name="Error_DOCUMENT_CERTIFIED_NO_CHANGES" xml:space="preserve"><value>Das Dokument ist zertifiziert und seine Zertifizierung erlaubt kein Hinzufügen eines Signaturbildes. Es wurde nichts signiert.</value></data>
+  <data name="Error_TOKEN_WEAK" xml:space="preserve"><value>The token is too weak: at least 43 characters of random data (32 random bytes, base64url), no spaces, quotes or commas.</value></data>
+  <data name="Error_EXTERNAL_ID_INVALID" xml:space="preserve"><value>externalId must be 1 to 64 characters of letters, digits and . _ : -</value></data>
+  <data name="Error_LABEL_INVALID" xml:space="preserve"><value>label may have at most 128 characters and no control characters.</value></data>
+  <data name="Error_ACCOUNT_EXISTS" xml:space="preserve"><value>An account with this externalId already exists with a different token, or this token is already in use. No token is issued for an existing account.</value></data>
+  <data name="Error_PARENT_NOT_ENTERPRISE" xml:space="preserve"><value>Accounts can be provisioned only under an Enterprise account.</value></data>
+  <data name="Error_PROVISIONING_LIMIT" xml:space="preserve"><value>Too many provisioning requests. Try again later.</value></data>
+  <data name="Error_TOKEN_IN_USE" xml:space="preserve"><value>This token is already in use or was revoked. Generate a new one.</value></data>
+  <data name="Error_TOO_MANY_API_TOKENS" xml:space="preserve"><value>The account has the maximum number of active tokens. Revoke the old ones first.</value></data>
+  <data name="Error_ACCOUNT_DELETE_REFUSED" xml:space="preserve"><value>The account cannot be deleted now.</value></data>
+  <data name="AccountDeleteHasChildAccounts" xml:space="preserve"><value>This account has provisioned accounts that are still active. They have to be deleted first.</value></data>
+  <data name="AdminInheritedFromParent" xml:space="preserve"><value>Inherited from the parent account; it cannot be set on a provisioned account.</value></data>
+  <data name="AdminProvisionedBy" xml:space="preserve"><value>Provisioned by</value></data>
+  <data name="AdminProvisionedLabel" xml:space="preserve"><value>Name from the integrator</value></data>
+  <data name="AdminChildAccounts" xml:space="preserve"><value>Provisioned accounts</value></data>
+  <data name="AdminProvisionedBadge" xml:space="preserve"><value>Provisioned</value></data>
 </root>

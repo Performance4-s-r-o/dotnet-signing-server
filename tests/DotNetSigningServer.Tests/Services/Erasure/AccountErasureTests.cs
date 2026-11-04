@@ -53,7 +53,6 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
     private readonly OutboxPostgresFixture _pg;
     private readonly OutboxTestHost _host;
     private readonly FakePaymentGateway _payments = new();
-    private readonly PortalTrustOptions _portal = new();
     private readonly P4BackofficeProductOptions _backoffice = Backoffice(billingOn: false);
     private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "erasure-test-" + Guid.NewGuid().ToString("N"));
 
@@ -64,7 +63,6 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
         _host = new OutboxTestHost(pg.Configure, services =>
         {
             services.AddSingleton<IPaymentGateway>(_payments);
-            services.AddSingleton(_portal);
             services.AddSingleton<IOptions<P4BackofficeProductOptions>>(Microsoft.Extensions.Options.Options.Create(_backoffice));
             services.AddScoped<AccountErasureService>();
             services.AddSingleton<IOutboxHandler, ErasureRequestOutboxHandler>();
@@ -579,19 +577,44 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
         Assert.Equal(BackofficeOutboxStatus.Cancelled, (await _host.ItemAsync(a.PendingSupportItem)).Status);
     }
 
-    [DockerFact]
-    public async Task The_portal_service_account_is_never_erased_and_a_request_for_it_acks_failed()
+    /// <summary>A provisioned account under <paramref name="parentId"/> with a token, a presign, an operation and a usage record.</summary>
+    private async Task<(Guid Id, string File)> SeedChildAsync(Guid parentId, string externalId)
     {
-        var a = await SeedAsync($"portal{Guid.NewGuid():N}@example.com");
+        await using var db = _pg.CreateContext();
+        var child = new User
+        {
+            Email = $"child-{Guid.NewGuid():N}@service.invalid",
+            IsActive = true,
+            IsServiceAccount = true,
+            ParentUserId = parentId,
+            ExternalId = externalId,
+            Label = "Contoso s.r.o.",
+        };
+        db.Users.Add(child);
+        var file = Path.Combine(_tempDir, child.Id.ToString("N") + ".pdf");
+        await File.WriteAllTextAsync(file, "%PDF-1.7");
+        db.SigningData.Add(new SigningData { UserId = child.Id, PresignedPdfPath = file, HashToSign = "h", CertificatePem = "c" });
+        db.ApiOperations.Add(new ApiOperation { UserId = child.Id, OperationId = "op-" + child.Id.ToString("N"), Operation = "sign", RequestFingerprint = "f", State = ApiOperationState.Completed, ResultProtected = [1] });
+        db.ApiTokens.Add(new ApiToken { UserId = child.Id, Label = "provisioned", TokenHash = [9, 9, (byte)externalId.Length] });
+        db.UsageRecords.Add(new UsageRecord { UserId = child.Id, Operation = "sign", Count = 1 });
+        await db.SaveChangesAsync();
+        return (child.Id, file);
+    }
+
+    [DockerFact]
+    public async Task A_parent_with_live_provisioned_accounts_is_never_erased_and_a_request_for_it_acks_failed()
+    {
+        var a = await SeedAsync($"parent{Guid.NewGuid():N}@example.com");
         await using (var flag = _pg.CreateContext())
         {
-            (await flag.Users.SingleAsync(u => u.Id == a.UserId)).TrustedCaller = true;
+            (await flag.Users.SingleAsync(u => u.Id == a.UserId)).IsServiceAccount = true;
             await flag.SaveChangesAsync();
         }
+        await SeedChildAsync(a.UserId, "tenant-" + Guid.NewGuid().ToString("N"));
 
         var result = await DeleteAsync(a.UserId);
         Assert.Equal(AccountErasureStatus.Refused, result.Status);
-        Assert.Equal(AccountErasureRefusal.PortalAccount, result.Refusal);
+        Assert.Equal(AccountErasureRefusal.HasLiveChildren, result.Refusal);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => HandleAsync(RequestedEvent(Guid.NewGuid(), AccountErasure.SubjectRef(a.UserId))));
         await AssertUntouchedAsync(a);
@@ -599,6 +622,49 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
         Assert.True((await db.Users.SingleAsync(u => u.Id == a.UserId)).AutoRechargeEnabled); // refused before anything changed
         var ack = Assert.Single(await ErasureItemsAsync(a.UserId));
         Assert.Contains("\"status\":\"failed\"", Payload(ack));
+    }
+
+    [DockerFact]
+    public async Task A_provisioned_account_is_erased_without_the_payment_step_or_a_message_and_frees_its_external_id()
+    {
+        var parent = await SeedAsync($"parent{Guid.NewGuid():N}@example.com");
+        var externalId = "tenant-" + Guid.NewGuid().ToString("N");
+        var (childId, file) = await SeedChildAsync(parent.UserId, externalId);
+        var detachedBefore = _payments.Detached;
+
+        AccountErasureResult result;
+        using (var scope = _host.Services.CreateScope())
+        {
+            result = await Erasure(scope).DeleteProvisionedAccountAsync(childId, CancellationToken.None);
+        }
+
+        Assert.Equal(AccountErasureStatus.Erased, result.Status);
+        Assert.Equal(detachedBefore, _payments.Detached);
+        Assert.False(File.Exists(file));
+        await using var db = _pg.CreateContext();
+        var tombstone = await db.Users.AsNoTracking().SingleAsync(u => u.Id == childId);
+        Assert.NotNull(tombstone.ErasedAt);
+        Assert.False(tombstone.IsActive);
+        Assert.Null(tombstone.Label);
+        Assert.Equal(parent.UserId, tombstone.ParentUserId);
+        Assert.Equal(externalId, tombstone.ExternalId);
+        Assert.False(await db.ApiTokens.AnyAsync(t => t.UserId == childId));
+        Assert.False(await db.SigningData.AnyAsync(s => s.UserId == childId));
+        Assert.False(await db.ApiOperations.AnyAsync(o => o.UserId == childId));
+        Assert.Equal(1, await db.UsageRecords.CountAsync(r => r.UserId == childId)); // billing history stays
+        Assert.Empty(await ErasureItemsAsync(childId)); // nobody behind it: nothing for the service
+        await AssertUntouchedAsync(parent);
+
+        // The tenant reopens: the same external id gets a new live account.
+        var (again, _) = await SeedChildAsync(parent.UserId, externalId);
+        Assert.NotEqual(childId, again);
+
+        // With its children erased the parent itself may go.
+        using (var scope = _host.Services.CreateScope())
+        {
+            await Erasure(scope).DeleteProvisionedAccountAsync(again, CancellationToken.None);
+        }
+        Assert.Equal(AccountErasureStatus.Erased, (await DeleteAsync(parent.UserId)).Status);
     }
 
     private async Task DemoteOtherAdminsAsync(params Guid[] keep)

@@ -98,6 +98,20 @@ public class ApiGateMiddleware
             return;
         }
 
+        // The provisioning token provisions only, and only it provisions (#131).
+        var provisioningToken = authenticated && SessionClaims.IsProvisioningToken(context.User);
+        if (provisioningToken
+                ? !ProvisioningTokenScope.IsAllowed(context.Request.Method, path)
+                : ProvisioningTokenScope.IsProvisioningPath(path))
+        {
+            context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger<ApiGateMiddleware>()
+                .LogWarning("Token {TokenId} ({Kind}) refused outside its scope: {Method} {Path}",
+                    SessionClaims.TokenIdOf(context.User), provisioningToken ? "provisioning" : "other", context.Request.Method, path);
+            await DotNetSigningServer.Services.Provisioning.AccountProvisioner.RecordScopeRefusalAsync(context, userId);
+            await WriteAsync(context, StatusCodes.Status403Forbidden, BrowserTokenScope.ScopeErrorCode);
+            return;
+        }
+
         var heavy = Heavy.FirstOrDefault(h => value.StartsWith(h.Path, StringComparison.OrdinalIgnoreCase));
 
         if (userId is Guid id)

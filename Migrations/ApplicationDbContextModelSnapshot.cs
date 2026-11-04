@@ -23,6 +23,51 @@ namespace dotnetsigningserver.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("DotNetSigningServer.Models.AccountProvisioningEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid?>("CallerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ChildUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ClientIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid?>("TokenId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CallerUserId", "CreatedAt");
+
+                    b.ToTable("AccountProvisioningEvents", "dotnet_signing");
+                });
+
             modelBuilder.Entity("DotNetSigningServer.Models.AdminAuditEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -133,10 +178,6 @@ namespace dotnetsigningserver.Migrations
                         .HasMaxLength(24)
                         .HasColumnType("character varying(24)");
 
-                    b.Property<string>("TenantId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.Property<int>("Tier")
                         .HasColumnType("integer");
 
@@ -189,6 +230,9 @@ namespace dotnetsigningserver.Migrations
                     b.Property<bool>("IsBrowserToken")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsProvisioningToken")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Label")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -216,7 +260,10 @@ namespace dotnetsigningserver.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("ApiTokens", "dotnet_signing");
+                    b.ToTable("ApiTokens", "dotnet_signing", t =>
+                        {
+                            t.HasCheckConstraint("CK_ApiTokens_Kind", "NOT (\"IsBrowserToken\" AND \"IsProvisioningToken\")");
+                        });
                 });
 
             modelBuilder.Entity("DotNetSigningServer.Models.AuthAttemptCounter", b =>
@@ -750,14 +797,6 @@ namespace dotnetsigningserver.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("RequestId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("TenantId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.Property<string>("TsaBackupPassword")
                         .HasColumnType("text");
 
@@ -848,16 +887,8 @@ namespace dotnetsigningserver.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
-                    b.Property<string>("RequestId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
                     b.Property<int>("Status")
                         .HasColumnType("integer");
-
-                    b.Property<string>("TenantId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
 
                     b.Property<int>("Tier")
                         .HasColumnType("integer");
@@ -942,6 +973,10 @@ namespace dotnetsigningserver.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -954,6 +989,10 @@ namespace dotnetsigningserver.Migrations
                     b.Property<bool>("IsServiceAccount")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("Label")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<string>("Locale")
                         .HasMaxLength(8)
                         .HasColumnType("character varying(8)");
@@ -964,6 +1003,9 @@ namespace dotnetsigningserver.Migrations
 
                     b.Property<int?>("MaxConcurrentOperations")
                         .HasColumnType("integer");
+
+                    b.Property<Guid?>("ParentUserId")
+                        .HasColumnType("uuid");
 
                     b.Property<byte[]>("PasswordHash")
                         .IsRequired()
@@ -996,9 +1038,6 @@ namespace dotnetsigningserver.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
-                    b.Property<bool>("TrustedCaller")
-                        .HasColumnType("boolean");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1015,7 +1054,17 @@ namespace dotnetsigningserver.Migrations
                         .HasDatabaseName("IX_Users_StripeCustomerId")
                         .HasFilter("\"StripeCustomerId\" IS NOT NULL AND btrim(\"StripeCustomerId\") <> ''");
 
-                    b.ToTable("Users", "dotnet_signing");
+                    b.HasIndex("ParentUserId", "ExternalId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Users_ParentUserId_ExternalId")
+                        .HasFilter("\"ErasedAt\" IS NULL AND \"ParentUserId\" IS NOT NULL");
+
+                    b.ToTable("Users", "dotnet_signing", t =>
+                        {
+                            t.HasCheckConstraint("CK_Users_Child_HasExternalId", "(\"ParentUserId\" IS NULL) = (\"ExternalId\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_Users_Child_IsServiceAccount", "\"ParentUserId\" IS NULL OR \"IsServiceAccount\"");
+                        });
                 });
 
             modelBuilder.Entity("DotNetSigningServer.Models.WebhookEvent", b =>
@@ -1124,6 +1173,16 @@ namespace dotnetsigningserver.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("DotNetSigningServer.Models.User", b =>
+                {
+                    b.HasOne("DotNetSigningServer.Models.User", "Parent")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Parent");
+                });
+
             modelBuilder.Entity("DotNetSigningServer.Models.Document", b =>
                 {
                     b.Navigation("UsageRecords");
@@ -1137,6 +1196,8 @@ namespace dotnetsigningserver.Migrations
             modelBuilder.Entity("DotNetSigningServer.Models.User", b =>
                 {
                     b.Navigation("ApiTokens");
+
+                    b.Navigation("Children");
 
                     b.Navigation("Documents");
 

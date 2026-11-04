@@ -17,5 +17,5 @@ public interface IApiAuthService
     void InvalidateTokenCache(Guid tokenId);
 }
 
-/// <summary>A valid token: its owner, its id and whether it is a browser token.</summary>
-public sealed record ApiTokenValidation(User User, Guid TokenId, bool IsBrowserToken);
+/// <summary>A valid token: its owner (with its parent loaded), its id and its kind.</summary>
+public sealed record ApiTokenValidation(User User, Guid TokenId, bool IsBrowserToken, bool IsProvisioningToken = false);

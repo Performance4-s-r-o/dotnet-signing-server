@@ -194,8 +194,8 @@ namespace DotNetSigningServer.Controllers
         /// <summary>flatten-form po vstupní kontrole, společné oběma kanálům.</summary>
         private async Task<IActionResult> FlattenFormCoreAsync(User user, byte[] pdf, string fingerprint)
         {
-            // Billed on the public API (FLATTEN_FORM_CREDIT_COST); the portal's flow pays for the signature.
-            var cost = PortalTrust.IsTrustedCaller(HttpContext) ? 0 : BillingOptions.FlattenFormCredits;
+            // FLATTEN_FORM_CREDIT_COST; an Enterprise account is not debited, the usage record carries it.
+            var cost = BillingOptions.FlattenFormCredits;
             var guard = SafetyGuard;
             var limits = LimitGuard.Limits;
             try
@@ -289,6 +289,10 @@ namespace DotNetSigningServer.Controllers
 
                 return await RunOperationAsync(user, "fill-pdf", fingerprint, requiredCredits, async ct =>
                     new PaidResult(await PdfTemplateService.FillAsync(input, user.Id, ct)));
+            }
+            catch (ApiValidationException ex) when (ex.Code == TemplateNotFoundCode)
+            {
+                return TemplateNotFound();
             }
             catch (ApiValidationException ex)
             {

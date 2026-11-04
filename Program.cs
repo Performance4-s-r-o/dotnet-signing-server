@@ -97,17 +97,15 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
         builder.Configuration["ForwardedHeaders:KnownProxies"]);
 });
 
-// #78: the trusted caller's token only on the internal listener, its tenant headers only from there.
-// Which account is trusted is a flag set in the administration (User.TrustedCaller).
-// The migrate step serves nothing and may be given only the database variables.
-var portalTrust = migrateOnly ? new PortalTrustOptions() : PortalTrustOptions.From(builder.Configuration);
-builder.Services.AddSingleton(portalTrust);
-builder.Services.AddSingleton<DotNetSigningServer.Services.MissingTrustedCallerFlag>();
-if (portalTrust.InternalPort is int internalPort)
+// Optional second listener for the Docker network (#78, #131): the provisioning token works only
+// there when it is set. The migrate step serves nothing and may be given only the database variables.
+var internalListener = migrateOnly ? new InternalListenerOptions() : InternalListenerOptions.From(builder.Configuration);
+builder.Services.AddSingleton(internalListener);
+if (internalListener.InternalPort is int internalPort)
 {
     // A second listener next to whatever ASPNETCORE_URLS names (Kestrel's default otherwise).
     // It is for the Docker network: docker-compose only `expose`s it, never publishes it.
-    builder.WebHost.UseUrls(PortalTrustOptions.WithInternalListener(
+    builder.WebHost.UseUrls(InternalListenerOptions.WithInternalListener(
         builder.Configuration[Microsoft.AspNetCore.Hosting.WebHostDefaults.ServerUrlsKey], internalPort));
 }
 
@@ -245,6 +243,9 @@ builder.Services.AddOptions<LimitsOptions>()
         options.MaxApiTokensPerUser = EnvValues.Int(builder.Configuration, "MAX_API_TOKENS_PER_USER") ?? options.MaxApiTokensPerUser)
     .ValidateOnStart();
 builder.Services.AddScoped<AuthAttemptLimiter>();
+// Provisioning API of the integrator (#131): limits from PROVISIONING_*; nonsense stops the start.
+builder.Services.AddSingleton(ProvisioningOptions.From(builder.Configuration));
+builder.Services.AddScoped<DotNetSigningServer.Services.Provisioning.AccountProvisioner>();
 builder.Services.Configure<LokiOptions>(builder.Configuration.GetSection("Loki"));
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("AI"));
 // The switch is read from the raw text, not bound: only exactly "true" turns AI on.
@@ -671,8 +672,8 @@ app.UseAuthorization();
 app.UseRateLimiter();
 app.UseMiddleware<DotNetSigningServer.Middleware.ApiGateMiddleware>();
 
-// Tenant and request id of a portal call into the log scope (#78); ignored from anybody else.
-app.UseMiddleware<DotNetSigningServer.Middleware.PortalCallerScopeMiddleware>();
+// The caller's X-Request-Id and the provisioned account into the log scope (#131).
+app.UseMiddleware<DotNetSigningServer.Middleware.RequestCorrelationMiddleware>();
 
 // Concurrency limiting runs AFTER authentication so ClaimsPrincipal carries the user id.
 app.UseMiddleware<UserConcurrencyMiddleware>();
@@ -690,8 +691,8 @@ app.MapHealthChecks("/healthz");
 // Occupancy of the concurrency pools and queues (#69): counts only, served on the internal
 // listener only (404 elsewhere, and everywhere while INTERNAL_API_PORT is empty).
 app.MapGet(ConcurrencyDiagnostics.Path, (HttpContext context,
-        PortalTrustOptions trust, CapacityPools pools) =>
-    ConcurrencyDiagnostics.IsServedOn(trust, context.Connection.LocalPort)
+        InternalListenerOptions listener, CapacityPools pools) =>
+    ConcurrencyDiagnostics.IsServedOn(listener, context.Connection.LocalPort)
         ? Results.Json(ConcurrencyDiagnostics.Snapshot(pools))
         : Results.NotFound());
 {
@@ -789,16 +790,13 @@ using (var scope = app.Services.CreateScope())
         throw;
     }
 
-    // After the administrator: the portal's service account and token from PORTAL_BOOTSTRAP_TOKEN (#169).
+    // After the administrator: the integrator's account and its provisioning token from PORTAL_BOOTSTRAP_TOKEN (#169, #131).
     await DotNetSigningServer.Services.PortalBootstrap.EnsureAsync(
         builder.Configuration.GetSection("PortalBootstrap").Get<DotNetSigningServer.Options.PortalBootstrapOptions>() ?? new(),
-        privateServer,
         scope.ServiceProvider.GetRequiredService<DotNetSigningServer.Services.ITokenService>(),
+        scope.ServiceProvider.GetRequiredService<DotNetSigningServer.Services.IIpWhitelistService>(),
         dbContext,
         logger);
-
-    // After the schema exists: an internal listener nobody may use, or a flag that does nothing, is said aloud.
-    await DotNetSigningServer.Services.PortalTrustStartupChecks.WarnAsync(portalTrust, dbContext, logger);
 
     // After the schema exists: a self-hosted installation has signing up switched
     // off, so without this there would be no way to obtain the first account.

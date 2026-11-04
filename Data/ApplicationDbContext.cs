@@ -9,6 +9,9 @@ namespace DotNetSigningServer.Data
     {
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
+        /// <summary>One live provisioned account per (parent, external id); a violation is a concurrent create.</summary>
+        public const string ProvisionedAccountUniqueIndex = "IX_Users_ParentUserId_ExternalId";
+
         public DbSet<SigningData> SigningData { get; set; }
         public DbSet<User> Users { get; set; }
         public DbSet<ApiToken> ApiTokens { get; set; }
@@ -29,6 +32,7 @@ namespace DotNetSigningServer.Data
         public DbSet<OperatorSwitch> OperatorSwitches { get; set; }
         public DbSet<AdminAuditEntry> AdminAuditEntries { get; set; }
         public DbSet<AuthAttemptCounter> AuthAttemptCounters { get; set; }
+        public DbSet<AccountProvisioningEvent> AccountProvisioningEvents { get; set; }
 
         /// <summary>
         /// Outbox items added through this context and not yet announced to the dispatcher;
@@ -107,6 +111,32 @@ namespace DotNetSigningServer.Data
             modelBuilder.Entity<LegalDocument>()
                 .Property(d => d.ContentHash)
                 .IsFixedLength();
+
+            // Provisioned accounts (#131): one level below the integrator, always service accounts,
+            // one live account per (parent, external id); an erased one frees the id again.
+            modelBuilder.Entity<User>()
+                .HasOne(u => u.Parent)
+                .WithMany(u => u.Children)
+                .HasForeignKey(u => u.ParentUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<User>()
+                .HasIndex(u => new { u.ParentUserId, u.ExternalId })
+                .HasDatabaseName(ProvisionedAccountUniqueIndex)
+                .IsUnique()
+                .HasFilter("\"ErasedAt\" IS NULL AND \"ParentUserId\" IS NOT NULL");
+
+            modelBuilder.Entity<User>().ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_Users_Child_IsServiceAccount", "\"ParentUserId\" IS NULL OR \"IsServiceAccount\"");
+                t.HasCheckConstraint("CK_Users_Child_HasExternalId", "(\"ParentUserId\" IS NULL) = (\"ExternalId\" IS NULL)");
+            });
+
+            modelBuilder.Entity<ApiToken>().ToTable(t =>
+                t.HasCheckConstraint("CK_ApiTokens_Kind", "NOT (\"IsBrowserToken\" AND \"IsProvisioningToken\")"));
+
+            modelBuilder.Entity<AccountProvisioningEvent>()
+                .HasIndex(e => new { e.CallerUserId, e.CreatedAt });
 
             modelBuilder.Entity<ApiToken>()
                 .HasIndex(t => t.TokenHash);
