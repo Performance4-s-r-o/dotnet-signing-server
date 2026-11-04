@@ -205,33 +205,33 @@ public sealed class ProvisionedAccountApiController : ProvisioningControllerBase
         }
 
         var hash = _provisioner.HashOf(value);
-        var now = DateTimeOffset.UtcNow;
-        var active = await _db.ApiTokens
-            .Where(t => t.UserId == caller.Account.Id && t.RevokedAt == null && (t.ExpiresAt == null || t.ExpiresAt > now))
-            .ToListAsync();
-        var same = active.FirstOrDefault(t => CryptographicOperations.FixedTimeEquals(t.TokenHash, hash));
-        if (same != null) return Ok(new { tokenId = same.Id });
-
-        // Revoked here or used anywhere else: a value never gets a second meaning.
-        if (await _db.ApiTokens.AnyAsync(t => t.TokenHash == hash)) return Error(StatusCodes.Status409Conflict, "TOKEN_IN_USE");
-
         var max = _limits.Value.MaxApiTokensPerUser;
-        if (max > 0 && active.Count >= max) return Error(StatusCodes.Status409Conflict, "TOO_MANY_API_TOKENS");
-
-        var token = new ApiToken
+        // Check and insert under the value's lock (#131), as when provisioning.
+        var (outcome, _) = await _provisioner.UnderTokenLockAsync(hash, async token =>
         {
-            UserId = caller.Account.Id,
-            Label = AccountProvisioner.TokenLabel,
-            TokenHash = hash,
-            TokenPrefix = null,
-            IsBrowserToken = false,
-            IsProvisioningToken = false,
-        };
-        _db.ApiTokens.Add(token);
-        await _db.SaveChangesAsync();
-        _logger.LogInformation("Provisioned account {AccountId} added token {TokenId}", caller.Account.Id, token.Id);
-        return Ok(new { tokenId = token.Id });
+            var now = DateTimeOffset.UtcNow;
+            var active = await _db.ApiTokens
+                .Where(t => t.UserId == caller.Account.Id && t.RevokedAt == null && (t.ExpiresAt == null || t.ExpiresAt > now))
+                .ToListAsync(token);
+            var same = active.FirstOrDefault(t => CryptographicOperations.FixedTimeEquals(t.TokenHash, hash));
+            if (same != null) return (new RotateOutcome(same.Id, null), false, false);
+
+            // Revoked here or used anywhere else: a value never gets a second meaning.
+            if (await _db.ApiTokens.AnyAsync(t => t.TokenHash == hash, token)) return (new RotateOutcome(null, "TOKEN_IN_USE"), false, false);
+            if (max > 0 && active.Count >= max) return (new RotateOutcome(null, "TOO_MANY_API_TOKENS"), false, false);
+
+            var added = AccountProvisioner.NewToken(caller.Account.Id, hash, now);
+            _db.ApiTokens.Add(added);
+            await _db.SaveChangesAsync(token);
+            return (new RotateOutcome(added.Id, null), true, false);
+        }, HttpContext.RequestAborted);
+
+        if (outcome.Code != null) return Error(StatusCodes.Status409Conflict, outcome.Code);
+        _logger.LogInformation("Provisioned account {AccountId} has token {TokenId}", caller.Account.Id, outcome.Id);
+        return Ok(new { tokenId = outcome.Id });
     }
+
+    private sealed record RotateOutcome(Guid? Id, string? Code);
 
     /// <summary>Revokes every other active token of the account; called with the new one.</summary>
     [HttpPost("tokens/revoke-others")]

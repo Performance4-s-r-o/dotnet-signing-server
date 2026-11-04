@@ -132,37 +132,70 @@ public sealed class AccountProvisioner
         if (!parent.IsEnterprise) return new ProvisionResult(ProvisionOutcome.ParentNotEnterprise);
 
         var hash = HashOf(apiToken);
-        var existing = await DecideExistingAsync(parent, externalId!, hash, ct);
-        if (existing != null) return existing;
-
-        // Any token with this value, live or revoked, of any account: never a second meaning.
-        if (await _db.ApiTokens.AnyAsync(t => t.TokenHash == hash, ct))
+        // The check that the value is unused and the insert run under one lock per value (#131):
+        // without a unique index two calls could otherwise give one token to two tenants.
+        var (decided, retry) = await UnderTokenLockAsync(hash, async token =>
         {
-            return new ProvisionResult(ProvisionOutcome.Conflict);
-        }
+            var existing = await DecideExistingAsync(parent, externalId!, hash, token);
+            if (existing != null) return ((ProvisionResult?)existing, false, false);
 
-        var now = _time.GetUtcNow();
-        if (_options.MaxAccountsPerDay > 0)
-        {
-            var today = await _db.Users.CountAsync(u => u.ParentUserId == parent.Id && u.CreatedAt >= now.AddDays(-1), ct);
-            if (today >= _options.MaxAccountsPerDay)
+            // Any token with this value, live or revoked, of any account: never a second meaning.
+            if (await _db.ApiTokens.AnyAsync(t => t.TokenHash == hash, token))
             {
-                _logger.LogError("Provisioning refused for parent {ParentId}: {Count} accounts in 24 h reached the limit {Limit}",
-                    parent.Id, today, _options.MaxAccountsPerDay);
-                _alerter.Alert(LimitAlertKey,
-                    $"Provisioning refused: parent {parent.Id} created {today} accounts in 24 h (limit {_options.MaxAccountsPerDay}).");
-                return new ProvisionResult(ProvisionOutcome.Limited, RetryAfterSeconds: 3600);
+                return (new ProvisionResult(ProvisionOutcome.Conflict), false, false);
             }
-        }
 
-        var (pwHash, pwSalt) = (RandomNumberGenerator.GetBytes(32), RandomNumberGenerator.GetBytes(16));
+            var now = _time.GetUtcNow();
+            if (_options.MaxAccountsPerDay > 0)
+            {
+                var today = await _db.Users.CountAsync(u => u.ParentUserId == parent.Id && u.CreatedAt >= now.AddDays(-1), token);
+                if (today >= _options.MaxAccountsPerDay)
+                {
+                    _logger.LogError("Provisioning refused for parent {ParentId}: {Count} accounts in 24 h reached the limit {Limit}",
+                        parent.Id, today, _options.MaxAccountsPerDay);
+                    _alerter.Alert(LimitAlertKey,
+                        $"Provisioning refused: parent {parent.Id} created {today} accounts in 24 h (limit {_options.MaxAccountsPerDay}).");
+                    return (new ProvisionResult(ProvisionOutcome.Limited, RetryAfterSeconds: 3600), false, false);
+                }
+            }
+
+            var account = NewAccount(parent, externalId!, label, now);
+            _db.Users.Add(account);
+            _db.ApiTokens.Add(NewToken(account.Id, hash, now));
+            try
+            {
+                await _db.SaveChangesAsync(token);
+            }
+            catch (DbUpdateException ex) when (CreditGrants.IsUniqueViolation(ex))
+            {
+                // A concurrent call created the same (parent, external id): decide after the rollback.
+                return (null, false, true);
+            }
+            account.Parent = parent;
+            return (new ProvisionResult(ProvisionOutcome.Created, account), true, false);
+        }, ct);
+
+        _db.ChangeTracker.Clear();
+        if (retry)
+        {
+            return await DecideExistingAsync(parent, externalId!, hash, ct) ?? new ProvisionResult(ProvisionOutcome.Conflict);
+        }
+        if (decided is not { Outcome: ProvisionOutcome.Created, Account: { } created }) return decided!;
+
+        _logger.LogInformation("Provisioned account {AccountId} for parent {ParentId}", created.Id, parent.Id);
+        await AlertWhenUnusualAsync(parent.Id, created.CreatedAt, ct);
+        return decided;
+    }
+
+    private static User NewAccount(User parent, string externalId, string? label, DateTimeOffset now)
+    {
         var id = Guid.NewGuid();
-        var account = new User
+        return new User
         {
             Id = id,
             Email = $"child-{id:N}@service.invalid",
-            PasswordHash = pwHash,
-            PasswordSalt = pwSalt,
+            PasswordHash = RandomNumberGenerator.GetBytes(32),
+            PasswordSalt = RandomNumberGenerator.GetBytes(16),
             PasswordIterations = AuthService.DefaultIterations,
             IsActive = true,
             EmailVerified = false,
@@ -178,36 +211,50 @@ public sealed class AccountProvisioner
             CreatedAt = now,
             UpdatedAt = now,
         };
-        _db.Users.Add(account);
-        _db.ApiTokens.Add(new ApiToken
-        {
-            UserId = id,
-            Label = TokenLabel,
-            TokenHash = hash,
-            // No prefix: it would store 8 characters of the integrator's value.
-            TokenPrefix = null,
-            IsBrowserToken = false,
-            IsProvisioningToken = false,
-            CreatedAt = now,
-        });
-        try
-        {
-            await _db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateException ex) when (CreditGrants.IsUniqueViolation(ex))
-        {
-            // A concurrent call created it: decide against what is there now.
-            _db.ChangeTracker.Clear();
-            return await DecideExistingAsync(parent, externalId!, hash, ct) ?? new ProvisionResult(ProvisionOutcome.Conflict);
-        }
-
-        _db.ChangeTracker.Clear();
-        _logger.LogInformation("Provisioned account {AccountId} for parent {ParentId}", id, parent.Id);
-        await AlertWhenUnusualAsync(parent.Id, now, ct);
-
-        account.Parent = parent;
-        return new ProvisionResult(ProvisionOutcome.Created, account);
     }
+
+    /// <summary>A provisioned account's server token: the HMAC only, no prefix.</summary>
+    public static ApiToken NewToken(Guid userId, byte[] hash, DateTimeOffset now) => new()
+    {
+        UserId = userId,
+        Label = TokenLabel,
+        TokenHash = hash,
+        TokenPrefix = null,
+        IsBrowserToken = false,
+        IsProvisioningToken = false,
+        CreatedAt = now,
+    };
+
+    /// <summary>
+    /// Runs <paramref name="work"/> in a transaction holding <c>pg_advisory_xact_lock</c> for the
+    /// token value, so "is this value unused" and its insert are one step across instances. The
+    /// work returns whether to commit; anything else rolls back. Without PostgreSQL it just runs.
+    /// </summary>
+    public async Task<(T Result, bool Retry)> UnderTokenLockAsync<T>(
+        byte[] hash, Func<CancellationToken, Task<(T Result, bool Commit, bool Retry)>> work, CancellationToken ct)
+    {
+        if (!_db.Database.IsNpgsql())
+        {
+            var (direct, _, directRetry) = await work(ct);
+            return (direct, directRetry);
+        }
+
+        var strategy = _db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async token =>
+        {
+            _db.ChangeTracker.Clear();
+            await using var tx = await _db.Database.BeginTransactionAsync(token);
+            await _db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock({0})", new object[] { LockKey(hash) }, token);
+            var (result, commit, retry) = await work(token);
+            if (commit) await tx.CommitAsync(token);
+            else await tx.RollbackAsync(token);
+            return (result, retry);
+        }, ct);
+    }
+
+    /// <summary>The lock key of a token value: the first 8 bytes of its HMAC, in a namespace of its own.</summary>
+    internal static long LockKey(byte[] hash) =>
+        BitConverter.ToInt64(SHA256.HashData([.. "p4:token-lock:"u8, .. hash]), 0);
 
     /// <summary>The live account of (parent, external id): a replay or a conflict; null when there is none.</summary>
     private async Task<ProvisionResult?> DecideExistingAsync(User parent, string externalId, byte[] hash, CancellationToken ct)
