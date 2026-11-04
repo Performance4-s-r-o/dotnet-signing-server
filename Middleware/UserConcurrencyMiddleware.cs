@@ -26,7 +26,7 @@ namespace DotNetSigningServer.Middleware;
 ///
 /// The user's queue is bounded (#69): at most <c>UserQueueMaxSeconds</c> of waiting and
 /// <c>UserQueueLengthFactor</c> × limit waiting requests, then 429 with an honest Retry-After.
-/// The trusted caller is exempt from both bounds; it shares its capacity between tenants itself.
+/// Both bounds apply to every account; a provisioned tenant has a queue of its own (#131).
 /// </summary>
 public class UserConcurrencyMiddleware
 {

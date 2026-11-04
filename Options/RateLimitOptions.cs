@@ -25,9 +25,8 @@ public class RateLimitOptions
 
     /// <summary>
     /// Refused inputs (400, 413) on the heavy paths per key within <see cref="FailureWindowMinutes"/>,
-    /// then a block of <see cref="BlockMinutes"/>. **0 = off, the default.** The portal calls this
-    /// server with one account for every tenant: switched on without that account in
-    /// <see cref="ExemptUserIds"/>, twenty bad PDFs from one tenant would pause signing for all.
+    /// then a block of <see cref="BlockMinutes"/>. **0 = off, the default.** Since #131 every tenant
+    /// has an account of its own, so a block pauses that tenant only.
     /// </summary>
     public int FailuresBeforeBlock { get; set; } = 0;
 

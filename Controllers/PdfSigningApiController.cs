@@ -284,8 +284,8 @@ namespace DotNetSigningServer.Controllers
         /// <summary>
         /// Flattening and PDF/A conversion before the signature (#184), one step for presign, timestamp
         /// and visual-sign, under the document deadline and the operator's switches of the two
-        /// features. Priced like <c>/api/flatten-form</c> and <c>/api/convert/pdfa</c>, free for the
-        /// trusted caller. Presign is charged by <c>/api/sign</c> and so checks the balance here
+        /// features. Priced like <c>/api/flatten-form</c> and <c>/api/convert/pdfa</c> for every caller.
+        /// Presign is charged by <c>/api/sign</c> and so checks the balance here
         /// (<paramref name="checkCredits"/>); timestamp and visual-sign add the credits to their own
         /// reservation, which answers 402 itself.
         /// </summary>

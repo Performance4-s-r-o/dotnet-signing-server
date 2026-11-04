@@ -10,7 +10,7 @@ namespace DotNetSigningServer.Services;
 /// of an operation it started, the capability list — and optionally to a credit budget. Templates,
 /// fill, sealing, PFX, AI and everything else answer 403 <c>TOKEN_SCOPE</c>.
 ///
-/// Server tokens (the portal's <c>SIGN_API_TOKEN</c> among them) are not affected.
+/// Server tokens are not affected; the provisioning token has its own scope (<see cref="ProvisioningTokenScope"/>).
 /// </summary>
 public static class BrowserTokenScope
 {
