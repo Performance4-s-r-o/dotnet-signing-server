@@ -62,12 +62,13 @@ namespace DotNetSigningServer.Services
         /// <summary>Where a stamp lands and how it is laid out, before anything is drawn.</summary>
         public sealed class StampPlan
         {
-            internal StampPlan(VisualSignInput input, string? companyName, int page, Rectangle rect, LayoutResult layout, SignatureAppearanceOptions appearance)
+            internal StampPlan(VisualSignInput input, string? companyName, int page, Rectangle rect, PageFrame frame, LayoutResult layout, SignatureAppearanceOptions appearance)
             {
                 Input = input;
                 CompanyName = companyName;
                 Page = page;
                 Rect = rect;
+                Frame = frame;
                 Layout = layout;
                 Appearance = appearance;
             }
@@ -75,12 +76,16 @@ namespace DotNetSigningServer.Services
             internal VisualSignInput Input { get; }
             internal string? CompanyName { get; }
             public int Page { get; }
+            /// <summary>The box in the client frame (CropBox corner, as displayed), see <see cref="PageFrame"/>.</summary>
             public Rectangle Rect { get; }
+            public PageFrame Frame { get; }
+            /// <summary>The box in default user space.</summary>
+            public Rectangle PageRect => Frame.ToPage(Rect);
             internal LayoutResult Layout { get; }
             internal SignatureAppearanceOptions Appearance { get; }
         }
 
-        /// <summary>Layout and box of the stamp on its page, clamped to the visible page (CropBox).</summary>
+        /// <summary>Layout and box of the stamp on its page, clamped to the visible page (CropBox, client frame).</summary>
         public static StampPlan PlanStamp(VisualSignInput input, PdfDocument pdfDoc, string? companyName)
         {
             int pageNumber = input.SignPageNumber <= 0 ? 1 : input.SignPageNumber;
@@ -122,8 +127,9 @@ namespace DotNetSigningServer.Services
             // height — due to algorithm drift or preview-value divergence —
             // the anchor-at-top shift above can push y negative or x past
             // the page edge. Without this clamp, the signature overflows.
-            var rect = ClampToPage(new Rectangle(x, y, layout.BoxWidthPt, layout.BoxHeightPt), page.GetCropBox());
-            return new StampPlan(input, companyName, pageNumber, rect, layout, appearanceOptions);
+            var frame = PageFrame.Of(page);
+            var rect = ClampToPage(new Rectangle(x, y, layout.BoxWidthPt, layout.BoxHeightPt), frame.Box);
+            return new StampPlan(input, companyName, pageNumber, rect, frame, layout, appearanceOptions);
         }
 
         /// <summary>
@@ -133,7 +139,17 @@ namespace DotNetSigningServer.Services
         public static void DrawIntoContent(StampPlan plan, PdfDocument pdfDoc)
         {
             var page = pdfDoc.GetPage(plan.Page);
-            DrawStamp(plan, new PdfCanvas(page, true), pdfDoc, plan.Rect);
+            var canvas = new PdfCanvas(page, true);
+            if (plan.Frame.IsIdentity)
+            {
+                DrawStamp(plan, canvas, pdfDoc, plan.Rect);
+                return;
+            }
+            // Drawn in the client frame, so the stamp sits where it was placed and reads upright.
+            var m = plan.Frame.ToPageMatrix();
+            canvas.SaveState().ConcatMatrix(m[0], m[1], m[2], m[3], m[4], m[5]);
+            DrawStamp(plan, canvas, pdfDoc, plan.Rect);
+            canvas.RestoreState();
         }
 
         /// <summary>
@@ -146,8 +162,14 @@ namespace DotNetSigningServer.Services
             var box = new Rectangle(0, 0, rect.GetWidth(), rect.GetHeight());
             var appearance = new PdfFormXObject(box);
             DrawStamp(plan, new PdfCanvas(appearance, pdfDoc), pdfDoc, box);
+            if (plan.Frame.Rotation != 0)
+            {
+                // Turned against the page's /Rotate, so the stamp reads upright.
+                var m = plan.Frame.ToPageMatrix();
+                appearance.GetPdfObject().Put(PdfName.Matrix, new PdfArray(new[] { m[0], m[1], m[2], m[3], 0f, 0f }));
+            }
 
-            var annotation = new PdfStampAnnotation(rect);
+            var annotation = new PdfStampAnnotation(plan.PageRect);
             annotation.SetStampName(new PdfName("P4PDFSignature"));
             annotation.SetName(new PdfString(SealPlacement.StampAnnotationPrefix + Guid.NewGuid().ToString("N")));
             annotation.SetNormalAppearance(appearance.GetPdfObject());
@@ -205,7 +227,7 @@ namespace DotNetSigningServer.Services
             float? designWidth = null,
             float? designHeight = null,
             bool? autoHeight = null,
-            Rectangle? pageSize = null,
+            PageFrame? frame = null,
             string? signerNameOverride = null)
         {
             SignerProperties signerProperties = new SignerProperties().SetFieldName(fieldName);
@@ -309,15 +331,17 @@ namespace DotNetSigningServer.Services
             }
 
             // Safety net: clamp the final rect to the page if caller supplied
-            // the page size. See ApplyVisualSign for the same logic — this is
+            // the page. See ApplyVisualSign for the same logic — this is
             // reached when the certificate-based flow (PdfSigner + BuildSignerProperties)
             // goes through here. Without the clamp a box near the page edge can
             // overflow when the dotnet-grown height differs from what the SPFx
             // client predicted at placement time.
+            // The rect is in the client frame (portál #511); the field needs user space,
+            // iText turns the appearance by /Rotate itself.
             var finalRect = new Rectangle(finalX, finalY, finalW, finalH);
-            if (pageSize != null)
+            if (frame != null)
             {
-                finalRect = ClampToPage(finalRect, pageSize);
+                finalRect = frame.ToPage(ClampToPage(finalRect, frame.Box));
             }
 
             signerProperties

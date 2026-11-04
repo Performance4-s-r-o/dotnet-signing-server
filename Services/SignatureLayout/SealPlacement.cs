@@ -6,8 +6,8 @@ using iText.Kernel.Pdf.Annot;
 namespace DotNetSigningServer.Services.SignatureLayout
 {
     /// <summary>
-    /// Where the seal field goes beside a content stamp (portál #511): right, left, below, above,
-    /// always inside the visible page (CropBox). The first spot that covers neither the stamp nor
+    /// Where the seal field goes beside a content stamp (portál #511): right, left, below, above as
+    /// displayed, always inside the visible page (CropBox), in the client frame (<see cref="PageFrame"/>). The first spot that covers neither the stamp nor
     /// anything occupied wins; with none free there is no spot (the caller refuses, nothing moves).
     /// </summary>
     public static class SealPlacement
@@ -59,28 +59,30 @@ namespace DotNetSigningServer.Services.SignatureLayout
         /// <summary>
         /// What a new stamp and seal must not cover on the page: signed signature widgets (with or
         /// without <c>/P</c>), our stamp annotations, stamps recorded in earlier signatures and what the
-        /// caller reserved for other signers. Unsigned signature fields are listed apart.
+        /// caller reserved for other signers. Unsigned signature fields are listed apart. All in the
+        /// client frame (<see cref="PageFrame"/>): what is on the page is converted, <c>reserved</c> already is.
         /// </summary>
         public static Obstacles ObstaclesOn(PdfDocument doc, int pageNumber, IEnumerable<OccupiedRect>? reserved)
         {
             var result = new List<Rectangle>();
             var unsigned = new List<Rectangle>();
             var page = doc.GetPage(pageNumber);
+            var frame = PageFrame.Of(page);
             foreach (var annotation in page.GetAnnotations())
             {
                 var dict = annotation.GetPdfObject();
                 if (annotation is PdfWidgetAnnotation && IsSignatureWidget(dict))
                 {
                     // An empty "sign here" field is no signature: a stamp may go on it.
-                    AddIfReal(IsSigned(dict) ? result : unsigned, annotation.GetRectangle());
+                    AddIfReal(IsSigned(dict) ? result : unsigned, annotation.GetRectangle(), frame);
                 }
                 else if (annotation is PdfStampAnnotation
                     && dict.GetAsString(PdfName.NM)?.ToUnicodeString().StartsWith(StampAnnotationPrefix, StringComparison.Ordinal) == true)
                 {
-                    AddIfReal(result, annotation.GetRectangle());
+                    AddIfReal(result, annotation.GetRectangle(), frame);
                 }
                 // A merged field and widget carries its /V here; a stamp drawn into the content is known only from it.
-                if (StampMarkerOf(dict) is { } marker && marker.Page == pageNumber) result.Add(marker.Rect);
+                if (StampMarkerOf(dict) is { } marker && marker.Page == pageNumber) result.Add(frame.ToView(marker.Rect));
             }
             foreach (var r in reserved ?? Enumerable.Empty<OccupiedRect>())
             {
@@ -96,7 +98,7 @@ namespace DotNetSigningServer.Services.SignatureLayout
         public static IReadOnlyList<Rectangle> OccupiedOn(PdfDocument doc, int pageNumber, IEnumerable<OccupiedRect>? reserved) =>
             ObstaclesOn(doc, pageNumber, reserved).Occupied;
 
-        /// <summary>The stamp recorded in a signature dictionary as [page x y w h].</summary>
+        /// <summary>The stamp recorded in a signature dictionary as [page x y w h], default user space.</summary>
         public static PdfArray StampMarker(int page, Rectangle rect) =>
             new(new float[] { page, rect.GetX(), rect.GetY(), rect.GetWidth(), rect.GetHeight() });
 
@@ -143,10 +145,10 @@ namespace DotNetSigningServer.Services.SignatureLayout
             return null;
         }
 
-        private static void AddIfReal(List<Rectangle> result, PdfArray? rect)
+        private static void AddIfReal(List<Rectangle> result, PdfArray? rect, PageFrame frame)
         {
             var r = rect?.ToRectangle();
-            if (r != null && r.GetWidth() > 0 && r.GetHeight() > 0) result.Add(r);
+            if (r != null && r.GetWidth() > 0 && r.GetHeight() > 0) result.Add(frame.ToView(r));
         }
     }
 }

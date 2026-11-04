@@ -43,14 +43,15 @@ namespace DotNetSigningServer.Models
     /// <summary>
     /// Where presign drew the content stamp and put the signature field (portál #511).
     /// <c>Annotation</c>: the stamp is a locked <c>/Stamp</c> annotation (the document was already signed),
-    /// otherwise page content. <c>Version</c> 2 = earlier stamps, <c>occupied</c> and the CropBox are honoured.
+    /// otherwise page content. <c>Version</c> 2 = earlier stamps, <c>occupied</c> and the CropBox are honoured;
+    /// 3 = rects in the client frame (CropBox origin and <c>/Rotate</c>), unsigned signature fields are no obstacle.
     /// </summary>
     public record ContentStampPlacement(int Page, SignRect Stamp, SignRect Field, bool Annotation = false, int Version = ContentStampPlacement.CurrentVersion)
     {
-        public const int CurrentVersion = 2;
+        public const int CurrentVersion = 3;
     }
 
-    /// <summary>A box the stamp and seal must not cover, reserved by the caller for another signer (portál #511).</summary>
+    /// <summary>A box the stamp and seal must not cover, reserved by the caller for another signer (portál #511), client frame.</summary>
     public class OccupiedRect
     {
         public int Page { get; set; } = 1;

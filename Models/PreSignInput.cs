@@ -6,6 +6,7 @@ namespace DotNetSigningServer.Models
         public string PdfContent { get; set; } = "";
         public string Location { get; set; } = "";
         public string Reason { get; set; } = "";
+        /// <summary>PDF points, origin bottom left at the CropBox corner of the page as displayed (after <c>/Rotate</c>).</summary>
         public SignRect SignRect { get; set; } = new();
         public string? SignImageContent { get; set; }
         public string? StampImageContent { get; set; }
@@ -43,7 +44,7 @@ namespace DotNetSigningServer.Models
         /// the position and <c>SignPageNumber</c> are computed. Requires <see cref="ContentStamp"/>.
         /// </summary>
         public bool PlaceBesideContentStamp { get; set; }
-        /// <summary>Boxes of other signers (PDF points, page coordinates) the stamp and seal must not cover.</summary>
+        /// <summary>Boxes of other signers the stamp and seal must not cover, in PDF points of the client frame like <c>SignRect</c>.</summary>
         public List<OccupiedRect>? Occupied { get; set; }
         /// <summary>Flatten the form and remove active content before anything else (#184); skipped on a signed document.</summary>
         public bool FlattenForm { get; set; }

@@ -123,6 +123,7 @@ namespace DotNetSigningServer.Services
         /// Where the stamp and the seal beside it go, without writing anything (portál #511). Neither
         /// may cover another signature, a stamp of an earlier signer or a box in <c>occupied</c>, and both
         /// stay inside the CropBox; otherwise <see cref="SealPlacement.NoRoomCode"/>, nothing is moved.
+        /// Rects in and out are in the client frame (CropBox corner, as displayed; <see cref="PageFrame"/>).
         /// A document that is already signed gets the stamp as an annotation; a certified one that
         /// allows no annotation is refused as <see cref="CertifiedNoChangesCode"/>.
         /// </summary>
@@ -150,7 +151,7 @@ namespace DotNetSigningServer.Services
             if (input.PlaceBesideContentStamp)
             {
                 var field = SealPlacement.Beside(
-                    stamp.Rect, input.SignRect.Width, input.SignRect.Height, doc.GetPage(stamp.Page).GetCropBox(), obstacles)
+                    stamp.Rect, input.SignRect.Width, input.SignRect.Height, stamp.Frame.Box, obstacles)
                     ?? throw new ApiValidationException(SealPlacement.NoRoomCode, "no free spot beside the stamp");
                 signRect = new SignRect { X = field.GetX(), Y = field.GetY(), Width = field.GetWidth(), Height = field.GetHeight() };
                 signPage = stamp.Page;
@@ -297,7 +298,7 @@ namespace DotNetSigningServer.Services
             var signer = new PdfSigner(reader, msOut, new StampingProperties().UseAppendMode());
 
             int resolvedPage = input.SignPageNumber <= 0 ? 1 : input.SignPageNumber;
-            var signerPageSize = signer.GetDocument().GetPage(resolvedPage).GetPageSize();
+            var signerFrame = PageFrame.Of(signer.GetDocument().GetPage(resolvedPage));
 
             SignerProperties signerProperties = PdfVisualSigningService.BuildSignerProperties(
                 fieldName,
@@ -315,7 +316,7 @@ namespace DotNetSigningServer.Services
                 designWidth: input.DesignWidth,
                 designHeight: input.DesignHeight,
                 autoHeight: input.AutoHeight,
-                pageSize: signerPageSize,
+                frame: signerFrame,
                 signerNameOverride: input.SignerName);
 
             signer.SetSignerProperties(signerProperties);
@@ -606,7 +607,7 @@ namespace DotNetSigningServer.Services
             var signer = new PdfSigner(reader, msOut, new StampingProperties().UseAppendMode());
 
             int resolvedPage = pageNumber <= 0 ? 1 : pageNumber;
-            var signerPageSize = signer.GetDocument().GetPage(resolvedPage).GetCropBox();
+            var signerFrame = PageFrame.Of(signer.GetDocument().GetPage(resolvedPage));
 
             // The stamp goes into the signature's own revision, before the field, so the signature covers it (portál #511).
             if (stamp != null)
@@ -634,11 +635,11 @@ namespace DotNetSigningServer.Services
                 designWidth,
                 designHeight,
                 autoHeight,
-                pageSize: signerPageSize,
+                frame: signerFrame,
                 signerNameOverride: signerNameOverride);
 
             signer.SetSignerProperties(signerProperties);
-            ApplySignerName(signer, signerNameOverride, stamp == null ? null : SealPlacement.StampMarker(stamp.Stamp.Page, stamp.Stamp.Rect));
+            ApplySignerName(signer, signerNameOverride, stamp == null ? null : SealPlacement.StampMarker(stamp.Stamp.Page, stamp.Stamp.PageRect));
             // Reserve extra space so the deferred signature can include TSA timestamp tokens when present.
             signer.SignExternalContainer(container, 32768);
 

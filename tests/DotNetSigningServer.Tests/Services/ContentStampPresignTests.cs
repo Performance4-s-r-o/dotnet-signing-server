@@ -97,7 +97,7 @@ public class ContentStampPresignTests : IDisposable
         var props = PdfVisualSigningService.BuildSignerProperties(
             "f", input.SignRect, input.Reason, input.Location, 1, input.SignImageContent, null, input.Appearance,
             designWidth: input.DesignWidth, designHeight: input.DesignHeight, autoHeight: input.AutoHeight,
-            pageSize: A4, signerNameOverride: input.SignerName);
+            frame: PageFrame.Plain(A4), signerNameOverride: input.SignerName);
         var field = props.GetPageRect();
         Assert.Equal(field.GetX(), rect.GetX(), 2);
         Assert.Equal(field.GetY(), rect.GetY(), 2);
@@ -280,10 +280,18 @@ public class ContentStampPresignTests : IDisposable
     {
         var crop = new Rectangle(100, 200, 380, 400);
         var scan = PresignPdfaTests.Pdf(d => d.GetFirstPage().SetCropBox(crop));
-        var (_, placement) = PresignAndSign(scan, keep: null, stamp: Stamp(x: 20, y: 20));
-        Assert.True(SealPlacement.Inside(ToRect(placement!.Stamp), crop));
-        Assert.True(SealPlacement.Inside(ToRect(placement.Field), crop));
+        var (signed, placement) = PresignAndSign(scan, keep: null, stamp: Stamp(x: 20, y: 20));
+        // The placement is in the client frame; the field lands at the CropBox corner plus it.
+        var view = new Rectangle(0, 0, crop.GetWidth(), crop.GetHeight());
+        Assert.True(SealPlacement.Inside(ToRect(placement!.Stamp), view));
+        Assert.True(SealPlacement.Inside(ToRect(placement.Field), view));
         Assert.False(Overlaps(ToRect(placement.Field), ToRect(placement.Stamp)));
+        Assert.Equal(20, placement.Stamp.X, 1);
+        using var doc = new PdfDocument(new PdfReader(new MemoryStream(signed)));
+        var widget = PdfAcroForm.GetAcroForm(doc, false)!.GetField("Seal1").GetWidgets()[0].GetRectangle().ToRectangle();
+        Assert.Equal(crop.GetX() + placement.Field.X, widget.GetX(), 1);
+        Assert.Equal(crop.GetY() + placement.Field.Y, widget.GetY(), 1);
+        Assert.True(SealPlacement.Inside(widget, crop));
     }
 
     [Fact]
@@ -419,7 +427,7 @@ public class ContentStampPresignTests : IDisposable
         return (signed, placement);
     }
 
-    private static ContentStampInput Stamp(float x = 50, float y = 100) => new()
+    internal static ContentStampInput Stamp(float x = 50, float y = 100) => new()
     {
         SignRect = new SignRect { X = x, Y = y, Width = 200, Height = 60 },
         SignPageNumber = 1,
@@ -447,7 +455,7 @@ public class ContentStampPresignTests : IDisposable
         return output.ToArray();
     }
 
-    private static string SignHash(string hashHex, string pfx, string password)
+    internal static string SignHash(string hashHex, string pfx, string password)
     {
         using var pfxMs = new MemoryStream(Convert.FromBase64String(pfx));
         var store = new Pkcs12StoreBuilder().Build();
