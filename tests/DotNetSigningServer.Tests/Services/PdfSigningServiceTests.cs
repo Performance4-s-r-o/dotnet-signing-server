@@ -358,7 +358,7 @@ public class PdfSigningServiceTests : IDisposable
     }
 
     [Fact]
-    public void AddAttachment_WithConfiguredEncryptionFlagButMissingCertificate_Throws()
+    public void AddAttachment_WithConfiguredEncryptionFlagButMissingCertificate_ThrowsCoded()
     {
         var pdfBase64 = TestHelpers.CreateMinimalPdfBase64();
         var sut = CreateSigningService(new EvidenceOptions
@@ -366,15 +366,46 @@ public class PdfSigningServiceTests : IDisposable
             Enabled = true,
             EncryptionCertificatePem = null
         });
+        var input = new AddAttachmentInput
+        {
+            PdfContent = pdfBase64,
+            AttachmentContent = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("evidence")),
+            FileName = "ses-evidence.p7m",
+            UseConfiguredEncryptionCertificate = true
+        };
 
-        Assert.Throws<InvalidOperationException>(() =>
-            sut.AddAttachment(new AddAttachmentInput
-            {
-                PdfContent = pdfBase64,
-                AttachmentContent = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("evidence")),
-                FileName = "ses-evidence.p7m",
-                UseConfiguredEncryptionCertificate = true
-            }));
+        Assert.True(sut.MissingEvidenceCertificate(input));
+        var ex = Assert.Throws<ApiValidationException>(() => sut.AddAttachment(input));
+        Assert.Equal(PdfSigningService.EvidenceCertNotConfiguredCode, ex.Code);
+    }
+
+    [Fact]
+    public void AddAttachment_CertificateInRequest_WinsOverMissingConfiguration()
+    {
+        // Varianta B (#513): portál pošle certifikát sám, server žádný nemá.
+        var pdfBase64 = TestHelpers.CreateMinimalPdfBase64();
+        var attachmentBytes = System.Text.Encoding.UTF8.GetBytes("{\"evidence\":true}");
+        var (certPem, pfxBase64, password) = TestHelpers.CreateTestCertificate();
+        var sut = CreateSigningService(new EvidenceOptions { Enabled = true, EncryptionCertificatePem = null });
+        var input = new AddAttachmentInput
+        {
+            PdfContent = pdfBase64,
+            AttachmentContent = Convert.ToBase64String(attachmentBytes),
+            FileName = "ses-evidence.p7m",
+            EncryptForCertificatePem = certPem,
+            UseConfiguredEncryptionCertificate = true,
+            CompressBeforeEncrypt = true
+        };
+
+        Assert.False(sut.MissingEvidenceCertificate(input));
+        var pdfBytes = Convert.FromBase64String(sut.AddAttachment(input));
+        var encrypted = ExtractEmbeddedAttachmentBytes(pdfBytes, "ses-evidence.p7m");
+        Assert.NotNull(encrypted);
+        Assert.Equal(attachmentBytes, DecryptCmsAttachment(encrypted, pfxBase64, password, compressed: true));
+
+        // Klíč obálky je RSA PKCS#1 v1.5: v Key Vaultu se odbaluje algoritmem RSA1_5 (docs/evidence-encryption-key.md v portálu).
+        var recipient = new CmsEnvelopedData(encrypted).GetRecipientInfos().GetRecipients().Cast<RecipientInformation>().Single();
+        Assert.Equal("1.2.840.113549.1.1.1", recipient.KeyEncryptionAlgOid);
     }
 
     [Fact]
