@@ -399,8 +399,14 @@ public class ProvisioningApiTests : IClassFixture<WebUiAuthFixture>
         {
             db.ApiOperations.Add(new ApiOperation
             {
-                UserId = accountB, OperationId = key, ClientKey = true, Operation = "sign", PresignId = completedPresign,
-                RequestFingerprint = "f", State = ApiOperationState.Completed, ResultProtected = [1, 2, 3],
+                UserId = accountB,
+                OperationId = key,
+                ClientKey = true,
+                Operation = "sign",
+                PresignId = completedPresign,
+                RequestFingerprint = "f",
+                State = ApiOperationState.Completed,
+                ResultProtected = [1, 2, 3],
                 ResultExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
             });
             await db.SaveChangesAsync();

@@ -31,7 +31,7 @@ docker compose up --build
 ```
 
 `docker-compose.yml` does not publish a port (#78): it only `expose`s 8085 (public API, behind
-the tunnel) and, when `INTERNAL_API_PORT` is set, 8086 (the trusted caller) to the Docker network. To reach it from the host locally, add a
+the tunnel) and, when `INTERNAL_API_PORT` is set, 8086 (the internal listener) to the Docker network. To reach it from the host locally, add a
 `docker-compose.override.yml` with `ports: ["${HTTP_PORT:-8085}:8085"]`.
 
 ### Local .NET
@@ -93,7 +93,7 @@ The answer gains `preparation`: `flatten` (`flattened` / `unchanged` / `skipped-
 `flattenedFields`, `removed[]`, `pdfa` (`converted` / `already-pdfa`), `conformance`,
 `credits`. The credits are charged by `/api/sign` together with the signature:
 `FLATTEN_FORM_CREDIT_COST` for flattening, one per started three pages for the
-conversion (as `convert/pdfa`); free for the trusted caller. Presign refuses with
+conversion (as `convert/pdfa`); an Enterprise account (a provisioned one inherits it) is not debited. Presign refuses with
 `402` when the balance does not cover the signature with them.
 
 | Answer | When |
@@ -179,6 +179,35 @@ anything else answers `403 TOKEN_SCOPE`. A token can also carry a credit limit
 (`402 TOKEN_CREDIT_LIMIT` once spent). Server tokens are not affected. A completed password
 reset revokes the account's browser tokens (server tokens stay).
 
+### Provisioning
+
+An integrator (the portal) holds one **provisioning token** (`PORTAL_BOOTSTRAP_TOKEN`) and one
+**provisioned account** per tenant (#131). The provisioning token can only create and list
+accounts and read capabilities; it signs nothing and opens no tenant's data. A tenant's own
+token works like any server token, on its own account: presigns, operations, templates and
+limits (`MAX_PENDING_PRESIGNS_PER_USER`, `MAX_TEMPLATES_PER_USER`, the queue caps) are per
+tenant. A provisioned account is a service account one level below its parent and inherits
+*Enterprise*, the seal grant and being active from it (an inactive parent stops all of them).
+Another account's presign or completed signature answers `404 SIGNING_DATA_NOT_FOUND`, its
+operation `404 OPERATION_NOT_FOUND`.
+
+| Endpoint | Token | Answer |
+|---|---|---|
+| `POST /api/provisioning/accounts` `{externalId, label?, apiToken}` | provisioning | `201` new / `200` repeat with the same token: `{accountId, externalId, label, createdAt, inherits: {enterprise, sealAllowed}}`. `409 ACCOUNT_EXISTS` (the account has another token, or the token is in use anywhere), `409 PARENT_NOT_ENTERPRISE`, `400 EXTERNAL_ID_INVALID` / `LABEL_INVALID` / `TOKEN_WEAK`, `429 PROVISIONING_LIMIT` + `Retry-After` |
+| `GET /api/provisioning/accounts?externalId=&limit=` | provisioning | `{accounts: [{accountId, externalId, label, createdAt, isActive, erasedAt}]}`, erased ones included, at most 1000 |
+| `POST /api/account/tokens/rotate` `{newToken}` | the tenant's | `200 {tokenId}`; the old token stays valid. Repeat = the same `tokenId`. `409 TOKEN_IN_USE`, `409 TOO_MANY_API_TOKENS`, `400 TOKEN_WEAK` |
+| `POST /api/account/tokens/revoke-others` | the tenant's (new) | `200 {tokenId, revoked}`: every other token of the account is revoked |
+| `DELETE /api/account` | the tenant's | `200 {status: "erased"}`: the account is erased (presigns, operations, templates, tokens; usage records stay on the tombstone); a repeat is `401` |
+
+The integrator generates every tenant token (32 random bytes, base64url) and keeps it; the
+server stores only its HMAC and never hands a token out, so a lost answer is repeated with the
+same token and gets `200`. `externalId` is unique per parent among live accounts; after a
+deletion it can be provisioned again. Every call of the provisioning API (refusals at the gate
+included) leaves a row in `AccountProvisioningEvents` (token id, accounts, external id, outcome,
+client IP; no token). Calls are limited to 30 per minute per token. A change of `Token__Secret`
+invalidates the hashes of every tenant token: the tenants then have to be deleted in the database
+and provisioned again.
+
 ### Admin audit
 
 Admin actions on accounts (enterprise mode, seal permission, queue timeout) and on the
@@ -228,10 +257,13 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `GLOBAL_CONCURRENCY_LIMIT` / `GLOBAL_CONCURRENCY_WAIT_MS` | no (off / 2000) | Cap on concurrent operations of the whole server (#69), taken after the user's own slot. Empty or `0` = off; a start hypothesis is H + R + A (logged at startup), to be set only once every caller's own limit is below it (otherwise the caller gets `503`). A request waits up to the given milliseconds for a slot of the global, heavy or AI pool, then gets `503` + `Retry-After`. Negative values stop the server at start; this variable wins over `Billing__GlobalConcurrencyLimit`. Note: a flood of find-codes scans holds a slot of G and of the user's limit for up to `RASTER_WAIT_MS` (30 s) per page while it waits for pool R |
 | `HEAVY_OPERATIONS_LIMIT` / `AI_OPERATIONS_LIMIT` | no (off / off) | Pools H and A (#69): presign, sign, sign-pfx, visual-sign, timestamp, extend-signature, fill-pdf and PDF/A at once, and AI calls at once. Empty or `0` = off. Start hypotheses: H = the CPU count, A = 4. Full after `GLOBAL_CONCURRENCY_WAIT_MS` = `503` + `Retry-After: 10`. Negative or above 10000 stops the server at start |
 | `RASTER_OPERATIONS_LIMIT` / `RASTER_WAIT_MS` | no (CPUs / 2, at least 1 / 30000) | Pool R (#69): PDF pages rasterised at once (find-codes). The limit counts pages, not requests: a slot is taken per page, so one scan of 30 pages needs 30 turns. Unlike H and A it is on by default, because the limit existed before as a fixed one; `0` = off. A page that finds R full waits `RASTER_WAIT_MS`, then the request gets `503` + `Retry-After: 10` and the charge is released. Negative, or a wait above 600000, stops the server at start |
-| `USER_QUEUE_MAX_SECONDS` / `USER_QUEUE_LENGTH_FACTOR` | no (30 / 2) | A user's queue (#69): the longest wait whatever the account stores (0–600), and requests that may wait per slot of the user's limit (1–100); the next one gets `429` at once. `Retry-After` after a `429` is the queue wait, at least 5 and at most 60 s. The trusted caller is exempt from both. Out of range stops the server at start |
+| `USER_QUEUE_MAX_SECONDS` / `USER_QUEUE_LENGTH_FACTOR` | no (30 / 2) | A user's queue (#69): the longest wait whatever the account stores (0–600), and requests that may wait per slot of the user's limit (1–100); the next one gets `429` at once. `Retry-After` after a `429` is the queue wait, at least 5 and at most 60 s. Every account, provisioned ones included. Out of range stops the server at start |
 | `CONTAINER_MEM_LIMIT` / `CONTAINER_CPUS` / `CONTAINER_STOP_GRACE_PERIOD` | no (0 / 0 / 135s) | Read by `docker-compose.yml` itself (#69): `mem_limit`, `cpus` and `stop_grace_period` of the server container. `0` = no limit. Tune to the machine; `cpus` also sets the CPU count the pools are sized from |
-| `INTERNAL_API_PORT` | no (empty) | Second listener for a trusted internal caller (#78), added next to `ASPNETCORE_URLS`; `docker-compose.yml` only `expose`s 8086, so with the shipped file use 8086. A token of an account marked *Trusted caller* in the administration is accepted on it only; on the public port it gets `401`. Only that account's server token, on the internal port, is a trusted caller: it alone may skip the attachment debit (`X-P4PDF-Attachment-Billing-Bypass`) and its `X-P4-Tenant` / `X-Request-Id` are logged and stored on presigns, operations and usage records. `/api/sign` (a replay included), any keyed replay and `/api/operations/{id}` refuse another tenant's presign or operation (`403 TENANT_MISMATCH`). No marked account = the start only warns and nobody is trusted. Empty = one listener, a plain API, and the flag has no effect. |
-| `PORTAL_BOOTSTRAP_TOKEN` | no (empty = off) | `PortalBootstrap:Token` (#169). The portal's server token, at least 43 characters, no whitespace or quote, not a placeholder or known default, random-looking (otherwise the start is refused; the value is never logged); generate with `openssl rand -base64 32`. At start, after migrations, the server creates a **service account** `portal@service.invalid` (`IsServiceAccount`: no usable password, e-mail unverified, refused by sign-in, password reset, the e-mail code and any cookie session) with *Trusted caller* and the seal grant, and with `PRIVATE_SERVER` also *Enterprise* (no credit check), and registers an API token labelled `bootstrap` holding only the HMAC of the value (`Token__Secret`). Idempotent. A changed value revokes the previous bootstrap token and adds the new one; so does a changed `Token__Secret` (the old hash is dead). A token that already exists on any other account (e.g. a portal account made by hand) is left alone: nothing is created and a line is logged. A value that was revoked is refused at start. Removing the variable leaves the token valid; it stops working by rotating the value or by a change in the database (an admin action to revoke an account's tokens is a topic for #131). A deactivated or erased service account stops the start. Addresses under `.invalid` cannot sign up. SaaS: Coolify shared `DOTNET_PORTAL_BOOTSTRAP_TOKEN`, set on purpose. Put the value of an existing hand-made token there only if it meets the strength rules (≥ 43 characters, 3 kinds of characters or hex ≥ 64); otherwise leave it empty and that token stays managed by hand. After a change of `Token__Secret` the hashes of earlier revoked values no longer match, so a revoked value would pass again: do not reuse one after changing the secret. Before enabling on SaaS run `SELECT "Id" FROM dotnet_signing."Users" WHERE lower("Email") LIKE '%.invalid';` (reserved addresses registered before this check stop the start). |
+| `INTERNAL_API_PORT` | no (empty) | Optional second listener for the Docker network (#78, #131), added next to `ASPNETCORE_URLS`; `docker-compose.yml` only `expose`s 8086, so with the shipped file use 8086. When set, the integrator's provisioning token is accepted there only (`401` on the public port) and `/internal/concurrency` is served there; every other token works on both. Empty = one listener. |
+| `PORTAL_BOOTSTRAP_TOKEN` | no (empty = off) | `PortalBootstrap:Token` (#169, #131). The integrator's **provisioning token**: one value or `new,old` during a rotation (at most two). Each value at least 43 characters, no whitespace, quote or comma, not a placeholder or known default, random-looking (otherwise the start is refused; the value is never logged); generate with `openssl rand -base64 32`. At start, after migrations, the server creates the **service account** `portal@service.invalid` (`IsServiceAccount`: no usable password, refused by sign-in, password reset, the e-mail code and any cookie session) with *Enterprise* and the seal grant, which its provisioned accounts inherit, and registers each value as a provisioning token labelled `bootstrap` holding only its HMAC (`Token__Secret`). A bootstrap token whose value left the list is revoked (so is the old hash after a change of `Token__Secret`). A value that is another account's token, or a revoked one, stops the start. A deactivated or erased service account stops the start. The provisioning token may only call `/api/provisioning/accounts` and `GET /api/capabilities` (`403 TOKEN_SCOPE` elsewhere); see [Provisioning](#provisioning). SaaS: the application variable links to the Coolify shared `P4PDF_SIGN_API_PROVISIONING_TOKEN`, which the portal reads as `SIGN_API_PROVISIONING_TOKEN`. |
+| `PORTAL_BOOTSTRAP_ALLOWED_IPS` | no (empty = any) | `PortalBootstrap:AllowedIps`: IPs / CIDRs, comma-separated, written on the provisioning tokens at start (the client IP as `ClientIp` reads it). An entry that does not parse stops the start. |
+| `PROVISIONING_MAX_ACCOUNTS_PER_DAY` | no (50) | Accounts one parent may create in 24 h; over it `429 PROVISIONING_LIMIT` and the ops alert `provisioning-limit`. `0` = no limit; negative or nonsense stops the start. |
+| `PROVISIONING_ALERT_ACCOUNTS_PER_HOUR` | no (10) | Accounts created by one parent within an hour that raise the ops alert `provisioning-unusual`. `0` = no alert. |
 | `TRUSTED_CF_PROXIES` | in production (startup fails when empty) | Address / CIDR of cloudflared (#106). `CF-Connecting-IP` is the client (rate limits, token IP whitelist, consent evidence) only for a request that came from cloudflared — it is the TCP peer, or a `TRUSTED_PROXIES` proxy is the peer and cloudflared the forwarded address. Empty = never believed; `none` = no tunnel in front, on purpose |
 | `TRUSTED_PROXIES` | no | Reverse proxy (Traefik/Caddy) addresses / CIDRs (#106): whose `X-Forwarded-For` is applied. An explicit `ForwardedHeaders__KnownProxies` / `__KnownNetworks` wins; empty = the private ranges and loopback (as before); `none` = nobody's. A reverse proxy alone never vouches for `CF-Connecting-IP` |
 | `DataProtection__CertificateBase64` / `__CertificatePassword` (compose: `DATA_PROTECTION_CERTIFICATE_BASE64` / `_PASSWORD`) | in production, unless the next row is `true` | Base64 PFX that encrypts the Data Protection key ring, which also protects stored TSA credentials |
