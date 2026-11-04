@@ -83,6 +83,48 @@ public class CorsPreflightTests
         Assert.False(Service().IsOriginAllowed("https://shop.example.evil.example", Request()));
     }
 
+    [Theory]
+    [InlineData("null")]
+    [InlineData("NULL")]
+    [InlineData("not a url")]
+    [InlineData("file://")]
+    [InlineData("ftp://shop.example")]
+    [InlineData("https://shop.example/")] // a serialized origin has no trailing slash
+    [InlineData("https://shop.example/path")]
+    [InlineData("https://shop.example?x=1")]
+    [InlineData("https://user@shop.example")]
+    public void NotASerializedOrigin_IsRefused(string origin)
+    {
+        AddToken("https://shop.example");
+
+        Assert.False(Service().IsOriginAllowed(origin, Request()));
+        Assert.False(Service("Development").IsOriginAllowed(origin, Request()));
+    }
+
+    [Theory]
+    [InlineData("https://SHOP.example", true)]
+    [InlineData("https://shop.example:443", true)]
+    [InlineData("https://shop.example:8443", false)]
+    [InlineData("http://shop.example", false)]
+    [InlineData("https://api.shop.example", false)]
+    [InlineData("https://example", false)]
+    public void OriginVariants(string origin, bool allowed)
+    {
+        AddToken("https://shop.example");
+
+        Assert.Equal(allowed, Service().IsOriginAllowed(origin, Request()));
+    }
+
+    [Fact]
+    public void NullOrigin_IsNeverTheTokensOrigin()
+    {
+        var token = new ApiToken { IsBrowserToken = true, AllowedOrigins = "https://shop.example" };
+
+        Assert.False(Service("Development").IsOriginAllowedForToken("null", token));
+        Assert.False(Service().IsOriginAllowedForToken("https://shop.example/path", token));
+        Assert.True(Service().IsOriginAllowedForToken("https://SHOP.example:443", token));
+    }
+
     [Fact]
     public void RevokedExpiredAndServerTokens_DoNotCount()
     {
@@ -179,6 +221,20 @@ public class CorsPreflightTests
         AddToken("https://shop.example");
 
         var ctx = await RunAsync(Request(origin: "https://evil.example"));
+
+        Assert.Equal(StatusCodes.Status403Forbidden, ctx.Response.StatusCode);
+        Assert.False(ctx.Response.Headers.ContainsKey("Access-Control-Allow-Origin"));
+        Assert.False((bool)ctx.Items["reached"]!);
+    }
+
+    [Theory]
+    [InlineData("OPTIONS")]
+    [InlineData("POST")]
+    public async Task NullOrigin_403WithoutCorsHeaders(string method)
+    {
+        AddToken("https://shop.example");
+
+        var ctx = await RunAsync(Request(method, origin: "null"));
 
         Assert.Equal(StatusCodes.Status403Forbidden, ctx.Response.StatusCode);
         Assert.False(ctx.Response.Headers.ContainsKey("Access-Control-Allow-Origin"));

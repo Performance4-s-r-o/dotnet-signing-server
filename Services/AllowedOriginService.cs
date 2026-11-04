@@ -49,10 +49,16 @@ public class AllowedOriginService : IAllowedOriginService
     /// </summary>
     public bool IsOriginAllowed(string origin, HttpContext context)
     {
-        var normalized = NormalizeOrigin(origin);
-        if (normalized == null)
+        if (string.IsNullOrWhiteSpace(origin))
         {
             return true; // non-browser requests
+        }
+
+        // "null" (sandboxed frame, file:) or anything that is not a serialized origin passes nowhere.
+        var normalized = NormalizeRequestOrigin(origin);
+        if (normalized == null)
+        {
+            return false;
         }
 
         if (IsOwnOrigin(normalized, context))
@@ -77,7 +83,7 @@ public class AllowedOriginService : IAllowedOriginService
     /// <summary>Whether <paramref name="origin"/> is the origin this request was addressed to.</summary>
     public bool IsOwnOrigin(string origin, HttpContext context)
     {
-        var normalized = NormalizeOrigin(origin);
+        var normalized = NormalizeRequestOrigin(origin);
         var own = NormalizeOrigin(context.Request.Scheme + "://" + context.Request.Host);
         return normalized != null && own != null && string.Equals(normalized, own, StringComparison.OrdinalIgnoreCase);
     }
@@ -132,7 +138,7 @@ public class AllowedOriginService : IAllowedOriginService
 
     public bool IsOriginAllowedForToken(string origin, ApiToken token)
     {
-        var normalized = NormalizeOrigin(origin);
+        var normalized = NormalizeRequestOrigin(origin);
         if (normalized == null)
         {
             return false; // browser token must provide origin
@@ -195,6 +201,25 @@ public class AllowedOriginService : IAllowedOriginService
         return builder.Uri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
     }
 
+    /// <summary>
+    /// The <c>Origin</c> header as a browser serializes it: http(s), a host, an optional port and
+    /// nothing else (no path, not even a trailing slash, no query, no user info). Host case and an
+    /// explicit default port are normalized; anything else, the literal <c>null</c> included, is null.
+    /// </summary>
+    internal static string? NormalizeRequestOrigin(string? origin)
+    {
+        if (string.IsNullOrWhiteSpace(origin)) return null;
+        var raw = origin.Trim();
+        if (raw.EndsWith('/') || !Uri.TryCreate(raw, UriKind.Absolute, out var uri)) return null;
+        if (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp) return null;
+        if (uri.AbsolutePath != "/" || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment)
+            || !string.IsNullOrEmpty(uri.UserInfo) || string.IsNullOrEmpty(uri.Host))
+        {
+            return null;
+        }
+        return NormalizeOrigin(raw);
+    }
+
     private static bool IsLocal(string normalizedOrigin)
     {
         // Exact host comparison. A StartsWith prefix match would accept
@@ -206,7 +231,7 @@ public class AllowedOriginService : IAllowedOriginService
 
     public bool IsLocalOrigin(string origin)
     {
-        var normalized = NormalizeOrigin(origin);
+        var normalized = NormalizeRequestOrigin(origin);
         return normalized != null && IsLocal(normalized);
     }
 }

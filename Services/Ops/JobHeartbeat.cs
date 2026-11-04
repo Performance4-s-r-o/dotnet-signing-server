@@ -4,7 +4,7 @@ namespace DotNetSigningServer.Services.Ops;
 
 /// <summary>A periodic job (#167).</summary>
 /// <param name="Name">Stable job name; the check name too when the job is in no group.</param>
-/// <param name="Interval">How often the job runs at most apart; a group's cycle must leave room for it.</param>
+/// <param name="Interval">How often the job runs at most apart; a group's cycle is at least 1.5 × it.</param>
 public sealed record HeartbeatJob(string Name, TimeSpan Interval);
 
 /// <summary>One Healthchecks check shared by several jobs.</summary>
@@ -39,9 +39,10 @@ public static class HeartbeatJobs
     [
         new("dotnet-maintenance", TimeSpan.FromMinutes(30), [PresignCleanup, OperationMaintenance]),
         new("dotnet-backoffice-sync", TimeSpan.FromMinutes(30), [BackofficeOutbox, BackofficeInbox, BackofficePolling]),
-        // Hourly jobs drift by their own run time, so a 1 h cycle would now and then see none: 2 h.
+        // Loops drift by their own run time (and a retry later after a failure): a cycle as long as the
+        // interval would now and then see no run, so the hourly and daily jobs get twice their interval.
         new("dotnet-backoffice-hourly", TimeSpan.FromHours(2), [ConsentReconciliation, PricingRefresh, SupportCategories]),
-        new("dotnet-daily", TimeSpan.FromDays(1), [DataRetention, PricingUpcoming]),
+        new("dotnet-daily", TimeSpan.FromDays(2), [DataRetention, PricingUpcoming]),
     ];
 
     /// <summary>The check a job pings: its group, otherwise its own name.</summary>

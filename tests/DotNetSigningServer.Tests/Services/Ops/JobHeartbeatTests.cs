@@ -275,7 +275,8 @@ public class JobHeartbeatTests
         {
             foreach (var job in group.Jobs)
             {
-                Assert.True(job.Interval <= group.Cycle, $"{job.Name} runs every {job.Interval}, the {group.Name} cycle is {group.Cycle}");
+                // Room for drift (run time) and a retry after a failure: half an interval at least.
+                Assert.True(job.Interval * 1.5 <= group.Cycle, $"{job.Name} runs every {job.Interval}, the {group.Name} cycle is {group.Cycle}");
             }
         }
     }
