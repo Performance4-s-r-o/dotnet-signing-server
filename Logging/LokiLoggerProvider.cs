@@ -50,23 +50,23 @@ internal sealed class LokiLogger : ILogger
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull => _scopes()?.Push(state);
 
     /// <summary>
-    /// Tenant and request id of a portal call (#78), appended to the line rather than made labels:
-    /// a label per tenant would be a stream per tenant.
+    /// Provisioned account and request id of an API call (#131), appended to the line rather than
+    /// made labels: a label per tenant would be a stream per tenant.
     /// </summary>
-    internal static string? PortalScopeSuffix(IExternalScopeProvider? scopes)
+    internal static string? CorrelationSuffix(IExternalScopeProvider? scopes)
     {
         if (scopes == null) return null;
-        string? tenant = null, request = null;
+        string? account = null, request = null;
         scopes.ForEachScope((scope, _) =>
         {
             if (scope is not IEnumerable<KeyValuePair<string, object?>> pairs) return;
             foreach (var (key, value) in pairs)
             {
-                if (key == DotNetSigningServer.Middleware.PortalCallerScopeMiddleware.TenantScopeKey) tenant = value?.ToString();
-                else if (key == DotNetSigningServer.Middleware.PortalCallerScopeMiddleware.RequestIdScopeKey) request = value?.ToString();
+                if (key == DotNetSigningServer.Middleware.RequestCorrelationMiddleware.AccountScopeKey) account = value?.ToString();
+                else if (key == DotNetSigningServer.Middleware.RequestCorrelationMiddleware.RequestIdScopeKey) request = value?.ToString();
             }
         }, (object?)null);
-        return tenant == null && request == null ? null : $" [tenant={tenant} requestId={request}]";
+        return account == null && request == null ? null : $" [account={account} requestId={request}]";
     }
 
     public bool IsEnabled(LogLevel logLevel)
@@ -102,7 +102,7 @@ internal sealed class LokiLogger : ILogger
             return;
         }
 
-        var message = formatter(state, exception) + PortalScopeSuffix(_scopes());
+        var message = formatter(state, exception) + CorrelationSuffix(_scopes());
         if (exception != null)
         {
             message += "\n" + exception;

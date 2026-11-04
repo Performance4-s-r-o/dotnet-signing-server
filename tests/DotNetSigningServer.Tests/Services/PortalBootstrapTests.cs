@@ -60,9 +60,34 @@ public class PortalBootstrapValidatorTests
         await using var db = TestHelpers.CreateInMemoryDbContext();
         const string weak = "weak-value-xyz";
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => PortalBootstrap.EnsureAsync(
-            new PortalBootstrapOptions { Token = weak }, new PrivateServerOptions(),
-            TestHelpers.CreateTokenService(), db, NullLogger.Instance));
+            new PortalBootstrapOptions { Token = weak }, TestHelpers.CreateTokenService(), new IpWhitelistService(), db, NullLogger.Instance));
         Assert.DoesNotContain(weak, ex.Message);
+    }
+
+    [Theory]
+    [InlineData(Good + "," + Good)]
+    [InlineData(Good + ",Zk3Vb8Nc1Xm5Lp9Qw2Er7Ty4Ui6Oa0SdH7gF2dS9a1Kx3Mn=,Xp4Lm8Nq2Wr6Ty0Ui3Oa7Sd1Fg5Hj9Kl2Zx4Cv8Bn=")]
+    public async Task A_repeated_value_or_more_than_two_stop_the_start(string token)
+    {
+        await using var db = TestHelpers.CreateInMemoryDbContext();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => PortalBootstrap.EnsureAsync(
+            new PortalBootstrapOptions { Token = token }, TestHelpers.CreateTokenService(), new IpWhitelistService(), db, NullLogger.Instance));
+    }
+
+    [Fact]
+    public async Task Allowed_ips_that_do_not_parse_stop_the_start()
+    {
+        await using var db = TestHelpers.CreateInMemoryDbContext();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => PortalBootstrap.EnsureAsync(
+            new PortalBootstrapOptions { Token = Good, AllowedIps = "10.0.0.1,not-an-ip" },
+            TestHelpers.CreateTokenService(), new IpWhitelistService(), db, NullLogger.Instance));
+    }
+
+    [Fact]
+    public void A_list_is_split_on_commas_and_trimmed()
+    {
+        Assert.Equal(new[] { "a", "b" }, new PortalBootstrapOptions { Token = " a , b ," }.Values());
+        Assert.Empty(new PortalBootstrapOptions { Token = "  " }.Values());
     }
 
     [Fact]
@@ -94,13 +119,12 @@ public class PortalBootstrapPostgresTests : IClassFixture<OutboxPostgresFixture>
         await db.Users.Where(u => u.Email == PortalBootstrap.AccountEmail).ExecuteDeleteAsync();
     }
 
-    private async Task RunAsync(string? token, string secret = SecretOne, bool privateServer = false)
+    private async Task RunAsync(string? token, string secret = SecretOne, string? allowedIps = null)
     {
         await using var db = _pg.CreateContext();
         await PortalBootstrap.EnsureAsync(
-            new PortalBootstrapOptions { Token = token },
-            new PrivateServerOptions { Enabled = privateServer },
-            TestHelpers.CreateTokenService(secret), db, NullLogger.Instance);
+            new PortalBootstrapOptions { Token = token, AllowedIps = allowedIps },
+            TestHelpers.CreateTokenService(secret), new IpWhitelistService(), db, NullLogger.Instance);
     }
 
     private async Task<(List<User> Users, List<ApiToken> Tokens)> StateAsync()
@@ -112,32 +136,30 @@ public class PortalBootstrapPostgresTests : IClassFixture<OutboxPostgresFixture>
         return (users, tokens);
     }
 
+    private static byte[] Hash(string token, string secret = SecretOne) => TestHelpers.CreateTokenService(secret).HashToken(token);
+
     [DockerFact]
-    public async Task First_start_creates_the_service_account_and_token()
+    public async Task First_start_creates_an_enterprise_service_account_with_a_provisioning_token()
     {
         await ResetAsync();
-        await RunAsync(TokenA, privateServer: true);
+        await RunAsync(TokenA);
 
         var (users, tokens) = await StateAsync();
         var user = Assert.Single(users);
         Assert.True(user.IsServiceAccount);
-        Assert.True(user.TrustedCaller);
         Assert.True(user.SealAllowed);
+        // Enterprise also in SaaS (Q1): provisioned accounts inherit it.
         Assert.True(user.IsEnterprise);
+        Assert.NotNull(user.EnterpriseEnabledAt);
         Assert.False(user.EmailVerified);
         var token = Assert.Single(tokens);
         Assert.Equal(PortalBootstrap.TokenLabel, token.Label);
+        Assert.True(token.IsProvisioningToken);
+        Assert.False(token.IsBrowserToken);
         Assert.Null(token.RevokedAt);
-        Assert.Equal(TestHelpers.CreateTokenService(SecretOne).HashToken(TokenA), token.TokenHash);
+        Assert.Null(token.AllowedIps);
+        Assert.Equal(Hash(TokenA), token.TokenHash);
         Assert.DoesNotContain(TokenA, Convert.ToBase64String(token.TokenHash));
-    }
-
-    [DockerFact]
-    public async Task Without_private_server_the_account_is_not_enterprise()
-    {
-        await ResetAsync();
-        await RunAsync(TokenA, privateServer: false);
-        Assert.False(Assert.Single((await StateAsync()).Users).IsEnterprise);
     }
 
     [DockerFact]
@@ -155,17 +177,22 @@ public class PortalBootstrapPostgresTests : IClassFixture<OutboxPostgresFixture>
     }
 
     [DockerFact]
-    public async Task Rotation_revokes_the_old_token_and_adds_the_new_one()
+    public async Task Rotation_keeps_both_values_active_and_revokes_the_one_that_left_the_list()
     {
         await ResetAsync();
         await RunAsync(TokenA);
-        await RunAsync(TokenB);
+        await RunAsync($"{TokenB},{TokenA}");
 
+        var (_, both) = await StateAsync();
+        Assert.Equal(2, both.Count);
+        Assert.All(both, t => Assert.Null(t.RevokedAt));
+        Assert.All(both, t => Assert.True(t.IsProvisioningToken));
+
+        await RunAsync(TokenB);
         var (_, tokens) = await StateAsync();
         Assert.Equal(2, tokens.Count);
-        Assert.NotNull(tokens[0].RevokedAt);
-        Assert.Null(tokens[1].RevokedAt);
-        Assert.Equal(TestHelpers.CreateTokenService(SecretOne).HashToken(TokenB), tokens[1].TokenHash);
+        Assert.NotNull(Assert.Single(tokens, t => t.TokenHash.SequenceEqual(Hash(TokenA))).RevokedAt);
+        Assert.Null(Assert.Single(tokens, t => t.TokenHash.SequenceEqual(Hash(TokenB))).RevokedAt);
     }
 
     [DockerFact]
@@ -178,7 +205,18 @@ public class PortalBootstrapPostgresTests : IClassFixture<OutboxPostgresFixture>
         var (users, tokens) = await StateAsync();
         Assert.Single(users);
         var active = Assert.Single(tokens, t => t.RevokedAt == null);
-        Assert.Equal(TestHelpers.CreateTokenService(SecretTwo).HashToken(TokenA), active.TokenHash);
+        Assert.Equal(Hash(TokenA, SecretTwo), active.TokenHash);
+    }
+
+    [DockerFact]
+    public async Task Allowed_ips_are_written_on_the_token_and_follow_the_configuration()
+    {
+        await ResetAsync();
+        await RunAsync(TokenA, allowedIps: "10.0.0.5, 172.18.0.0/16");
+        Assert.Equal("10.0.0.5,172.18.0.0/16", Assert.Single((await StateAsync()).Tokens).AllowedIps);
+
+        await RunAsync(TokenA);
+        Assert.Null(Assert.Single((await StateAsync()).Tokens).AllowedIps);
     }
 
     [DockerFact]
@@ -207,10 +245,10 @@ public class PortalBootstrapPostgresTests : IClassFixture<OutboxPostgresFixture>
     }
 
     [DockerFact]
-    public async Task A_token_that_belongs_to_another_account_is_left_alone()
+    public async Task A_value_that_belongs_to_another_account_stops_the_start()
     {
         await ResetAsync();
-        var hash = TestHelpers.CreateTokenService(SecretOne).HashToken(TokenA);
+        var hash = Hash(TokenA);
         Guid manualId;
         await using (var db = _pg.CreateContext())
         {
@@ -221,14 +259,14 @@ public class PortalBootstrapPostgresTests : IClassFixture<OutboxPostgresFixture>
             manualId = manual.Id;
         }
 
-        await RunAsync(TokenA);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => RunAsync(TokenA));
+        Assert.DoesNotContain(TokenA, ex.Message);
 
         var (users, tokens) = await StateAsync();
         Assert.Empty(users);
         Assert.Empty(tokens);
         await using var check = _pg.CreateContext();
-        var all = await check.ApiTokens.AsNoTracking().Where(t => t.TokenHash == hash).ToListAsync();
-        Assert.Equal(manualId, Assert.Single(all).UserId);
+        Assert.False(Assert.Single(await check.ApiTokens.AsNoTracking().Where(t => t.TokenHash == hash).ToListAsync()).IsProvisioningToken);
         await check.ApiTokens.Where(t => t.UserId == manualId).ExecuteDeleteAsync();
         await check.Users.Where(u => u.Id == manualId).ExecuteDeleteAsync();
     }
@@ -290,61 +328,20 @@ public class PortalBootstrapPostgresTests : IClassFixture<OutboxPostgresFixture>
     }
 
     [DockerFact]
-    public async Task A_new_value_owned_by_another_account_keeps_the_old_token_and_warns()
-    {
-        await ResetAsync();
-        await RunAsync(TokenA);
-        var hashB = TestHelpers.CreateTokenService(SecretOne).HashToken(TokenB);
-        Guid manualId;
-        await using (var db = _pg.CreateContext())
-        {
-            var manual = new User { Email = $"manual-{Guid.NewGuid():N}@example.com", IsActive = true };
-            db.Users.Add(manual);
-            db.ApiTokens.Add(new ApiToken { UserId = manual.Id, Label = "hand", TokenHash = hashB });
-            await db.SaveChangesAsync();
-            manualId = manual.Id;
-        }
-
-        var log = new CapturingLogger();
-        await using (var db = _pg.CreateContext())
-        {
-            await PortalBootstrap.EnsureAsync(new PortalBootstrapOptions { Token = TokenB }, new PrivateServerOptions(),
-                TestHelpers.CreateTokenService(SecretOne), db, log);
-        }
-
-        Assert.Contains(log.Warnings, w => w.Contains("rotation not performed"));
-        var token = Assert.Single((await StateAsync()).Tokens);
-        Assert.Null(token.RevokedAt);
-        await using var cleanup = _pg.CreateContext();
-        await cleanup.ApiTokens.Where(t => t.UserId == manualId).ExecuteDeleteAsync();
-        await cleanup.Users.Where(u => u.Id == manualId).ExecuteDeleteAsync();
-    }
-
-    [DockerFact]
-    public async Task The_value_under_another_label_on_the_service_account_adds_no_second_row()
+    public async Task A_plain_token_of_the_service_account_with_the_value_becomes_the_provisioning_token()
     {
         await ResetAsync();
         await RunAsync(TokenA);
         await using (var db = _pg.CreateContext())
         {
             await db.ApiTokens.Where(t => t.User!.Email == PortalBootstrap.AccountEmail)
-                .ExecuteUpdateAsync(x => x.SetProperty(t => t.Label, "manual"));
+                .ExecuteUpdateAsync(x => x.SetProperty(t => t.Label, "manual").SetProperty(t => t.IsProvisioningToken, false));
         }
 
         await RunAsync(TokenA);
 
-        Assert.Single((await StateAsync()).Tokens);
-    }
-
-    private sealed class CapturingLogger : Microsoft.Extensions.Logging.ILogger
-    {
-        public List<string> Warnings { get; } = new();
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
-        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
-            TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            if (logLevel == Microsoft.Extensions.Logging.LogLevel.Warning) Warnings.Add(formatter(state, exception));
-        }
+        var token = Assert.Single((await StateAsync()).Tokens);
+        Assert.True(token.IsProvisioningToken);
+        Assert.Equal(PortalBootstrap.TokenLabel, token.Label);
     }
 }

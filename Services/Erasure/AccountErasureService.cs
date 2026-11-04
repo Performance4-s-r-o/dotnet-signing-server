@@ -41,8 +41,8 @@ public enum AccountErasureRefusal
 {
     None,
 
-    /// <summary>The trusted caller's service account (<c>User.TrustedCaller</c>): every tenant's signing runs on it.</summary>
-    PortalAccount,
+    /// <summary>The account still has live provisioned accounts (#131): they would lose their parent.</summary>
+    HasLiveChildren,
 
     /// <summary>The only active administrator: nobody could manage the installation afterwards.</summary>
     LastAdmin,
@@ -78,8 +78,8 @@ public sealed record ErasureAckTarget(Guid ErasureId, string ProductSlug);
 /// a request the service received (<c>subject_request</c>).
 ///
 /// <list type="number">
-/// <item>Refused (<see cref="AccountErasureStatus.Refused"/>) for the portal's service account,
-/// the last active administrator, and while an auto-recharge charge runs or settles.</item>
+/// <item>Refused (<see cref="AccountErasureStatus.Refused"/>) for an account with live provisioned
+/// accounts, the last active administrator, and while an auto-recharge charge runs or settles.</item>
 /// <item>Auto-recharge is switched off (own commit), then saved cards are removed at the payment
 /// provider (this product has no Stripe subscription; auto-recharge on a saved card is its only
 /// recurring charge). Failure = <see cref="AccountErasureStatus.BillingFailed"/>: nothing is
@@ -123,6 +123,13 @@ public sealed class AccountErasureService
     /// <summary>The user deleted their own account.</summary>
     public Task<AccountErasureResult> DeleteAccountAsync(Guid userId, CancellationToken cancellationToken) =>
         EraseAsync(userId, AccountErasure.Origins.AccountDeleted, ack: null, cancellationToken);
+
+    /// <summary>
+    /// The integrator deletes a provisioned account (#131): no person behind it, so no payment
+    /// provider step and nothing sent to the service; its tokens go with the rest.
+    /// </summary>
+    public Task<AccountErasureResult> DeleteProvisionedAccountAsync(Guid userId, CancellationToken cancellationToken) =>
+        EraseAsync(userId, AccountErasure.Origins.IntegratorDeleted, ack: null, cancellationToken);
 
     /// <summary>The service asks for the erasure; <paramref name="ack"/> is queued with the result.</summary>
     public Task<AccountErasureResult> EraseForRequestAsync(Guid userId, ErasureAckTarget ack, CancellationToken cancellationToken) =>
@@ -177,7 +184,8 @@ public sealed class AccountErasureService
             await db.Users.Where(u => u.Id == userId && u.AutoRechargeEnabled)
                 .ExecuteUpdateAsync(s => s.SetProperty(u => u.AutoRechargeEnabled, false), cancellationToken);
             chargesStopped = true;
-            var stopped = await StopRecurringChargesAsync(services, existing, cancellationToken);
+            // A provisioned account never had a card or a payer of its own (#131).
+            var stopped = existing.ParentUserId != null || await StopRecurringChargesAsync(services, existing, cancellationToken);
             if (!stopped)
             {
                 return new AccountErasureResult(AccountErasureStatus.BillingFailed, new Dictionary<string, int>(), null, ChargesStopped: true);
@@ -210,7 +218,10 @@ public sealed class AccountErasureService
     private static async Task<AccountErasureRefusal> RefusalAsync(
         IServiceProvider services, ApplicationDbContext db, User user, CancellationToken cancellationToken)
     {
-        if (user.TrustedCaller) return AccountErasureRefusal.PortalAccount;
+        if (await db.Users.AnyAsync(u => u.ParentUserId == user.Id && u.ErasedAt == null, cancellationToken))
+        {
+            return AccountErasureRefusal.HasLiveChildren;
+        }
 
         if (user.IsAdmin && !await db.Users.AnyAsync(
                 u => u.Id != user.Id && u.IsAdmin && u.IsActive && u.ErasedAt == null, cancellationToken))
@@ -424,6 +435,10 @@ public sealed class AccountErasureService
                 retainedReason is null ? AccountErasure.AckStatuses.Done : AccountErasure.AckStatuses.Retained,
                 AckCounts(counts), retainedReason, subjectRef);
         }
+        else if (firstTime && user.ParentUserId != null)
+        {
+            // Nobody behind a provisioned account (#131): the service holds nothing about it.
+        }
         else if (firstTime && backoffice.AnyEnabledBeyondEmail)
         {
             // The service erases its own targets (consents, e-mail log, support, billing, …).
@@ -517,7 +532,8 @@ public sealed class AccountErasureService
         user.IsActive = false;
         user.IsAdmin = false;
         user.SealAllowed = false;
-        user.TrustedCaller = false;
+        // ParentUserId and ExternalId stay: the usage records of the tenant still point here.
+        user.Label = null;
         user.EmailVerified = false;
         user.EmailVerificationToken = null;
         user.EmailVerificationExpiresAt = null;

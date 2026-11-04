@@ -24,8 +24,7 @@ public sealed record OperationRequest(
     string Fingerprint,
     int BaseCost,
     int Tier,
-    string? PresignId = null,
-    string? TenantId = null);
+    string? PresignId = null);
 
 public enum OperationStart
 {
@@ -130,6 +129,7 @@ public class ApiOperationService
     public Task<ApiOperation?> FindAsync(Guid userId, string operationId, CancellationToken ct = default) =>
         _db.ApiOperations.AsNoTracking().SingleOrDefaultAsync(o => o.UserId == userId && o.OperationId == operationId, ct);
 
+    /// <summary>The operation of a presign, whoever owns it: the caller checks <c>UserId</c> (#131).</summary>
     public Task<ApiOperation?> FindByPresignAsync(string presignId, CancellationToken ct = default) =>
         _db.ApiOperations.AsNoTracking().SingleOrDefaultAsync(o => o.PresignId == presignId, ct);
 
@@ -213,7 +213,6 @@ public class ApiOperationService
             Operation = request.Operation,
             RequestFingerprint = request.Fingerprint,
             PresignId = request.PresignId,
-            TenantId = request.TenantId,
             State = ApiOperationState.Pending,
             BaseCost = request.BaseCost,
             Tier = request.Tier,
@@ -324,8 +323,7 @@ public class ApiOperationService
     /// False when this attempt no longer owns the operation (its lease expired and the credits
     /// went back) — then the result must not be delivered.
     /// </summary>
-    /// <param name="caller">Tenant and request id of a portal call (#78), written on the usage record.</param>
-    public Task<bool> CompleteAsync(ApiOperation op, int attempt, StoredResult? result, PortalCaller? caller = null)
+    public Task<bool> CompleteAsync(ApiOperation op, int attempt, StoredResult? result)
     {
         var body = result == null ? null : ProtectorFor(op).Protect(result.Json);
         var headers = result?.PdfHeaders is { Count: > 0 } ? JsonSerializer.Serialize(result.PdfHeaders) : null;
@@ -374,8 +372,6 @@ public class ApiOperationService
                     BaseCost = op.BaseCost,
                     Tier = op.Tier,
                     Operation = op.Operation,
-                    TenantId = caller?.TenantId,
-                    RequestId = caller?.RequestId,
                     CreatedAt = now,
                 };
                 _db.UsageRecords.Add(usage);

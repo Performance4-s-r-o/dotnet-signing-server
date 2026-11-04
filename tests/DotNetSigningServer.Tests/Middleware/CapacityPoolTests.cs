@@ -158,8 +158,8 @@ public class CapacityPoolTests
     [InlineData(8086, 8086, true)]
     public void Diagnostics_are_served_on_the_internal_listener_only(int? internalPort, int localPort, bool expected)
     {
-        var trust = new PortalTrustOptions { InternalPort = internalPort };
-        Assert.Equal(expected, ConcurrencyDiagnostics.IsServedOn(trust, localPort));
+        var listener = new InternalListenerOptions { InternalPort = internalPort };
+        Assert.Equal(expected, ConcurrencyDiagnostics.IsServedOn(listener, localPort));
     }
 
     [Fact]

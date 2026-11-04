@@ -127,7 +127,7 @@ public class ApiAuthService : IApiAuthService
         // AsNoTracking — result is cached in a singleton IMemoryCache across requests/scopes.
         var candidates = await _dbContext.ApiTokens
             .AsNoTracking()
-            .Include(t => t.User)
+            .Include(t => t.User).ThenInclude(u => u!.Parent)
             .Where(t => t.RevokedAt == null && (t.ExpiresAt == null || t.ExpiresAt > now))
             .Where(t => t.TokenPrefix == null || t.TokenPrefix == prefix)
             .ToListAsync();
@@ -167,13 +167,20 @@ public class ApiAuthService : IApiAuthService
             return null;
         }
 
-        if (apiToken.User != null && !apiToken.User.IsActive)
+        // A provisioned account stops with its parent (#131): deactivating the integrator stops every tenant.
+        if (apiToken.User != null && !apiToken.User.EffectiveActive)
         {
-            _logger.LogWarning("[auth] token rejected: user inactive (tokenId={TokenId} userId={UserId})", apiToken.Id, apiToken.User.Id);
+            _logger.LogWarning("[auth] token rejected: user or its parent inactive (tokenId={TokenId} userId={UserId})", apiToken.Id, apiToken.User.Id);
             return null;
         }
 
-        return new CachedValidation { User = apiToken.User, TokenId = apiToken.Id, IsBrowserToken = apiToken.IsBrowserToken };
+        return new CachedValidation
+        {
+            User = apiToken.User,
+            TokenId = apiToken.Id,
+            IsBrowserToken = apiToken.IsBrowserToken,
+            IsProvisioningToken = apiToken.IsProvisioningToken,
+        };
     }
 
     private static string BuildCacheKey(string token, string? originHeader, IPAddress? clientIp)
@@ -203,8 +210,9 @@ public class ApiAuthService : IApiAuthService
         public Guid? TokenId { get; init; }
         public bool NotFound { get; init; }
         public bool IsBrowserToken { get; init; }
+        public bool IsProvisioningToken { get; init; }
 
         public ApiTokenValidation? ToResult() =>
-            User != null && TokenId is Guid id ? new ApiTokenValidation(User, id, IsBrowserToken) : null;
+            User != null && TokenId is Guid id ? new ApiTokenValidation(User, id, IsBrowserToken, IsProvisioningToken) : null;
     }
 }

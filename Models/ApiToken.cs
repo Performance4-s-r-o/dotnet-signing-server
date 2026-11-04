@@ -23,6 +23,12 @@ public class ApiToken
 
     public bool IsBrowserToken { get; set; }
 
+    /// <summary>
+    /// The integrator's main key (#131): may only provision accounts and read capabilities.
+    /// Created from <c>PORTAL_BOOTSTRAP_TOKEN</c> only, never from the web UI.
+    /// </summary>
+    public bool IsProvisioningToken { get; set; }
+
     public string? AllowedOrigins { get; set; }
 
     public string? AllowedIps { get; set; }

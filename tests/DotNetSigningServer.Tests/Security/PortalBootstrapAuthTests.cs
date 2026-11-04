@@ -26,8 +26,8 @@ public class PortalBootstrapAuthTests : IClassFixture<WebUiAuthFixture>
         using var scope = _fx.App.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DotNetSigningServer.Data.ApplicationDbContext>();
         await PortalBootstrap.EnsureAsync(
-            new PortalBootstrapOptions { Token = Token }, new PrivateServerOptions(),
-            scope.ServiceProvider.GetRequiredService<ITokenService>(), db, NullLogger.Instance);
+            new PortalBootstrapOptions { Token = Token },
+            scope.ServiceProvider.GetRequiredService<ITokenService>(), new IpWhitelistService(), db, NullLogger.Instance);
         return (await db.Users.AsNoTracking().SingleAsync(u => u.Email == PortalBootstrap.AccountEmail)).Id;
     }
 
@@ -48,16 +48,20 @@ public class PortalBootstrapAuthTests : IClassFixture<WebUiAuthFixture>
     }
 
     [DockerFact]
-    public async Task Bootstrap_token_authorises_a_protected_api_route()
+    public async Task Bootstrap_token_provisions_and_reads_capabilities_and_nothing_else()
     {
         await BootstrapAsync();
         var client = _fx.App.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/pdf-template")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/provisioning/accounts")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/capabilities")).StatusCode);
+        var templates = await client.GetAsync("/api/pdf-template");
+        Assert.Equal(HttpStatusCode.Forbidden, templates.StatusCode);
+        Assert.Contains("TOKEN_SCOPE", await templates.Content.ReadAsStringAsync());
 
         var wrong = _fx.App.CreateClient();
         wrong.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token + "x");
-        Assert.NotEqual(HttpStatusCode.OK, (await wrong.GetAsync("/api/pdf-template")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await wrong.GetAsync("/api/provisioning/accounts")).StatusCode);
     }
 
     [DockerFact]

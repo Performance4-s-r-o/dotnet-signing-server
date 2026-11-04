@@ -53,7 +53,7 @@ namespace DotNetSigningServer.Controllers
             {
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Template");
                 SafetyGuard.EnsureSafePdf(input.PdfContent, "Template");
-                var response = await PdfTemplateService.CreateTemplateAsync(input, user.Id, default, PortalTrust.IsTrustedCaller(HttpContext));
+                var response = await PdfTemplateService.CreateTemplateAsync(input, user.Id);
                 return Ok(response);
             }
             catch (ApiValidationException ex)

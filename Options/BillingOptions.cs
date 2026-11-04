@@ -119,13 +119,13 @@ public class BillingOptions
     public static int EffectiveGlobalLimit(BillingOptions options, int processorCount) =>
         options.GlobalConcurrencyLimit is { } configured ? Math.Max(0, configured) : 0;
 
-    /// <summary>The wait in a user's queue: the stored one, capped unless the caller is trusted.</summary>
-    public static int EffectiveQueueSeconds(int stored, int maxSeconds, bool trustedCaller) =>
-        Math.Max(0, trustedCaller ? stored : Math.Min(stored, maxSeconds));
+    /// <summary>The wait in a user's queue: the stored one, capped.</summary>
+    public static int EffectiveQueueSeconds(int stored, int maxSeconds) =>
+        Math.Max(0, Math.Min(stored, maxSeconds));
 
-    /// <summary>How many may wait behind a user's limit; unlimited for the trusted caller.</summary>
-    public static int MaxWaiting(int limit, int factor, bool trustedCaller) =>
-        trustedCaller ? int.MaxValue : (int)Math.Min(int.MaxValue, (long)Math.Max(0, limit) * Math.Max(0, factor));
+    /// <summary>How many may wait behind a user's limit.</summary>
+    public static int MaxWaiting(int limit, int factor) =>
+        (int)Math.Min(int.MaxValue, (long)Math.Max(0, limit) * Math.Max(0, factor));
 
     /// <summary>
     /// Retry-After after a 429 from the user's queue (#69): at least 5 s, and no sooner than the

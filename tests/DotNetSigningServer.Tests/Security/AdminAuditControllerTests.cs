@@ -73,74 +73,25 @@ public class AdminAuditControllerTests
     }
 
     [Fact]
-    public async Task ToggleTrustedCaller_IsAudited_BothWays()
-    {
-        var (db, user) = await SeedAsync();
-        await Controller(db).ToggleTrustedCaller(user.Id);
-        Assert.True((await db.Users.SingleAsync(u => u.Id == user.Id)).TrustedCaller);
-        await Controller(db).ToggleTrustedCaller(user.Id);
-        Assert.False((await db.Users.SingleAsync(u => u.Id == user.Id)).TrustedCaller);
-
-        var entries = await db.AdminAuditEntries.ToListAsync();
-        Assert.Equal(2, entries.Count);
-        Assert.All(entries, e =>
-        {
-            Assert.Equal(ActorId, e.ActorUserId);
-            Assert.Equal(user.Id, e.TargetUserId);
-            Assert.Equal(AdminAudit.Actions.TrustedCaller, e.Action);
-        });
-        Assert.Single(entries, e => e.Change.Contains("\"to\":true"));
-        Assert.Single(entries, e => e.Change.Contains("\"to\":false"));
-    }
-
-    [Fact]
-    public async Task ToggleTrustedCaller_DropsTheAccountsCachedTokens()
-    {
-        var (db, user) = await SeedAsync();
-        var token = new ApiToken { UserId = user.Id, Label = "server" };
-        var other = new ApiToken { UserId = Guid.NewGuid(), Label = "someone else" };
-        db.ApiTokens.AddRange(token, other);
-        await db.SaveChangesAsync();
-        var apiAuth = new Mock<IApiAuthService>();
-        var controller = Controller(db);
-        controller.HttpContext.RequestServices = new ServiceCollection()
-            .AddSingleton(apiAuth.Object)
-            .AddSingleton(Mock.Of<Microsoft.AspNetCore.Mvc.Routing.IUrlHelperFactory>()).BuildServiceProvider();
-
-        await controller.ToggleTrustedCaller(user.Id);
-
-        apiAuth.Verify(a => a.InvalidateTokenCache(token.Id), Times.Once);
-        apiAuth.Verify(a => a.InvalidateTokenCache(other.Id), Times.Never);
-    }
-
-    [Fact]
-    public async Task ToggleTrustedCaller_RefusesTheAdminsOwnAccount()
+    public async Task Enterprise_and_seal_cannot_be_set_on_a_provisioned_account()
     {
         var db = TestHelpers.CreateInMemoryDbContext();
-        db.Users.Add(new User { Id = ActorId, Email = "admin@example.cz", IsAdmin = true });
+        var parent = new User { Email = "parent@service.invalid", IsServiceAccount = true, IsEnterprise = true, SealAllowed = true };
+        var child = new User { Email = "child@service.invalid", IsServiceAccount = true, ParentUserId = parent.Id, ExternalId = "t-1" };
+        db.Users.AddRange(parent, child);
         await db.SaveChangesAsync();
 
-        await Controller(db).ToggleTrustedCaller(ActorId);
+        var enterprise = Controller(db);
+        await enterprise.ToggleEnterprise(child.Id);
+        var seal = Controller(db);
+        await seal.ToggleSealAllowed(child.Id);
 
-        Assert.False((await db.Users.SingleAsync()).TrustedCaller);
+        var stored = await db.Users.AsNoTracking().SingleAsync(u => u.Id == child.Id);
+        Assert.False(stored.IsEnterprise);
+        Assert.False(stored.SealAllowed);
+        Assert.Equal("AdminInheritedFromParent", enterprise.TempData["Error"]);
+        Assert.Equal("AdminInheritedFromParent", seal.TempData["Error"]);
         Assert.Empty(await db.AdminAuditEntries.ToListAsync());
-    }
-
-    [Fact]
-    public void ToggleTrustedCaller_IsAdminOnly()
-    {
-        var policy = typeof(AdminController).GetCustomAttributes(typeof(CookieAuthorizeAttribute), true)
-            .Cast<CookieAuthorizeAttribute>().Single().Policy;
-        Assert.Equal("AdminOnly", policy);
-        var action = typeof(AdminController).GetMethod(nameof(AdminController.ToggleTrustedCaller))!;
-        Assert.Empty(action.GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute), true));
-        Assert.NotEmpty(action.GetCustomAttributes(typeof(ValidateAntiForgeryTokenAttribute), true));
-    }
-
-    [Fact]
-    public void TrustedCaller_IsOffByDefault()
-    {
-        Assert.False(new User().TrustedCaller);
     }
 
     [Fact]

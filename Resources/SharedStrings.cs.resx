@@ -172,7 +172,6 @@
   <data name="VisualSignError" xml:space="preserve"><value>Při aplikaci vizuálního podpisu došlo k chybě</value></data>
   <data name="SealCertificateRequired" xml:space="preserve"><value>Server nemá vlastní pečetní certifikát. Certifikát dodejte sami (presign/sign s vaším klíčem, nebo sign-pfx).</value></data>
   <data name="SealNotPermitted" xml:space="preserve"><value>Pečetění není pro tento účet povoleno.</value></data>
-  <data name="AttachmentBypassNotPermitted" xml:space="preserve"><value>Přeskočení účtování přílohy smí jen důvěryhodný volající.</value></data>
   <data name="SealAllowed" xml:space="preserve"><value>Pečetění</value></data>
   <data name="SealAllowedDescription" xml:space="preserve"><value>Odemkne tomuto účtu /api/seal. Server vlastní certifikát nemá, endpoint proto jen odpoví 422 SEAL_CERTIFICATE_REQUIRED; pečeťte vlastním certifikátem přes presign/sign nebo sign-pfx. Ve výchozím stavu vypnuto.</value></data>
   <data name="EnableSealAllowed" xml:space="preserve"><value>Povolit pečetění</value></data>
@@ -181,16 +180,6 @@
   <data name="ConfirmDisableSealAllowed" xml:space="preserve"><value>Odebrat tomuto účtu přístup k pečetění?</value></data>
   <data name="SealAllowedEnabled" xml:space="preserve"><value>Pečetění pro tento účet povoleno.</value></data>
   <data name="SealAllowedDisabled" xml:space="preserve"><value>Pečetění pro tento účet zakázáno.</value></data>
-  <data name="TrustedCaller" xml:space="preserve"><value>Důvěryhodný volající</value></data>
-  <data name="TrustedCallerDescription" xml:space="preserve"><value>Token tohoto účtu je přijat jen na interním portu (INTERNAL_API_PORT); tam se věří jeho hlavičkám X-P4-Tenant / X-Request-Id a smí přeskočit účtování příloh. Na veřejném portu je odmítnut (401). Bez interního portu nemá příznak účinek.</value></data>
-  <data name="EnableTrustedCaller" xml:space="preserve"><value>Označit jako důvěryhodného volajícího</value></data>
-  <data name="DisableTrustedCaller" xml:space="preserve"><value>Zrušit důvěryhodného volajícího</value></data>
-  <data name="ConfirmEnableTrustedCaller" xml:space="preserve"><value>Označit tento účet jako důvěryhodného volajícího? Jeho token pak na veřejném portu přestane fungovat.</value></data>
-  <data name="ConfirmDisableTrustedCaller" xml:space="preserve"><value>Odebrat tomuto účtu důvěru?</value></data>
-  <data name="TrustedCallerEnabled" xml:space="preserve"><value>Účet je označen jako důvěryhodný volající.</value></data>
-  <data name="TrustedCallerDisabled" xml:space="preserve"><value>Účet už není důvěryhodný volající.</value></data>
-  <data name="TrustedCallerNotOnSelf" xml:space="preserve"><value>Vlastní účet nelze označit jako důvěryhodného volajícího.</value></data>
-  <data name="TrustedCallerBadge" xml:space="preserve"><value>Důvěryhodný volající</value></data>
   <data name="Error_EVIDENCE_CERT_NOT_CONFIGURED" xml:space="preserve"><value>Šifrovací certifikát evidence není nastaven. Nic nebylo podepsáno ani účtováno. Kontaktujte provozovatele.</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>Při přidávání přílohy došlo k chybě</value></data>
   <data name="PdfaConversionError" xml:space="preserve"><value>Při převodu dokumentu na PDF/A došlo k chybě</value></data>
@@ -650,7 +639,6 @@
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Příliš mnoho požadavků. Zkuste to později.</value></data>
   <data name="Error_CONTENT_STAMP_REQUIRED" xml:space="preserve"><value>Pole podpisu se má umístit vedle obrázkového podpisu, ale požadavek žádný obrázkový podpis nenese.</value></data>
   <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Příliš mnoho dokumentů čeká na podpis. Dokončete je, nebo počkejte, až vyprší.</value></data>
-  <data name="Error_TENANT_MISMATCH" xml:space="preserve"><value>Dokument byl připraven k podpisu pro jinou organizaci.</value></data>
   <data name="Error_SIGNATURE_INVALID" xml:space="preserve"><value>Podpis neodpovídá dokumentu připravenému k podpisu ani certifikátu. Nic se nepodepsalo ani nestrhlo.</value></data>
   <data name="Error_TOO_MANY_TEMPLATES" xml:space="preserve"><value>Byl dosažen maximální počet uložených šablon.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Stránka PDF je pro hledání kódů příliš velká (víc než asi 1,6 m² nebo strana delší než 5 m).</value></data>
@@ -784,7 +772,7 @@
   <data name="ReauthCodeHeading" xml:space="preserve"><value>Nebo potvrďte kódem z e-mailu</value></data>
   <data name="ReauthSendCodeButton" xml:space="preserve"><value>Poslat kód</value></data>
   <data name="Error_REAUTH_REQUIRED" xml:space="preserve"><value>Nejdřív potvrďte heslo nebo kód z e-mailu a pak akci zopakujte.</value></data>
-  <data name="Error_TOKEN_SCOPE" xml:space="preserve"><value>Prohlížečový token smí jen presign, sign a stav operace. Pro tento endpoint použijte serverový token.</value></data>
+  <data name="Error_TOKEN_SCOPE" xml:space="preserve"><value>Tento token pro tento endpoint použít nelze: prohlížečový token jen pro presign, sign a stav operace, zakládací token jen pro zakládání účtů a capabilities.</value></data>
   <data name="Error_TOKEN_CREDIT_LIMIT" xml:space="preserve"><value>Tento token vyčerpal svůj limit kreditů.</value></data>
   <data name="BrowserTokenScopeHint" xml:space="preserve"><value>Prohlížečový token umí jen presign, sign a čtení stavu svých operací. Kontrola Origin je jen doplňková ochrana: jakýkoli klient může poslat libovolný Origin, proto token berte jako veřejný a omezte ho limitem kreditů.</value></data>
   <data name="BrowserTokenCreditLimitLabel" xml:space="preserve"><value>Limit kreditů (nepovinné)</value></data>
@@ -813,10 +801,24 @@
   <data name="AccountDeleteFailed" xml:space="preserve"><value>Účet se nepodařilo smazat. Automatické dobíjení už může být vypnuté a uložené karty odebrané, vaše údaje ale zůstaly. Zkuste to prosím později.</value></data>
   <data name="AccountDeleteBillingFailed" xml:space="preserve"><value>Uložené karty se u platební brány nepodařilo odebrat všechny, proto účet smazán nebyl. Automatické dobíjení jsme vypnuli a některé karty už mohou být odebrané. Zkuste to prosím později nebo kontaktujte podporu.</value></data>
   <data name="AccountDeleted" xml:space="preserve"><value>Váš účet byl smazán.</value></data>
-  <data name="AccountDeletePortalAccount" xml:space="preserve"><value>Tento účet je servisní účet portálu a tady ho smazat nejde. Obraťte se na správce.</value></data>
   <data name="AccountDeleteLastAdmin" xml:space="preserve"><value>Jste jediný správce. Než svůj účet smažete, udělejte správcem jiný účet.</value></data>
   <data name="AccountDeleteRechargeInProgress" xml:space="preserve"><value>Právě probíhá automatické dobití kreditů. Zkuste to prosím za pár minut.</value></data>
   <data name="AccountDeleteRechargeInProgressStopped" xml:space="preserve"><value>Právě probíhalo automatické dobití kreditů, proto účet smazán nebyl. Automatické dobíjení jsme vypnuli. Zkuste to prosím za pár minut.</value></data>
   <data name="Error_SEAL_PLACEMENT_NO_ROOM" xml:space="preserve"><value>Podpis se na tomto místě nevejde: obrázek podpisu nebo pečeť vedle něj by překryly jiný podpis nebo by přesáhly stránku. Přesuňte podpis na volné místo.</value></data>
   <data name="Error_DOCUMENT_CERTIFIED_NO_CHANGES" xml:space="preserve"><value>Dokument je certifikovaný a jeho certifikace nedovoluje přidat obrázek podpisu. Nic nebylo podepsáno.</value></data>
+  <data name="Error_TOKEN_WEAK" xml:space="preserve"><value>Token je příliš slabý: aspoň 43 znaků náhodných dat (32 náhodných bajtů, base64url), bez mezer, uvozovek a čárek.</value></data>
+  <data name="Error_EXTERNAL_ID_INVALID" xml:space="preserve"><value>externalId musí mít 1 až 64 znaků z písmen, číslic a . _ : -</value></data>
+  <data name="Error_LABEL_INVALID" xml:space="preserve"><value>label smí mít nejvýš 128 znaků a žádné řídicí znaky.</value></data>
+  <data name="Error_ACCOUNT_EXISTS" xml:space="preserve"><value>Účet s tímto externalId už existuje s jiným tokenem, nebo je tento token už použitý. K existujícímu účtu se token nevydává.</value></data>
+  <data name="Error_PARENT_NOT_ENTERPRISE" xml:space="preserve"><value>Účty lze zakládat jen pod účtem Enterprise.</value></data>
+  <data name="Error_PROVISIONING_LIMIT" xml:space="preserve"><value>Příliš mnoho požadavků na zakládání účtů. Zkuste to později.</value></data>
+  <data name="Error_TOKEN_IN_USE" xml:space="preserve"><value>Tento token už je použitý nebo byl zneplatněn. Vygenerujte nový.</value></data>
+  <data name="Error_TOO_MANY_API_TOKENS" xml:space="preserve"><value>Účet má nejvyšší povolený počet aktivních tokenů. Nejdřív zneplatněte staré.</value></data>
+  <data name="Error_ACCOUNT_DELETE_REFUSED" xml:space="preserve"><value>Účet teď smazat nelze.</value></data>
+  <data name="AccountDeleteHasChildAccounts" xml:space="preserve"><value>Pod tímto účtem jsou založené účty, které jsou stále aktivní. Nejdřív je potřeba smazat je.</value></data>
+  <data name="AdminInheritedFromParent" xml:space="preserve"><value>Dědí se z nadřazeného účtu; u založeného účtu se nastavit nedá.</value></data>
+  <data name="AdminProvisionedBy" xml:space="preserve"><value>Založil</value></data>
+  <data name="AdminProvisionedLabel" xml:space="preserve"><value>Název od integrátora</value></data>
+  <data name="AdminChildAccounts" xml:space="preserve"><value>Založené účty</value></data>
+  <data name="AdminProvisionedBadge" xml:space="preserve"><value>Založený</value></data>
 </root>

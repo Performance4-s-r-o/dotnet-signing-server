@@ -847,8 +847,8 @@ public class AccountController : Controller
         {
             return result.Refusal switch
             {
-                Services.Erasure.AccountErasureRefusal.PortalAccount =>
-                    DeleteAccountRefused(StatusCodes.Status409Conflict, "ACCOUNT_DELETE_PORTAL_ACCOUNT", "AccountDeletePortalAccount"),
+                Services.Erasure.AccountErasureRefusal.HasLiveChildren =>
+                    DeleteAccountRefused(StatusCodes.Status409Conflict, "ACCOUNT_DELETE_HAS_CHILD_ACCOUNTS", "AccountDeleteHasChildAccounts"),
                 Services.Erasure.AccountErasureRefusal.LastAdmin =>
                     DeleteAccountRefused(StatusCodes.Status409Conflict, "ACCOUNT_DELETE_LAST_ADMIN", "AccountDeleteLastAdmin"),
                 _ => DeleteAccountRefused(StatusCodes.Status409Conflict, "ACCOUNT_DELETE_RECHARGE_IN_PROGRESS",

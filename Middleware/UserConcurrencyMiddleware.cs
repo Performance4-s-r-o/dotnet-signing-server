@@ -273,11 +273,9 @@ public class UserConcurrencyMiddleware
         var gate = Semaphores.GetOrAdd(userId.Value, _ => new UserGate(limit));
         gate.SetLimit(limit);
 
-        // #69: the queue is bounded in time and length, except for the trusted caller, which
-        // queues its own tenants fairly and keeps what its account has stored.
-        var trusted = PortalTrust.IsTrustedCaller(context);
-        var queueSeconds = BillingOptions.EffectiveQueueSeconds(queueTimeoutSeconds, _billingOptions.UserQueueMaxSeconds, trusted);
-        var maxWaiting = BillingOptions.MaxWaiting(limit, _billingOptions.UserQueueLengthFactor, trusted);
+        // #69: the queue is bounded in time and length for every account, provisioned ones included.
+        var queueSeconds = BillingOptions.EffectiveQueueSeconds(queueTimeoutSeconds, _billingOptions.UserQueueMaxSeconds);
+        var maxWaiting = BillingOptions.MaxWaiting(limit, _billingOptions.UserQueueLengthFactor);
         var waitTimeout = queueSeconds > 0
             ? TimeSpan.FromSeconds(queueSeconds)
             : TimeSpan.Zero;
@@ -398,14 +396,21 @@ public class UserConcurrencyMiddleware
         {
             using var scope = services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            // A provisioned account's own setting, else its parent's, else the default (#131).
             var row = await db.Users
                 .AsNoTracking()
                 .Where(u => u.Id == userId)
-                .Select(u => new { u.MaxConcurrentOperations, u.ConcurrencyQueueTimeoutSeconds })
+                .Select(u => new
+                {
+                    u.MaxConcurrentOperations,
+                    u.ConcurrencyQueueTimeoutSeconds,
+                    ParentMax = u.Parent == null ? null : u.Parent.MaxConcurrentOperations,
+                    ParentQueue = u.Parent == null ? null : u.Parent.ConcurrencyQueueTimeoutSeconds,
+                })
                 .FirstOrDefaultAsync();
 
-            var limit = row?.MaxConcurrentOperations ?? defaultLimit;
-            var queueTimeout = row?.ConcurrencyQueueTimeoutSeconds ?? defaultQueueTimeout;
+            var limit = row?.MaxConcurrentOperations ?? row?.ParentMax ?? defaultLimit;
+            var queueTimeout = row?.ConcurrencyQueueTimeoutSeconds ?? row?.ParentQueue ?? defaultQueueTimeout;
             LimitCache[userId] = (limit, queueTimeout, DateTimeOffset.UtcNow.AddSeconds(LimitCacheDurationSeconds));
             return (limit, queueTimeout);
         }

@@ -172,7 +172,6 @@
   <data name="VisualSignError" xml:space="preserve"><value>An error occurred while applying the visual signature</value></data>
   <data name="SealCertificateRequired" xml:space="preserve"><value>The server has no seal certificate of its own. Supply the certificate yourself (presign/sign with your key, or sign-pfx).</value></data>
   <data name="SealNotPermitted" xml:space="preserve"><value>Sealing is not enabled for this account.</value></data>
-  <data name="AttachmentBypassNotPermitted" xml:space="preserve"><value>Only the trusted caller may skip the attachment charge.</value></data>
   <data name="SealAllowed" xml:space="preserve"><value>Sealing</value></data>
   <data name="SealAllowedDescription" xml:space="preserve"><value>Lets this account reach /api/seal. The server has no certificate of its own, so the endpoint only answers 422 SEAL_CERTIFICATE_REQUIRED; seal with your own certificate via presign/sign or sign-pfx. Off by default.</value></data>
   <data name="EnableSealAllowed" xml:space="preserve"><value>Enable sealing</value></data>
@@ -181,16 +180,6 @@
   <data name="ConfirmDisableSealAllowed" xml:space="preserve"><value>Withdraw this account's access to sealing?</value></data>
   <data name="SealAllowedEnabled" xml:space="preserve"><value>Sealing enabled for this account.</value></data>
   <data name="SealAllowedDisabled" xml:space="preserve"><value>Sealing disabled for this account.</value></data>
-  <data name="TrustedCaller" xml:space="preserve"><value>Trusted caller</value></data>
-  <data name="TrustedCallerDescription" xml:space="preserve"><value>This account's token is accepted on the internal port (INTERNAL_API_PORT) only; there its X-P4-Tenant / X-Request-Id headers are believed and it may skip the attachment charge. On the public port it is refused (401). Without an internal port the flag has no effect.</value></data>
-  <data name="EnableTrustedCaller" xml:space="preserve"><value>Mark as trusted caller</value></data>
-  <data name="DisableTrustedCaller" xml:space="preserve"><value>Remove trusted caller</value></data>
-  <data name="ConfirmEnableTrustedCaller" xml:space="preserve"><value>Mark this account as the trusted caller? Its token then stops working on the public port.</value></data>
-  <data name="ConfirmDisableTrustedCaller" xml:space="preserve"><value>Withdraw trust from this account?</value></data>
-  <data name="TrustedCallerEnabled" xml:space="preserve"><value>The account is marked as trusted caller.</value></data>
-  <data name="TrustedCallerDisabled" xml:space="preserve"><value>The account is no longer a trusted caller.</value></data>
-  <data name="TrustedCallerNotOnSelf" xml:space="preserve"><value>You cannot mark your own account as trusted caller.</value></data>
-  <data name="TrustedCallerBadge" xml:space="preserve"><value>Trusted caller</value></data>
   <data name="Error_EVIDENCE_CERT_NOT_CONFIGURED" xml:space="preserve"><value>The evidence encryption certificate is not configured. Nothing was signed or charged. Contact the operator.</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>An error occurred while adding the attachment</value></data>
   <data name="PdfaConversionError" xml:space="preserve"><value>An error occurred while converting the document to PDF/A</value></data>
@@ -650,7 +639,6 @@
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Too many requests. Try again later.</value></data>
   <data name="Error_CONTENT_STAMP_REQUIRED" xml:space="preserve"><value>The signature field is to be placed beside the image signature, but the request carries no image signature.</value></data>
   <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Too many documents are waiting to be signed. Finish or wait for them to expire.</value></data>
-  <data name="Error_TENANT_MISMATCH" xml:space="preserve"><value>This document was prepared for signing for a different organisation.</value></data>
   <data name="Error_SIGNATURE_INVALID" xml:space="preserve"><value>The signature does not match the document prepared for signing or the certificate. Nothing was signed or charged.</value></data>
   <data name="Error_TOO_MANY_TEMPLATES" xml:space="preserve"><value>The maximum number of stored templates has been reached.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>A page of the PDF is too large to scan for codes (more than about 1.6 m², or one side longer than 5 m).</value></data>
@@ -784,7 +772,7 @@
   <data name="ReauthCodeHeading" xml:space="preserve"><value>Or confirm with a code sent by e-mail</value></data>
   <data name="ReauthSendCodeButton" xml:space="preserve"><value>Send me a code</value></data>
   <data name="Error_REAUTH_REQUIRED" xml:space="preserve"><value>Confirm your password or an e-mailed code first, then repeat the action.</value></data>
-  <data name="Error_TOKEN_SCOPE" xml:space="preserve"><value>A browser token may only be used for presign, sign and the state of an operation. Use a server token for this endpoint.</value></data>
+  <data name="Error_TOKEN_SCOPE" xml:space="preserve"><value>This token may not be used for this endpoint: a browser token only for presign, sign and the state of an operation, a provisioning token only for provisioning and capabilities.</value></data>
   <data name="Error_TOKEN_CREDIT_LIMIT" xml:space="preserve"><value>This token has reached its credit limit.</value></data>
   <data name="BrowserTokenScopeHint" xml:space="preserve"><value>A browser token can only presign, sign and read the state of its operations. The Origin check is extra protection only: any client can send any Origin, so treat a browser token as public and cap it with a credit limit.</value></data>
   <data name="BrowserTokenCreditLimitLabel" xml:space="preserve"><value>Credit limit (optional)</value></data>
@@ -813,10 +801,24 @@
   <data name="AccountDeleteFailed" xml:space="preserve"><value>Your account could not be deleted. Auto-recharge may already be switched off and saved cards removed; your data is still there. Please try again later.</value></data>
   <data name="AccountDeleteBillingFailed" xml:space="preserve"><value>Your saved cards could not all be removed at the payment provider, so your account was not deleted. Auto-recharge has been switched off and some cards may already be removed. Please try again later or contact support.</value></data>
   <data name="AccountDeleted" xml:space="preserve"><value>Your account has been deleted.</value></data>
-  <data name="AccountDeletePortalAccount" xml:space="preserve"><value>This account is the portal's service account and cannot be deleted here. Contact the administrator.</value></data>
   <data name="AccountDeleteLastAdmin" xml:space="preserve"><value>You are the only administrator. Make another account an administrator before deleting yours.</value></data>
   <data name="AccountDeleteRechargeInProgress" xml:space="preserve"><value>An automatic top-up is being processed right now. Please try again in a few minutes.</value></data>
   <data name="AccountDeleteRechargeInProgressStopped" xml:space="preserve"><value>An automatic top-up was being processed, so your account was not deleted. Auto-recharge has been switched off. Please try again in a few minutes.</value></data>
   <data name="Error_SEAL_PLACEMENT_NO_ROOM" xml:space="preserve"><value>The signature does not fit here: the signature image or the seal beside it would cover another signature or run off the page. Move the signature to a free spot.</value></data>
   <data name="Error_DOCUMENT_CERTIFIED_NO_CHANGES" xml:space="preserve"><value>The document is certified and its certification does not allow adding a signature image. Nothing was signed.</value></data>
+  <data name="Error_TOKEN_WEAK" xml:space="preserve"><value>The token is too weak: at least 43 characters of random data (32 random bytes, base64url), no spaces, quotes or commas.</value></data>
+  <data name="Error_EXTERNAL_ID_INVALID" xml:space="preserve"><value>externalId must be 1 to 64 characters of letters, digits and . _ : -</value></data>
+  <data name="Error_LABEL_INVALID" xml:space="preserve"><value>label may have at most 128 characters and no control characters.</value></data>
+  <data name="Error_ACCOUNT_EXISTS" xml:space="preserve"><value>An account with this externalId already exists with a different token, or this token is already in use. No token is issued for an existing account.</value></data>
+  <data name="Error_PARENT_NOT_ENTERPRISE" xml:space="preserve"><value>Accounts can be provisioned only under an Enterprise account.</value></data>
+  <data name="Error_PROVISIONING_LIMIT" xml:space="preserve"><value>Too many provisioning requests. Try again later.</value></data>
+  <data name="Error_TOKEN_IN_USE" xml:space="preserve"><value>This token is already in use or was revoked. Generate a new one.</value></data>
+  <data name="Error_TOO_MANY_API_TOKENS" xml:space="preserve"><value>The account has the maximum number of active tokens. Revoke the old ones first.</value></data>
+  <data name="Error_ACCOUNT_DELETE_REFUSED" xml:space="preserve"><value>The account cannot be deleted now.</value></data>
+  <data name="AccountDeleteHasChildAccounts" xml:space="preserve"><value>This account has provisioned accounts that are still active. They have to be deleted first.</value></data>
+  <data name="AdminInheritedFromParent" xml:space="preserve"><value>Inherited from the parent account; it cannot be set on a provisioned account.</value></data>
+  <data name="AdminProvisionedBy" xml:space="preserve"><value>Provisioned by</value></data>
+  <data name="AdminProvisionedLabel" xml:space="preserve"><value>Name from the integrator</value></data>
+  <data name="AdminChildAccounts" xml:space="preserve"><value>Provisioned accounts</value></data>
+  <data name="AdminProvisionedBadge" xml:space="preserve"><value>Provisioned</value></data>
 </root>

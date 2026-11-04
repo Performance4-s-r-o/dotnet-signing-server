@@ -199,12 +199,14 @@ namespace DotNetSigningServer.Controllers
             {
                 var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
                                   ?? User.FindFirst("sub")?.Value;
+                // The provisioning token never reaches an endpoint through here (#131): the gate refuses it first.
+                if (SessionClaims.IsProvisioningToken(User)) return null;
                 if (Guid.TryParse(userIdClaim, out var guid))
                 {
-                    var cookieUser = await DbContext.Users.FirstOrDefaultAsync(u => u.Id == guid);
+                    var cookieUser = await DbContext.Users.Include(u => u.Parent).FirstOrDefaultAsync(u => u.Id == guid);
                     if (cookieUser != null)
                     {
-                        if (!cookieUser.IsActive) return null;
+                        if (!cookieUser.EffectiveActive) return null;
                         TagAuthenticatedUser(cookieUser.Id);
                         return cookieUser;
                     }
@@ -224,18 +226,15 @@ namespace DotNetSigningServer.Controllers
             {
                 return null;
             }
-            // Same rule as the authentication handler (#78): a trusted account's token only on the internal listener.
-            var portalTrust = HttpContext.RequestServices.GetService<DotNetSigningServer.Options.PortalTrustOptions>()
-                              ?? new DotNetSigningServer.Options.PortalTrustOptions();
-            if (PortalTrust.Classify(portalTrust, HttpContext.Connection.LocalPort, validation.User.TrustedCaller, validation.IsBrowserToken)
-                == PortalCallKind.Refused)
+            // The provisioning token calls no endpoint that asks for a user here (#131).
+            if (validation.IsProvisioningToken)
             {
                 return null;
             }
             var tokenUser = validation.User;
 
-            var dbUser = await DbContext.Users.FirstOrDefaultAsync(u => u.Id == tokenUser.Id);
-            if (dbUser != null && !dbUser.IsActive) return null;
+            var dbUser = await DbContext.Users.Include(u => u.Parent).FirstOrDefaultAsync(u => u.Id == tokenUser.Id);
+            if (dbUser != null && !dbUser.EffectiveActive) return null;
             if (dbUser != null) TagAuthenticatedUser(dbUser.Id);
             return dbUser;
         }
@@ -322,20 +321,9 @@ namespace DotNetSigningServer.Controllers
                     new { message = Localizer[globalLimit ? "ServerAtCapacity" : "TooManyRequests"].Value, retryAfter = 10 });
             }
 
-            // The portal holds one account for every tenant (#78): an operation started for one tenant
-            // is neither replayed nor continued for another — checked before anything is reserved.
-            var callerTenant = PortalTrust.CallerOf(HttpContext).TenantId;
-            var prior = presignId != null
-                ? await Operations.FindByPresignAsync(presignId, HttpContext.RequestAborted)
-                : clientKey != null ? await Operations.FindAsync(user.Id, clientKey, HttpContext.RequestAborted) : null;
-            if (prior != null && prior.UserId == user.Id && PortalTrust.TenantsConflict(prior.TenantId, callerTenant))
-            {
-                return TenantMismatch(prior.OperationId);
-            }
-
             var tier = HttpContext.Items[DotNetSigningServer.Middleware.UserConcurrencyMiddleware.TierItemKey] is int t ? t : 1;
             var begin = await Operations.BeginAsync(
-                new OperationRequest(user.Id, user.IsEnterprise, operation, clientKey, fingerprint, baseCost, tier, presignId, callerTenant),
+                new OperationRequest(user.Id, user.EffectiveEnterprise, operation, clientKey, fingerprint, baseCost, tier, presignId),
                 HttpContext.RequestAborted);
             var op = begin.Operation;
             if (!string.IsNullOrEmpty(op.OperationId)) Response.Headers[OperationIdHeader] = op.OperationId;
@@ -540,17 +528,6 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
-        public const string TenantMismatchCode = "TENANT_MISMATCH";
-
-        /// <summary>403 for a presign or operation of another tenant (#78). Logs ids only.</summary>
-        protected IActionResult TenantMismatch(string? reference)
-        {
-            Logger.LogWarning(Logging.LoggingEvents.AuthFailed,
-                "Refused {Reference}: it belongs to another tenant than X-P4-Tenant of this call", reference);
-            return StatusCode(StatusCodes.Status403Forbidden,
-                new { code = TenantMismatchCode, message = Localizer[$"Error_{TenantMismatchCode}"].Value });
-        }
-
         /// <summary>
         /// The answer for a TSA failure (#72, #82): a code and a generic message, the detail only
         /// in the log. The exception text carries whatever the connection said (addresses, ports,
@@ -637,7 +614,7 @@ namespace DotNetSigningServer.Controllers
             {
                 try
                 {
-                    var done = await Operations.CompleteAsync(op, attempt, stored, PortalTrust.CallerOf(HttpContext));
+                    var done = await Operations.CompleteAsync(op, attempt, stored);
                     return (done, done);
                 }
                 catch (Exception storeError)
@@ -650,7 +627,7 @@ namespace DotNetSigningServer.Controllers
             {
                 // After a failed store this is also how a commit that did go through is
                 // recognised: the row is already completed by this attempt.
-                return (await Operations.CompleteAsync(op, attempt, null, PortalTrust.CallerOf(HttpContext)), false);
+                return (await Operations.CompleteAsync(op, attempt, null), false);
             }
             catch
             {
@@ -752,7 +729,7 @@ namespace DotNetSigningServer.Controllers
         private async Task TriggerAutoRechargeIfLowAsync(User user)
         {
             // Skip for Enterprise users — they're billed manually
-            if (user.IsEnterprise || !user.AutoRechargeEnabled || user.AutoRechargeQuantity <= 0) return;
+            if (user.EffectiveEnterprise || !user.AutoRechargeEnabled || user.AutoRechargeQuantity <= 0) return;
 
             try
             {
@@ -853,7 +830,7 @@ namespace DotNetSigningServer.Controllers
         /// </summary>
         protected static bool LacksCredits(User user, int requiredCredits)
         {
-            return requiredCredits > 0 && !user.IsEnterprise && user.CreditsRemaining < requiredCredits;
+            return requiredCredits > 0 && !user.EffectiveEnterprise && user.CreditsRemaining < requiredCredits;
         }
 
         protected static int CalculateCreditsForPages(int pageCount)

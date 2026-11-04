@@ -127,14 +127,6 @@ public class User
     public bool SealAllowed { get; set; } = false;
 
     /// <summary>
-    /// The trusted internal caller's service account (#78): its server token is accepted only on
-    /// the internal listener (<c>INTERNAL_API_PORT</c>), and only there are its tenant headers
-    /// believed and the attachment debit skippable. On the public port the token is refused.
-    /// Off by default; only an administrator sets it, never the account itself.
-    /// </summary>
-    public bool TrustedCaller { get; set; } = false;
-
-    /// <summary>
     /// A machine account created from configuration (#169), e.g. the portal's. It has no usable
     /// password and never signs in to the web UI: sign-in, password reset and the e-mail code
     /// all refuse it, and an existing cookie session is rejected. It is reached by API token only.
@@ -155,6 +147,45 @@ public class User
     /// it; see <c>AccountErasureService</c>. NULL = a live account.
     /// </summary>
     public DateTimeOffset? ErasedAt { get; set; }
+
+    /// <summary>
+    /// The integrator's account that provisioned this one (#131); null for every ordinary account.
+    /// A provisioned account is always a service account, one level deep, and inherits Enterprise
+    /// and the seal grant from it (<see cref="EffectiveEnterprise"/>).
+    /// </summary>
+    public Guid? ParentUserId { get; set; }
+
+    public User? Parent { get; set; }
+
+    public ICollection<User> Children { get; set; } = new List<User>();
+
+    /// <summary>The integrator's id for this account (its tenant, or <c>platform</c>); unique per parent among live accounts.</summary>
+    [MaxLength(MaxExternalIdLength)]
+    public string? ExternalId { get; set; }
+
+    public const int MaxExternalIdLength = 64;
+
+    /// <summary>A name the integrator gave the account, for the administration only.</summary>
+    [MaxLength(MaxLabelLength)]
+    public string? Label { get; set; }
+
+    public const int MaxLabelLength = 128;
+
+    /// <summary>Enterprise of this account, or of its parent for a provisioned one.</summary>
+    [NotMapped]
+    public bool EffectiveEnterprise => ParentUserId == null ? IsEnterprise : RequireParent().IsEnterprise;
+
+    /// <summary>The seal grant of this account, or of its parent for a provisioned one.</summary>
+    [NotMapped]
+    public bool EffectiveSealAllowed => ParentUserId == null ? SealAllowed : RequireParent().SealAllowed;
+
+    /// <summary>Active, and so is the parent of a provisioned account.</summary>
+    [NotMapped]
+    public bool EffectiveActive => IsActive && (ParentUserId == null || (RequireParent().IsActive && RequireParent().ErasedAt == null));
+
+    // A provisioned account loaded without its parent must not read as "not Enterprise".
+    private User RequireParent() => Parent
+        ?? throw new InvalidOperationException($"User {Id} is a provisioned account; load it with its Parent.");
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;

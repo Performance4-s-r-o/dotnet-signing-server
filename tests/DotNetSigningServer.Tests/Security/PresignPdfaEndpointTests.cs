@@ -75,7 +75,7 @@ public class PresignPdfaEndpointTests : IDisposable
             Ok((await work(CancellationToken.None)).Body);
     }
 
-    private Harness Controller(bool trusted = false, BillingOptions? billing = null, HttpContent? multipart = null, bool runWork = false)
+    private Harness Controller(BillingOptions? billing = null, HttpContent? multipart = null, bool runWork = false)
     {
         var limits = new LimitsOptions { RejectActiveContent = true };
         var services = new ServiceCollection();
@@ -90,7 +90,6 @@ public class PresignPdfaEndpointTests : IDisposable
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(new Microsoft.AspNetCore.Mvc.JsonOptions()));
 
         var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, _user.Id.ToString()) };
-        if (trusted) claims.Add(new Claim(PortalTrust.TrustedCallerClaim, "true"));
         var http = new DefaultHttpContext { RequestServices = services.BuildServiceProvider() };
         http.User = new ClaimsPrincipal(new ClaimsIdentity(claims, ApiKeyAuthenticationHandler.SchemeName));
         if (multipart != null)
@@ -154,7 +153,7 @@ public class PresignPdfaEndpointTests : IDisposable
     [Fact]
     public async Task A_content_stamp_is_reported_with_the_seal_box_and_costs_the_same()
     {
-        var controller = Controller(trusted: true);
+        var controller = Controller();
         var input = Input(PresignPdfaTests.Pdf(_ => { }));
         input.SignRect = new SignRect { Width = 150, Height = 50 };
         input.ContentStamp = new ContentStampInput { SignRect = new SignRect { X = 50, Y = 100, Width = 200, Height = 60 }, SignerName = "Jana" };
@@ -176,7 +175,7 @@ public class PresignPdfaEndpointTests : IDisposable
     [Fact]
     public async Task A_stamp_without_room_is_422_from_presign_and_the_placement_check_and_writes_nothing()
     {
-        var controller = Controller(trusted: true);
+        var controller = Controller();
         PreSignInput Blocked()
         {
             var input = Input(PresignPdfaTests.Pdf(_ => { }));
@@ -242,19 +241,6 @@ public class PresignPdfaEndpointTests : IDisposable
 
         await controller.Sign(new SignInput { Id = row.Id, SignedHash = "00" });
         Assert.Equal(("sign", 3), controller.Calls.Single());
-    }
-
-    [Fact]
-    public async Task The_trusted_caller_is_not_charged_for_the_preparation()
-    {
-        var controller = Controller(trusted: true, billing: new BillingOptions { FlattenFormCredits = 5 });
-        var (status, _, body) = Describe(await controller.PreSign(Input(PresignPdfaTests.ScriptedFormEmbedded(), flatten: true, convert: true)));
-
-        Assert.Equal(200, status);
-        Assert.Equal(0, body.GetProperty("preparation").GetProperty("credits").GetInt32());
-        var row = await _db.SigningData.SingleAsync();
-        await controller.Sign(new SignInput { Id = row.Id, SignedHash = "00" });
-        Assert.Equal(("sign", 1), controller.Calls.Single());
     }
 
     [Fact]
@@ -363,15 +349,11 @@ public class PresignPdfaEndpointTests : IDisposable
     }
 
     [Fact]
-    public async Task Timestamp_takes_the_preparation_into_its_reservation_and_trusted_caller_pays_only_the_timestamp()
+    public async Task Timestamp_takes_the_preparation_into_its_reservation()
     {
         var paying = Controller(billing: new BillingOptions { FlattenFormCredits = 1 });
         Assert.Equal(200, Describe(await paying.ApplyTimestamp(TimestampInput(PresignPdfaTests.ScriptedFormEmbedded(), flatten: true, convert: true))).Status);
         Assert.Equal(("timestamp", 3), paying.Calls.Single());
-
-        var trusted = Controller(trusted: true, billing: new BillingOptions { FlattenFormCredits = 5 });
-        await trusted.ApplyTimestamp(TimestampInput(PresignPdfaTests.ScriptedFormEmbedded(), flatten: true, convert: true));
-        Assert.Equal(("timestamp", 1), trusted.Calls.Single());
     }
 
     [Fact]
