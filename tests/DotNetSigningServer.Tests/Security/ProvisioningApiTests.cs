@@ -430,9 +430,71 @@ public class ProvisioningApiTests : IClassFixture<WebUiAuthFixture>
         var list = await SendAsync(app, HttpMethod.Get, "/api/pdf-template", tokenA);
         Assert.DoesNotContain("secret-of-b", await list.Content.ReadAsStringAsync());
         var read = await SendAsync(app, HttpMethod.Get, "/api/pdf-template/" + templateId, tokenA);
-        Assert.NotEqual(HttpStatusCode.OK, read.StatusCode);
-        Assert.DoesNotContain("secret-of-b", await read.Content.ReadAsStringAsync());
-        Assert.Equal(HttpStatusCode.OK, (await SendAsync(app, HttpMethod.Get, "/api/pdf-template/" + templateId, tokenB)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, read.StatusCode);
+        Assert.Equal("TEMPLATE_NOT_FOUND", await CodeAsync(read));
+
+        // Changing, deleting or filling it is the same 404, and B's template stays as it was.
+        var update = await SendAsync(app, HttpMethod.Put, "/api/pdf-template/" + templateId, tokenA, new { templateName = "taken-by-a" });
+        Assert.Equal(HttpStatusCode.NotFound, update.StatusCode);
+        Assert.Equal("TEMPLATE_NOT_FOUND", await CodeAsync(update));
+        var delete = await SendAsync(app, HttpMethod.Delete, "/api/pdf-template/" + templateId, tokenA);
+        Assert.Equal(HttpStatusCode.NotFound, delete.StatusCode);
+        Assert.Equal("TEMPLATE_NOT_FOUND", await CodeAsync(delete));
+        var fill = await SendAsync(app, HttpMethod.Post, "/api/fill-pdf", tokenA, new
+        {
+            templateId,
+            data = new[] { new { data = new[] { new { fieldName = "F", value = "x" } } } },
+        });
+        Assert.Equal(HttpStatusCode.NotFound, fill.StatusCode);
+        Assert.Equal("TEMPLATE_NOT_FOUND", await CodeAsync(fill));
+
+        var own = await SendAsync(app, HttpMethod.Get, "/api/pdf-template/" + templateId, tokenB);
+        Assert.Equal(HttpStatusCode.OK, own.StatusCode);
+        Assert.Contains("secret-of-b", await own.Content.ReadAsStringAsync());
+    }
+
+    [DockerFact]
+    public async Task Two_concurrent_calls_with_one_token_for_two_tenants_create_one_account()
+    {
+        await using var app = App();
+        var (parentId, mainKey) = await NewParentAsync(app);
+        var token = NewToken();
+
+        for (var round = 0; round < 5; round++)
+        {
+            var shared = round == 0 ? token : NewToken();
+            var calls = await Task.WhenAll(
+                ProvisionAsync(app, mainKey, NewExternalId(), shared),
+                ProvisionAsync(app, mainKey, NewExternalId(), shared));
+            Assert.Single(calls, c => c.StatusCode == HttpStatusCode.Created);
+            Assert.Single(calls, c => c.StatusCode == HttpStatusCode.Conflict);
+        }
+
+        await using var db = _fx.Postgres.CreateContext();
+        Assert.Equal(5, await db.Users.CountAsync(u => u.ParentUserId == parentId));
+        using var scope = app.Services.CreateScope();
+        var hash = scope.ServiceProvider.GetRequiredService<ITokenService>().HashToken(ApiAuthService.NormalizeToken(token));
+        Assert.Equal(1, await db.ApiTokens.CountAsync(t => t.TokenHash == hash));
+    }
+
+    [DockerFact]
+    public async Task A_value_shared_by_two_active_tokens_authenticates_nobody()
+    {
+        await using var app = App();
+        var token = NewToken();
+        using (var scope = app.Services.CreateScope())
+        {
+            var hash = scope.ServiceProvider.GetRequiredService<ITokenService>().HashToken(ApiAuthService.NormalizeToken(token));
+            await using var db = _fx.Postgres.CreateContext();
+            var a = new User { Email = $"a-{Guid.NewGuid():N}@example.com", IsActive = true };
+            var b = new User { Email = $"b-{Guid.NewGuid():N}@example.com", IsActive = true };
+            db.Users.AddRange(a, b);
+            db.ApiTokens.Add(new ApiToken { UserId = a.Id, Label = "a", TokenHash = hash });
+            db.ApiTokens.Add(new ApiToken { UserId = b.Id, Label = "b", TokenHash = hash });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(app, HttpMethod.Get, "/api/pdf-template", token)).StatusCode);
     }
 
     [DockerFact]

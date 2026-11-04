@@ -151,6 +151,9 @@ public class PortalBootstrapPostgresTests : IClassFixture<OutboxPostgresFixture>
         // Enterprise also in SaaS (Q1): provisioned accounts inherit it.
         Assert.True(user.IsEnterprise);
         Assert.NotNull(user.EnterpriseEnabledAt);
+        // Inherited by provisioned accounts that set none of their own.
+        Assert.Equal(PortalBootstrap.ProvisionedConcurrencyLimit, user.MaxConcurrentOperations);
+        Assert.Equal(PortalBootstrap.ProvisionedQueueSeconds, user.ConcurrencyQueueTimeoutSeconds);
         Assert.False(user.EmailVerified);
         var token = Assert.Single(tokens);
         Assert.Equal(PortalBootstrap.TokenLabel, token.Label);

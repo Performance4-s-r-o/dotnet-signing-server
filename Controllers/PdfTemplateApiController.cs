@@ -90,6 +90,10 @@ namespace DotNetSigningServer.Controllers
                 var template = await PdfTemplateService.GetTemplateAsync(templateId, user.Id);
                 return Ok(template);
             }
+            catch (ApiValidationException ex) when (ex.Code == TemplateNotFoundCode)
+            {
+                return TemplateNotFound();
+            }
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Get template failed");
@@ -119,6 +123,10 @@ namespace DotNetSigningServer.Controllers
                 var response = await PdfTemplateService.UpdateTemplateAsync(templateId, user.Id, input);
                 return Ok(response);
             }
+            catch (ApiValidationException ex) when (ex.Code == TemplateNotFoundCode)
+            {
+                return TemplateNotFound();
+            }
             catch (ApiValidationException ex)
             {
                 return BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
@@ -140,6 +148,10 @@ namespace DotNetSigningServer.Controllers
             {
                 await PdfTemplateService.DeleteTemplateAsync(templateId, user.Id);
                 return NoContent();
+            }
+            catch (ApiValidationException ex) when (ex.Code == TemplateNotFoundCode)
+            {
+                return TemplateNotFound();
             }
             catch (Exception ex)
             {

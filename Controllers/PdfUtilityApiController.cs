@@ -290,6 +290,10 @@ namespace DotNetSigningServer.Controllers
                 return await RunOperationAsync(user, "fill-pdf", fingerprint, requiredCredits, async ct =>
                     new PaidResult(await PdfTemplateService.FillAsync(input, user.Id, ct)));
             }
+            catch (ApiValidationException ex) when (ex.Code == TemplateNotFoundCode)
+            {
+                return TemplateNotFound();
+            }
             catch (ApiValidationException ex)
             {
                 // Validace uvnitř vyplňování (strop řádků tabulky, šablona bez

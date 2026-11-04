@@ -528,6 +528,12 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
+        public const string TemplateNotFoundCode = "TEMPLATE_NOT_FOUND";
+
+        /// <summary>A missing template, or another account's (#131): 404, never a 500 or a 400.</summary>
+        protected ObjectResult TemplateNotFound() =>
+            NotFound(new { code = TemplateNotFoundCode, message = Localizer[$"Error_{TemplateNotFoundCode}"].Value });
+
         /// <summary>
         /// The answer for a TSA failure (#72, #82): a code and a generic message, the detail only
         /// in the log. The exception text carries whatever the connection said (addresses, ports,

@@ -384,6 +384,11 @@ public class AdminController : Controller
         await _dbContext.SaveChangesAsync();
 
         UserConcurrencyMiddleware.InvalidateLimitCache(id);
+        // Provisioned accounts that set none inherit it (#131): their cached limits go too.
+        foreach (var childId in await _dbContext.Users.AsNoTracking().Where(u => u.ParentUserId == id).Select(u => u.Id).ToListAsync())
+        {
+            UserConcurrencyMiddleware.InvalidateLimitCache(childId);
+        }
         TempData["Info"] = _localizer["ConcurrencyQueueTimeoutUpdated"].Value;
         return RedirectToAction(nameof(Details), new { id });
     }

@@ -9,6 +9,7 @@ public class PortalBootstrapOptions
     /// <summary>
     /// The provisioning token (<c>PORTAL_BOOTSTRAP_TOKEN</c>): one value, or <c>new,old</c> during a
     /// rotation (both active; a value that leaves the list is revoked). Only hashes are stored.
+    /// Empty = off: nothing is created or revoked; existing tokens are then managed by hand.
     /// </summary>
     public string? Token { get; set; }
 

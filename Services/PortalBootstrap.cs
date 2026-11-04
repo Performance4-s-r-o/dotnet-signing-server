@@ -17,6 +17,12 @@ public static class PortalBootstrap
     public const string TokenLabel = "bootstrap";
     public const int MinimumTokenLength = 43; // base64 of 32 random bytes
 
+    /// <summary>Parallel operations per provisioned tenant, set on the integrator at creation (#131).</summary>
+    public const int ProvisionedConcurrencyLimit = 49;
+
+    /// <summary>Stored queue wait of the integrator; at run time capped by <c>USER_QUEUE_MAX_SECONDS</c>.</summary>
+    public const int ProvisionedQueueSeconds = 600;
+
     private static readonly HashSet<string> KnownDefaults = new(StringComparer.OrdinalIgnoreCase)
     {
         "change-this-secret", "changeme", "change-me", "secret", "password", "token",
@@ -176,6 +182,9 @@ public static class PortalBootstrap
                 // Provisioning needs it (#131): provisioned accounts inherit it and are never debited.
                 IsEnterprise = true,
                 EnterpriseEnabledAt = DateTimeOffset.UtcNow,
+                // Inherited by every provisioned account that sets none: the portal's former limits.
+                MaxConcurrentOperations = ProvisionedConcurrencyLimit,
+                ConcurrencyQueueTimeoutSeconds = ProvisionedQueueSeconds,
             };
             db.Users.Add(user);
             try
