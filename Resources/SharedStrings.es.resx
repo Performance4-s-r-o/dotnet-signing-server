@@ -191,6 +191,7 @@
   <data name="TrustedCallerDisabled" xml:space="preserve"><value>La cuenta ya no es llamante de confianza.</value></data>
   <data name="TrustedCallerNotOnSelf" xml:space="preserve"><value>No puede marcar su propia cuenta como llamante de confianza.</value></data>
   <data name="TrustedCallerBadge" xml:space="preserve"><value>Llamante de confianza</value></data>
+  <data name="Error_EVIDENCE_CERT_NOT_CONFIGURED" xml:space="preserve"><value>El certificado de cifrado de las evidencias no está configurado. No se ha firmado ni cobrado nada. Póngase en contacto con el operador.</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>Se produjo un error al añadir el archivo adjunto</value></data>
   <data name="PdfaConversionError" xml:space="preserve"><value>Se produjo un error al convertir el documento a PDF/A</value></data>
   <data name="ProvideTemplateOrPdf" xml:space="preserve"><value>Proporcione TemplateId o PdfContent (pero no ambos).</value></data>

@@ -1233,6 +1233,12 @@ namespace DotNetSigningServer.Controllers
         /// <summary>attachment po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
         private async Task<IActionResult> AttachmentCoreAsync(User user, AddAttachmentInput input, byte[]? pdf, bool bypassDebitRequested, string fingerprint)
         {
+            // Bez certifikátu se odmítá dřív, než vznikne operace a rezervace (#513).
+            if (_signingService.MissingEvidenceCertificate(input))
+            {
+                return EvidenceCertNotConfigured();
+            }
+
             try
             {
                 return await RunOperationAsync(
@@ -1246,11 +1252,30 @@ namespace DotNetSigningServer.Controllers
                         return Task.FromResult(new PaidResult(new { result }, result));
                     });
             }
+            catch (ApiValidationException ex) when (ex.Code == PdfSigningService.EvidenceCertNotConfiguredCode)
+            {
+                return EvidenceCertNotConfigured();
+            }
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Add attachment failed");
                 return SafeProblem(Localizer["AttachmentError"], ex);
             }
+        }
+
+        /// <summary>503: chyba nasazení, ne vstupu; volající nemá co opravit v požadavku.</summary>
+        private IActionResult EvidenceCertNotConfigured()
+        {
+            Logger.LogError(
+                Logging.LoggingEvents.ApiError,
+                "Evidence attachment refused: no encryption certificate in the request and EVIDENCE_ENCRYPTION_CERTIFICATE_PEM(_BASE64) is not set");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    code = PdfSigningService.EvidenceCertNotConfiguredCode,
+                    message = Localizer[$"Error_{PdfSigningService.EvidenceCertNotConfiguredCode}"].Value,
+                });
         }
 
         /// <summary>

@@ -318,6 +318,22 @@ namespace DotNetSigningServer.Services
         public virtual string AddAttachment(AddAttachmentInput input) =>
             AddAttachment(input, null);
 
+        /// <summary>Šifrovat se má nakonfigurovaným certifikátem, ale žádný není (#513).</summary>
+        public const string EvidenceCertNotConfiguredCode = "EVIDENCE_CERT_NOT_CONFIGURED";
+
+        /// <summary>
+        /// Volající chce nakonfigurovaný certifikát, sám žádný neposlal a server žádný nemá.
+        /// Certifikát v požadavku má přednost, takže pak chybějící konfigurace nevadí.
+        /// </summary>
+        public virtual bool MissingEvidenceCertificate(AddAttachmentInput input) =>
+            input.UseConfiguredEncryptionCertificate
+            && string.IsNullOrWhiteSpace(input.EncryptForCertificatePem)
+            && string.IsNullOrWhiteSpace(_evidenceOptions.EncryptionCertificatePem);
+
+        /// <summary>Je nastavený certifikát pro šifrování evidence (varianta A, #513)?</summary>
+        public bool HasConfiguredEvidenceCertificate =>
+            !string.IsNullOrWhiteSpace(_evidenceOptions.EncryptionCertificatePem);
+
         /// <summary>
         /// Příloha nad bajty PDF (#74, binární kanál); <c>input.PdfContent</c> se nečte.
         /// <c>null</c> = PDF je v <c>input.PdfContent</c> (base64).
@@ -333,9 +349,9 @@ namespace DotNetSigningServer.Services
             byte[] attachmentBytes = Convert.FromBase64String(input.AttachmentContent);
             string attachmentFileName = input.FileName;
             string? attachmentMimeType = input.MimeType;
-            if (input.UseConfiguredEncryptionCertificate && string.IsNullOrWhiteSpace(_evidenceOptions.EncryptionCertificatePem))
+            if (MissingEvidenceCertificate(input))
             {
-                throw new InvalidOperationException("Evidence encryption certificate is not configured.");
+                throw new ApiValidationException(EvidenceCertNotConfiguredCode);
             }
 
             string? encryptionCertificatePem = !string.IsNullOrWhiteSpace(input.EncryptForCertificatePem)
