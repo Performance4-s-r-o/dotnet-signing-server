@@ -24,20 +24,17 @@ public sealed class PriceEffectiveHandler : IBackofficeEventHandler
     private readonly PricingSnapshotRefresher _refresher;
     private readonly PricingSnapshotHolder _holder;
     private readonly ApplicationDbContext _db;
-    private readonly IOptionsMonitor<BillingOptions> _billing;
     private readonly ILogger<PriceEffectiveHandler> _logger;
 
     public PriceEffectiveHandler(
         PricingSnapshotRefresher refresher,
         PricingSnapshotHolder holder,
         ApplicationDbContext db,
-        IOptionsMonitor<BillingOptions> billing,
         ILogger<PriceEffectiveHandler> logger)
     {
         _refresher = refresher;
         _holder = holder;
         _db = db;
-        _billing = billing;
         _logger = logger;
     }
 
@@ -67,12 +64,12 @@ public sealed class PriceEffectiveHandler : IBackofficeEventHandler
                 $"price.effective {eventId}: the fetched price list is v{snapshot?.Version.ToString() ?? "-"}, not v{version} yet");
         }
 
-        var currency = PriceScheduledHandler.ProductCurrency(_billing.CurrentValue);
-        var pack100 = PriceListMapper.Map(snapshot.Body, currency).Packs.GetValueOrDefault(100);
+        var mapping = PriceListMapper.Map(snapshot.Body);
+        var pack100 = mapping.Packs.GetValueOrDefault(100);
         if (pack100 is null)
         {
             _logger.LogWarning("[pricing] price list v{Version} has no 100 credits price in {Currency}; stored auto-recharge prices unchanged",
-                snapshot.Version, currency);
+                snapshot.Version, mapping.Currency ?? "-");
         }
 
         var users = await _db.Users
@@ -98,6 +95,6 @@ public sealed class PriceEffectiveHandler : IBackofficeEventHandler
         await _db.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("[pricing] price list v{Version} in force ({EventId}): auto-recharge price per 100 credits {Price} {Currency} stored for {Count} users",
-            version, eventId, pack100?.Amount, currency, repriced);
+            version, eventId, pack100?.Amount, mapping.Currency, repriced);
     }
 }

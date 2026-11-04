@@ -148,7 +148,6 @@ builder.Services.AddScoped<PdfVisualSigningService>();
 builder.Services.AddScoped<PdfSigningService>();
 builder.Services.AddScoped<PdfLtvService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
-builder.Services.AddScoped<IBillingService, BillingService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IApiAuthService, ApiAuthService>();
 // SizeLimit counts entries: every cache.Set must carry Size = 1 (#74). Without a limit the
@@ -191,8 +190,6 @@ DotNetSigningServer.Services.PfxGuard.MaxBytes =
     builder.Configuration.GetValue<int?>("Limits:PfxMaxBytes") ?? DotNetSigningServer.Services.PfxGuard.MaxBytes;
 DotNetSigningServer.Services.PfxGuard.MaxIterations =
     builder.Configuration.GetValue<long?>("Limits:PfxMaxIterations") ?? DotNetSigningServer.Services.PfxGuard.MaxIterations;
-// PriceChangeMonitorService is registered by AddP4BackofficeIntegration, only while
-// P4Backoffice:Modules:Pricing is not On (then the price.* events replace it).
 builder.Services.AddSingleton<IAllowedOriginService, AllowedOriginService>();
 builder.Services.AddSingleton<IIpWhitelistService, IpWhitelistService>();
 // LokiClient is a singleton (it owns a batching queue + background flush
@@ -397,18 +394,10 @@ builder.Services.AddOptions<EvidenceOptions>()
         }
     });
 
-// A currency that is not a code would reach the price list and the payment: stop in production,
-// fall back to EUR with a warning elsewhere.
-var currencyProblem = DotNetSigningServer.Services.Pricing.ConfigCreditPricingProvider.CurrencyProblem(builder.Configuration["Billing:Currency"]);
-if (currencyProblem != null && builder.Environment.IsProduction())
-{
-    throw new InvalidOperationException(currencyProblem);
-}
 builder.Services.AddOptions<BillingOptions>()
     .Bind(builder.Configuration.GetSection("Billing"))
     .PostConfigure(options =>
     {
-        if (currencyProblem != null) options.Currency = "EUR";
         options.FlattenFormCredits = EnvValues.Int(builder.Configuration, "FLATTEN_FORM_CREDIT_COST") ?? options.FlattenFormCredits;
         if (options.FlattenFormCredits < 0)
         {
@@ -482,7 +471,6 @@ if (!migrateOnly)
 }
 
 var appLogger = app.Services.GetRequiredService<ILogger<Program>>();
-if (currencyProblem != null) appLogger.LogWarning("{Problem} Using EUR.", currencyProblem);
 
 // #80: in Production the CORS list no longer falls back to the origins of every user's
 // browser tokens. Without Cors:AllowedOrigins only the server's own origin passes.

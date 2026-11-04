@@ -24,9 +24,10 @@ public class Payment
 
     public int AmountCents { get; set; }
 
+    /// <summary>ISO 4217 code as the billing service reported it; no default (#175).</summary>
     [Required]
     [MaxLength(8)]
-    public string Currency { get; set; } = "EUR";
+    public required string Currency { get; set; }
 
     [Required]
     [MaxLength(32)]

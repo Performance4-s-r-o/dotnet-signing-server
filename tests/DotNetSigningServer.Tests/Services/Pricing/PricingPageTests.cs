@@ -34,12 +34,13 @@ public class PricingPageTests : IClassFixture<SignUpPostgresFixture>
     }
 
     [Fact]
-    public async Task Off_ShowsTheConfiguredPrice()
+    public async Task Off_ShowsNoPriceAtAll()
     {
         var html = await PricingHtmlAsync();
 
-        Assert.Contains("5 EUR", html);
-        Assert.Contains("0 EUR", html);
+        Assert.DoesNotContain("pricing-price", html);
+        Assert.DoesNotContain("EUR", html);
+        Assert.DoesNotContain("pricing-card--highlight", html);
     }
 
     [Fact]
@@ -50,14 +51,12 @@ public class PricingPageTests : IClassFixture<SignUpPostgresFixture>
             var holder = new PricingSnapshotHolder();
             holder.Set(PricingTestData.Snapshot(PricingTestData.ImportedJson(2, new Dictionary<int, long> { [100] = 600, [300] = 1710, [500] = 2700, [1000] = 5100 })));
             services.RemoveAll<ICreditPricingProvider>();
-            services.AddSingleton<ICreditPricingProvider>(sp => new BackofficeCreditPricingProvider(
-                holder,
-                new ConfigCreditPricingProvider(new BillingOptions()),
-                sp.GetRequiredService<IOptionsMonitor<BillingOptions>>(),
-                NullLogger<BackofficeCreditPricingProvider>.Instance));
+            services.AddSingleton<ICreditPricingProvider>(_ => new BackofficeCreditPricingProvider(
+                holder, NullLogger<BackofficeCreditPricingProvider>.Instance));
         });
 
         Assert.Contains("6 EUR", html);
+        Assert.Contains("0 EUR", html);
         Assert.DoesNotContain("5 EUR", html);
     }
 }

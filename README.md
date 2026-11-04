@@ -269,7 +269,6 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `DataProtection__CertificateBase64` / `__CertificatePassword` (compose: `DATA_PROTECTION_CERTIFICATE_BASE64` / `_PASSWORD`) | in production, unless the next row is `true` | Base64 PFX that encrypts the Data Protection key ring, which also protects stored TSA credentials |
 | `DATA_PROTECTION_ALLOW_PLAINTEXT_KEYS` | no | `true` = a Production start without the certificate is allowed, with a warning (single host, protected volume). Otherwise Production refuses to start with an unencrypted key ring; with `true` it starts and prints a warning. Outside Production nothing is checked or printed. Back up the certificate: adding it does not encrypt keys already written in plaintext (they are replaced when the ring rotates, about every 90 days), and a lost certificate makes the ring unreadable |
 | `P4Backoffice__Modules__Billing` | in production (startup fails otherwise) | `On`: payments go through the billing service; this product holds no payment provider key. See *Payments* below |
-| `Billing__Currency` (compose: `BILLING_CURRENCY`) | no (`EUR`; empty or an unresolved placeholder = `EUR`) | Three-letter ISO 4217 code (anything else stops a production start). Currency the product sells in: selects the price list's prices and is the currency of the configured fallback prices |
 | `P4Backoffice__BaseUrl` + `P4Backoffice__SecretKey` | in production (startup fails otherwise) | All e-mail (2FA, password reset, notifications) goes through the backoffice outbox; there is no other provider. Without them outside production messages are only logged |
 | `P4Backoffice__Email__From` / `__ReplyTo` (compose: `P4_BACKOFFICE_EMAIL_FROM` / `_REPLY_TO`) | | Sender and Reply-To of every message; the sender's domain must be the one configured for the environment in the service. Empty = the service's default |
 | `EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64` / `EVIDENCE_ENCRYPTION_CERTIFICATE_PEM` | no, but see purpose | Public RSA certificate that encrypts the SES evidence attachment (CMS, key transport RSA PKCS#1 v1.5 + AES-256-CBC) when `/api/attachment` asks for `UseConfiguredEncryptionCertificate` (#513). A certificate sent in the request (`EncryptForCertificatePem`) wins; the SaaS portal sends one from Key Vault (`EVIDENCE_ENCRYPTION_SOURCE=keyvault`), so this is for TEST, a standalone server and on-prem. Neither one = `503 EVIDENCE_CERT_NOT_CONFIGURED` before any operation or charge, and a Production start logs an error (it does not stop: the caller may send the certificate). Never put the private key here |
@@ -594,38 +593,36 @@ again). Queued items are never lost by that.
 
 Credit packs are 100, 300, 500 and 1000 credits. Every price the app shows or
 charges (`/pricing`, `/Billing`, Checkout, auto-recharge, the price-change
-monitor) comes from `ICreditPricingProvider` (`Services/Pricing/`); nothing on
-those paths calls the service.
+notices) comes from `ICreditPricingProvider` (`Services/Pricing/`); nothing on
+those paths calls the service. Prices **and their currency** come only from the
+service's price list (#175): there is no configured price list and no currency
+setting.
 
-- `P4Backoffice__Modules__Pricing=Off` (default): `Billing__PricePer100` and the
-  `Billing__Discount*` volume discounts, in `Billing__Currency`. They are what a private
-  server shows; a payment is taken only with `Modules:Billing=On`, which needs this module `On`.
+- `P4Backoffice__Modules__Pricing=Off` (development, private server): no price
+  list, nothing is sold. The pricing and billing pages show no price at all
+  (never a price of 0), Checkout and card setup are refused. A private server has
+  no price list by design.
 - `On`: prices from the snapshot of `GET /v1/pricing/current` (items of kind
-  `credits` with `attributes.quantity`, the one-time price in `Billing__Currency`),
-  kept in `BackofficeStates` (`pricing:current`) and in memory, refreshed hourly
-  (with `ETag`), right after `price.effective` and on `window_clamped`. Without a
-  snapshot, or for a pack missing from it, the configured price is used and a
-  warning logged. The billing service charges the pack's Stripe Price by its
-  `lookup_key` (see *Payments* below); checkout metadata (`documents`) is unchanged.
+  `credits` with `attributes.quantity` and a one-time price), kept in
+  `BackofficeStates` (`pricing:current`) and in memory, refreshed hourly (with
+  `ETag`), right after `price.effective` and on `window_clamped`. The product
+  currency is the price list's own: the currency in which the most packs are
+  priced (a list in several currencies is logged as a warning). Without a
+  snapshot nothing is sold until one arrives; a pack missing from it is not sold;
+  both are logged as warnings. The billing service charges the pack's Stripe
+  Price by its `lookup_key` (see *Payments* below); checkout metadata
+  (`documents`) is unchanged.
 
-Price-change notices (`price_change_notice` to users with auto-recharge):
-
-- `Off`: `PriceChangeMonitorService` compares the price of 100
-  credits with each user's stored price once a day, as before.
-- `On`: the monitor does not run. `price.scheduled` notifies every non-Enterprise
-  user with auto-recharge on a pack whose price changes, once per price-list
-  version (`Users.PriceChangeNotifiedVersion`, stored with the queued e-mail);
-  `price.effective` stores the new price of 100 credits in
-  `AutoRechargePricePer100` and clears the notice markers; `price.unscheduled`
-  clears the marker of that version (no e-mail); `price.sync_failed` is logged as
-  an error. A daily check of `GET /v1/pricing/upcoming` sends the notices itself
-  (with a warning) when a version takes effect in less than its notice period and
-  nobody has been notified yet.
-
-Rollback: `P4Backoffice__Modules__Pricing=Off`. Keep `Billing__*` in line with
-the price list while the module is `On`: it is the fallback, and after a rollback
-the monitor compares against `Billing__PricePer100` again
-(`PriceChangeNotifiedVersion` is then ignored).
+Price-change notices (`price_change_notice` to users with auto-recharge), only
+with `On`: `price.scheduled` notifies every non-Enterprise user with
+auto-recharge on a pack whose price changes, once per price-list version
+(`Users.PriceChangeNotifiedVersion`, stored with the queued e-mail);
+`price.effective` stores the new price of 100 credits in
+`AutoRechargePricePer100` and clears the notice markers; `price.unscheduled`
+clears the marker of that version (no e-mail); `price.sync_failed` is logged as
+an error. A daily check of `GET /v1/pricing/upcoming` sends the notices itself
+(with a warning) when a version takes effect in less than its notice period and
+nobody has been notified yet.
 
 #### Support form (`Modules:Support`)
 

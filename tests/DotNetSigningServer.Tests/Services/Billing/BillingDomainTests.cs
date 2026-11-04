@@ -397,23 +397,10 @@ public class BillingRegistrationTests
 public class BillingTextAndCurrencyTests
 {
     [Theory]
-    [InlineData(null, "EUR")]
-    [InlineData("", "EUR")]
-    [InlineData("  ", "EUR")]
-    [InlineData("{{project.DOTNET_BILLING_CURRENCY}}", "EUR")]
     [InlineData(" czk ", "CZK")]
-    public void Currency_IsUpperCase_AndUnsetOrAPlaceholderIsEur(string? raw, string expected)
-    {
-        Assert.Equal(expected, DotNetSigningServer.Services.Pricing.ConfigCreditPricingProvider.NormalizeCurrency(raw));
-        Assert.Null(DotNetSigningServer.Services.Pricing.ConfigCreditPricingProvider.CurrencyProblem(raw));
-    }
-
-    [Theory]
-    [InlineData("EURO")]
-    [InlineData("12")]
-    [InlineData("E<")]
-    public void ACurrencyThatIsNotACode_IsAProblem(string raw) =>
-        Assert.NotNull(DotNetSigningServer.Services.Pricing.ConfigCreditPricingProvider.CurrencyProblem(raw));
+    [InlineData("eur", "EUR")]
+    public void Currency_IsTrimmedUpperCase(string raw, string expected) =>
+        Assert.Equal(expected, DotNetSigningServer.Services.Pricing.CreditPricing.NormalizeCurrency(raw));
 
     [Fact]
     public void FailureText_FromAnEvent_KeepsNoMarkup()

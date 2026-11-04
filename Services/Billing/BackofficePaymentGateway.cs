@@ -90,8 +90,9 @@ public sealed class BackofficePaymentGateway : IPaymentGateway
             Customer = CustomerBody(user),
             Mode = "setup",
             Ui = "hosted",
-            // Stripe needs a currency in setup mode too.
-            Currency = _pricing.Currency.ToLowerInvariant(),
+            // Stripe needs a currency in setup mode too; it is the price list's, never a default.
+            Currency = _pricing.Currency?.ToLowerInvariant()
+                ?? throw new InvalidOperationException("Card setup needs the price list's currency; no price list is in force"),
             SuccessUrl = successUrl,
             CancelUrl = cancelUrl,
             Metadata = new Dictionary<string, string>(metadata),
@@ -132,7 +133,8 @@ public sealed class BackofficePaymentGateway : IPaymentGateway
                 BillingJson.Long(i, "amount_due") ?? 0,
                 BillingJson.String(i, "status") ?? "unknown",
                 BillingJson.String(i, "hosted_invoice_url"),
-                BillingJson.Date(i, "created_at") ?? default))
+                BillingJson.Date(i, "created_at") ?? default,
+                BillingJson.String(i, "currency")?.ToUpperInvariant()))
             .ToList();
     }
 

@@ -141,12 +141,12 @@ public sealed class PricingSnapshotWorker : BackgroundService
         {
             if (!await _refresher.LoadStoredAsync(cancellationToken))
             {
-                _logger.LogInformation("[pricing] no stored price list yet; configured prices until the first refresh");
+                _logger.LogInformation("[pricing] no stored price list yet; nothing is sold until the first refresh");
             }
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
-            _logger.LogWarning(ex, "[pricing] stored price list could not be loaded; configured prices until the first refresh");
+            _logger.LogWarning(ex, "[pricing] stored price list could not be loaded; nothing is sold until the first refresh");
         }
         await base.StartAsync(cancellationToken);
     }

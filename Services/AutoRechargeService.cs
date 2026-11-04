@@ -188,7 +188,7 @@ public class AutoRechargeService : IAutoRechargeService
         user.AutoRechargePricePer100 = pricePer100;
         // CSPRNG, not Guid.NewGuid(). Stored in plaintext on purpose: the cancel link
         // is rebuilt from the DB every time a price-change email goes out
-        // (PriceChangeMonitorService), so there is no plaintext to keep elsewhere.
+        // (PriceScheduledHandler), so there is no plaintext to keep elsewhere.
         // Worst case on a DB dump is that auto-recharge gets switched off — no
         // account takeover — which is why this one isn't hashed like the reset and
         // verification tokens.

@@ -28,7 +28,6 @@ public sealed class PriceScheduledHandler : IBackofficeEventHandler
     private readonly ApplicationDbContext _db;
     private readonly ITemplatedEmailSender _email;
     private readonly ICreditPricingProvider _pricing;
-    private readonly IOptionsMonitor<BillingOptions> _billing;
     private readonly IOptions<AppOptions> _app;
     private readonly TimeProvider _time;
     private readonly ILogger<PriceScheduledHandler> _logger;
@@ -37,7 +36,6 @@ public sealed class PriceScheduledHandler : IBackofficeEventHandler
         ApplicationDbContext db,
         ITemplatedEmailSender email,
         ICreditPricingProvider pricing,
-        IOptionsMonitor<BillingOptions> billing,
         IOptions<AppOptions> app,
         TimeProvider time,
         ILogger<PriceScheduledHandler> logger)
@@ -45,7 +43,6 @@ public sealed class PriceScheduledHandler : IBackofficeEventHandler
         _db = db;
         _email = email;
         _pricing = pricing;
-        _billing = billing;
         _app = app;
         _time = time;
         _logger = logger;
@@ -68,8 +65,14 @@ public sealed class PriceScheduledHandler : IBackofficeEventHandler
     /// <summary>Plans and sends the notices of <paramref name="data"/>.</summary>
     public async Task<PriceNoticeResult> NotifyAsync(PriceChangeEvent data, string eventId, CancellationToken cancellationToken)
     {
-        var currency = ProductCurrency(_billing.CurrentValue);
+        // The product currency is the one of the price list in force; nothing sold, nothing to announce.
+        var currency = _pricing.Currency;
         var currentPacks = _pricing.GetPacks();
+        if (currency is null)
+        {
+            _logger.LogInformation("[pricing] price list v{Version} ({EventId}): no price list in force; no notices", data.Version, eventId);
+            return new PriceNoticeResult(0, 0);
+        }
         var changes = PriceNoticePlanner.CreditChanges(data, currency, currentPacks);
         if (changes.Count == 0)
         {
@@ -148,7 +151,4 @@ public sealed class PriceScheduledHandler : IBackofficeEventHandler
         }
         return new PriceNoticeResult(plan.Notices.Count, notified);
     }
-
-    /// <summary>The currency the product sells in, as the price-list provider maps it.</summary>
-    internal static string ProductCurrency(BillingOptions billing) => ConfigCreditPricingProvider.NormalizeCurrency(billing.Currency);
 }

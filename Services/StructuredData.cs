@@ -18,11 +18,12 @@ public static class StructuredData
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    public static string SiteJsonLd(string origin, string description)
+    /// <param name="currency">Currency of the price list in force; null leaves out the offer (no price list, #175).</param>
+    public static string SiteJsonLd(string origin, string description, string? currency = null)
     {
         var trimmed = (origin ?? string.Empty).TrimEnd('/');
 
-        return JsonSerializer.Serialize(new Dictionary<string, object?>
+        var graph = new Dictionary<string, object?>
         {
             ["@context"] = "https://schema.org",
             ["@type"] = "SoftwareApplication",
@@ -31,13 +32,6 @@ public static class StructuredData
             ["operatingSystem"] = "Any",
             ["url"] = trimmed,
             ["description"] = description,
-            ["offers"] = new Dictionary<string, object?>
-            {
-                ["@type"] = "Offer",
-                ["price"] = "0",
-                ["priceCurrency"] = "EUR",
-                ["url"] = $"{trimmed}/pricing",
-            },
             ["publisher"] = new Dictionary<string, object?>
             {
                 ["@type"] = "Organization",
@@ -48,6 +42,17 @@ public static class StructuredData
                 ["email"] = "support@performance4.cz",
                 ["sameAs"] = new[] { "https://github.com/Performance4-s-r-o/dotnet-signing-server/" },
             },
-        }, Options);
+        };
+        if (currency != null)
+        {
+            graph["offers"] = new Dictionary<string, object?>
+            {
+                ["@type"] = "Offer",
+                ["price"] = "0",
+                ["priceCurrency"] = currency,
+                ["url"] = $"{trimmed}/pricing",
+            };
+        }
+        return JsonSerializer.Serialize(graph, Options);
     }
 }

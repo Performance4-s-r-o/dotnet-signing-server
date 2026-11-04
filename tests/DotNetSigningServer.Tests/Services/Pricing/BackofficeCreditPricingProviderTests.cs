@@ -1,53 +1,67 @@
-using DotNetSigningServer.Options;
 using DotNetSigningServer.Services.Pricing;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 namespace DotNetSigningServer.Tests.Services.Pricing;
 
 public class BackofficeCreditPricingProviderTests
 {
-    private sealed class Monitor<T>(T value) : IOptionsMonitor<T>
+    private static (BackofficeCreditPricingProvider Sut, PricingSnapshotHolder Holder) Create()
     {
-        public T CurrentValue { get; set; } = value;
-        public T Get(string? name) => CurrentValue;
-        public IDisposable? OnChange(Action<T, string?> listener) => null;
-    }
-
-    private static (BackofficeCreditPricingProvider Sut, PricingSnapshotHolder Holder) Create(
-        BillingOptions? billing = null, string currency = "EUR")
-    {
-        billing ??= new BillingOptions();
-        billing.Currency = currency;
         var holder = new PricingSnapshotHolder();
-        var sut = new BackofficeCreditPricingProvider(
-            holder,
-            new ConfigCreditPricingProvider(billing),
-            new Monitor<BillingOptions>(billing),
-            NullLogger<BackofficeCreditPricingProvider>.Instance);
+        var sut = new BackofficeCreditPricingProvider(holder, NullLogger<BackofficeCreditPricingProvider>.Instance);
         return (sut, holder);
     }
 
-    [Fact]
-    public void WithoutSnapshot_UsesTheConfiguredPrices()
+    /// <summary>An item priced in two currencies.</summary>
+    private static Dictionary<string, object?> TwoCurrencies(int quantity, long eur, long czk)
     {
-        var (sut, _) = Create(new BillingOptions { PricePer100 = 6m });
+        var item = PricingTestData.Item(quantity, eur);
+        var other = (object[])PricingTestData.Item(quantity, czk, currency: "czk")["prices"]!;
+        item["prices"] = ((object[])item["prices"]!).Concat(other).ToArray();
+        return item;
+    }
 
-        Assert.Equal(CreditPricing.SourceConfig, sut.Source);
-        Assert.Equal(600, sut.GetPack(100)!.UnitAmountMinor);
-        Assert.Null(sut.GetPack(100)!.LookupKey);
-        Assert.Equal(6m, sut.PricePer100);
+    [Fact]
+    public void WithoutSnapshot_NothingIsSold()
+    {
+        var (sut, _) = Create();
+
+        Assert.Empty(sut.GetPacks());
+        Assert.Null(sut.GetPack(100));
+        Assert.Null(sut.PricePer100);
+        Assert.Null(sut.Currency);
+    }
+
+    [Fact]
+    public void EmptyPriceList_NothingIsSold()
+    {
+        var (sut, holder) = Create();
+        holder.Set(PricingTestData.Snapshot(PricingTestData.Json(1)));
+
+        Assert.Empty(sut.GetPacks());
+        Assert.Null(sut.PricePer100);
+        Assert.Null(sut.Currency);
+    }
+
+    [Fact]
+    public void PricingOff_SellsNothing()
+    {
+        var sut = new NoCreditPricingProvider();
+
+        Assert.Empty(sut.GetPacks());
+        Assert.Null(sut.GetPack(100));
+        Assert.Null(sut.PricePer100);
+        Assert.Null(sut.Currency);
     }
 
     [Fact]
     public void Snapshot_MapsCreditItemsToPacks()
     {
-        var (sut, holder) = Create(new BillingOptions { PricePer100 = 99m });
+        var (sut, holder) = Create();
         holder.Set(PricingTestData.Snapshot(PricingTestData.ImportedJson(amounts: new Dictionary<int, long> { [100] = 600, [300] = 1500 })));
 
         var packs = sut.GetPacks();
 
-        Assert.Equal(CreditPricing.SourceBackoffice, sut.Source);
         Assert.Equal(new[] { 100, 300, 500, 1000 }, packs.Select(p => p.Quantity));
         Assert.Equal(new long[] { 600, 1500, 2250, 4250 }, packs.Select(p => p.UnitAmountMinor));
         var pack300 = sut.GetPack(300)!;
@@ -59,41 +73,60 @@ public class BackofficeCreditPricingProviderTests
     }
 
     [Fact]
-    public void MissingItem_FallsBackToTheConfiguredPriceOfThatPackOnly()
+    public void MissingItem_IsNotSold()
     {
-        var (sut, holder) = Create(new BillingOptions { PricePer100 = 7m });
+        var (sut, holder) = Create();
         holder.Set(PricingTestData.Snapshot(PricingTestData.Json(1,
             PricingTestData.Item(100, 500), PricingTestData.Item(500, 2250), PricingTestData.Item(1000, 4250))));
 
-        var pack300 = sut.GetPack(300)!;
-
-        Assert.Equal(1995, pack300.UnitAmountMinor); // 3 × 7 − 5 %
-        Assert.Null(pack300.LookupKey);
+        Assert.Null(sut.GetPack(300));
+        Assert.Equal(new[] { 100, 500, 1000 }, sut.GetPacks().Select(p => p.Quantity));
         Assert.Equal("pd_credits_500_once_eur", sut.GetPack(500)!.LookupKey);
-        Assert.Equal(CreditPricing.SourceBackoffice, sut.Source);
     }
 
     [Fact]
-    public void OtherCurrency_UsesTheConfiguredPrices()
+    public void Without100Pack_NoPricePer100()
     {
-        var (sut, holder) = Create(currency: "EUR");
-        holder.Set(PricingTestData.Snapshot(PricingTestData.Json(1,
-            PricingTestData.Imported.Select(p => PricingTestData.Item(p.Quantity, p.Cents * 25, currency: "czk")).ToArray())));
+        var (sut, holder) = Create();
+        holder.Set(PricingTestData.Snapshot(PricingTestData.Json(1, PricingTestData.Item(300, 1425))));
 
-        Assert.Equal(CreditPricing.SourceConfig, sut.Source);
-        Assert.All(sut.GetPacks(), p => Assert.Null(p.LookupKey));
-        Assert.Equal(500, sut.GetPack(100)!.UnitAmountMinor);
+        Assert.Null(sut.PricePer100);
+        Assert.Equal("EUR", sut.Currency);
     }
 
     [Fact]
-    public void ProductCurrency_SelectsThePrice()
+    public void Currency_ComesFromThePriceList()
     {
-        var (sut, holder) = Create(currency: "czk");
+        var (sut, holder) = Create();
         holder.Set(PricingTestData.Snapshot(PricingTestData.Json(1,
             PricingTestData.Imported.Select(p => PricingTestData.Item(p.Quantity, p.Cents * 25, currency: "czk")).ToArray())));
 
         Assert.Equal(12500, sut.GetPack(100)!.UnitAmountMinor);
         Assert.Equal("CZK", sut.Currency);
+        Assert.All(sut.GetPacks(), p => Assert.Equal("CZK", p.Currency));
+    }
+
+    [Fact]
+    public void SeveralCurrencies_TheOnePricingMostPacksWins()
+    {
+        var mapping = PriceListMapper.Map(PricingTestData.Snapshot(PricingTestData.Json(1,
+            TwoCurrencies(100, 500, 12500),
+            TwoCurrencies(300, 1425, 35000),
+            PricingTestData.Item(500, 56000, currency: "czk"))).Body);
+
+        Assert.Equal("CZK", mapping.Currency);
+        Assert.Equal(new[] { 100, 300, 500 }, mapping.Packs.Keys.Order());
+        Assert.Contains(mapping.Problems, p => p.Contains("CZK, EUR"));
+    }
+
+    [Fact]
+    public void SeveralCurrencies_TieGoesToThe100Pack()
+    {
+        var mapping = PriceListMapper.Map(PricingTestData.Snapshot(PricingTestData.Json(1,
+            PricingTestData.Item(100, 12500, currency: "czk"),
+            PricingTestData.Item(300, 1425))).Body);
+
+        Assert.Equal("CZK", mapping.Currency);
     }
 
     [Fact]

@@ -102,7 +102,8 @@ public sealed class PricingUpcomingCheck : BackgroundService
         }
 
         var pricing = scope.ServiceProvider.GetRequiredService<ICreditPricingProvider>();
-        var currency = PriceScheduledHandler.ProductCurrency(scope.ServiceProvider.GetRequiredService<IOptionsMonitor<BillingOptions>>().CurrentValue);
+        // Compared in the currency in force; without a price list there is nothing to announce.
+        if (pricing.Currency is not { } currency) return null;
         var changes = Changes(PriceListMapper.Map(upcoming, currency), pricing.GetPacks(), currency);
         var data = new PriceChangeEvent(version, effectiveFrom, noticeDays, changes, []);
 

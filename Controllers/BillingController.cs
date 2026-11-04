@@ -19,7 +19,6 @@ namespace DotNetSigningServer.Controllers;
 public class BillingController : Controller
 {
     private readonly ApplicationDbContext _dbContext;
-    private readonly IBillingService _billingService;
     private readonly ICreditPricingProvider _pricing;
     private readonly IPaymentGateway _payments;
     private readonly IAutoRechargeService _autoRechargeService;
@@ -29,7 +28,6 @@ public class BillingController : Controller
 
     public BillingController(
         ApplicationDbContext dbContext,
-        IBillingService billingService,
         ICreditPricingProvider pricing,
         IPaymentGateway payments,
         IAutoRechargeService autoRechargeService,
@@ -37,7 +35,6 @@ public class BillingController : Controller
         IStringLocalizer<SharedStrings> localizer)
     {
         _dbContext = dbContext;
-        _billingService = billingService;
         _pricing = pricing;
         _payments = payments;
         _autoRechargeService = autoRechargeService;
@@ -245,8 +242,7 @@ public class BillingController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        // Only the sold packs, at the current price (Modules:Pricing: the service's price list
-        // snapshot or Billing:*). No call to the service here.
+        // Only the packs of the price-list snapshot in force; none without one. No call to the service here.
         var pack = _pricing.GetPack(documentsToBuy);
         if (pack == null)
         {
@@ -377,7 +373,7 @@ public class BillingController : Controller
                         && bool.TryParse(autoRechargeValue, out var autoRecharge)
                         && autoRecharge)
                     {
-                        await _autoRechargeService.EnableAsync(user, documents, _pricing.PricePer100);
+                        await _autoRechargeService.EnableAsync(user, documents, _pricing.PricePer100 ?? 0m);
                     }
                 }, HttpContext.RequestAborted);
             if (!granted)
@@ -402,8 +398,10 @@ public class BillingController : Controller
     public class BillingViewModel
     {
         public IEnumerable<DotNetSigningServer.Models.Invoice> Invoices { get; set; } = Enumerable.Empty<DotNetSigningServer.Models.Invoice>();
-        public decimal PricePer100 { get; set; }
-        public string Currency { get; set; } = "EUR";
+        /// <summary>Price of 100 credits; null when the price list sells no 100-pack.</summary>
+        public decimal? PricePer100 { get; set; }
+        /// <summary>Currency of the price list in force; null when nothing is sold.</summary>
+        public string? Currency { get; set; }
         public int CreditsRemaining { get; set; }
         public IReadOnlyList<InvoiceSummary> StripeInvoices { get; set; } = Array.Empty<InvoiceSummary>();
         /// <summary>The sold packs at their current prices, smallest first.</summary>
@@ -449,7 +447,8 @@ public class BillingController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        if (!CreditPricing.IsSoldQuantity(quantity))
+        // Only a pack the price list in force sells; without a price list nothing is.
+        if (_pricing.GetPack(quantity) is null)
         {
             TempData["Error"] = _localizer["InvalidDocumentBundle"].Value;
             return RedirectToAction(nameof(Index));
@@ -518,7 +517,7 @@ public class BillingController : Controller
             }
         }
 
-        await _autoRechargeService.EnableAsync(user, quantity, _pricing.PricePer100);
+        await _autoRechargeService.EnableAsync(user, quantity, _pricing.PricePer100 ?? 0m);
         TempData["Info"] = _localizer["AutoRechargeEnabled"].Value;
         return RedirectToAction(nameof(Index));
     }
@@ -575,7 +574,7 @@ public class BillingController : Controller
                 await _dbContext.SaveChangesAsync();
             }
 
-            await _autoRechargeService.EnableAsync(user, quantity, _pricing.PricePer100);
+            await _autoRechargeService.EnableAsync(user, quantity, _pricing.PricePer100 ?? 0m);
             TempData["Info"] = _localizer["AutoRechargeEnabled"].Value;
         }
         catch (Exception ex)
