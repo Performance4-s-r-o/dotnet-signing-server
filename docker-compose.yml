@@ -194,6 +194,8 @@ services:
       - P4Backoffice__Keys__Billing=${P4_BACKOFFICE_BILLING_SECRET_KEY:-}
       # Alert channel independent of the backoffice (https webhook, POST {"text": ...}); empty = log only.
       - OpsAlert__WebhookUrl=${OPS_ALERT_WEBHOOK_URL:-}
+      # Healthchecks pings around every periodic job (#167); empty = off.
+      - HEARTBEAT_BASE_URL=${HEARTBEAT_BASE_URL:-}
       - P4Backoffice__CookieWidget__Url=${P4_BACKOFFICE_WIDGET_URL:-}
       - P4Backoffice__CookieWidget__PublishableKey=${P4_BACKOFFICE_PK:-}
       - P4Backoffice__SupportForm__Product=${P4_BACKOFFICE_SUPPORT_FORM_PRODUCT:-}

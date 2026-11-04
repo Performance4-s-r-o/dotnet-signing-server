@@ -66,6 +66,7 @@ public sealed class BackofficePollingService : BackgroundService
     private readonly IOptions<P4BackofficeProductOptions> _options;
     private readonly TimeProvider _time;
     private readonly ILogger<BackofficePollingService> _logger;
+    private readonly DotNetSigningServer.Services.Ops.IJobHeartbeat _heartbeat;
 
     public BackofficePollingService(
         IServiceScopeFactory scopes,
@@ -73,8 +74,10 @@ public sealed class BackofficePollingService : BackgroundService
         BackofficeInboxSignal signal,
         IOptions<P4BackofficeProductOptions> options,
         TimeProvider time,
-        ILogger<BackofficePollingService> logger)
+        ILogger<BackofficePollingService> logger,
+        DotNetSigningServer.Services.Ops.IJobHeartbeat? heartbeat = null)
     {
+        _heartbeat = heartbeat ?? DotNetSigningServer.Services.Ops.JobHeartbeat.Disabled;
         _scopes = scopes;
         _httpClients = httpClients;
         _signal = signal;
@@ -102,7 +105,7 @@ public sealed class BackofficePollingService : BackgroundService
         {
             try
             {
-                await PollOnceAsync(stoppingToken);
+                await _heartbeat.RunAsync(DotNetSigningServer.Services.Ops.HeartbeatJobs.BackofficePolling, PollOnceAsync, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

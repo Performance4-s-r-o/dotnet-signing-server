@@ -199,6 +199,8 @@ builder.Services.AddSingleton<LokiClient>();
 builder.Services.Configure<DotNetSigningServer.Middleware.CspOptions>(builder.Configuration.GetSection(DotNetSigningServer.Middleware.CspOptions.SectionName));
 // Alerts that must not travel through the system they report on (OPS_ALERT_WEBHOOK_URL).
 DotNetSigningServer.Services.Ops.OpsAlertRegistration.AddOpsAlerts(builder.Services, builder.Configuration);
+// Dead man's switch around every periodic job (#167); empty HEARTBEAT_BASE_URL = off.
+DotNetSigningServer.Services.Ops.JobHeartbeatRegistration.AddJobHeartbeats(builder.Services, builder.Configuration);
 // Ship all ILogger output (not just unhandled exceptions) to Loki.
 builder.Services.AddSingleton<ILoggerProvider, DotNetSigningServer.Logging.LokiLoggerProvider>();
 // The model gets 60 s; the caller's RequestAborted is passed on per call (#72).

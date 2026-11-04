@@ -28,6 +28,7 @@ public sealed class BackofficeOutboxDispatcher : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly TimeProvider _time;
     private readonly ILogger<BackofficeOutboxDispatcher> _logger;
+    private readonly Ops.IJobHeartbeat _heartbeat;
 
     /// <summary>How long a pass waits for the signal; <see cref="PollInterval"/> unless a test sets it.</summary>
     private readonly TimeSpan _pollInterval;
@@ -41,8 +42,10 @@ public sealed class BackofficeOutboxDispatcher : BackgroundService
         IServiceScopeFactory scopes,
         TimeProvider time,
         ILogger<BackofficeOutboxDispatcher> logger,
-        TimeSpan? pollInterval = null)
+        TimeSpan? pollInterval = null,
+        Ops.IJobHeartbeat? heartbeat = null)
     {
+        _heartbeat = heartbeat ?? Ops.JobHeartbeat.Disabled;
         _pollInterval = pollInterval ?? PollInterval;
         _processor = processor;
         _signal = signal;
@@ -63,7 +66,7 @@ public sealed class BackofficeOutboxDispatcher : BackgroundService
             var wait = _pollInterval;
             try
             {
-                if (await RunPassAsync(stoppingToken))
+                if (await _heartbeat.RunAsync(Ops.HeartbeatJobs.BackofficeOutbox, RunPassAsync, stoppingToken))
                 {
                     continue; // drain budget spent with more due: carry on without waiting
                 }

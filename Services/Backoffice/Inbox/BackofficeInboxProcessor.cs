@@ -55,14 +55,17 @@ public sealed class BackofficeInboxProcessor : BackgroundService
     private DateTimeOffset _nextCleanup;
 
     private readonly DotNetSigningServer.Services.Ops.IOpsAlerter? _alerter;
+    private readonly DotNetSigningServer.Services.Ops.IJobHeartbeat _heartbeat;
 
     public BackofficeInboxProcessor(
         IServiceScopeFactory scopes,
         BackofficeInboxSignal signal,
         TimeProvider time,
         ILogger<BackofficeInboxProcessor> logger,
-        DotNetSigningServer.Services.Ops.IOpsAlerter? alerter = null)
+        DotNetSigningServer.Services.Ops.IOpsAlerter? alerter = null,
+        DotNetSigningServer.Services.Ops.IJobHeartbeat? heartbeat = null)
     {
+        _heartbeat = heartbeat ?? DotNetSigningServer.Services.Ops.JobHeartbeat.Disabled;
         _alerter = alerter;
         _scopes = scopes;
         _signal = signal;
@@ -88,18 +91,21 @@ public sealed class BackofficeInboxProcessor : BackgroundService
             var wait = PollInterval;
             try
             {
-                // A full batch means more may be due right now.
-                while (await ProcessDueAsync(stoppingToken) >= BatchSize)
+                await _heartbeat.RunAsync(DotNetSigningServer.Services.Ops.HeartbeatJobs.BackofficeInbox, async ct =>
                 {
-                    stoppingToken.ThrowIfCancellationRequested();
-                }
+                    // A full batch means more may be due right now.
+                    while (await ProcessDueAsync(ct) >= BatchSize)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                    }
 
-                var now = _time.GetUtcNow();
-                if (now >= _nextCleanup)
-                {
-                    _nextCleanup = now + CleanupInterval;
-                    await CleanupAsync(stoppingToken);
-                }
+                    var now = _time.GetUtcNow();
+                    if (now >= _nextCleanup)
+                    {
+                        _nextCleanup = now + CleanupInterval;
+                        await CleanupAsync(ct);
+                    }
+                }, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

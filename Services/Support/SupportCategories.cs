@@ -148,14 +148,17 @@ public sealed class SupportCategoriesWorker : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly TimeProvider _time;
     private readonly ILogger<SupportCategoriesWorker> _logger;
+    private readonly DotNetSigningServer.Services.Ops.IJobHeartbeat _heartbeat;
 
     public SupportCategoriesWorker(
         SupportCategoriesClient client,
         SupportCategoriesHolder holder,
         IServiceScopeFactory scopes,
         TimeProvider time,
-        ILogger<SupportCategoriesWorker> logger)
+        ILogger<SupportCategoriesWorker> logger,
+        DotNetSigningServer.Services.Ops.IJobHeartbeat? heartbeat = null)
     {
+        _heartbeat = heartbeat ?? DotNetSigningServer.Services.Ops.JobHeartbeat.Disabled;
         _client = client;
         _holder = holder;
         _scopes = scopes;
@@ -236,7 +239,7 @@ public sealed class SupportCategoriesWorker : BackgroundService
             var delay = Interval;
             try
             {
-                await RefreshAsync(stoppingToken);
+                await _heartbeat.RunAsync(DotNetSigningServer.Services.Ops.HeartbeatJobs.SupportCategories, RefreshAsync, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

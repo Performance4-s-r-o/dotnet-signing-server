@@ -30,9 +30,12 @@ public sealed class PricingUpcomingCheck : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly TimeProvider _time;
     private readonly ILogger<PricingUpcomingCheck> _logger;
+    private readonly DotNetSigningServer.Services.Ops.IJobHeartbeat _heartbeat;
 
-    public PricingUpcomingCheck(BackofficePricingClient client, IServiceScopeFactory scopes, TimeProvider time, ILogger<PricingUpcomingCheck> logger)
+    public PricingUpcomingCheck(BackofficePricingClient client, IServiceScopeFactory scopes, TimeProvider time, ILogger<PricingUpcomingCheck> logger,
+        DotNetSigningServer.Services.Ops.IJobHeartbeat? heartbeat = null)
     {
+        _heartbeat = heartbeat ?? DotNetSigningServer.Services.Ops.JobHeartbeat.Disabled;
         _client = client;
         _scopes = scopes;
         _time = time;
@@ -56,7 +59,8 @@ public sealed class PricingUpcomingCheck : BackgroundService
             delay = Interval;
             try
             {
-                await RunOnceAsync(stoppingToken);
+                await _heartbeat.RunAsync(DotNetSigningServer.Services.Ops.HeartbeatJobs.PricingUpcoming, RunOnceAsync, stoppingToken,
+                    result => result is null ? "nothing due" : $"notices {result.Notified}");
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

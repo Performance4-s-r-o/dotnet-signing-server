@@ -127,9 +127,12 @@ public sealed class PricingSnapshotWorker : BackgroundService
     private readonly PricingSnapshotRefresher _refresher;
     private readonly TimeProvider _time;
     private readonly ILogger<PricingSnapshotWorker> _logger;
+    private readonly DotNetSigningServer.Services.Ops.IJobHeartbeat _heartbeat;
 
-    public PricingSnapshotWorker(PricingSnapshotRefresher refresher, TimeProvider time, ILogger<PricingSnapshotWorker> logger)
+    public PricingSnapshotWorker(PricingSnapshotRefresher refresher, TimeProvider time, ILogger<PricingSnapshotWorker> logger,
+        DotNetSigningServer.Services.Ops.IJobHeartbeat? heartbeat = null)
     {
+        _heartbeat = heartbeat ?? DotNetSigningServer.Services.Ops.JobHeartbeat.Disabled;
         _refresher = refresher;
         _time = time;
         _logger = logger;
@@ -160,7 +163,8 @@ public sealed class PricingSnapshotWorker : BackgroundService
             var delay = Interval;
             try
             {
-                await _refresher.RefreshAsync(reason, conditional: true, stoppingToken);
+                await _heartbeat.RunAsync(DotNetSigningServer.Services.Ops.HeartbeatJobs.PricingRefresh,
+                    ct => _refresher.RefreshAsync(reason, conditional: true, ct), stoppingToken, outcome => outcome.ToString());
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

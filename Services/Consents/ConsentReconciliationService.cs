@@ -52,14 +52,17 @@ public sealed class ConsentReconciliationService : BackgroundService
     private readonly IOptions<P4BackofficeProductOptions> _options;
     private readonly TimeProvider _time;
     private readonly ILogger<ConsentReconciliationService> _logger;
+    private readonly DotNetSigningServer.Services.Ops.IJobHeartbeat _heartbeat;
 
     public ConsentReconciliationService(
         IServiceScopeFactory scopes,
         IHttpClientFactory httpClients,
         IOptions<P4BackofficeProductOptions> options,
         TimeProvider time,
-        ILogger<ConsentReconciliationService> logger)
+        ILogger<ConsentReconciliationService> logger,
+        DotNetSigningServer.Services.Ops.IJobHeartbeat? heartbeat = null)
     {
+        _heartbeat = heartbeat ?? DotNetSigningServer.Services.Ops.JobHeartbeat.Disabled;
         _scopes = scopes;
         _httpClients = httpClients;
         _options = options;
@@ -74,7 +77,7 @@ public sealed class ConsentReconciliationService : BackgroundService
         {
             try
             {
-                await RunIfDueAsync(stoppingToken);
+                await _heartbeat.RunAsync(DotNetSigningServer.Services.Ops.HeartbeatJobs.ConsentReconciliation, RunIfDueAsync, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
