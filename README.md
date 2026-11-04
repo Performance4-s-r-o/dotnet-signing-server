@@ -249,7 +249,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `Token__Secret` | yes | Signing key for issued API tokens |
 | `FqdnServerName` | yes | Public hostname, used in generated links |
 | `AllowedHosts` | recommended | Host filtering, `*` by default |
-| `CORS_ALLOWED_ORIGINS` (`Cors__AllowedOrigins`) | in production, when browser tokens are used | Comma-separated browser origins allowed on `/api`. In Production an empty list means only the server's own origin (it no longer falls back to the origins of every user's browser tokens) and startup logs a warning |
+| `CORS_ALLOWED_ORIGINS` (`Cors__AllowedOrigins`) | no | Optional operator restriction of browser origins on `/api` (#177), comma-separated. Empty = a preflight passes an origin that an active browser token lists (cached 30 s), the server's own origin, or localhost in Development; set = the origin must also be in this list. The real request is always checked against the origin of its own token. `Access-Control-Allow-Credentials` is never sent and a cross-origin request loses its session cookie |
 | `AUTH_REAUTH_MINUTES` | no (15) | Step-up re-authentication: creating an API token and changing billing need a password or e-mailed code confirmed within this many minutes; otherwise `403 REAUTH_REQUIRED` and a confirmation form (`/Account/Reauth`) |
 | `AUTH_OTP_MAX_FAILED_ATTEMPTS` | no (5) | Wrong 2FA codes after which the code is void. The count is cleared only by a successful code or a password reset, not by signing in again |
 | `AUTH_ACCOUNT_MAX_ATTEMPTS` / `AUTH_ACCOUNT_WINDOW_MINUTES` | no (30 / 15) | Sign-in and 2FA attempts per account whatever the IP (on top of the per-IP+address limit), counted in PostgreSQL |

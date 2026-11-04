@@ -1,4 +1,3 @@
-using System.Security.Policy;
 using System.Text.RegularExpressions;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Models;
@@ -33,6 +32,21 @@ public class AllowedOriginService : IAllowedOriginService
         _configuration = configuration;
     }
 
+    /// <summary>How long the set of browser-token origins is reused before the next database read.</summary>
+    internal static readonly TimeSpan TokenOriginsTtl = TimeSpan.FromSeconds(30);
+
+    private readonly object _tokenOriginsLock = new();
+    private (long ExpiresAt, HashSet<string> Origins)? _tokenOrigins;
+
+    /// <summary>
+    /// The CORS shim on <c>/api</c> (#177): a preflight carries no token, so it passes an origin
+    /// that at least one active browser token lists (or the server's own origin, or localhost in
+    /// Development). Which token it is never shows; the real request then checks the origin of
+    /// that very token (<see cref="IsOriginAllowedForToken"/>).
+    ///
+    /// <c>Cors:AllowedOrigins</c> is an optional operator restriction on top: when set, an origin
+    /// must be in it as well. Empty does not switch CORS off, it leaves the decision to the tokens.
+    /// </summary>
     public bool IsOriginAllowed(string origin, HttpContext context)
     {
         var normalized = NormalizeOrigin(origin);
@@ -41,39 +55,63 @@ public class AllowedOriginService : IAllowedOriginService
             return true; // non-browser requests
         }
 
-        if (IsLocal(normalized))
+        if (IsOwnOrigin(normalized, context))
         {
             return true;
         }
 
-        var allowedOrigins = LoadCorsOrigins().Concat(LocalOrigins).Concat(
-            [context.Request.Scheme + "://" + context.Request.Host.ToString()]
-        ).ToHashSet();
-        return allowedOrigins.Contains(normalized);
-    }
+        if (_environment.IsDevelopment() && IsLocal(normalized))
+        {
+            return true;
+        }
 
-    /// <summary>
-    /// Origins reflected by the request-level CORS shim.
-    ///
-    /// When <c>Cors:AllowedOrigins</c> is configured, that operator-controlled list is
-    /// authoritative. Without it we fall back to the union of every active browser
-    /// token's origins across all users — which means any registered user can widen
-    /// the server-wide CORS list just by creating a token, so production should
-    /// always set the explicit list.
-    ///
-    /// In Production that fallback is off (#80): without the list only the server's own origin
-    /// (and localhost) passes, and startup logs a warning. A browser token used from another
-    /// site then needs its origin in <c>Cors:AllowedOrigins</c>.
-    /// </summary>
-    private IEnumerable<string> LoadCorsOrigins()
-    {
         var configured = LoadConfiguredCorsOrigins();
-        if (configured.Count > 0) return configured;
-        return _environment.IsProduction() ? Enumerable.Empty<string>() : LoadAllowedOrigins();
+        if (configured.Count > 0 && !configured.Contains(normalized))
+        {
+            return false;
+        }
+
+        return TokenOrigins().Contains(normalized);
     }
 
-    /// <summary>Whether <c>Cors:AllowedOrigins</c> lists anything (startup warning in Production).</summary>
-    public bool HasConfiguredCorsOrigins => LoadConfiguredCorsOrigins().Count > 0;
+    /// <summary>Whether <paramref name="origin"/> is the origin this request was addressed to.</summary>
+    public bool IsOwnOrigin(string origin, HttpContext context)
+    {
+        var normalized = NormalizeOrigin(origin);
+        var own = NormalizeOrigin(context.Request.Scheme + "://" + context.Request.Host);
+        return normalized != null && own != null && string.Equals(normalized, own, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Drops the cached browser-token origins, so a new or revoked token counts at once in this process.</summary>
+    public void InvalidateTokenOrigins()
+    {
+        lock (_tokenOriginsLock)
+        {
+            _tokenOrigins = null;
+        }
+    }
+
+    private HashSet<string> TokenOrigins()
+    {
+        var now = Environment.TickCount64;
+        var cached = _tokenOrigins;
+        if (cached is { } hit && hit.ExpiresAt > now)
+        {
+            return hit.Origins;
+        }
+
+        lock (_tokenOriginsLock)
+        {
+            cached = _tokenOrigins;
+            if (cached is { } again && again.ExpiresAt > now)
+            {
+                return again.Origins;
+            }
+            var origins = LoadAllowedOrigins();
+            _tokenOrigins = (now + (long)TokenOriginsTtl.TotalMilliseconds, origins);
+            return origins;
+        }
+    }
 
     private HashSet<string> LoadConfiguredCorsOrigins()
     {
@@ -85,6 +123,10 @@ public class AllowedOriginService : IAllowedOriginService
             ? string.Join(",", section.GetChildren().Select(c => c.Value))
             : section.Value;
 
+        if (DotNetSigningServer.Options.EnvValues.IsUnset(raw))
+        {
+            return [];
+        }
         return ParseOrigins(raw).ToHashSet();
     }
 
@@ -120,7 +162,7 @@ public class AllowedOriginService : IAllowedOriginService
             .Select(t => t.AllowedOrigins)
             .ToList();
 
-        return new HashSet<string>(origins.SelectMany(ParseOrigins));
+        return new HashSet<string>(origins.SelectMany(ParseOrigins), StringComparer.OrdinalIgnoreCase);
     }
 
     private static IEnumerable<string> ParseOrigins(string? rawOrigins)

@@ -159,6 +159,7 @@ public class ApiTokensController : Controller
 
         _dbContext.ApiTokens.Add(token);
         await _dbContext.SaveChangesAsync();
+        InvalidateBrowserOrigins(isBrowser);
 
         _logger.LogInformation(DotNetSigningServer.Logging.LoggingEvents.TokenCreated, "Token created for user {UserId} label {Label} browser {Browser}", user.Id, label, isBrowser);
         TempData["NewToken"] = plaintext;
@@ -184,6 +185,7 @@ public class ApiTokensController : Controller
 
         token.RevokedAt = DateTimeOffset.UtcNow;
         await _dbContext.SaveChangesAsync();
+        InvalidateBrowserOrigins(token.IsBrowserToken);
         _apiAuth.InvalidateTokenCache(token.Id);
         _logger.LogInformation(DotNetSigningServer.Logging.LoggingEvents.TokenRevoked, "Token {TokenId} revoked for user {UserId}", id, userId);
         return RedirectToAction(nameof(Index));
@@ -208,6 +210,7 @@ public class ApiTokensController : Controller
 
         _dbContext.ApiTokens.Remove(token);
         await _dbContext.SaveChangesAsync();
+        InvalidateBrowserOrigins(token.IsBrowserToken);
         _apiAuth.InvalidateTokenCache(token.Id);
         _logger.LogInformation(DotNetSigningServer.Logging.LoggingEvents.TokenDeleted, "Token {TokenId} deleted for user {UserId}", id, userId);
         TempData["Info"] = _localizer["TokenDeleted"].Value;
@@ -247,6 +250,12 @@ public class ApiTokensController : Controller
             .Where(o => o != null)
             .Select(o => o!)
             .Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The CORS preflight reads browser-token origins from a short cache (#177); a change counts at once.</summary>
+    private void InvalidateBrowserOrigins(bool isBrowser)
+    {
+        if (isBrowser) HttpContext?.RequestServices?.GetService<IAllowedOriginService>()?.InvalidateTokenOrigins();
     }
 
     private Guid? GetCurrentUserId()

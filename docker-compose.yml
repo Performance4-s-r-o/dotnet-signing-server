@@ -70,8 +70,7 @@ services:
       # arrives empty or as the placeholder and the code default applies (Options/EnvValues.cs).
       # Live API tokens per account; 0 = no limit (default 100).
       - MAX_API_TOKENS_PER_USER=${MAX_API_TOKENS_PER_USER:-}
-      # Browser origins allowed to call /api (comma-separated). Production no longer falls back
-      # to the origins of every user's browser tokens: list the sites that use them.
+      # Optional restriction of browser origins on /api; empty = the origins of browser tokens decide.
       - Cors__AllowedOrigins=${CORS_ALLOWED_ORIGINS:-}
       # Step-up re-auth: minutes since the last password/2FA confirmation before an API token
       # can be created or billing changed (default 15); wrong 2FA codes before a code is void (5).

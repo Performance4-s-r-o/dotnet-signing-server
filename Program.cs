@@ -472,17 +472,6 @@ if (!migrateOnly)
 
 var appLogger = app.Services.GetRequiredService<ILogger<Program>>();
 
-// #80: in Production the CORS list no longer falls back to the origins of every user's
-// browser tokens. Without Cors:AllowedOrigins only the server's own origin passes.
-if (!migrateOnly && app.Environment.IsProduction()
-    && app.Services.GetRequiredService<IAllowedOriginService>() is AllowedOriginService origins
-    && !origins.HasConfiguredCorsOrigins)
-{
-    appLogger.LogWarning(
-        "Cors:AllowedOrigins is empty: browser calls to /api are accepted only from this server's own origin. "
-        + "Set CORS_ALLOWED_ORIGINS (Cors__AllowedOrigins) to the sites that use browser tokens.");
-}
-
 // #513: bez certifikátu evidence padá každý SES podpis, který si ho nepošle sám. Start se nezastaví,
 // protože portál může certifikát posílat v požadavku (varianta B, Key Vault).
 if (!migrateOnly && app.Environment.IsProduction())
@@ -569,39 +558,8 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-app.Use(async (context, next) =>
-{
-    // Apply CORS only to API routes
-    if (context.Request.Path.HasValue && context.Request.Path.Value!.StartsWith("/api", StringComparison.OrdinalIgnoreCase))
-    {
-        var origin = context.Request.Headers["Origin"].ToString();
-        if (!string.IsNullOrWhiteSpace(origin))
-        {
-            var originService = context.RequestServices.GetRequiredService<IAllowedOriginService>();
-            if (!originService.IsOriginAllowed(origin, context))
-            {
-                var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-                logger.LogWarning("CORS origin not allowed: {Origin}", origin);
-                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                return;
-            }
-            context.Response.Headers["Access-Control-Allow-Origin"] = origin;
-            context.Response.Headers["Vary"] = "Origin";
-            // No billing-bypass header (#78): only the portal sends it, server to server, never a browser.
-            context.Response.Headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type,Idempotency-Key";
-            context.Response.Headers["Access-Control-Expose-Headers"] = "X-Operation-Id,X-Operation-State,Idempotent-Replayed,Retry-After,X-Signature-Verified";
-            context.Response.Headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS";
-        }
-
-        if (string.Equals(context.Request.Method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
-        {
-            context.Response.StatusCode = StatusCodes.Status204NoContent;
-            return;
-        }
-    }
-
-    await next();
-});
+// CORS on /api by the origins of browser tokens (#177); Cors:AllowedOrigins only narrows it.
+app.UseMiddleware<DotNetSigningServer.Middleware.ApiCorsMiddleware>();
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/ApiTokens", StringComparison.OrdinalIgnoreCase)
