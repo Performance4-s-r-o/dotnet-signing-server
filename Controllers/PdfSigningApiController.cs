@@ -3,6 +3,7 @@ using DotNetSigningServer.Data;
 using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Services.SignatureLayout;
 using DotNetSigningServer.Services.Operations;
 using iText.Signatures;
 using DotNetSigningServer.Options;
@@ -61,6 +62,7 @@ namespace DotNetSigningServer.Controllers
                 // Active content is what flattening removes; the prepared document gets the full check.
                 pdf = GuardedPdfFromBase64(input.PdfContent, "Presign", checkActiveContent: !input.FlattenForm);
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
+                LimitGuard.EnsureImageWithinLimit(input.ContentStamp?.SignImageContent, "Signature image");
             }
             catch (ApiValidationException ex)
             {
@@ -92,6 +94,7 @@ namespace DotNetSigningServer.Controllers
             {
                 SafetyGuard.EnsureSafePdf(pdf!, "Presign", checkActiveContent: !input!.FlattenForm);
                 LimitGuard.EnsureImageWithinLimit(input.SignImageContent, "Signature image");
+                LimitGuard.EnsureImageWithinLimit(input.ContentStamp?.SignImageContent, "Signature image");
             }
             catch (ApiValidationException ex)
             {
@@ -103,6 +106,10 @@ namespace DotNetSigningServer.Controllers
         /// <summary>Presign po vstupní kontrole, společný oběma kanálům.</summary>
         private async Task<IActionResult> PreSignCoreAsync(User user, PreSignInput input, byte[] pdf)
         {
+            if (input.PlaceBesideContentStamp && input.ContentStamp == null)
+            {
+                return InputRefused(new ApiValidationException("CONTENT_STAMP_REQUIRED"));
+            }
             var maxPending = HttpContext.RequestServices.GetRequiredService<IOptions<LimitsOptions>>().Value.MaxPendingPresignsPerUser;
             if (maxPending > 0 && !PortalTrust.IsTrustedCaller(HttpContext) && await DbContext.SigningData.CountAsync(x => x.UserId == user.Id) >= maxPending)
             {
@@ -146,7 +153,7 @@ namespace DotNetSigningServer.Controllers
                     ? $"Signature_{signingData.Id.Replace("-", string.Empty)}"
                     : input.FieldName;
 
-                var (presignedPdfPath, hashToSign) = _signingService.HandlePreSign(input, pdf, fieldName, prepared?.KeepPdfA);
+                var (presignedPdfPath, hashToSign, stampPlacement) = _signingService.HandlePreSignWithStamp(input, pdf, fieldName, prepared?.KeepPdfA);
                 writtenPath = presignedPdfPath;
                 signingData.FieldName = fieldName;
                 signingData.PresignedPdfPath = presignedPdfPath;
@@ -176,16 +183,26 @@ namespace DotNetSigningServer.Controllers
                 await DbContext.SaveChangesAsync();
                 writtenPath = null; // the row now owns the file
 
+                // The caller checks contentStamp: an older server would drop the stamp without a word (portál #511).
                 if (prepared == null)
                 {
-                    return Ok(new { id = signingData.Id, hashToSign = signingData.HashToSign });
+                    return stampPlacement == null
+                        ? Ok(new { id = signingData.Id, hashToSign = signingData.HashToSign })
+                        : Ok(new { id = signingData.Id, hashToSign = signingData.HashToSign, contentStamp = stampPlacement });
                 }
                 return Ok(new
                 {
                     id = signingData.Id,
                     hashToSign = signingData.HashToSign,
                     preparation = PreparationBody(prepared.Report, preparationCredits),
+                    contentStamp = stampPlacement,
                 });
+            }
+            catch (ApiValidationException ex) when (StampRefusalCodes.Contains(ex.Code))
+            {
+                // Planned before anything is written: nothing to clean up (portál #511).
+                Logger.LogInformation("Presign refused: {Code} ({Detail})", ex.Code, ex.Message);
+                return StampRefused(ex);
             }
             catch (ApiValidationException ex) when (PreparationRefusalCodes.Contains(ex.Code))
             {
@@ -211,6 +228,43 @@ namespace DotNetSigningServer.Controllers
                 }
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Presign failed");
                 return SafeProblem(Localizer["PresignError"], ex);
+            }
+        }
+
+        /// <summary>The stamp or the seal beside it has no place, or the certification forbids it (422, portál #511).</summary>
+        internal static readonly IReadOnlySet<string> StampRefusalCodes = new HashSet<string>(StringComparer.Ordinal)
+        {
+            SealPlacement.NoRoomCode, PdfSigningService.CertifiedNoChangesCode,
+        };
+
+        private IActionResult StampRefused(ApiValidationException ex) =>
+            UnprocessableEntity(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
+
+        /// <summary>
+        /// Where presign would put the content stamp and the seal beside it, without writing anything
+        /// (portál #511): the portal asks before it reserves credits or spends an SMS. Same input and
+        /// the same 422 refusals as <c>/api/presign</c>; free.
+        /// </summary>
+        [CapacityPool(CapacityPoolKind.Heavy)]
+        [HttpPost("/api/presign/placement")]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> PresignPlacement([FromBody] PreSignInput input)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+            try
+            {
+                var pdf = GuardedPdfFromBase64(input.PdfContent, "Presign", checkActiveContent: !input.FlattenForm);
+                input.PdfContent = string.Empty;
+                return Ok(new { contentStamp = PdfSigningService.PlanContentStamp(input, pdf).Placement });
+            }
+            catch (ApiValidationException ex) when (StampRefusalCodes.Contains(ex.Code))
+            {
+                return StampRefused(ex);
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
             }
         }
 
@@ -1233,6 +1287,12 @@ namespace DotNetSigningServer.Controllers
         /// <summary>attachment po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
         private async Task<IActionResult> AttachmentCoreAsync(User user, AddAttachmentInput input, byte[]? pdf, bool bypassDebitRequested, string fingerprint)
         {
+            // Bez certifikátu se odmítá dřív, než vznikne operace a rezervace (#513).
+            if (_signingService.MissingEvidenceCertificate(input))
+            {
+                return EvidenceCertNotConfigured();
+            }
+
             try
             {
                 return await RunOperationAsync(
@@ -1246,11 +1306,30 @@ namespace DotNetSigningServer.Controllers
                         return Task.FromResult(new PaidResult(new { result }, result));
                     });
             }
+            catch (ApiValidationException ex) when (ex.Code == PdfSigningService.EvidenceCertNotConfiguredCode)
+            {
+                return EvidenceCertNotConfigured();
+            }
             catch (Exception ex)
             {
                 Logger.LogError(Logging.LoggingEvents.ApiError, ex, "Add attachment failed");
                 return SafeProblem(Localizer["AttachmentError"], ex);
             }
+        }
+
+        /// <summary>503: chyba nasazení, ne vstupu; volající nemá co opravit v požadavku.</summary>
+        private IActionResult EvidenceCertNotConfigured()
+        {
+            Logger.LogError(
+                Logging.LoggingEvents.ApiError,
+                "Evidence attachment refused: no encryption certificate in the request and EVIDENCE_ENCRYPTION_CERTIFICATE_PEM(_BASE64) is not set");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    code = PdfSigningService.EvidenceCertNotConfiguredCode,
+                    message = Localizer[$"Error_{PdfSigningService.EvidenceCertNotConfiguredCode}"].Value,
+                });
         }
 
         /// <summary>

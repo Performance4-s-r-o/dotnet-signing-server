@@ -500,6 +500,20 @@ if (!migrateOnly && app.Environment.IsProduction()
         + "Set CORS_ALLOWED_ORIGINS (Cors__AllowedOrigins) to the sites that use browser tokens.");
 }
 
+// #513: bez certifikátu evidence padá každý SES podpis, který si ho nepošle sám. Start se nezastaví,
+// protože portál může certifikát posílat v požadavku (varianta B, Key Vault).
+if (!migrateOnly && app.Environment.IsProduction())
+{
+    var evidence = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<EvidenceOptions>>().Value;
+    if (string.IsNullOrWhiteSpace(evidence.EncryptionCertificatePem))
+    {
+        appLogger.LogError(
+            "EVIDENCE_ENCRYPTION_CERTIFICATE_PEM(_BASE64) is not set: /api/attachment with UseConfiguredEncryptionCertificate "
+            + "answers 503 EVIDENCE_CERT_NOT_CONFIGURED unless the caller sends EncryptForCertificatePem "
+            + "(the portal with EVIDENCE_ENCRYPTION_SOURCE=keyvault does).");
+    }
+}
+
 // #106: without cloudflared in TRUSTED_CF_PROXIES the CF-Connecting-IP header is ignored, and
 // behind the tunnel every visitor then has the tunnel's address — one sign-in limit (20 per
 // 10 min) for everybody. That breaks sign-in rather than degrading it, so production refuses to

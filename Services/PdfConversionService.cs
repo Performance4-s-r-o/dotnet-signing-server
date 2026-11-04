@@ -42,6 +42,8 @@ namespace DotNetSigningServer.Services
             }
 
             var conformance = ResolveConformance(input.Conformance);
+            // Non-embedded Helvetica, Times and Courier get a metric-compatible embedded font (#189).
+            originalPdf = StandardFontEmbedder.Embed(originalPdf);
 
             using var outputStream = new MemoryStream();
             using var inputStream = new MemoryStream(originalPdf);

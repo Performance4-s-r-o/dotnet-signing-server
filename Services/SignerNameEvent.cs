@@ -1,3 +1,5 @@
+using DotNetSigningServer.Services.SignatureLayout;
+using iText.Kernel.Pdf;
 using iText.Signatures;
 
 namespace DotNetSigningServer.Services;
@@ -23,9 +25,19 @@ namespace DotNetSigningServer.Services;
 /// </summary>
 internal sealed class SignerNameEvent : PdfSigner.ISignatureEvent
 {
-    private readonly string _name;
+    private readonly string? _name;
+    private readonly PdfArray? _stampMarker;
 
-    internal SignerNameEvent(string name) => _name = name;
+    /// <param name="stampMarker">Where this signature's content stamp is (portál #511), for later signers.</param>
+    internal SignerNameEvent(string? name, PdfArray? stampMarker = null)
+    {
+        _name = name;
+        _stampMarker = stampMarker;
+    }
 
-    public void GetSignatureDictionary(PdfSignature sig) => sig.SetName(_name);
+    public void GetSignatureDictionary(PdfSignature sig)
+    {
+        if (!string.IsNullOrWhiteSpace(_name)) sig.SetName(_name);
+        if (_stampMarker != null) sig.Put(SealPlacement.StampMarkerKey, _stampMarker);
+    }
 }

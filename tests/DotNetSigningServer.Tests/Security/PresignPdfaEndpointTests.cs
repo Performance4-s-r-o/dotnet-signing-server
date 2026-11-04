@@ -152,6 +152,70 @@ public class PresignPdfaEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task A_content_stamp_is_reported_with_the_seal_box_and_costs_the_same()
+    {
+        var controller = Controller(trusted: true);
+        var input = Input(PresignPdfaTests.Pdf(_ => { }));
+        input.SignRect = new SignRect { Width = 150, Height = 50 };
+        input.ContentStamp = new ContentStampInput { SignRect = new SignRect { X = 50, Y = 100, Width = 200, Height = 60 }, SignerName = "Jana" };
+        input.PlaceBesideContentStamp = true;
+
+        var (status, _, body) = Describe(await controller.PreSign(input));
+
+        Assert.Equal(200, status);
+        var stamp = body.GetProperty("contentStamp");
+        Assert.Equal(1, stamp.GetProperty("page").GetInt32());
+        Assert.Equal(50, stamp.GetProperty("stamp").GetProperty("x").GetSingle(), 1);
+        Assert.Equal(150, stamp.GetProperty("field").GetProperty("width").GetSingle(), 1);
+        // One signature, one price: the stamp is not a visual-sign of its own (portál #511).
+        var row = await _db.SigningData.SingleAsync();
+        await controller.Sign(new SignInput { Id = row.Id, SignedHash = "00" });
+        Assert.Equal(("sign", 1), controller.Calls.Single());
+    }
+
+    [Fact]
+    public async Task A_stamp_without_room_is_422_from_presign_and_the_placement_check_and_writes_nothing()
+    {
+        var controller = Controller(trusted: true);
+        PreSignInput Blocked()
+        {
+            var input = Input(PresignPdfaTests.Pdf(_ => { }));
+            input.SignRect = new SignRect { Width = 150, Height = 50 };
+            input.ContentStamp = new ContentStampInput { SignRect = new SignRect { X = 50, Y = 100, Width = 200, Height = 60 }, SignerName = "Jana" };
+            input.PlaceBesideContentStamp = true;
+            input.Occupied = new List<OccupiedRect> { new() { Page = 1, X = 0, Y = 0, Width = 595, Height = 842 } };
+            return input;
+        }
+
+        var (status, code, _) = Describe(await controller.PreSign(Blocked()));
+        Assert.Equal(422, status);
+        Assert.Equal("SEAL_PLACEMENT_NO_ROOM", code);
+        Assert.Empty(_db.SigningData);
+
+        (status, code, _) = Describe(await controller.PresignPlacement(Blocked()));
+        Assert.Equal(422, status);
+        Assert.Equal("SEAL_PLACEMENT_NO_ROOM", code);
+
+        var free = Blocked();
+        free.Occupied = null;
+        var (okStatus, _, body) = Describe(await controller.PresignPlacement(free));
+        Assert.Equal(200, okStatus);
+        Assert.Equal(ContentStampPlacement.CurrentVersion, body.GetProperty("contentStamp").GetProperty("version").GetInt32());
+        Assert.Empty(_db.SigningData);
+    }
+
+    [Fact]
+    public async Task Placing_beside_without_a_stamp_is_400()
+    {
+        var input = Input(PresignPdfaTests.Pdf(_ => { }));
+        input.PlaceBesideContentStamp = true;
+        var (status, code, _) = Describe(await Controller().PreSign(input));
+        Assert.Equal(400, status);
+        Assert.Equal("CONTENT_STAMP_REQUIRED", code);
+        Assert.Empty(_db.SigningData);
+    }
+
+    [Fact]
     public async Task Without_the_switches_active_content_is_still_refused()
     {
         var (status, code, _) = Describe(await Controller().PreSign(Input(PresignPdfaTests.ScriptedFormEmbedded())));
@@ -196,7 +260,7 @@ public class PresignPdfaEndpointTests : IDisposable
     [Fact]
     public async Task A_document_that_cannot_be_converted_is_409_and_leaves_no_presign()
     {
-        var (status, code, _) = Describe(await Controller().PreSign(Input(PresignPdfaTests.HelveticaText(), convert: true)));
+        var (status, code, _) = Describe(await Controller().PreSign(Input(PresignPdfaTests.SymbolText(), convert: true)));
         Assert.Equal(409, status);
         Assert.Equal(DocumentPreparation.ConversionFailedCode, code);
         Assert.Empty(_db.SigningData);
@@ -317,8 +381,8 @@ public class PresignPdfaEndpointTests : IDisposable
             iText.Kernel.Pdf.Filespec.PdfFileSpec.CreateEmbeddedFileSpec(doc, new byte[] { 1 }, "a", "a.txt", null, null, null)));
         var cases = new (Func<Harness, Task<IActionResult>> Call, int Status, string Code)[]
         {
-            (c => c.ApplyTimestamp(TimestampInput(PresignPdfaTests.HelveticaText(), convert: true)), 409, DocumentPreparation.ConversionFailedCode),
-            (c => c.ApplyVisualSign(VisualInput(PresignPdfaTests.HelveticaText(), convert: true)), 409, DocumentPreparation.ConversionFailedCode),
+            (c => c.ApplyTimestamp(TimestampInput(PresignPdfaTests.SymbolText(), convert: true)), 409, DocumentPreparation.ConversionFailedCode),
+            (c => c.ApplyVisualSign(VisualInput(PresignPdfaTests.SymbolText(), convert: true)), 409, DocumentPreparation.ConversionFailedCode),
             (c => c.ApplyVisualSign(VisualInput(withFile, convert: true)), 409, DocumentPreparation.EmbeddedFilesCode),
             (c => c.ApplyVisualSign(VisualInput(PresignPdfaTests.Pdf(_ => { }), convert: true, conformance: "PDF/A-1B")), 400, DocumentPreparation.ConformanceUnsupportedCode),
             (c => c.ApplyTimestamp(TimestampInput(PdfFormFlattenerTests.DuplicateNamedFields(), flatten: true)), 409, PdfFormFlattener.FormInvalidCode),
@@ -354,7 +418,7 @@ public class PresignPdfaEndpointTests : IDisposable
         controller.HttpContext.Request.Headers[PdfSigningApiController.IdempotencyKeyHeader] = key;
 
         // A document that would fail the conversion: a replay must reach the stored answer instead.
-        await controller.ApplyVisualSign(VisualInput(PresignPdfaTests.HelveticaText(), convert: true));
+        await controller.ApplyVisualSign(VisualInput(PresignPdfaTests.SymbolText(), convert: true));
         Assert.Equal(("visual-sign", 1), controller.Calls.Single());
     }
 }

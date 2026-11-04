@@ -191,6 +191,7 @@
   <data name="TrustedCallerDisabled" xml:space="preserve"><value>The account is no longer a trusted caller.</value></data>
   <data name="TrustedCallerNotOnSelf" xml:space="preserve"><value>You cannot mark your own account as trusted caller.</value></data>
   <data name="TrustedCallerBadge" xml:space="preserve"><value>Trusted caller</value></data>
+  <data name="Error_EVIDENCE_CERT_NOT_CONFIGURED" xml:space="preserve"><value>The evidence encryption certificate is not configured. Nothing was signed or charged. Contact the operator.</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>An error occurred while adding the attachment</value></data>
   <data name="PdfaConversionError" xml:space="preserve"><value>An error occurred while converting the document to PDF/A</value></data>
   <data name="ProvideTemplateOrPdf" xml:space="preserve"><value>Provide either TemplateId or PdfContent (but not both).</value></data>
@@ -647,6 +648,7 @@
   <data name="Error_FEATURE_DISABLED" xml:space="preserve"><value>This function is temporarily unavailable.</value></data>
   <data name="Error_AI_DISABLED" xml:space="preserve"><value>AI features are disabled on this server.</value></data>
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Too many requests. Try again later.</value></data>
+  <data name="Error_CONTENT_STAMP_REQUIRED" xml:space="preserve"><value>The signature field is to be placed beside the image signature, but the request carries no image signature.</value></data>
   <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Too many documents are waiting to be signed. Finish or wait for them to expire.</value></data>
   <data name="Error_TENANT_MISMATCH" xml:space="preserve"><value>This document was prepared for signing for a different organisation.</value></data>
   <data name="Error_SIGNATURE_INVALID" xml:space="preserve"><value>The signature does not match the document prepared for signing or the certificate. Nothing was signed or charged.</value></data>
@@ -815,4 +817,6 @@
   <data name="AccountDeleteLastAdmin" xml:space="preserve"><value>You are the only administrator. Make another account an administrator before deleting yours.</value></data>
   <data name="AccountDeleteRechargeInProgress" xml:space="preserve"><value>An automatic top-up is being processed right now. Please try again in a few minutes.</value></data>
   <data name="AccountDeleteRechargeInProgressStopped" xml:space="preserve"><value>An automatic top-up was being processed, so your account was not deleted. Auto-recharge has been switched off. Please try again in a few minutes.</value></data>
+  <data name="Error_SEAL_PLACEMENT_NO_ROOM" xml:space="preserve"><value>The signature does not fit here: the signature image or the seal beside it would cover another signature or run off the page. Move the signature to a free spot.</value></data>
+  <data name="Error_DOCUMENT_CERTIFIED_NO_CHANGES" xml:space="preserve"><value>The document is certified and its certification does not allow adding a signature image. Nothing was signed.</value></data>
 </root>

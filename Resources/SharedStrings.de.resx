@@ -191,6 +191,7 @@
   <data name="TrustedCallerDisabled" xml:space="preserve"><value>Das Konto ist kein vertrauenswürdiger Aufrufer mehr.</value></data>
   <data name="TrustedCallerNotOnSelf" xml:space="preserve"><value>Das eigene Konto kann nicht als vertrauenswürdiger Aufrufer markiert werden.</value></data>
   <data name="TrustedCallerBadge" xml:space="preserve"><value>Vertrauenswürdiger Aufrufer</value></data>
+  <data name="Error_EVIDENCE_CERT_NOT_CONFIGURED" xml:space="preserve"><value>Das Verschlüsselungszertifikat für die Nachweise ist nicht konfiguriert. Es wurde nichts signiert oder berechnet. Wenden Sie sich an den Betreiber.</value></data>
   <data name="AttachmentError" xml:space="preserve"><value>Beim Hinzufügen des Anhangs ist ein Fehler aufgetreten</value></data>
   <data name="PdfaConversionError" xml:space="preserve"><value>Beim Konvertieren des Dokuments in PDF/A ist ein Fehler aufgetreten</value></data>
   <data name="ProvideTemplateOrPdf" xml:space="preserve"><value>Geben Sie entweder TemplateId oder PdfContent an (nicht beides).</value></data>
@@ -637,6 +638,7 @@
   <data name="Error_FEATURE_DISABLED" xml:space="preserve"><value>Diese Funktion ist vorübergehend nicht verfügbar.</value></data>
   <data name="Error_AI_DISABLED" xml:space="preserve"><value>Die KI-Funktionen sind auf diesem Server deaktiviert.</value></data>
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Zu viele Anfragen. Bitte später erneut versuchen.</value></data>
+  <data name="Error_CONTENT_STAMP_REQUIRED" xml:space="preserve"><value>Das Signaturfeld soll neben der Bildsignatur stehen, aber die Anfrage enthält keine Bildsignatur.</value></data>
   <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Zu viele Dokumente warten auf die Signatur. Schließen Sie sie ab oder warten Sie, bis sie ablaufen.</value></data>
   <data name="Error_TENANT_MISMATCH" xml:space="preserve"><value>Dieses Dokument wurde für eine andere Organisation zur Signatur vorbereitet.</value></data>
   <data name="Error_SIGNATURE_INVALID" xml:space="preserve"><value>Die Signatur passt nicht zum vorbereiteten Dokument oder zum Zertifikat. Es wurde nichts signiert und nichts abgerechnet.</value></data>
@@ -814,4 +816,6 @@
   <data name="AccountDeleteLastAdmin" xml:space="preserve"><value>You are the only administrator. Make another account an administrator before deleting yours.</value></data>
   <data name="AccountDeleteRechargeInProgress" xml:space="preserve"><value>An automatic top-up is being processed right now. Please try again in a few minutes.</value></data>
   <data name="AccountDeleteRechargeInProgressStopped" xml:space="preserve"><value>An automatic top-up was being processed, so your account was not deleted. Auto-recharge has been switched off. Please try again in a few minutes.</value></data>
+  <data name="Error_SEAL_PLACEMENT_NO_ROOM" xml:space="preserve"><value>Die Signatur passt hier nicht: Das Signaturbild oder das Siegel daneben würde eine andere Signatur überdecken oder über die Seite hinausragen. Verschieben Sie die Signatur an eine freie Stelle.</value></data>
+  <data name="Error_DOCUMENT_CERTIFIED_NO_CHANGES" xml:space="preserve"><value>Das Dokument ist zertifiziert und seine Zertifizierung erlaubt kein Hinzufügen eines Signaturbildes. Es wurde nichts signiert.</value></data>
 </root>

@@ -539,6 +539,53 @@ public class PdfFormFlattenerTests
         Assert.Null(Read(result.Pdf, d => d.GetCatalog().GetPdfObject().Get(PdfName.AcroForm)));
     }
 
+    private static void PutXfaWithData(PdfDocument doc, string fieldName, string xfaValue)
+    {
+        var xfa = new PdfStream(System.Text.Encoding.UTF8.GetBytes(
+            "<xdp:xdp xmlns:xdp=\"http://ns.adobe.com/xdp/\">"
+            + "<template xmlns=\"http://www.xfa.org/schema/xfa-template/3.3/\"><subform name=\"form1\"><field name=\"" + fieldName + "\"/></subform></template>"
+            + "<xfa:datasets xmlns:xfa=\"http://www.xfa.org/schema/xfa-data/1.0/\"><xfa:data><form1><" + fieldName + ">" + xfaValue + "</" + fieldName + "></form1></xfa:data></xfa:datasets>"
+            + "</xdp:xdp>"));
+        PdfAcroForm.GetAcroForm(doc, true).GetPdfObject().Put(PdfName.XFA, xfa.MakeIndirect(doc));
+    }
+
+    /// <summary>
+    /// #187, synthetic fixture (no real LiveCycle form was available): a hybrid form whose AcroForm
+    /// /V and XFA data disagree, as when a tool updated only one of them. Flattening draws /V and
+    /// drops the XFA data; this pins that, it does not say /V is what Acrobat would show.
+    /// Acrobat shows the XFA data for such a form, so the page can differ from what the user saw.
+    /// </summary>
+    [Fact]
+    public void Hybrid_XFA_with_conflicting_data_is_flattened_from_the_AcroForm_value()
+    {
+        var pdf = Build(doc =>
+        {
+            Text(doc, "form1[0].amount", "AcroValue");
+            PutXfaWithData(doc, "amount", "XfaValue");
+        });
+
+        var result = Flatten(pdf);
+
+        var text = PageText(result.Pdf);
+        Assert.Contains("AcroValue", text);
+        Assert.DoesNotContain("XfaValue", text);
+        Assert.Contains("xfa", result.Report.Removed);
+    }
+
+    [Fact]
+    public void Hybrid_XFA_with_data_but_empty_AcroForm_value_is_flattened_empty()
+    {
+        var pdf = Build(doc =>
+        {
+            Text(doc, "form1[0].amount", "");
+            PutXfaWithData(doc, "amount", "OnlyInXfa");
+        });
+
+        var result = Flatten(pdf);
+
+        Assert.DoesNotContain("OnlyInXfa", PageText(result.Pdf));
+    }
+
     [Fact]
     public void Dynamic_XFA_is_refused()
     {

@@ -68,9 +68,9 @@ public class PresignPdfaTests : IDisposable
         doc.GetCatalog().GetNameTree(PdfName.JavaScript).AddEntry("init", PdfAction.CreateJavaScript("app.alert('hi')").GetPdfObject());
     });
 
-    /// <summary>Text in plain Helvetica, which is never embedded: no PDF/A can come of it.</summary>
-    internal static byte[] HelveticaText() => Pdf(doc =>
-        Text(doc, PdfFontFactory.CreateFont(iText.IO.Font.Constants.StandardFonts.HELVETICA), "Hello"));
+    /// <summary>Text in non-embedded Symbol, which no PDF/A can come of (Helvetica, Times and Courier are embedded since #189).</summary>
+    internal static byte[] SymbolText() => Pdf(doc =>
+        Text(doc, PdfFontFactory.CreateFont(iText.IO.Font.Constants.StandardFonts.SYMBOL), "Hello"));
 
     private static byte[] EmbeddedText() => Pdf(doc => Text(doc, AppFonts.Load(AppFontFamily.Sans), "Hello"));
 
@@ -158,7 +158,7 @@ public class PresignPdfaTests : IDisposable
     [Fact]
     public void A_font_that_is_not_embedded_is_refused_not_passed_off_as_PDFA()
     {
-        Assert.Equal(DocumentPreparation.ConversionFailedCode, Code(() => Prepare(HelveticaText(), flatten: false, convert: true)));
+        Assert.Equal(DocumentPreparation.ConversionFailedCode, Code(() => Prepare(SymbolText(), flatten: false, convert: true)));
     }
 
     [Fact]
