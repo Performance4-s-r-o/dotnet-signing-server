@@ -24,8 +24,16 @@ namespace DotNetSigningServer.Services.SignatureLayout
         /// <summary>Key in the signature dictionary with the stamp of that signature: [page x y w h].</summary>
         public static readonly PdfName StampMarkerKey = new("P4PDFContentStamp");
 
+        /// <summary>
+        /// The seal spot beside the stamp, or null when none is free. A spot over an unsigned signature
+        /// field is taken only when no other spot is free: the field is empty, so it is no obstacle.
+        /// </summary>
+        public static Rectangle? Beside(Rectangle stamp, float width, float height, Rectangle page, Obstacles obstacles) =>
+            Beside(stamp, width, height, page, obstacles.Occupied, obstacles.Unsigned);
+
         /// <summary>The seal spot beside the stamp, or null when none is free.</summary>
-        public static Rectangle? Beside(Rectangle stamp, float width, float height, Rectangle page, IReadOnlyList<Rectangle> occupied)
+        public static Rectangle? Beside(
+            Rectangle stamp, float width, float height, Rectangle page, IReadOnlyList<Rectangle> occupied, IReadOnlyList<Rectangle>? avoidIfPossible = null)
         {
             float w = width > 0 ? width : 160f;
             float h = height > 0 ? height : 56f;
@@ -38,24 +46,33 @@ namespace DotNetSigningServer.Services.SignatureLayout
                 new Rectangle(stamp.GetLeft(), top + Gap, w, h),
             };
             // Only spots that fit without moving: a shifted spot could end on the stamp or on someone else.
-            return candidates.FirstOrDefault(c => Inside(c, page) && !Overlaps(c, stamp) && !occupied.Any(o => Overlaps(c, o)));
+            var free = candidates.Where(c => Inside(c, page) && !Overlaps(c, stamp) && !occupied.Any(o => Overlaps(c, o))).ToList();
+            return free.FirstOrDefault(c => avoidIfPossible?.Any(o => Overlaps(c, o)) != true) ?? free.FirstOrDefault();
         }
 
         /// <summary>
-        /// What a new stamp and seal must not cover on the page: signature widgets (with or without
-        /// <c>/P</c>), our stamp annotations, stamps recorded in earlier signatures and what the caller
-        /// reserved for other signers.
+        /// What is on the page: <c>Occupied</c> must not be covered, <c>Unsigned</c> (empty signature
+        /// fields) is only avoided by the seal when another spot is free.
         /// </summary>
-        public static IReadOnlyList<Rectangle> OccupiedOn(PdfDocument doc, int pageNumber, IEnumerable<OccupiedRect>? reserved)
+        public sealed record Obstacles(IReadOnlyList<Rectangle> Occupied, IReadOnlyList<Rectangle> Unsigned);
+
+        /// <summary>
+        /// What a new stamp and seal must not cover on the page: signed signature widgets (with or
+        /// without <c>/P</c>), our stamp annotations, stamps recorded in earlier signatures and what the
+        /// caller reserved for other signers. Unsigned signature fields are listed apart.
+        /// </summary>
+        public static Obstacles ObstaclesOn(PdfDocument doc, int pageNumber, IEnumerable<OccupiedRect>? reserved)
         {
             var result = new List<Rectangle>();
+            var unsigned = new List<Rectangle>();
             var page = doc.GetPage(pageNumber);
             foreach (var annotation in page.GetAnnotations())
             {
                 var dict = annotation.GetPdfObject();
                 if (annotation is PdfWidgetAnnotation && IsSignatureWidget(dict))
                 {
-                    AddIfReal(result, annotation.GetRectangle());
+                    // An empty "sign here" field is no signature: a stamp may go on it.
+                    AddIfReal(IsSigned(dict) ? result : unsigned, annotation.GetRectangle());
                 }
                 else if (annotation is PdfStampAnnotation
                     && dict.GetAsString(PdfName.NM)?.ToUnicodeString().StartsWith(StampAnnotationPrefix, StringComparison.Ordinal) == true)
@@ -72,8 +89,12 @@ namespace DotNetSigningServer.Services.SignatureLayout
                     result.Add(new Rectangle(r.X, r.Y, r.Width, r.Height));
                 }
             }
-            return result;
+            return new Obstacles(result, unsigned);
         }
+
+        /// <summary>Hard obstacles only, see <see cref="ObstaclesOn"/>.</summary>
+        public static IReadOnlyList<Rectangle> OccupiedOn(PdfDocument doc, int pageNumber, IEnumerable<OccupiedRect>? reserved) =>
+            ObstaclesOn(doc, pageNumber, reserved).Occupied;
 
         /// <summary>The stamp recorded in a signature dictionary as [page x y w h].</summary>
         public static PdfArray StampMarker(int page, Rectangle rect) =>
@@ -94,6 +115,16 @@ namespace DotNetSigningServer.Services.SignatureLayout
             {
                 var ft = d.GetAsName(PdfName.FT);
                 if (ft != null) return PdfName.Sig.Equals(ft);
+            }
+            return false;
+        }
+
+        private static bool IsSigned(PdfDictionary widget)
+        {
+            // /V is inherited like /FT.
+            for (var d = widget; d != null; d = d.GetAsDictionary(PdfName.Parent))
+            {
+                if (d.Get(PdfName.V) is { } v && !(v is PdfNull)) return true;
             }
             return false;
         }

@@ -301,7 +301,56 @@ public class ContentStampPresignTests : IDisposable
     }
 
     [Fact]
-    public void A_signature_widget_without_P_counts_as_occupied()
+    public void A_signed_widget_without_P_counts_as_occupied()
+    {
+        var (first, p1) = PresignAndSign(Blank(), keep: null);
+        using var stripped = new MemoryStream();
+        using (var edit = new PdfDocument(new PdfReader(new MemoryStream(first)), new PdfWriter(stripped), new StampingProperties().UseAppendMode()))
+        {
+            var widget = edit.GetPage(1).GetPdfObject().GetAsArray(PdfName.Annots).GetAsDictionary(0);
+            widget.Remove(PdfName.P);
+            widget.SetModified();
+        }
+        using var doc = new PdfDocument(new PdfReader(new MemoryStream(stripped.ToArray())));
+        var field = ToRect(p1!.Field);
+        Assert.Contains(SealPlacement.ObstaclesOn(doc, 1, null).Occupied, r => Math.Abs(r.GetX() - field.GetX()) < 0.1);
+    }
+
+    [Fact]
+    public void An_unsigned_signature_field_is_no_obstacle_and_the_seal_avoids_it_when_it_can()
+    {
+        // "Sign here" field right of the stamp, as Acrobat or DocuSign leave it.
+        var withField = PresignPdfaTests.Pdf(d =>
+        {
+            var form = PdfAcroForm.GetAcroForm(d, true);
+            var field = new iText.Forms.Fields.SignatureFormFieldBuilder(d, "SignHere")
+                .SetWidgetRectangle(new Rectangle(256, 100, 150, 60)).SetPage(1).CreateSignature();
+            form.AddField(field, d.GetFirstPage());
+        });
+        using (var doc = new PdfDocument(new PdfReader(new MemoryStream(withField))))
+        {
+            var obstacles = SealPlacement.ObstaclesOn(doc, 1, null);
+            Assert.Empty(obstacles.Occupied);
+            Assert.Single(obstacles.Unsigned);
+        }
+        // The stamp on the empty field is fine; the seal goes left instead of on the field.
+        var (_, onField) = PresignAndSign(withField, keep: null, stamp: Stamp(x: 256, y: 100));
+        Assert.True(onField!.Field.X < 256);
+        var (_, beside) = PresignAndSign(withField, keep: null);
+        Assert.False(Overlaps(ToRect(beside!.Field), new Rectangle(256, 100, 150, 60)));
+        // Nothing else free: the seal may go on the empty field.
+        var walls = new List<OccupiedRect>
+        {
+            new() { Page = 1, X = 0, Y = 0, Width = 49, Height = 842 },
+            new() { Page = 1, X = 0, Y = 0, Width = 595, Height = 99 },
+            new() { Page = 1, X = 0, Y = 161, Width = 595, Height = 681 },
+        };
+        var (_, forced) = PresignAndSign(withField, keep: null, occupied: walls);
+        Assert.Equal(256, forced!.Field.X, 1);
+    }
+
+    [Fact]
+    public void A_signature_widget_without_P_is_found()
     {
         var withField = PresignPdfaTests.Pdf(d =>
         {
@@ -318,8 +367,8 @@ public class ContentStampPresignTests : IDisposable
         using var doc = new PdfDocument(new PdfReader(new MemoryStream(stripped.ToArray())));
         // The widget as written has no /P (iText fills it in memory once the page's annotations are read).
         Assert.Null(doc.GetPage(1).GetPdfObject().GetAsArray(PdfName.Annots).GetAsDictionary(0).Get(PdfName.P));
-        var occupied = SealPlacement.OccupiedOn(doc, 1, null);
-        Assert.Contains(occupied, r => Math.Abs(r.GetX() - 300) < 0.1 && Math.Abs(r.GetWidth() - 100) < 0.1);
+        var unsigned = SealPlacement.ObstaclesOn(doc, 1, null).Unsigned;
+        Assert.Contains(unsigned, r => Math.Abs(r.GetX() - 300) < 0.1 && Math.Abs(r.GetWidth() - 100) < 0.1);
     }
 
     [Fact]

@@ -139,8 +139,8 @@ namespace DotNetSigningServer.Services
 
             var stamp = PdfVisualSigningService.PlanStamp(
                 input.ContentStamp.ToVisualSign(), doc, PdfVisualSigningService.CompanyOf(input.ContentStamp));
-            var occupied = SealPlacement.OccupiedOn(doc, stamp.Page, input.Occupied);
-            if (occupied.Any(o => SealPlacement.Overlaps(stamp.Rect, o)))
+            var obstacles = SealPlacement.ObstaclesOn(doc, stamp.Page, input.Occupied);
+            if (obstacles.Occupied.Any(o => SealPlacement.Overlaps(stamp.Rect, o)))
             {
                 throw new ApiValidationException(SealPlacement.NoRoomCode, "the stamp covers another signature");
             }
@@ -150,7 +150,7 @@ namespace DotNetSigningServer.Services
             if (input.PlaceBesideContentStamp)
             {
                 var field = SealPlacement.Beside(
-                    stamp.Rect, input.SignRect.Width, input.SignRect.Height, doc.GetPage(stamp.Page).GetCropBox(), occupied)
+                    stamp.Rect, input.SignRect.Width, input.SignRect.Height, doc.GetPage(stamp.Page).GetCropBox(), obstacles)
                     ?? throw new ApiValidationException(SealPlacement.NoRoomCode, "no free spot beside the stamp");
                 signRect = new SignRect { X = field.GetX(), Y = field.GetY(), Width = field.GetWidth(), Height = field.GetHeight() };
                 signPage = stamp.Page;
