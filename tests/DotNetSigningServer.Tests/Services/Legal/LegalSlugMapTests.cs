@@ -11,8 +11,6 @@ public class LegalSlugMapTests
     [InlineData("service-level-agreement", "sla")]
     [InlineData("refund-policy", "refund")]
     [InlineData("cookies-policy", "cookies")]
-    [InlineData("open-source-notices", "oss")]
-    [InlineData("license", "license")]
     public void MapsEverySlugToTheImportedTypeAndBack(string slug, string type)
     {
         Assert.Equal(type, LegalSlugMap.TypeFor(slug));
@@ -20,9 +18,9 @@ public class LegalSlugMapTests
     }
 
     [Fact]
-    public void Types_AreTheEightImportedDocuments()
+    public void Types_AreTheSixDocumentsOfTheService()
     {
-        Assert.Equal(new[] { "terms", "privacy", "dpa", "sla", "refund", "cookies", "oss", "license" }, LegalSlugMap.Types);
+        Assert.Equal(new[] { "terms", "privacy", "dpa", "sla", "refund", "cookies" }, LegalSlugMap.Types);
     }
 
     [Theory]
@@ -30,6 +28,8 @@ public class LegalSlugMapTests
     [InlineData("")]
     [InlineData("imprint")]
     [InlineData("terms")]
+    [InlineData("license")]
+    [InlineData("open-source-notices")]
     public void UnknownSlug_HasNoType(string? slug) => Assert.Null(LegalSlugMap.TypeFor(slug));
 
     [Theory]

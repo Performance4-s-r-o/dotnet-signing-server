@@ -46,11 +46,8 @@ public class LegalSnapshotPostgresTests : IClassFixture<OutboxPostgresFixture>
         Assert.Equal(64, terms.ContentHash!.Length);
 
         await using var check = _pg.CreateContext();
-        var off = await new DbLegalDocumentSource(check, Microsoft.Extensions.Logging.Abstractions.NullLogger<DbLegalDocumentSource>.Instance)
+        var snapshot = await new DbLegalDocumentSource(check, Microsoft.Extensions.Logging.Abstractions.NullLogger<DbLegalDocumentSource>.Instance)
             .GetAsync("terms-of-service", "en");
-        Assert.Null(off);
-        var on = await new DbLegalDocumentSource(check, Microsoft.Extensions.Logging.Abstractions.NullLogger<DbLegalDocumentSource>.Instance, includeSnapshots: true)
-            .GetAsync("terms-of-service", "en");
-        Assert.Equal(2, on!.Version);
+        Assert.Equal(2, snapshot!.Version);
     }
 }

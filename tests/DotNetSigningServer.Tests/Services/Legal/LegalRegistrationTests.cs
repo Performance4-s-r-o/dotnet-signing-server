@@ -17,13 +17,12 @@ public class LegalRegistrationTests
         services.Any(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType == typeof(LegalDocumentsWarmup));
 
     [Fact]
-    public void Off_ReadsOnlyTheManualRows_AndTalksToNothing()
+    public void Off_ReadsOnlyTheSnapshot_AndTalksToNothing()
     {
         using var host = new LegalDocsTestHost("Off");
         using var scope = host.Services.CreateScope();
 
-        var source = Assert.IsType<DbLegalDocumentSource>(scope.ServiceProvider.GetRequiredService<ILegalDocumentSource>());
-        Assert.False(source.IncludeSnapshots);
+        Assert.IsType<DbLegalDocumentSource>(scope.ServiceProvider.GetRequiredService<ILegalDocumentSource>());
         Assert.Null(host.Services.GetService<BackofficeDocumentsClient>());
     }
 
@@ -34,7 +33,6 @@ public class LegalRegistrationTests
         using var scope = host.Services.CreateScope();
 
         Assert.IsType<BackofficeLegalDocumentSource>(scope.ServiceProvider.GetRequiredService<ILegalDocumentSource>());
-        Assert.True(scope.ServiceProvider.GetRequiredService<DbLegalDocumentSource>().IncludeSnapshots);
         Assert.Equal([typeof(DocumentEventsHandler), typeof(CookieDeclarationEventsHandler)],
             scope.ServiceProvider.GetServices<IBackofficeEventHandler>().Select(h => h.GetType()));
         Assert.Equal([typeof(DocumentsResync), typeof(CookieDeclarationResync)],

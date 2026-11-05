@@ -22,60 +22,55 @@ public class LegalController : Controller
     public IActionResult Index() => View();
 
     [HttpGet("TermsOfService")]
-    public Task<IActionResult> TermsOfService(CancellationToken ct)
-        => RenderAsync("terms-of-service", "TermsOfService/Index", ct);
+    public Task<IActionResult> TermsOfService(CancellationToken ct) => RenderAsync("terms-of-service", ct);
 
     [HttpGet("PrivacyPolicy")]
-    public Task<IActionResult> PrivacyPolicy(CancellationToken ct)
-        => RenderAsync("privacy-policy", "PrivacyPolicy/Index", ct);
+    public Task<IActionResult> PrivacyPolicy(CancellationToken ct) => RenderAsync("privacy-policy", ct);
 
     [HttpGet("DataProcessingAgreement")]
-    public Task<IActionResult> DataProcessingAgreement(CancellationToken ct)
-        => RenderAsync("data-processing-agreement", "DataProcessingAgreement/Index", ct);
+    public Task<IActionResult> DataProcessingAgreement(CancellationToken ct) => RenderAsync("data-processing-agreement", ct);
 
     [HttpGet("ServiceLevelAgreement")]
-    public Task<IActionResult> ServiceLevelAgreement(CancellationToken ct)
-        => RenderAsync("service-level-agreement", "ServiceLevelAgreement/Index", ct);
+    public Task<IActionResult> ServiceLevelAgreement(CancellationToken ct) => RenderAsync("service-level-agreement", ct);
 
     [HttpGet("RefundPolicy")]
-    public Task<IActionResult> RefundPolicy(CancellationToken ct)
-        => RenderAsync("refund-policy", "RefundPolicy/Index", ct);
+    public Task<IActionResult> RefundPolicy(CancellationToken ct) => RenderAsync("refund-policy", ct);
 
     [HttpGet("CookiesPolicy")]
-    public Task<IActionResult> CookiesPolicy(CancellationToken ct)
-        => RenderAsync(CookiesPolicySlug, "CookiesPolicy/Index", ct);
+    public Task<IActionResult> CookiesPolicy(CancellationToken ct) => RenderAsync(CookiesPolicySlug, ct);
 
     private const string CookiesPolicySlug = "cookies-policy";
 
+    // Licence obligations of this open-source server: static pages, not documents of the service.
     [HttpGet("OpenSourceNotices")]
-    public Task<IActionResult> OpenSourceNotices(CancellationToken ct)
-        => RenderAsync("open-source-notices", "OpenSourceNotices/Index", ct);
+    public IActionResult OpenSourceNotices() => View("OpenSourceNotices/Index");
 
     [HttpGet("License")]
-    public Task<IActionResult> License(CancellationToken ct)
-        => RenderAsync("license", "License/Index", ct);
+    public IActionResult License() => View("License/Index");
 
     /// <summary>
-    /// Render the managed version of a legal document (hand-maintained rows, or the P4
-    /// Backoffice service with its snapshot — see <see cref="ILegalDocumentSource"/>); when
-    /// there is none, fall back to the existing static Razor view.
+    /// Render a document of the service (its cached copy or the snapshot — see
+    /// <see cref="ILegalDocumentSource"/>). There is no static text: without a document the
+    /// answer is 503 and a page saying so.
     /// </summary>
-    private async Task<IActionResult> RenderAsync(string slug, string staticViewName, CancellationToken ct)
+    private async Task<IActionResult> RenderAsync(string slug, CancellationToken ct)
     {
         var locale = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.ToLowerInvariant();
         var rendered = await _documents.GetAsync(slug, locale, ct);
 
-        if (rendered is not null)
+        if (rendered is null)
         {
-            if (slug == CookiesPolicySlug)
-            {
-                // Docs On: the service's declaration (memory or snapshot, never a live call).
-                // Null otherwise; the page then has no table.
-                ViewData[CookieDeclarationKey] = await _cookieDeclaration.GetAsync(locale, ct);
-            }
-            return View("Dynamic", rendered);
+            Response.Headers.RetryAfter = "60";
+            Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            return View("Unavailable");
         }
 
-        return View(staticViewName);
+        if (slug == CookiesPolicySlug)
+        {
+            // Docs On: the service's declaration (memory or snapshot, never a live call).
+            // Null otherwise; the page then lists the audited cookies.
+            ViewData[CookieDeclarationKey] = await _cookieDeclaration.GetAsync(locale, ct);
+        }
+        return View("Dynamic", rendered);
     }
 }

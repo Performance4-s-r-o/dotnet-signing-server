@@ -458,24 +458,25 @@ modules `Off` (processing and polling stop; the tables stay).
 The `/Legal/*` pages (`Controllers/LegalController.cs`) read their text through
 `ILegalDocumentSource` (`Services/Legal/`):
 
-- `Off` — the hand-maintained `LegalDocuments` rows (`Source = manual`,
-  Markdown), then the static Razor views. Exactly the behaviour before the
-  integration.
-- `On` — the service's sanitized HTML (all eight documents, `oss` and
-  `license` included; slug ↔ type map in `LegalSlugMap`). A page reads the
-  in-memory copy and never waits for the service: a stale copy is shown while
-  it is revalidated (`If-None-Match`) in the background, and without one the
-  page reads the snapshot in `LegalDocuments` (`Source = backoffice`, or the
-  service HTML stored next to a manual row of the same version), then English,
-  then Razor. After a failed call the service is left alone for 30 s.
-  `document.published` / `document.minor_corrected` refetch the text right
-  away; `document.scheduled` / `unscheduled` update `docs:meta` in
+- `Off` — only the `LegalDocuments` snapshot (the service's last answer).
+- `On` — the service's sanitized HTML (terms, privacy, DPA, SLA, refund and
+  cookies; slug ↔ type map in `LegalSlugMap`). A page reads the in-memory copy
+  and never waits for the service: a stale copy is shown while it is
+  revalidated (`If-None-Match`) in the background, and without one the page
+  reads the snapshot in `LegalDocuments`, then English. After a failed call the
+  service is left alone for 30 s. `document.published` /
+  `document.minor_corrected` refetch the text right away;
+  `document.scheduled` / `unscheduled` update `docs:meta` in
   `BackofficeStates` (`requires_consent`, `current_version`,
   `required_version`, `upcoming`). A startup warm-up and the `window_clamped`
   resync rebuild both.
 
-Rollback: `P4Backoffice__Modules__Docs=Off`. Snapshot rows are ignored in
-`Off` and can stay.
+There is no static text: without a document (service down, cold start, empty
+snapshot, type not published) the page answers 503 with `Retry-After` and a
+notice. Only `License` and `OpenSourceNotices` (AGPL obligations) are static
+pages. A private server has no `/Legal` routes at all.
+
+Rollback: `P4Backoffice__Modules__Docs=Off` (snapshot only).
 
 The cookies policy (`/Legal/CookiesPolicy`) lists the cookies in a table under
 the text. With `Docs=On` the table comes from the service's cookie declaration
@@ -484,8 +485,7 @@ read from memory or the `cookies:{locale}` snapshot in `BackofficeStates`,
 revalidated in the background, and refetched on `cookie_declaration.published`
 (webhook or polling), at startup and on the `window_clamped` resync. Otherwise
 — and whenever no declaration is available — the table shows the audited
-cookies in `Services/Legal/AuditedCookies.cs`; the Razor fallback page shows
-the same list.
+cookies in `Services/Legal/AuditedCookies.cs`.
 
 #### Cookie banner
 

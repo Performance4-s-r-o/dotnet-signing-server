@@ -3,18 +3,13 @@ using System.ComponentModel.DataAnnotations;
 namespace DotNetSigningServer.Models;
 
 /// <summary>
-/// A versioned legal/policy document (Terms, Privacy, DPA, …) owned by this
-/// platform. Rows are maintained by hand — there is no admin UI — so the shape
-/// is deliberately small.
-///
-/// A document is served only once <see cref="EffectiveFrom"/> has passed and
-/// <see cref="IsDraft"/> is false. That is what makes writing the next version
-/// ahead of time safe: insert the row with its real future date, leave it a
-/// draft while you work on the wording, and clear the flag when it is ready —
-/// it then takes over on its own at the date already agreed.
+/// Snapshot of a legal document (Terms, Privacy, DPA, …) as the P4 Backoffice
+/// service last served it. The texts are written in the service, never here;
+/// a row is served only once <see cref="EffectiveFrom"/> has passed, <see cref="IsDraft"/>
+/// is false and <see cref="ContentHtml"/> is set.
 ///
 /// When no effective row exists for a (Slug, Locale), LegalController falls back
-/// to the English row and finally to the static Razor view in Views/Legal/.
+/// to the English row and finally to a "not available" page.
 /// </summary>
 public class LegalDocument
 {
@@ -24,8 +19,7 @@ public class LegalDocument
     /// <summary>
     /// Document type. Must match the slug LegalController passes for the route,
     /// e.g. terms-of-service, privacy-policy, data-processing-agreement,
-    /// service-level-agreement, refund-policy, cookies-policy,
-    /// open-source-notices, license.
+    /// service-level-agreement, refund-policy, cookies-policy.
     /// </summary>
     [Required]
     [MaxLength(64)]
@@ -52,8 +46,7 @@ public class LegalDocument
     public string? Summary { get; set; }
 
     /// <summary>
-    /// Document body in Markdown. Rendered with Markdig with raw HTML disabled,
-    /// so any HTML written here is escaped, not executed.
+    /// Unused: the text is <see cref="ContentHtml"/>. Kept empty so no migration is needed.
     /// </summary>
     [Required]
     public string Content { get; set; } = string.Empty;
@@ -80,8 +73,7 @@ public class LegalDocument
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     // ── Snapshot of the P4 Backoffice service (Modules:Docs) ────────────────
-    // Hand-maintained rows leave these empty. When the Docs module is On, the last
-    // successful answer of the service is stored here and served during an outage.
+    // The last successful answer of the service, served while it is unreachable.
 
     /// <summary>Service document type (<c>terms</c>, <c>privacy</c>, …); see <c>LegalSlugMap</c>.</summary>
     [MaxLength(40)]
@@ -99,8 +91,8 @@ public class LegalDocument
     public string? ChangeKind { get; set; }
 
     /// <summary>
-    /// <see cref="LegalDocumentSources.Manual"/> for hand-maintained rows (the default),
-    /// <see cref="LegalDocumentSources.Backoffice"/> for rows created from the service.
+    /// <see cref="LegalDocumentSources.Backoffice"/> for rows created from the service
+    /// (<see cref="LegalDocumentSources.Manual"/> is only the column default of rows from before).
     /// </summary>
     [Required]
     [MaxLength(16)]

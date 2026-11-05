@@ -160,20 +160,19 @@ public static class BackofficeRegistration
     }
 
     /// <summary>
-    /// Legal documents by <c>Modules:Docs</c>: Off reads the hand-maintained rows (as before), On serves the
-    /// service's texts with the <c>LegalDocuments</c> snapshot and Razor as fallbacks, and the
+    /// Legal documents by <c>Modules:Docs</c>: Off serves only the <c>LegalDocuments</c> snapshot of the
+    /// service's last answer, On serves the service's texts with that snapshot as the fallback, and the
     /// cookie declaration under the cookies policy (<see cref="CookieDeclarationReader"/>).
+    /// There is no static text: without a document the page says so.
     /// </summary>
     internal static void AddLegalDocuments(IServiceCollection services, P4BackofficeProductOptions options)
     {
         var mode = options.ModeFor(BackofficeModule.Docs);
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<LegalDocumentsSnapshotWriter>();
-        // On: the hand-maintained rows are the fallback, and the snapshot is read with them.
         services.TryAddScoped(sp => new DbLegalDocumentSource(
             sp.GetRequiredService<ApplicationDbContext>(),
             sp.GetRequiredService<ILogger<DbLegalDocumentSource>>(),
-            includeSnapshots: mode == BackofficeMode.On,
             sp.GetRequiredService<TimeProvider>()));
 
         if (mode == BackofficeMode.Off)

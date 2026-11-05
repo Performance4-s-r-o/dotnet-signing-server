@@ -2,7 +2,8 @@ namespace DotNetSigningServer.Services.Legal;
 
 /// <summary>
 /// Route slugs of <c>LegalController</c> ↔ document types of the P4 Backoffice service.
-/// Same keys as the import of this product's documents into the service. Pure.
+/// Same keys as the documents of this product in the service. Only documents of the service:
+/// the open-source notices and the licence are static pages. Pure.
 /// </summary>
 public static class LegalSlugMap
 {
@@ -14,8 +15,6 @@ public static class LegalSlugMap
         ("service-level-agreement", "sla"),
         ("refund-policy", "refund"),
         ("cookies-policy", "cookies"),
-        ("open-source-notices", "oss"),
-        ("license", "license"),
     ];
 
     private static readonly Dictionary<string, string> BySlug =

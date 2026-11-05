@@ -1,7 +1,6 @@
 @model DotNetSigningServer.Services.Legal.LegalDocumentRendered
-@* Model comes from ILegalDocumentSource: this platform's own LegalDocuments rows
-   (Markdown rendered by Markdig) or, with the Docs module On, the P4 Backoffice
-   service and its snapshot (HTML sanitized by the service). *@
+@* Model comes from ILegalDocumentSource: the P4 Backoffice service's document (HTML
+   sanitized by the service) or its snapshot in LegalDocuments. *@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
     ViewData["Title"] = Model.Title;
@@ -28,9 +27,7 @@
         </div>
     }
 
-    @* Safe HTML only: Markdig output of a hand-maintained row, whose pipeline has
-       DisableHtml() (raw HTML in the stored Markdown is escaped, not passed through),
-       or the P4 Backoffice service's HTML, which the service sanitizes before serving. *@
+    @* The P4 Backoffice service's HTML, which the service sanitizes before serving. *@
     @Html.Raw(Model.ContentHtml)
 
     @if (Model.Slug == "cookies-policy")
