@@ -168,3 +168,15 @@ Ověření: `select rolconnlimit, rolconfig from pg_roles where rolname = 'dotne
 - Connection string runtime služby nese `Maximum Pool Size` (výchozí 20, `DB_MAX_POOL_SIZE`), `Timeout=15` a `Command Timeout` (výchozí 15 s, `DB_COMMAND_TIMEOUT_SECONDS`). Služba `migrate` má vlastní connection string s `Command Timeout=600`; `statement_timeout` 15 s nastavený na roli ale platí i pro ni, takže migrace pod rolí `dotnet_user` s dlouhým příkazem musí použít jinou roli (`MIGRATION_DB_USER`) nebo `SET LOCAL statement_timeout`.
 - Supabase pooler v transakčním režimu (port 6543) vyžaduje navíc `No Reset On Close=true;Max Auto Prepare=0`.
 - Delší operace (úklid, migrace dat) si timeout zvýší lokálně: `SET LOCAL statement_timeout = '5min'`.
+
+## Ověření, že porty 8085 a 8086 nejsou vidět zvenku (#84)
+
+Test přes hostname nic nedokazuje, protože DNS ukazuje na proxy Cloudflare. Zkouší se **IP serveru** (IPv4 i IPv6) z cizí sítě, ne z VPN firmy:
+
+```bash
+for p in 8085 8086 4322; do nc -z -w 5 <IP_SERVERU> $p && echo "$p OPEN" || echo "$p closed"; done
+nc -6 -z -w 5 <IPV6_SERVERU> 8085 && echo OPEN || echo closed
+curl -m 5 -sS http://<IP_SERVERU>:8085/ ; echo "exit $?"
+```
+
+Očekávání: všechny porty `closed` a `curl` skončí chybou spojení (exit 7 nebo 28). Na serveru navíc `docker ps --format '{{.Names}} {{.Ports}}' | grep 0.0.0.0` nesmí ukázat nic z dotnetu (compose používá `expose`, ne `ports`). Výsledek zapsat do #84.
