@@ -31,7 +31,7 @@
     <PackageReference Include="Sentry.AspNetCore" Version="6.12.1" />
     <PackageReference Include="ZXing.Net" Version="0.16.11" />
     <!-- Dev-only (UseLocalDb starts a container). Release, and so the production image, does not carry it (#84). -->
-    <PackageReference Include="Testcontainers.PostgreSql" Version="4.10.0" Condition="'$(Configuration)' == 'Debug'" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.16.0" Condition="'$(Configuration)' == 'Debug'" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.3.1" />
 
   </ItemGroup>
