@@ -177,6 +177,58 @@ public class AiPricingEndpointTests
     }
 
     [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(false, true, false)] // detection base price missing
+    [InlineData(true, false, false)] // detection page surcharge missing
+    public async Task The_template_builder_offers_detection_only_with_both_prices(bool basePrice, bool pagesPrice, bool shown)
+    {
+        var costs = new List<(string, int)> { ("ai_extract", 2), ("ai_extract_pages", 1) };
+        if (basePrice) costs.Add(("ai_detect_fields", 2));
+        if (pagesPrice) costs.Add(("ai_detect_fields_pages", 1));
+        using var host = new AiHost();
+        var db = TestHelpers.CreateInMemoryDbContext();
+        var limits = new ContentLimitGuard(TestHelpers.WrapOptions(new LimitsOptions()));
+        var home = new HomeController(NullLogger<HomeController>.Instance,
+            new PdfTemplateService(db, NullLogger<PdfTemplateService>.Instance, limits, new KeyEchoLocalizerFactory(), TestRuntimeSettings.Defaults),
+            host.Gateway, TestHelpers.WrapOptions(new AppOptions()), TestHelpers.CreateMockEnvironment(),
+            new Mock<IStringLocalizer<SharedStrings>>().Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    RequestServices = new ServiceCollection().AddSingleton(TestRuntimeSettings.Prices(costs.ToArray())).BuildServiceProvider(),
+                },
+            },
+        };
+
+        home.TempData = new Microsoft.AspNetCore.Mvc.ViewFeatures.TempDataDictionary(home.HttpContext, Mock.Of<Microsoft.AspNetCore.Mvc.ViewFeatures.ITempDataProvider>());
+        var view = Assert.IsType<ViewResult>(await home.TemplateBuilder());
+
+        Assert.Equal(shown, view.ViewData["AiDetectEnabled"]);
+    }
+
+    [Fact]
+    public async Task The_template_builder_hides_detection_with_ai_switched_off()
+    {
+        using var host = new AiHost(settings: TestRuntimeSettings.Defaults);
+        var db = TestHelpers.CreateInMemoryDbContext();
+        var limits = new ContentLimitGuard(TestHelpers.WrapOptions(new LimitsOptions()));
+        var home = new HomeController(NullLogger<HomeController>.Instance,
+            new PdfTemplateService(db, NullLogger<PdfTemplateService>.Instance, limits, new KeyEchoLocalizerFactory(), TestRuntimeSettings.Defaults),
+            host.Gateway, TestHelpers.WrapOptions(new AppOptions()), TestHelpers.CreateMockEnvironment(),
+            new Mock<IStringLocalizer<SharedStrings>>().Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { RequestServices = new ServiceCollection().AddSingleton(Priced).BuildServiceProvider() },
+            },
+        };
+        home.TempData = new Microsoft.AspNetCore.Mvc.ViewFeatures.TempDataDictionary(home.HttpContext, Mock.Of<Microsoft.AspNetCore.Mvc.ViewFeatures.ITempDataProvider>());
+        Assert.Equal(false, Assert.IsType<ViewResult>(await home.TemplateBuilder()).ViewData["AiDetectEnabled"]);
+    }
+
+    [Theory]
     [InlineData(0, 0)]
     [InlineData(5, 0)]
     [InlineData(6, 1)]

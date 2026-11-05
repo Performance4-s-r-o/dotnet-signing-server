@@ -63,6 +63,17 @@ public sealed class AiGateway
     }
 
     /// <summary>
+    /// Whether an AI operation is offered now: both its prices (base and page surcharge; an operation that
+    /// requires a price is never offered without one) and <see cref="IsAvailableAsync"/>. Prices first, so
+    /// without them the credentials are not even asked for. The API (<c>/api/capabilities</c>) and the UI
+    /// use this one rule.
+    /// </summary>
+    public async Task<bool> IsOfferedAsync(Pricing.IOperationPrices prices, string priceKey, string pagesPriceKey, CancellationToken cancellationToken) =>
+        Pricing.OperationPricesExtensions.IsOffered(prices, priceKey)
+        && Pricing.OperationPricesExtensions.IsOffered(prices, pagesPriceKey)
+        && await IsAvailableAsync(cancellationToken);
+
+    /// <summary>
     /// Runs one call. <paramref name="parse"/> turns the answer text into the result and returns
     /// null when it does not match the schema (an <c>invalid_output</c>, never a reason to switch).
     /// </summary>
