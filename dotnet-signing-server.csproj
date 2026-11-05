@@ -27,7 +27,6 @@
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="15.0.0" />
-    <PackageReference Include="Markdig" Version="1.5.1" />
     <PackageReference Include="Sentry.AspNetCore" Version="6.12.1" />
     <PackageReference Include="ZXing.Net" Version="0.16.11" />
     <!-- Dev-only (UseLocalDb starts a container). Release, and so the production image, does not carry it (#84). -->

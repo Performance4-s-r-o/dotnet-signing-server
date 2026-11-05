@@ -150,11 +150,6 @@
         "resolved": "15.0.0",
         "contentHash": "mP/VovMRuXBX2Rcnn1wWu0Zur6cjsf8IQhmTUCrasEk8cyAtN5sjHE7NxiH88whw8/2mjRvuphKUwj6bAZslpQ=="
       },
-      "Markdig": {
-        "type": "Transitive",
-        "resolved": "1.5.1",
-        "contentHash": "NtHwU5t5yKr6Gnylhs8/hlR0mOAftTFQURDz2ID8bkunxps1neOzKw0dYKKlwNuwiYIGLHjJTXK91f809Ko1ww=="
-      },
       "Microsoft.AspNetCore.TestHost": {
         "type": "Transitive",
         "resolved": "8.0.33",
@@ -1066,7 +1061,6 @@
         "dependencies": {
           "BouncyCastle.Cryptography": "[2.7.0, )",
           "Magick.NET-Q16-AnyCPU": "[15.0.0, )",
-          "Markdig": "[1.5.1, )",
           "Microsoft.EntityFrameworkCore.Sqlite": "[9.0.22, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[9.0.4, )",
           "Sentry.AspNetCore": "[6.12.1, )",

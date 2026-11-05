@@ -82,10 +82,12 @@ public sealed class ConsentDocumentResolver
             // No published text: a document of the product is v1,
             // unless docs:meta says a newer one is in force, which the reader cannot see now.
             // A document with no page takes the meta version. Nothing known: refuse, don't invent.
+            // With Docs On there is no fallback to v1: a document the service has not published is
+            // refused loudly (LEGAL_DOCUMENT_UNAVAILABLE). v1 stays only with Docs not On (dev, tests).
             int? known = shown?.Version
                 ?? (slug is null
                     ? entry?.CurrentVersion
-                    : entry?.CurrentVersion is null or StaticPageVersion ? StaticPageVersion : null);
+                    : docsOn ? null : entry?.CurrentVersion is null or StaticPageVersion ? StaticPageVersion : null);
             var version = known ?? throw new ConsentVersionUnknownException(requirement.Document);
             var locale = shown?.Locale ?? LegalLocales.Default;
             var fromMeta = entry?.CurrentVersion == version;
