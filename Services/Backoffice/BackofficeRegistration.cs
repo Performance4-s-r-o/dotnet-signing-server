@@ -11,6 +11,7 @@ using DotNetSigningServer.Services.Consents;
 using DotNetSigningServer.Services.Email;
 using DotNetSigningServer.Services.Legal;
 using DotNetSigningServer.Services.Pricing;
+using DotNetSigningServer.Services.Settings;
 using DotNetSigningServer.Services.Support;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -68,6 +69,7 @@ public static class BackofficeRegistration
         AddSupport(services, snapshot);
         BillingRegistration.AddBilling(services, snapshot);
         AddErasure(services, snapshot);
+        AddRuntimeSettings(services, snapshot);
 
         return services;
     }
@@ -230,6 +232,10 @@ public static class BackofficeRegistration
     {
         services.TryAddSingleton(TimeProvider.System);
 
+        // Credits of each operation: from the snapshot when Pricing is On, otherwise every price is missing.
+        services.TryAddSingleton<IOperationPrices>(sp => new OperationPrices(
+            sp.GetService<PricingSnapshotHolder>(), sp.GetRequiredService<ILogger<OperationPrices>>()));
+
         var mode = options.ModeFor(BackofficeModule.Pricing);
         if (mode == BackofficeMode.Off)
         {
@@ -262,6 +268,7 @@ public static class BackofficeRegistration
         AddPriceEventHandler<PriceUnscheduledHandler>(services);
         services.AddScoped<IBackofficeEventHandler, PriceSyncFailedHandler>();
         services.AddHostedService<PricingUpcomingCheck>();
+        services.AddHostedService<OperationsManifestPublisher>();
 
         services.TryAddSingleton<BackofficeCreditPricingProvider>();
         services.TryAddSingleton<ICreditPricingProvider>(sp => sp.GetRequiredService<BackofficeCreditPricingProvider>());
@@ -315,6 +322,39 @@ public static class BackofficeRegistration
         // The erasure queue is a service feature (not a gateway's, not e-mail's).
         if (!options.AnyEnabledBeyondEmail) return;
         services.AddScoped<IBackofficeEventHandler, ErasureRequestedHandler>();
+    }
+
+    /// <summary>
+    /// Runtime settings (<c>GET /v1/settings</c>): always registered, because request paths read
+    /// them. With the service (<see cref="P4BackofficeProductOptions.RuntimeServiceEnabled"/>) they are
+    /// polled and refreshed on <c>settings.changed</c>; without it env overrides and defaults in code
+    /// apply and the kill switches stay closed.
+    /// </summary>
+    internal static void AddRuntimeSettings(IServiceCollection services, P4BackofficeProductOptions options)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton(sp => RuntimeSettingsOverrides.From(sp.GetRequiredService<IConfiguration>()));
+        services.TryAddSingleton<RuntimeSettings>();
+        services.TryAddSingleton<IRuntimeSettings>(sp => sp.GetRequiredService<RuntimeSettings>());
+        var enabled = options.RuntimeServiceEnabled;
+        services.AddHostedService(sp => new RuntimeSettingsStartupReport(
+            sp.GetRequiredService<RuntimeSettingsOverrides>(),
+            enabled,
+            sp.GetRequiredService<ILogger<RuntimeSettingsStartupReport>>()));
+        if (!enabled) return;
+
+        var baseUrl = options.BaseUrl?.Trim() ?? "";
+        var secretKey = options.SecretKey?.Trim() ?? "";
+        services.AddHttpClient(RuntimeSettingsClient.HttpClientName, client =>
+        {
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            client.Timeout = RuntimeSettingsClient.RequestTimeout;
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretKey);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-settings");
+        });
+        services.TryAddSingleton<RuntimeSettingsClient>();
+        services.AddHostedService<RuntimeSettingsWorker>();
+        services.AddScoped<IBackofficeEventHandler, SettingsChangedHandler>();
     }
 
     /// <summary>A <c>price.*</c> handler, also resolvable as itself.</summary>

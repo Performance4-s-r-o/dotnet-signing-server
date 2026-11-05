@@ -1,3 +1,4 @@
+using DotNetSigningServer.Services.Pricing;
 using DotNetSigningServer.Filters;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Exceptions;
@@ -192,7 +193,15 @@ namespace DotNetSigningServer.Controllers
 
             // An AI call invokes an LLM, a real cost. The credits are reserved
             // before the call; when they cannot be, the model is never asked (402).
-            var aiCost = BillingOptions.AiCallCredits;
+            int aiCost;
+            try
+            {
+                aiCost = Prices.Credits(Services.Pricing.PricedOperations.AiDetectFields);
+            }
+            catch (Services.Pricing.OperationNotOfferedException ex)
+            {
+                return OperationNotOffered(ex);
+            }
 
             try
             {
@@ -245,7 +254,15 @@ namespace DotNetSigningServer.Controllers
 
             // An AI call invokes an LLM, a real cost. The credits are reserved
             // before the call; when they cannot be, the model is never asked (402).
-            var aiCost = BillingOptions.AiCallCredits;
+            int aiCost;
+            try
+            {
+                aiCost = Prices.Credits(Services.Pricing.PricedOperations.AiExtract);
+            }
+            catch (Services.Pricing.OperationNotOfferedException ex)
+            {
+                return OperationNotOffered(ex);
+            }
 
             try
             {

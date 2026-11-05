@@ -138,7 +138,7 @@ public class BinaryChannelEndpointsTests
             _localizer = localizer.Object;
 
             var factory = new Mock<IStringLocalizerFactory>();
-            _templates = new PdfTemplateService(_db, NullLogger<PdfTemplateService>.Instance, _limits, factory.Object);
+            _templates = new PdfTemplateService(_db, NullLogger<PdfTemplateService>.Instance, _limits, factory.Object, DotNetSigningServer.Tests.Helpers.TestRuntimeSettings.Defaults);
 
             // PdfSigningService: oba přetížení vrací otisk dokumentu, který dostala; počítá, které bylo voláno.
             var signing = new Mock<PdfSigningService>(null, null);
@@ -158,6 +158,8 @@ public class BinaryChannelEndpointsTests
             _conversion = conversion.Object;
 
             _services = new ServiceCollection()
+                .AddSingleton(TestRuntimeSettings.NoPriceList)
+                .AddSingleton<DotNetSigningServer.Services.Settings.IRuntimeSettings>(TestRuntimeSettings.Defaults)
                 .AddSingleton(new PdfSafetyGuard(TestHelpers.WrapOptions(limitOptions)))
                 .AddSingleton(TestHelpers.WrapOptions(limitOptions))
                 .AddSingleton(Microsoft.Extensions.Options.Options.Create(new Microsoft.AspNetCore.Mvc.JsonOptions()))

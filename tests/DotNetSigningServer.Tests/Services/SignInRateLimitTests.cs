@@ -22,7 +22,7 @@ namespace DotNetSigningServer.Tests.Services;
 /// </summary>
 public class SignInRateLimitTests
 {
-    internal static AccountController Controller(DotNetSigningServer.Data.ApplicationDbContext? db = null, string? ip = null, AppOptions? app = null, SessionSecurityOptions? security = null, ITemplatedEmailSender? email = null)
+    internal static AccountController Controller(DotNetSigningServer.Data.ApplicationDbContext? db = null, string? ip = null, AppOptions? app = null, DotNetSigningServer.Services.Settings.IRuntimeSettings? security = null, ITemplatedEmailSender? email = null)
     {
         db ??= TestHelpers.CreateInMemoryDbContext();
         var controller = new AccountController(
@@ -32,7 +32,7 @@ public class SignInRateLimitTests
             TestHelpers.WrapOptions(app ?? new AppOptions()),
             new StringLocalizer<SharedStrings>(new KeyEchoLocalizerFactory()),
             new AuthAttemptLimiter(db),
-            TestHelpers.WrapOptions(security ?? new SessionSecurityOptions()));
+            security ?? TestRuntimeSettings.Defaults);
         var http = new DefaultHttpContext();
         if (ip != null) http.Connection.RemoteIpAddress = System.Net.IPAddress.Parse(ip);
         controller.ControllerContext = new ControllerContext { HttpContext = http };
@@ -72,7 +72,7 @@ public class SignInRateLimitTests
     {
         // A spoofed or rotating IP is a new per-IP key; the account key still counts (#80 review).
         var address = $"{Guid.NewGuid():N}@example.cz";
-        var security = new SessionSecurityOptions { AccountMaxAttempts = 3 };
+        var security = TestRuntimeSettings.With(("AUTH_ACCOUNT_MAX_ATTEMPTS", "3"));
         for (var i = 0; i < 3; i++)
         {
             var c = Controller(ip: $"203.0.113.{i + 1}", security: security);

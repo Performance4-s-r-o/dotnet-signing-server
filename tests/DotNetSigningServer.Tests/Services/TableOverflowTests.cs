@@ -29,7 +29,7 @@ public class TableOverflowTests : IDisposable
         _dbContext = TestHelpers.CreateInMemoryDbContext();
         var limitGuard = new ContentLimitGuard(TestHelpers.WrapOptions(new LimitsOptions()));
         _service = new PdfTemplateService(
-            _dbContext, NullLogger<PdfTemplateService>.Instance, limitGuard, new KeyEchoLocalizerFactory());
+            _dbContext, NullLogger<PdfTemplateService>.Instance, limitGuard, new KeyEchoLocalizerFactory(), DotNetSigningServer.Tests.Helpers.TestRuntimeSettings.Defaults);
     }
 
     public void Dispose() => _dbContext.Dispose();
@@ -216,7 +216,7 @@ public class TableOverflowTests : IDisposable
             NullLoggerFactory.Instance);
         var service = new PdfTemplateService(
             _dbContext, NullLogger<PdfTemplateService>.Instance,
-            new ContentLimitGuard(TestHelpers.WrapOptions(new LimitsOptions())), factory);
+            new ContentLimitGuard(TestHelpers.WrapOptions(new LimitsOptions())), factory, DotNetSigningServer.Tests.Helpers.TestRuntimeSettings.Defaults);
         var rows = Enumerable.Range(1, 60).Select(i => new List<string> { $"Radek-{i}", $"{i}" }).ToList();
 
         var result = await service.FillAsync(new FillPdfInput

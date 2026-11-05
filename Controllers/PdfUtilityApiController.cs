@@ -1,3 +1,4 @@
+using DotNetSigningServer.Services.Pricing;
 using DotNetSigningServer.Filters;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Exceptions;
@@ -100,7 +101,7 @@ namespace DotNetSigningServer.Controllers
         {
             try
             {
-                var requiredCredits = CalculateCreditsForPages(pageCount);
+                var requiredCredits = Prices.Credits(Services.Pricing.PricedOperations.PdfaConvert, CalculateCreditsForPages(pageCount));
 
                 // Reserved before the conversion; 402 here means it never ran.
                 return await RunOperationAsync(user, "pdfa", fingerprint, requiredCredits, _ =>
@@ -194,8 +195,8 @@ namespace DotNetSigningServer.Controllers
         /// <summary>flatten-form po vstupní kontrole, společné oběma kanálům.</summary>
         private async Task<IActionResult> FlattenFormCoreAsync(User user, byte[] pdf, string fingerprint)
         {
-            // FLATTEN_FORM_CREDIT_COST; an Enterprise account is not debited, the usage record carries it.
-            var cost = BillingOptions.FlattenFormCredits;
+            // Price list key flatten_form; an Enterprise account is not debited, the usage record carries it.
+            var cost = Prices.Credits(Services.Pricing.PricedOperations.FlattenForm);
             var guard = SafetyGuard;
             var limits = LimitGuard.Limits;
             try
@@ -285,7 +286,7 @@ namespace DotNetSigningServer.Controllers
             {
                 var fingerprint = ApiOperationService.Fingerprint("fill-pdf", input);
                 var (pdfBase64, pageCount) = await ResolvePdfForFillAsync(input, user.Id, directPages);
-                var requiredCredits = CalculateCreditsForPages(pageCount) * (input.Data?.Count ?? 0);
+                var requiredCredits = Prices.Credits(Services.Pricing.PricedOperations.FillPdf, checked(CalculateCreditsForPages(pageCount) * (input.Data?.Count ?? 0)));
 
                 return await RunOperationAsync(user, "fill-pdf", fingerprint, requiredCredits, async ct =>
                     new PaidResult(await PdfTemplateService.FillAsync(input, user.Id, ct)));
@@ -425,7 +426,7 @@ namespace DotNetSigningServer.Controllers
             {
                 // Charged for the pages that are scanned, not for the whole document (#71):
                 // pages past the first 30 are never rendered.
-                var requiredCredits = FindCodesCredits(pages);
+                var requiredCredits = FindCodesCredits(pages, Prices.Credits(Services.Pricing.PricedOperations.FindCodes));
 
                 return await RunOperationAsync(user, "find-codes", fingerprint, requiredCredits, async ct =>
                 {
@@ -513,8 +514,8 @@ namespace DotNetSigningServer.Controllers
             TimeSpan? budget = null) => ScanCodesAsync(pdfBytes, pages, plan, ct, budget);
 
         /// <summary>Credits for a scan: the pages actually rendered, never the whole document (#71).</summary>
-        internal static int FindCodesCredits(CodeScanRaster.ScanPages pages) =>
-            CalculateCreditsForPages(pages.PagesProcessed);
+        internal static int FindCodesCredits(CodeScanRaster.ScanPages pages, int creditsPerUnit) =>
+            checked(CalculateCreditsForPages(pages.PagesProcessed) * creditsPerUnit);
 
         internal static async Task<IReadOnlyList<object>> ScanCodesAsync(
             byte[] pdfBytes,

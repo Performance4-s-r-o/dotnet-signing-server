@@ -61,7 +61,7 @@ public class AccountSecurityTests
     {
         var challenge = Guid.NewGuid().ToString("N");
         var (db, user) = await SeedAsync("123456", challenge);
-        var limit = new DotNetSigningServer.Options.SessionSecurityOptions().OtpMaxFailedAttempts;
+        var limit = DotNetSigningServer.Services.Settings.RuntimeSettingKeys.Get("auth_otp_max_failed_attempts").Default;
 
         for (var i = 1; i < limit; i++)
         {
@@ -140,7 +140,7 @@ public class AccountSecurityTests
     public async Task TwoFactor_NewChallenges_HitTheLimitPerAccount()
     {
         var (db, user) = await SeedAsync("123456", null);
-        var security = new DotNetSigningServer.Options.SessionSecurityOptions { AccountMaxAttempts = 3, OtpMaxFailedAttempts = 100 };
+        var security = TestRuntimeSettings.With(("AUTH_ACCOUNT_MAX_ATTEMPTS", "3"), ("AUTH_OTP_MAX_FAILED_ATTEMPTS", "100"));
 
         for (var i = 0; i < 4; i++)
         {

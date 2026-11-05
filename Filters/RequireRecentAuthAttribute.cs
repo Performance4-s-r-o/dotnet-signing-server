@@ -1,3 +1,4 @@
+using DotNetSigningServer.Services.Settings;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Options;
 using DotNetSigningServer.Resources;
@@ -13,7 +14,7 @@ namespace DotNetSigningServer.Filters;
 
 /// <summary>
 /// Step-up re-authentication (#80): the cookie session must have confirmed the password or an
-/// e-mailed code within <see cref="SessionSecurityOptions.ReauthMinutes"/> (default 15). A stolen
+/// e-mailed code within the runtime setting <c>auth_reauth_minutes</c> (default 15). A stolen
 /// or forgotten-open session then cannot mint API tokens or change billing.
 ///
 /// Without a fresh confirmation the action does not run and the answer is 403 with the code
@@ -28,7 +29,7 @@ public sealed class RequireRecentAuthAttribute : Attribute, IAsyncActionFilter
 
     /// <summary>
     /// A stricter limit for this action, in minutes (deleting the account: 10, #217). The
-    /// shorter of this and <see cref="SessionSecurityOptions.ReauthMinutes"/> applies; 0 = the
+    /// shorter of this and <c>auth_reauth_minutes</c> applies; 0 = the
     /// configured window only.
     /// </summary>
     public int MaxMinutes { get; set; }
@@ -40,10 +41,10 @@ public sealed class RequireRecentAuthAttribute : Attribute, IAsyncActionFilter
     public Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         var services = context.HttpContext.RequestServices;
-        var options = services.GetRequiredService<IOptions<SessionSecurityOptions>>().Value;
+        var settings = services.GetRequiredService<Services.Settings.IRuntimeSettings>();
         var now = services.GetService<TimeProvider>()?.GetUtcNow() ?? DateTimeOffset.UtcNow;
 
-        if (IsFresh(SessionClaims.AuthTimeOf(context.HttpContext.User), now, WindowFor(options.ReauthWindow, MaxMinutes)))
+        if (IsFresh(SessionClaims.AuthTimeOf(context.HttpContext.User), now, WindowFor(settings.ReauthWindow(), MaxMinutes)))
         {
             return next();
         }

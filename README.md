@@ -92,8 +92,8 @@ document as it is: `GET /api/capabilities` reports `presignPreparation: true` wh
 The answer gains `preparation`: `flatten` (`flattened` / `unchanged` / `skipped-signed`),
 `flattenedFields`, `removed[]`, `pdfa` (`converted` / `already-pdfa`), `conformance`,
 `credits`. The credits are charged by `/api/sign` together with the signature:
-`FLATTEN_FORM_CREDIT_COST` for flattening, one per started three pages for the
-conversion (as `convert/pdfa`); an Enterprise account (a provisioned one inherits it) is not debited. Presign refuses with
+the price of `flatten_form` for flattening, the price of `pdfa_convert` per started three pages for the
+conversion (as `convert/pdfa`; see [Operation prices](#operation-prices)); an Enterprise account (a provisioned one inherits it) is not debited. Presign refuses with
 `402` when the balance does not cover the signature with them.
 
 | Answer | When |
@@ -230,12 +230,42 @@ for any other client. Two limits of that:
 | `GET POST PUT DELETE /api/pdf-template[/{id}]` | Template CRUD |
 | `POST /api/fill-pdf` | Render a template with supplied field data |
 | `POST /api/convert/pdfa` | Convert a PDF to PDF/A. Before signing prefer `presign` with `convertToPdfa` (one call, checked result). PDF/A-3 targets keep embedded files as associated files; other targets still drop them |
-| `POST /api/flatten-form` | Flatten filled form fields into the page and remove active content (JavaScript, Launch, trigger actions), so the document can be signed. `409` `PDF_ALREADY_SIGNED` / `PDF_XFA_DYNAMIC` / `FLATTEN_INCOMPLETE` / `PDF_FORM_INVALID`. Answers `result`, `sourceSha256`, `resultSha256`, `changed`, `flattenedFields`, `removed[]`. Price `FLATTEN_FORM_CREDIT_COST` (default 1) |
+| `POST /api/flatten-form` | Flatten filled form fields into the page and remove active content (JavaScript, Launch, trigger actions), so the document can be signed. `409` `PDF_ALREADY_SIGNED` / `PDF_XFA_DYNAMIC` / `FLATTEN_INCOMPLETE` / `PDF_FORM_INVALID`. Answers `result`, `sourceSha256`, `resultSha256`, `changed`, `flattenedFields`, `removed[]`. Price `flatten_form` (see [Operation prices](#operation-prices)) |
 | `POST /api/find-codes` | Detect barcodes and QR codes |
 | `POST /api/ai/detect-fields` | Suggest template fields from a PDF (optional, needs `AI__Enabled`) |
 | `POST /api/ai/extract-data` | Extract structured data from a PDF (optional) |
 
 ## Configuration
+
+### Runtime settings
+
+Tuning values live in the settings service of the P4 Backoffice integration and are read
+with `GET /v1/settings` (scope `settings:read`; the product and its environment come from the
+key): at start, every `poll_interval_seconds` with `If-None-Match`, and at once on the
+`settings.changed` event. Values are read on use, never copied at start. Keys:
+`max_pending_presigns_per_user`, `max_templates_per_user`, `max_api_tokens_per_user`,
+`auth_reauth_minutes`, `auth_otp_max_failed_attempts`, `auth_account_max_attempts`,
+`auth_account_window_minutes` (last known value, before the first read the default in code)
+and `ai_enabled` (a kill switch, `fail_mode=closed`: on only while the service said so within
+`closed_max_stale_seconds`; before the first read and after that it is off; the default in code
+is never used). An env variable of the key's name in upper case overrides it: it wins for the
+limits (`0` = no limit is possible only there; nonsense stops the start) and can only close a
+switch (`AI_ENABLED=false`; anything else is ignored with a warning). Without the service (a
+private server, no `P4Backoffice__BaseUrl` / `__SecretKey`, or a global `P4Backoffice__Mode=Off`)
+the service is never called: env overrides and defaults in code apply and AI stays off.
+Counters are per instance, so an effective limit is the limit × the number of instances.
+
+### Operation prices
+
+Credits per operation come from the price list in force (`credit_costs` of
+`GET /v1/pricing/current`, the last known snapshot during an outage): `sign`, `sign_pfx`,
+`timestamp`, `visual_sign`, `extend_signature`, `attachment`, `flatten_form`, `pdfa_convert`
+(per started three pages), `fill_pdf` (per started three pages of each document), `find_codes`
+(per started three scanned pages), `ai_detect_fields`, `ai_extract`. A missing price costs 1 credit;
+`0` is free. The AI operations require a price: without one they are not offered
+(`503 OPERATION_NOT_OFFERED`), never free. With `Modules:Pricing` Off (on-prem) there is no price
+list: every operation costs 1 credit, and AI is not offered. At start the server sends its
+operations manifest (`PUT /v1/pricing/operations`); a failure does not stop the start.
 
 Configuration binds from `appsettings.json`, then environment variables (`__`
 separates nested keys). `appsettings.json` holds defaults and empty
@@ -250,10 +280,10 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `FqdnServerName` | yes | Public hostname, used in generated links |
 | `AllowedHosts` | recommended | Host filtering, `*` by default |
 | `CORS_ALLOWED_ORIGINS` (`Cors__AllowedOrigins`) | no | Optional operator restriction of browser origins on `/api` (#177), comma-separated. Empty = a preflight passes an origin that an active browser token lists (cached 30 s), the server's own origin, or localhost in Development; set = the origin must also be in this list. The real request is always checked against the origin of its own token. `Access-Control-Allow-Credentials` is never sent and a cross-origin request loses its session cookie |
-| `AUTH_REAUTH_MINUTES` | no (15) | Step-up re-authentication: creating an API token and changing billing need a password or e-mailed code confirmed within this many minutes; otherwise `403 REAUTH_REQUIRED` and a confirmation form (`/Account/Reauth`) |
-| `AUTH_OTP_MAX_FAILED_ATTEMPTS` | no (5) | Wrong 2FA codes after which the code is void. The count is cleared only by a successful code or a password reset, not by signing in again |
-| `AUTH_ACCOUNT_MAX_ATTEMPTS` / `AUTH_ACCOUNT_WINDOW_MINUTES` | no (30 / 15) | Sign-in and 2FA attempts per account whatever the IP (on top of the per-IP+address limit), counted in PostgreSQL |
-| `MAX_API_TOKENS_PER_USER` | no (100) | Live API tokens per account; 0 = no limit |
+| `AUTH_REAUTH_MINUTES` | no (runtime setting, 15) | Step-up re-authentication: creating an API token and changing billing need a password or e-mailed code confirmed within this many minutes; otherwise `403 REAUTH_REQUIRED` and a confirmation form (`/Account/Reauth`) |
+| `AUTH_OTP_MAX_FAILED_ATTEMPTS` | no (runtime setting, 5) | Wrong 2FA codes after which the code is void. The count is cleared only by a successful code or a password reset, not by signing in again |
+| `AUTH_ACCOUNT_MAX_ATTEMPTS` / `AUTH_ACCOUNT_WINDOW_MINUTES` | no (runtime settings, 30 / 15) | Sign-in and 2FA attempts per account whatever the IP (on top of the per-IP+address limit), counted in PostgreSQL |
+| `MAX_API_TOKENS_PER_USER` / `MAX_PENDING_PRESIGNS_PER_USER` / `MAX_TEMPLATES_PER_USER` | no (runtime settings, 100 / 20 / 100) | Live API tokens, presigns waiting for `/api/sign` and stored templates per account; 0 = no limit (env only) |
 | `GLOBAL_CONCURRENCY_LIMIT` / `GLOBAL_CONCURRENCY_WAIT_MS` | no (off / 2000) | Cap on concurrent operations of the whole server (#69), taken after the user's own slot. Empty or `0` = off; a start hypothesis is H + R + A (logged at startup), to be set only once every caller's own limit is below it (otherwise the caller gets `503`). A request waits up to the given milliseconds for a slot of the global, heavy or AI pool, then gets `503` + `Retry-After`. Negative values stop the server at start; this variable wins over `Billing__GlobalConcurrencyLimit`. Note: a flood of find-codes scans holds a slot of G and of the user's limit for up to `RASTER_WAIT_MS` (30 s) per page while it waits for pool R |
 | `THREADPOOL_MIN_WORKER_THREADS` | no (CPUs + TSA call limit) | Minimum worker threads of the thread pool (#69): below it the pool adds threads at once, above it about one or two a second, and every timestamp-authority call blocks a thread. Empty = CPUs + `TSA_MAX_CONCURRENT_CALLS`; `0` = the .NET default; `1`-`10000` as given; anything else stops the start. It only raises the .NET default. The value in force is logged at startup and shown on `/internal/concurrency` |
 | `HEAVY_OPERATIONS_LIMIT` / `AI_OPERATIONS_LIMIT` | no (off / off) | Pools H and A (#69): presign, sign, sign-pfx, visual-sign, timestamp, extend-signature, fill-pdf and PDF/A at once, and AI calls at once. Empty or `0` = off. Start hypotheses: H = the CPU count, A = 4. Full after `GLOBAL_CONCURRENCY_WAIT_MS` = `503` + `Retry-After: 10`. Negative or above 10000 stops the server at start |

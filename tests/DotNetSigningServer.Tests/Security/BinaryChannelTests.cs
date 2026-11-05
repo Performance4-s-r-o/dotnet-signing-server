@@ -95,7 +95,7 @@ public sealed class BinaryChannelFixture : IAsyncLifetime
             builder.UseSetting("Token:Secret", "integration-test-secret-with-32-plus-characters");
             builder.UseSetting("Limits:PdfMaxBytes", PdfMaxBytes.ToString());
             builder.UseSetting("Limits:PdfMaxPages", PdfMaxPages.ToString());
-            builder.UseSetting("Limits:MaxPendingPresignsPerUser", MaxPendingPresigns.ToString());
+            builder.UseSetting("MAX_PENDING_PRESIGNS_PER_USER", MaxPendingPresigns.ToString());
             builder.UseSetting("Limits:ImageMaxBytes", ImageMaxBytes.ToString());
             builder.UseSetting("Limits:RequestBodyLimitBytes", RequestBodyLimitBytes.ToString());
             builder.ConfigureTestServices(services =>

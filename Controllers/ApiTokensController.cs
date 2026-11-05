@@ -1,3 +1,4 @@
+using DotNetSigningServer.Services.Settings;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Filters;
 using DotNetSigningServer.Options;
@@ -92,7 +93,7 @@ public class ApiTokensController : Controller
         }
 
         // Quota of live tokens per account (#80). Revoked and expired ones do not count.
-        var maxTokens = HttpContext.RequestServices.GetService<IOptions<LimitsOptions>>()?.Value.MaxApiTokensPerUser ?? 0;
+        var maxTokens = HttpContext.RequestServices.GetRequiredService<Services.Settings.IRuntimeSettings>().MaxApiTokensPerUser();
         if (maxTokens > 0)
         {
             var active = await _dbContext.ApiTokens.CountAsync(t =>

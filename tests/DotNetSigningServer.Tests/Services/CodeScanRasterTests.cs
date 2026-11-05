@@ -102,7 +102,9 @@ public class CodeScanRasterTests
         Assert.Equal(30, pages.PagesProcessed);
         Assert.True(pages.Truncated);
         // ceil(30 / 3) = 10; charging all 35 pages was ceil(35 / 3) = 12.
-        Assert.Equal(10, PdfUtilityApiController.FindCodesCredits(pages));
+        Assert.Equal(10, PdfUtilityApiController.FindCodesCredits(pages, 1));
+        // A price of 2 credits per three pages doubles it.
+        Assert.Equal(20, PdfUtilityApiController.FindCodesCredits(pages, 2));
     }
 
     [Fact]
@@ -111,7 +113,7 @@ public class CodeScanRasterTests
         var pages = CodeScanRaster.Plan(Pdf((A4W, A4H), (A4W, A4H), (A4W, A4H), (A4W, A4H)));
         Assert.Equal(4, pages.PagesProcessed);
         Assert.False(pages.Truncated);
-        Assert.Equal(2, PdfUtilityApiController.FindCodesCredits(pages));
+        Assert.Equal(2, PdfUtilityApiController.FindCodesCredits(pages, 1));
     }
 
     [Fact]

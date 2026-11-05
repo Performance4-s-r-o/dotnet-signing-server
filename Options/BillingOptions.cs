@@ -2,24 +2,8 @@ namespace DotNetSigningServer.Options;
 
 public class BillingOptions
 {
-    // Prices and their currency come only from the service's price list (#175).
-
-    /// <summary>
-    /// Credits charged per AI call (/api/ai/detect-fields, /api/ai/extract-data).
-    /// These invoke an LLM — a real cost — so they must not be free for direct
-    /// API customers. Mirrors the portal's own AI_EXTRACTION_CREDITS (2). The
-    /// exact figure is provisional pending the platform-wide re-pricing; set via
-    /// appsettings/env without a code change. 0 makes AI calls free again and
-    /// must be a deliberate choice.
-    /// </summary>
-    public int AiCallCredits { get; set; } = 2;
-
-    /// <summary>
-    /// Credits per document for /api/flatten-form (#180). Free would turn it into a free PDF
-    /// rewriter; an Enterprise account is not debited, the usage record still carries it. 0 = free, written
-    /// down on purpose. Env <c>FLATTEN_FORM_CREDIT_COST</c>, empty = 1, negative stops the start.
-    /// </summary>
-    public int FlattenFormCredits { get; set; } = 1;
+    // Prices and their currency come only from the service's price list (#175), and so do the
+    // credits of each operation (credit_costs, Services/Pricing/OperationPrices.cs).
 
     /// <summary>
     /// Number of parallel slots per tier. Example: 5 means slots 1–5 cost 1×,

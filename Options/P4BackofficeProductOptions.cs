@@ -145,6 +145,18 @@ public class P4BackofficeProductOptions
     /// </summary>
     public bool EventsEnabled => AnyEnabled && !GatewayOnly;
 
+    /// <summary>
+    /// Runtime settings and the AI credentials are read from the service whenever it is reachable at
+    /// all: not on a private server (a gateway has neither), with an address and a key, and not
+    /// rolled back by a global <c>Off</c>. Otherwise the defaults in code apply and every kill
+    /// switch (AI) stays closed.
+    /// </summary>
+    public bool RuntimeServiceEnabled =>
+        DisabledReason == BackofficeDisabledReason.None
+        && !string.IsNullOrWhiteSpace(BaseUrl)
+        && !string.IsNullOrWhiteSpace(SecretKey)
+        && !(TryParseMode(Mode, out var global) && global == BackofficeMode.Off && !string.IsNullOrWhiteSpace(Mode));
+
     /// <summary>True when at least one module is effectively On.</summary>
     public bool AnyEnabled => Enum.GetValues<BackofficeModule>().Any(m => ModeFor(m) != BackofficeMode.Off);
 

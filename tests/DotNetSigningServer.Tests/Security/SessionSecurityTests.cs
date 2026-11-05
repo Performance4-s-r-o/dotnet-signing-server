@@ -3,6 +3,7 @@ using DotNetSigningServer.Filters;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
 using DotNetSigningServer.Services.Billing;
+using DotNetSigningServer.Services.Settings;
 using DotNetSigningServer.Tests.Helpers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -89,8 +90,8 @@ public class SessionSecurityTests
     [Fact]
     public void Reauth_WindowIsConfigurable_DefaultFifteen()
     {
-        Assert.Equal(TimeSpan.FromMinutes(15), new DotNetSigningServer.Options.SessionSecurityOptions().ReauthWindow);
-        Assert.Equal(TimeSpan.FromMinutes(5), new DotNetSigningServer.Options.SessionSecurityOptions { ReauthMinutes = 5 }.ReauthWindow);
+        Assert.Equal(TimeSpan.FromMinutes(15), TestRuntimeSettings.Defaults.ReauthWindow());
+        Assert.Equal(TimeSpan.FromMinutes(5), TestRuntimeSettings.With(("AUTH_REAUTH_MINUTES", "5")).ReauthWindow());
     }
 
     [Fact]
