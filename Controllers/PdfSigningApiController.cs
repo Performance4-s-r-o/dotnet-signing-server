@@ -838,7 +838,7 @@ namespace DotNetSigningServer.Controllers
 
             // No platform seal exists; the field only reports that.
             // AI: switched on, a usable provider and a price for data extraction (never offered free).
-            var aiOn = Prices.IsOffered(PricedOperations.AiExtract)
+            var aiOn = Prices.IsOffered(PricedOperations.AiExtract) && Prices.IsOffered(PricedOperations.AiExtractPages)
                 && await HttpContext.RequestServices.GetRequiredService<Services.Ai.AiGateway>().IsAvailableAsync(HttpContext.RequestAborted);
             return Ok(new ServerCapabilities { Seal = new SealCapability { Enabled = false }, Ai = new AiCapability { Enabled = aiOn } });
         }
