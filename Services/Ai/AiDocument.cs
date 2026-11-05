@@ -65,13 +65,20 @@ public sealed record AiDocument(byte[] Pdf, int FirstPage, int TotalPages, IRead
             var bytes = output.ToArray();
 
             var texts = new List<string>();
-            var hidden = false;
+            // Optional content (layers) may be switched off in a viewer while the model still reads it.
+            var hidden = input.GetCatalog().GetPdfObject().ContainsKey(PdfName.OCProperties);
             using (var copy = new PdfDocument(new PdfReader(new MemoryStream(bytes))))
             {
                 for (var i = 1; i <= copy.GetNumberOfPages(); i++)
                 {
                     var page = copy.GetPage(i);
                     texts.Add(PdfTextExtractor.GetTextFromPage(page, new LocationTextExtractionStrategy()));
+                    // Annotations and form fields carry text outside the page content (appearance
+                    // streams, /Contents) that a viewer may not show; links are the only harmless kind.
+                    if (!hidden && page.GetAnnotations().Any(a => !PdfName.Link.Equals(a.GetSubtype())))
+                    {
+                        hidden = true;
+                    }
                     if (!hidden)
                     {
                         var listener = new HiddenTextListener(page.GetCropBox());
@@ -133,15 +140,36 @@ public sealed record AiDocument(byte[] Pdf, int FirstPage, int TotalPages, IRead
 
     /// <summary>
     /// Text a person does not see: render mode 3 (invisible) or 7 (clip only), smaller than
-    /// <see cref="MinVisibleTextSize"/>, filled in (near) white, or placed outside the CropBox.
+    /// <see cref="MinVisibleTextSize"/>, filled in (near) white, placed outside the CropBox, or covered
+    /// later by an image or a near-white filled shape. Known limits: a coloured shape over text, and
+    /// text that merely matches a coloured background, are not recognised.
     /// </summary>
     private sealed class HiddenTextListener(Rectangle cropBox) : IEventListener
     {
+        private readonly List<Rectangle> _texts = new();
+
         public bool Found { get; private set; }
 
         public void EventOccurred(IEventData data, EventType type)
         {
-            if (Found || data is not TextRenderInfo info || string.IsNullOrWhiteSpace(info.GetText())) return;
+            if (Found) return;
+            switch (data)
+            {
+                case TextRenderInfo text:
+                    OnText(text);
+                    break;
+                case PathRenderInfo path when (path.GetOperation() & PathRenderInfo.FILL) != 0 && !path.IsPathModifiesClippingPath():
+                    if (Lightness(path.GetFillColor()) >= BackgroundLightness && Bounds(path) is { } shape) CheckCover(shape);
+                    break;
+                case ImageRenderInfo image:
+                    CheckCover(Bounds(image.GetImageCtm()));
+                    break;
+            }
+        }
+
+        private void OnText(TextRenderInfo info)
+        {
+            if (string.IsNullOrWhiteSpace(info.GetText())) return;
             var mode = info.GetTextRenderMode();
             if (mode is 3 or 7) { Found = true; return; }
 
@@ -156,8 +184,59 @@ public sealed record AiDocument(byte[] Pdf, int FirstPage, int TotalPages, IRead
 
             var start = info.GetBaseline().GetStartPoint();
             var end = info.GetBaseline().GetEndPoint();
-            if (!Inside(start) || !Inside(end)) Found = true;
+            if (!Inside(start) || !Inside(end)) { Found = true; return; }
+
+            var top = info.GetAscentLine().GetEndPoint();
+            _texts.Add(Box(descent.Get(Vector.I1), descent.Get(Vector.I2), top.Get(Vector.I1), top.Get(Vector.I2)));
         }
+
+        /// <summary>A shape drawn after text that covers the middle of it hides that text.</summary>
+        private void CheckCover(Rectangle cover)
+        {
+            foreach (var text in _texts)
+            {
+                var cx = text.GetX() + text.GetWidth() / 2;
+                var cy = text.GetY() + text.GetHeight() / 2;
+                if (cx >= cover.GetLeft() && cx <= cover.GetRight() && cy >= cover.GetBottom() && cy <= cover.GetTop())
+                {
+                    Found = true;
+                    return;
+                }
+            }
+        }
+
+        private static Rectangle? Bounds(PathRenderInfo path)
+        {
+            var ctm = path.GetCtm();
+            float? minX = null, minY = null, maxX = null, maxY = null;
+            foreach (var subpath in path.GetPath().GetSubpaths())
+            {
+                foreach (var segment in subpath.GetSegments())
+                {
+                    foreach (var point in segment.GetBasePoints())
+                    {
+                        var v = new Vector((float)point.GetX(), (float)point.GetY(), 1).Cross(ctm);
+                        minX = Math.Min(minX ?? v.Get(Vector.I1), v.Get(Vector.I1));
+                        maxX = Math.Max(maxX ?? v.Get(Vector.I1), v.Get(Vector.I1));
+                        minY = Math.Min(minY ?? v.Get(Vector.I2), v.Get(Vector.I2));
+                        maxY = Math.Max(maxY ?? v.Get(Vector.I2), v.Get(Vector.I2));
+                    }
+                }
+            }
+            return minX is null ? null : Box(minX.Value, minY!.Value, maxX!.Value, maxY!.Value);
+        }
+
+        /// <summary>The unit square of an image through its matrix.</summary>
+        private static Rectangle Bounds(Matrix ctm)
+        {
+            var corners = new[] { new Vector(0, 0, 1), new Vector(1, 0, 1), new Vector(0, 1, 1), new Vector(1, 1, 1) }
+                .Select(c => c.Cross(ctm)).ToList();
+            return Box(corners.Min(c => c.Get(Vector.I1)), corners.Min(c => c.Get(Vector.I2)),
+                corners.Max(c => c.Get(Vector.I1)), corners.Max(c => c.Get(Vector.I2)));
+        }
+
+        private static Rectangle Box(float x1, float y1, float x2, float y2) =>
+            new(Math.Min(x1, x2), Math.Min(y1, y2), Math.Abs(x2 - x1), Math.Abs(y2 - y1));
 
         private bool Inside(Vector point)
         {
@@ -181,7 +260,8 @@ public sealed record AiDocument(byte[] Pdf, int FirstPage, int TotalPages, IRead
             };
         }
 
-        public ICollection<EventType> GetSupportedEvents() => new[] { EventType.RENDER_TEXT };
+        public ICollection<EventType> GetSupportedEvents() =>
+            new[] { EventType.RENDER_TEXT, EventType.RENDER_PATH, EventType.RENDER_IMAGE };
     }
 }
 

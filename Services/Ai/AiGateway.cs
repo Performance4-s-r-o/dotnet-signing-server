@@ -96,8 +96,9 @@ public sealed class AiGateway
             {
                 // Timed out: the provider may have billed it.
                 await RecordAsync(operationId, provider, provider.Model, 0, 0, pages, "uncertain", started);
-                await SwitchAsync(provider, AiFailover.Classify(new AiFailureInput(provider.Provider, Transport: "timeout")), null);
+                // The whole call ran out of time: not this provider's fault, nothing to report.
                 if (deadline.IsCancellationRequested) break;
+                await SwitchAsync(provider, AiFailover.Classify(new AiFailureInput(provider.Provider, Transport: "timeout")), null);
                 continue;
             }
             catch (HttpRequestException ex)

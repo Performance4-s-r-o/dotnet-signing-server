@@ -150,6 +150,28 @@ public class AiGatewayTests
     }
 
     [Fact]
+    public async Task The_whole_call_running_out_of_time_is_not_reported_against_the_provider()
+    {
+        using var host = new AiHost(deadline: TimeSpan.FromMilliseconds(300));
+        host.Providers.AnthropicError(529, "overloaded_error");
+        host.Providers.Google.Enqueue(async (_, ct) =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(30), ct);
+            return ProviderStub.Json(HttpStatusCode.OK, "{}");
+        });
+
+        var ex = await Assert.ThrowsAsync<AiException>(() => host.Gateway.CallAsync(Request, 1, Parse, CancellationToken.None));
+
+        Assert.Equal(AiException.Unavailable, ex.Code);
+        Assert.DoesNotContain(AiHost.Google().Id, host.Source.Cooling);
+        var dispatched = await host.DispatchedAsync();
+        var events = dispatched.Where(d => d.Path == "/v1/ai/provider-events").ToList();
+        Assert.Single(events); // the 529 of the first provider only
+        Assert.Contains(AiHost.Anthropic().Id, events[0].Body);
+        Assert.Contains(dispatched, d => d.Path == "/v1/ai/usage" && d.Body.Contains("\"uncertain\"") && d.Body.Contains(AiHost.Google().Id));
+    }
+
+    [Fact]
     public async Task At_most_max_providers_per_call_are_tried()
     {
         using var host = new AiHost(AiHost.Credentials(1));

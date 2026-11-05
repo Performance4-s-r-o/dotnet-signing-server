@@ -150,8 +150,10 @@ services:
       # Environment tag — set per deployment (e.g. test / production).
       # Defaults to "production" when unset.
       - Sentry__Environment=${SENTRY_ENVIRONMENT:-production}
-      # AI has no settings here: the switch is the runtime setting ai_enabled and the provider keys come
-      # from the AI credentials endpoint of the backoffice (P4_BACKOFFICE_URL / _SECRET_KEY above).
+      # AI: the switch is the runtime setting ai_enabled and the provider keys come from the AI
+      # credentials endpoint of the backoffice. AI_ENABLED can only switch AI off (exactly "false");
+      # any other value is ignored with a warning. Empty = the runtime setting decides.
+      - AI_ENABLED=${AI_ENABLED:-}
       # osTicket (support tickets). Url + ApiKey both required — without them the
       # /support contact form is hidden from the nav and its routes return 404.
       - OsTicket__Url=${OSTICKET_URL:-}

@@ -27,6 +27,7 @@ public sealed class RuntimeSettingsClient
     private readonly ILogger<RuntimeSettingsClient> _logger;
     private readonly object _gate = new();
     private Task? _inFlight;
+    private bool _again;
     private long? _bootVersion;
 
     public RuntimeSettingsClient(IHttpClientFactory httpClients, RuntimeSettings settings, TimeProvider time, ILogger<RuntimeSettingsClient> logger)
@@ -40,14 +41,35 @@ public sealed class RuntimeSettingsClient
     /// <summary>Stable id of this instance for the service's restart overview; null when the host name does not fit.</summary>
     public static string? InstanceId { get; } = InstanceIdPattern.IsMatch(Environment.MachineName) ? Environment.MachineName : null;
 
-    /// <summary>Refreshes the settings; a refresh already running is joined, not repeated. Never throws (except on cancellation).</summary>
+    /// <summary>
+    /// Refreshes the settings. A request that arrives while a read is running joins it and makes it
+    /// read once more when done (the running read may predate the change that triggered the request).
+    /// Never throws (except on cancellation).
+    /// </summary>
     public Task RefreshAsync(CancellationToken cancellationToken)
     {
         lock (_gate)
         {
-            if (_inFlight is { IsCompleted: false } running) return running.WaitAsync(cancellationToken);
-            _inFlight = FetchAsync();
+            if (_inFlight is { IsCompleted: false } running)
+            {
+                _again = true;
+                return running.WaitAsync(cancellationToken);
+            }
+            _inFlight = FetchLoopAsync();
             return _inFlight.WaitAsync(cancellationToken);
+        }
+    }
+
+    private async Task FetchLoopAsync()
+    {
+        while (true)
+        {
+            await FetchAsync();
+            lock (_gate)
+            {
+                if (!_again) return;
+                _again = false;
+            }
         }
     }
 

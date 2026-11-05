@@ -95,7 +95,7 @@ internal sealed class AiHost : IDisposable
     public ProviderStub Providers { get; } = new();
     public FixedCredentials Source { get; }
 
-    public AiHost(AiCredentialSet? credentials = null, IRuntimeSettings? settings = null, TimeSpan? callTimeout = null, int aiMaxPages = 20)
+    public AiHost(AiCredentialSet? credentials = null, IRuntimeSettings? settings = null, TimeSpan? callTimeout = null, int aiMaxPages = 20, TimeSpan? deadline = null)
     {
         Source = new FixedCredentials(credentials ?? Credentials());
         var s = settings ?? TestRuntimeSettings.AiOn();
@@ -114,6 +114,7 @@ internal sealed class AiHost : IDisposable
                 TimeProvider.System, NullLogger<AiGateway>.Instance)
             {
                 CallTimeoutValue = callTimeout ?? AiGateway.CallTimeout,
+                DeadlineValue = deadline ?? AiGateway.Deadline,
             });
             services.AddSingleton(sp => new DotNetSigningServer.Services.TemplateAiService(
                 sp.GetRequiredService<AiGateway>(),

@@ -287,7 +287,8 @@ every provider failed; `422 AI_REFUSED` when the provider declined; `502 AI_INVA
 
 Both read at most `Limits__AiMaxPages` (20) pages: `pageFrom` / `pageTo` (default the whole
 document) are cut to it and the answer carries `pages_truncated`. Text a person cannot see (render
-mode 3 or 7, under 2 pt, near-white, outside the CropBox) makes the server send page images
+mode 3 or 7, under 2 pt, near-white, outside the CropBox, covered later by an image or a near-white
+fill), optional content (layers) and annotations or form fields other than links make the server send page images
 (150 DPI, grey) instead of the PDF and answer `hidden_text_detected`, every value then `low`.
 
 `extract-data` takes `columns` (`key` `^[A-Za-z0-9_]{1,64}$`, `title` ≤ 128, `description` ≤ 500,
@@ -311,6 +312,7 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `Token__Secret` | yes | Signing key for issued API tokens |
 | `FqdnServerName` | yes | Public hostname, used in generated links |
 | `AllowedHosts` | recommended | Host filtering, `*` by default |
+| `AI_ENABLED` | no (empty) | Emergency stop of AI: exactly `false` closes the runtime setting `ai_enabled` whatever the service says; it can never open it (anything else is ignored with a warning) |
 | `CORS_ALLOWED_ORIGINS` (`Cors__AllowedOrigins`) | no | Optional operator restriction of browser origins on `/api` (#177), comma-separated. Empty = a preflight passes an origin that an active browser token lists (cached 30 s), the server's own origin, or localhost in Development; set = the origin must also be in this list. The real request is always checked against the origin of its own token. `Access-Control-Allow-Credentials` is never sent and a cross-origin request loses its session cookie |
 | `AUTH_REAUTH_MINUTES` | no (runtime setting, 15) | Step-up re-authentication: creating an API token and changing billing need a password or e-mailed code confirmed within this many minutes; otherwise `403 REAUTH_REQUIRED` and a confirmation form (`/Account/Reauth`) |
 | `AUTH_OTP_MAX_FAILED_ATTEMPTS` | no (runtime setting, 5) | Wrong 2FA codes after which the code is void. The count is cleared only by a successful code or a password reset, not by signing in again |

@@ -207,22 +207,26 @@ public class RuntimeSettingsTests
     }
 
     [Fact]
-    public async Task Concurrent_refreshes_share_one_request()
+    public async Task A_refresh_during_a_running_read_joins_it_and_reads_once_more()
     {
         using var host = new Host();
         var release = new TaskCompletionSource();
         host.Service.Responses.Enqueue(async _ =>
         {
             await release.Task;
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Body(1, AiOn), Encoding.UTF8, "application/json") };
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Body(1, AiOff), Encoding.UTF8, "application/json") };
         });
+        // The change that triggered the second request is only in the second read.
+        host.Service.Enqueue(HttpStatusCode.OK, Body(2, AiOn));
 
         var a = host.Client.RefreshAsync(CancellationToken.None);
         var b = host.Client.RefreshAsync(CancellationToken.None);
+        var c = host.Client.RefreshAsync(CancellationToken.None);
         release.SetResult();
-        await Task.WhenAll(a, b);
+        await Task.WhenAll(a, b, c);
 
-        Assert.Single(host.Service.Requests);
+        Assert.Equal(2, host.Service.Requests.Count);
+        Assert.Equal(2, host.Settings.Version);
         Assert.True(host.Settings.AiEnabled());
     }
 
