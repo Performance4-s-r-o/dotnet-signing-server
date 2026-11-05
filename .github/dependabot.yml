@@ -16,6 +16,12 @@ updates:
       itext:
         patterns:
           - "itext*"
+    ignore:
+      # Majors of the signing stack (AGPL, signature output) go by hand with signing tests, not as a bot PR.
+      - dependency-name: "itext*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "BouncyCastle*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: "/"
