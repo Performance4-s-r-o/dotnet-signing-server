@@ -43,7 +43,14 @@ public class AiPricingEndpointTests
         }
     }
 
-    private static (Harness Controller, AiHost Host) Controller(IOperationPrices prices)
+    /// <summary>Page selection that fails in a way no guard foresaw.</summary>
+    private sealed class BrokenPages() : TemplateAiService(null!, TestHelpers.WrapOptions(new LimitsOptions()), NullLogger<TemplateAiService>.Instance)
+    {
+        public override DotNetSigningServer.Services.Ai.AiDocument SelectPages(byte[] pdf, int? pageFrom, int? pageTo) =>
+            throw new NullReferenceException("parser bug");
+    }
+
+    private static (Harness Controller, AiHost Host) Controller(IOperationPrices prices, bool brokenPages = false)
     {
         var limitOptions = new LimitsOptions { RejectActiveContent = true };
         var limits = new ContentLimitGuard(TestHelpers.WrapOptions(limitOptions));
@@ -57,14 +64,16 @@ public class AiPricingEndpointTests
 
         var host = new AiHost();
         var services = new ServiceCollection()
+            .AddLogging()
             .AddSingleton(prices)
             .AddSingleton(new PdfSafetyGuard(TestHelpers.WrapOptions(limitOptions)))
             .AddSingleton(TestHelpers.WrapOptions(limitOptions))
+            .AddMvcCore().Services
             .BuildServiceProvider();
         var http = new DefaultHttpContext { RequestServices = services };
         http.User = new ClaimsPrincipal(new ClaimsIdentity(
             [new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())], ApiKeyAuthenticationHandler.SchemeName));
-        var controller = new Harness(db, limits, host.Service, localizer.Object)
+        var controller = new Harness(db, limits, brokenPages ? new BrokenPages() : host.Service, localizer.Object)
         {
             ControllerContext = new ControllerContext { HttpContext = http },
         };
@@ -150,6 +159,20 @@ public class AiPricingEndpointTests
         using var _ = host;
         var result = await controller.ExtractData(Extract(3, from: 9));
         Assert.Equal(400, Assert.IsAssignableFrom<ObjectResult>(result).StatusCode);
+        Assert.Empty(controller.Calls);
+    }
+
+    [Fact]
+    public async Task An_unforeseen_failure_reading_the_pages_is_a_localized_500_without_a_charge()
+    {
+        var (controller, host) = Controller(Priced, brokenPages: true);
+        using var _ = host;
+        var extract = Assert.IsType<ObjectResult>(await controller.ExtractData(Extract(3)));
+        Assert.Equal(500, extract.StatusCode);
+        Assert.Contains("AiExtractionFailed", System.Text.Json.JsonSerializer.Serialize(extract.Value));
+        var detect = Assert.IsType<ObjectResult>(await controller.DetectTemplateFields(new AiDetectFieldsInput { PdfContent = Pdf(3) }));
+        Assert.Equal(500, detect.StatusCode);
+        Assert.Contains("AiDetectionFailed", System.Text.Json.JsonSerializer.Serialize(detect.Value));
         Assert.Empty(controller.Calls);
     }
 

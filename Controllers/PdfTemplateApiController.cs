@@ -188,6 +188,12 @@ namespace DotNetSigningServer.Controllers
             {
                 return InputRefused(ex);
             }
+            catch (Exception ex)
+            {
+                // Reading the pages failed in a way the guards did not foresee: nothing was charged.
+                Logger.LogError(Logging.LoggingEvents.ApiError, ex, "AI page selection failed");
+                return Problem(Localizer["AiDetectionFailed"].Value);
+            }
 
             return await RunAiAsync(user, "ai-detect-fields", PricedOperations.AiDetectFields, PricedOperations.AiDetectFieldsPages,
                 document.PageCount, input, "AiDetectionFailed",
@@ -227,6 +233,12 @@ namespace DotNetSigningServer.Controllers
                     Logger.LogInformation("AI extract-data refused: {Detail}", ex.Message);
                 }
                 return InputRefused(ex);
+            }
+            catch (Exception ex)
+            {
+                // Reading the pages failed in a way the guards did not foresee: nothing was charged.
+                Logger.LogError(Logging.LoggingEvents.ApiError, ex, "AI page selection failed");
+                return Problem(Localizer["AiExtractionFailed"].Value);
             }
 
             return await RunAiAsync(user, "ai-extract-data", PricedOperations.AiExtract, PricedOperations.AiExtractPages,

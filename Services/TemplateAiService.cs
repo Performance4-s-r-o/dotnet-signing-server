@@ -39,14 +39,14 @@ public class TemplateAiService
           underscores.
         """;
 
-    /// <summary>Selects the pages and, with hidden text, renders them, so the model only sees what a person sees.</summary>
     /// <summary>
     /// The pages one call reads (the range cut to <see cref="LimitsOptions.AiMaxPages"/>). Done before the
     /// charge: the price depends on how many pages the model gets, and a bad range is a 400 before a 402.
     /// </summary>
-    public AiDocument SelectPages(byte[] pdf, int? pageFrom, int? pageTo) =>
+    public virtual AiDocument SelectPages(byte[] pdf, int? pageFrom, int? pageTo) =>
         AiDocument.Prepare(pdf, pageFrom, pageTo, _limits.AiMaxPages);
 
+    /// <summary>With hidden text, renders the selected pages, so the model only sees what a person sees.</summary>
     private async Task<(AiDocument Document, byte[]? Pdf, IReadOnlyList<byte[]> Images, List<string> Warnings)> PrepareAsync(
         AiDocument document, CancellationToken cancellationToken)
     {
