@@ -90,6 +90,25 @@ namespace DotNetSigningServer.Controllers
         protected IActionResult InputRefused(ApiValidationException ex) =>
             BadRequest(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
 
+        /// <summary>Credits of priced operations, from the price list in force.</summary>
+        protected Services.Pricing.IOperationPrices Prices =>
+            HttpContext.RequestServices.GetRequiredService<Services.Pricing.IOperationPrices>();
+
+        /// <summary>
+        /// 503 <c>OPERATION_NOT_OFFERED</c>: the operation requires a price and the price list has none,
+        /// so it is not sold (never charged as free).
+        /// </summary>
+        protected ObjectResult OperationNotOffered(Services.Pricing.OperationNotOfferedException ex)
+        {
+            Logger.LogWarning("Operation {Operation} refused: no price in the price list", ex.Key);
+            Response.Headers.RetryAfter = "300";
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                code = Services.Pricing.OperationNotOfferedException.Code,
+                message = Localizer["Error_OPERATION_NOT_OFFERED"].Value,
+            });
+        }
+
         /// <summary>
         /// PDF z JSON kanálu (base64), zkontrolované stejně jako dosud — limit velikosti ještě
         /// před dekódováním, pak <see cref="PdfSafetyGuard"/> — ale dekódované JEDNOU: bajty jdou
@@ -839,6 +858,7 @@ namespace DotNetSigningServer.Controllers
             return requiredCredits > 0 && !user.EffectiveEnterprise && user.CreditsRemaining < requiredCredits;
         }
 
+        /// <summary>Units of an operation priced per 3 pages: ⌈pages / 3⌉.</summary>
         protected static int CalculateCreditsForPages(int pageCount)
         {
             if (pageCount <= 0) return 0;

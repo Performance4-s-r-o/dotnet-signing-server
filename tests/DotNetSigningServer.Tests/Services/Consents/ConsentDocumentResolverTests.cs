@@ -16,7 +16,7 @@ public class ConsentDocumentResolverTests
     private static string Meta(string document, int current) =>
         "{\"documents\":{\"" + document + "\":{\"requires_consent\":true,\"current_version\":" + current + ",\"required_version\":1}}}";
 
-    private static async Task<IReadOnlyList<ConsentDocumentVersion>> ResolveAsync(string document, string docs = "Off", string? meta = null)
+    private static async Task<IReadOnlyList<ConsentDocumentVersion>> ResolveAsync(string document, string docs = "Off", string? meta = null, LegalDocumentRendered? shown = null)
     {
         using var host = new OutboxTestHost(null, services =>
             services.AddSingleton(Microsoft.Extensions.Options.Options.Create(new P4BackofficeProductOptions
@@ -33,8 +33,10 @@ public class ConsentDocumentResolverTests
         {
             await BackofficeStateStore.SetAsync(db, BackofficeStateKeys.DocsMeta, meta, DateTimeOffset.UtcNow);
         }
+        var source = new Mock<ILegalDocumentSource>();
+        source.Setup(s => s.GetAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(shown);
         var resolver = new ConsentDocumentResolver(
-            db, new Mock<ILegalDocumentSource>().Object, scope.ServiceProvider, NullLogger<ConsentDocumentResolver>.Instance);
+            db, source.Object, scope.ServiceProvider, NullLogger<ConsentDocumentResolver>.Instance);
         return await resolver.ResolveAsync([new ConsentRequirement(document, ConsentActions.Granted)], "en");
     }
 
@@ -64,9 +66,17 @@ public class ConsentDocumentResolverTests
     }
 
     [Fact]
-    public async Task DocsOn_MetaVersionOne_IsTheStaticPage()
+    public async Task DocsOn_MetaVersionOne_ButNoPublishedText_IsRefused_NoVersionOneFallback()
     {
-        Assert.Equal(1, Assert.Single(await ResolveAsync("terms", "On", Meta("terms", 1))).Version);
+        await Assert.ThrowsAsync<ConsentVersionUnknownException>(() => ResolveAsync("terms", "On", Meta("terms", 1)));
+        await Assert.ThrowsAsync<ConsentVersionUnknownException>(() => ResolveAsync("dpa", "On"));
+    }
+
+    [Fact]
+    public async Task DocsOn_PublishedText_IsTheVersionShown()
+    {
+        var shown = new LegalDocumentRendered("terms-of-service", "en", 4, "Terms", null, null, "<p>t</p>");
+        Assert.Equal(4, Assert.Single(await ResolveAsync("terms", "On", Meta("terms", 4), shown)).Version);
     }
 
     [Fact]

@@ -48,15 +48,29 @@ public class CookiesPolicyPageTests : IClassFixture<SignUpPostgresFixture>
         Regex.Matches(WebUtility.HtmlDecode(html), @"<td><code>([^<]+)</code></td>").Select(m => m.Groups[1].Value).ToList();
 
     [Theory]
-    [InlineData("/Legal/CookiesPolicy", "Strictly necessary")]
-    [InlineData("/cs/Legal/CookiesPolicy", "nezbytné")]
-    public async Task RazorFallback_ListsExactlyTheAuditedCookies_AndNoAnalytics(string path, string necessaryText)
+    [InlineData("/Legal/CookiesPolicy", "Document not available")]
+    [InlineData("/Legal/TermsOfService", "Document not available")]
+    [InlineData("/cs/Legal/PrivacyPolicy", "Dokument není dostupný")]
+    public async Task WithoutADocument_IsA503Page_NotAStaticText(string path, string expected)
     {
-        var html = WebUtility.HtmlDecode(await PageAsync(path));
+        await using var factory = new SignUpAppFactory(_fixture.Postgres.ConnectionString, "Off");
+        using var client = factory.CreateClient();
+        var response = await client.GetAsync(path);
 
-        Assert.DoesNotContain("Google Analytics", html, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(necessaryText, html, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(AuditedCookies.Names, TableCookieNames(html));
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.True(response.Headers.Contains("Retry-After"));
+        Assert.Contains(expected, WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync()));
+    }
+
+    [Theory]
+    [InlineData("/Legal/License")]
+    [InlineData("/Legal/OpenSourceNotices")]
+    public async Task LicenseAndNotices_StayStatic(string path)
+    {
+        await using var factory = new SignUpAppFactory(_fixture.Postgres.ConnectionString, "Off");
+        using var client = factory.CreateClient();
+
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(path)).StatusCode);
     }
 
     [Fact]

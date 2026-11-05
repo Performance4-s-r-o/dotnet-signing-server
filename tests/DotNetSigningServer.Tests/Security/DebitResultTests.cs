@@ -170,7 +170,8 @@ public sealed class DebitRaceFixture : IAsyncLifetime
                         sp.GetRequiredService<ApplicationDbContext>(),
                         NullLogger<PdfTemplateService>.Instance,
                         sp.GetRequiredService<ContentLimitGuard>(),
-                        Mock.Of<IStringLocalizerFactory>());
+                        Mock.Of<IStringLocalizerFactory>(),
+                        sp.GetRequiredService<DotNetSigningServer.Services.Settings.IRuntimeSettings>());
                     template.Setup(s => s.FillAsync(It.IsAny<FillPdfInput>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
                         .ReturnsAsync(new FillPdfResponse { Files = { pdf } });
                     return template.Object;

@@ -1,3 +1,4 @@
+using DotNetSigningServer.Services.Settings;
 using System.Text.Json;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Exceptions;
@@ -30,6 +31,7 @@ public class PdfTemplateService
     private readonly ILogger<PdfTemplateService> _logger;
     private readonly ContentLimitGuard _limitGuard;
     private readonly LimitsOptions _limits;
+    private readonly Settings.IRuntimeSettings _settings;
     // Text, který jde DO PDF (odkaz na pokračování tabulky, nadpis generované
     // stránky). Řídí se jazykem požadavku — jiný jazyk dokument nenese.
     private readonly IStringLocalizer _strings;
@@ -38,9 +40,11 @@ public class PdfTemplateService
         ApplicationDbContext dbContext,
         ILogger<PdfTemplateService> logger,
         ContentLimitGuard limitGuard,
-        IStringLocalizerFactory localizerFactory)
+        IStringLocalizerFactory localizerFactory,
+        Settings.IRuntimeSettings settings)
     {
         _limits = limitGuard.Limits;
+        _settings = settings;
         _dbContext = dbContext;
         _logger = logger;
         _limitGuard = limitGuard;
@@ -61,7 +65,7 @@ public class PdfTemplateService
         ValidateFields(input.Fields);
         _limitGuard.EnsurePdfWithinLimit(input.PdfContent, "Template");
 
-        var maxTemplates = _limits.MaxTemplatesPerUser;
+        var maxTemplates = _settings.MaxTemplatesPerUser();
         if (maxTemplates > 0
             && await _dbContext.StoredPdfTemplates.CountAsync(t => t.UserId == userId, cancellationToken) >= maxTemplates)
         {

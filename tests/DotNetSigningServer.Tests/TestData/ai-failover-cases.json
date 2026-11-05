@@ -1,0 +1,253 @@
+{
+  "about": "Golden failover cases of the AI gateway contract: a client switches to the next provider only on `switch` and reports `report` to POST /v1/ai/provider-events. Copied verbatim from the contract; keep in sync.",
+  "cases": [
+    {
+      "name": "anthropic credit balance too low (400)",
+      "input": {
+        "provider": "anthropic",
+        "httpStatus": 400,
+        "errorType": "invalid_request_error",
+        "message": "Your credit balance is too low to access the Anthropic API."
+      },
+      "expected": {
+        "action": "switch",
+        "report": "credit_exhausted",
+        "rule": "credit"
+      }
+    },
+    {
+      "name": "anthropic billing error (402)",
+      "input": {
+        "provider": "anthropic",
+        "httpStatus": 402,
+        "errorType": "billing_error"
+      },
+      "expected": {
+        "action": "switch",
+        "report": "credit_exhausted",
+        "rule": "credit"
+      }
+    },
+    {
+      "name": "anthropic rate limit (429)",
+      "input": {
+        "provider": "anthropic",
+        "httpStatus": 429,
+        "errorType": "rate_limit_error"
+      },
+      "expected": {
+        "action": "switch",
+        "report": "rate_limited",
+        "rule": "rate_limit"
+      }
+    },
+    {
+      "name": "anthropic overloaded (529)",
+      "input": {
+        "provider": "anthropic",
+        "httpStatus": 529,
+        "errorType": "overloaded_error"
+      },
+      "expected": {
+        "action": "switch",
+        "report": "unavailable",
+        "rule": "overloaded"
+      }
+    },
+    {
+      "name": "anthropic api error (500)",
+      "input": {
+        "provider": "anthropic",
+        "httpStatus": 500,
+        "errorType": "api_error"
+      },
+      "expected": {
+        "action": "switch",
+        "report": "unavailable",
+        "rule": "server_error"
+      }
+    },
+    {
+      "name": "anthropic invalid request (400)",
+      "input": {
+        "provider": "anthropic",
+        "httpStatus": 400,
+        "errorType": "invalid_request_error",
+        "message": "messages: field required"
+      },
+      "expected": {
+        "action": "no_switch",
+        "report": null,
+        "rule": "client_error"
+      }
+    },
+    {
+      "name": "anthropic authentication (401)",
+      "input": {
+        "provider": "anthropic",
+        "httpStatus": 401,
+        "errorType": "authentication_error"
+      },
+      "expected": {
+        "action": "no_switch",
+        "report": null,
+        "rule": "client_error"
+      }
+    },
+    {
+      "name": "anthropic permission (403)",
+      "input": {
+        "provider": "anthropic",
+        "httpStatus": 403,
+        "errorType": "permission_error"
+      },
+      "expected": {
+        "action": "no_switch",
+        "report": null,
+        "rule": "client_error"
+      }
+    },
+    {
+      "name": "anthropic request too large (413)",
+      "input": {
+        "provider": "anthropic",
+        "httpStatus": 413,
+        "errorType": "request_too_large"
+      },
+      "expected": {
+        "action": "no_switch",
+        "report": null,
+        "rule": "client_error"
+      }
+    },
+    {
+      "name": "anthropic refusal",
+      "input": {
+        "provider": "anthropic",
+        "httpStatus": 200,
+        "stopReason": "refusal"
+      },
+      "expected": {
+        "action": "no_switch",
+        "report": null,
+        "rule": "refusal"
+      }
+    },
+    {
+      "name": "anthropic schema-invalid output",
+      "input": {
+        "provider": "anthropic",
+        "httpStatus": 200,
+        "stopReason": "end_turn",
+        "schemaInvalid": true
+      },
+      "expected": {
+        "action": "no_switch",
+        "report": null,
+        "rule": "schema_invalid"
+      }
+    },
+    {
+      "name": "gemini quota (429)",
+      "input": {
+        "provider": "google",
+        "httpStatus": 429,
+        "errorType": "RESOURCE_EXHAUSTED"
+      },
+      "expected": {
+        "action": "switch",
+        "report": "rate_limited",
+        "rule": "rate_limit"
+      }
+    },
+    {
+      "name": "gemini unavailable (503)",
+      "input": {
+        "provider": "google",
+        "httpStatus": 503,
+        "errorType": "UNAVAILABLE"
+      },
+      "expected": {
+        "action": "switch",
+        "report": "unavailable",
+        "rule": "server_error"
+      }
+    },
+    {
+      "name": "gemini internal (500)",
+      "input": {
+        "provider": "google",
+        "httpStatus": 500,
+        "errorType": "INTERNAL"
+      },
+      "expected": {
+        "action": "switch",
+        "report": "unavailable",
+        "rule": "server_error"
+      }
+    },
+    {
+      "name": "gemini invalid argument (400)",
+      "input": {
+        "provider": "google",
+        "httpStatus": 400,
+        "errorType": "INVALID_ARGUMENT"
+      },
+      "expected": {
+        "action": "no_switch",
+        "report": null,
+        "rule": "client_error"
+      }
+    },
+    {
+      "name": "gemini permission denied (403)",
+      "input": {
+        "provider": "google",
+        "httpStatus": 403,
+        "errorType": "PERMISSION_DENIED"
+      },
+      "expected": {
+        "action": "no_switch",
+        "report": null,
+        "rule": "client_error"
+      }
+    },
+    {
+      "name": "gemini safety block",
+      "input": {
+        "provider": "google",
+        "httpStatus": 200,
+        "stopReason": "SAFETY"
+      },
+      "expected": {
+        "action": "no_switch",
+        "report": null,
+        "rule": "refusal"
+      }
+    },
+    {
+      "name": "timeout",
+      "input": {
+        "provider": "anthropic",
+        "transport": "timeout"
+      },
+      "expected": {
+        "action": "switch",
+        "report": "unavailable",
+        "rule": "timeout"
+      }
+    },
+    {
+      "name": "network error",
+      "input": {
+        "provider": "google",
+        "transport": "network"
+      },
+      "expected": {
+        "action": "switch",
+        "report": "unavailable",
+        "rule": "network"
+      }
+    }
+  ]
+}

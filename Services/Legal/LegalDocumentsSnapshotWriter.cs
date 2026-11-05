@@ -12,10 +12,9 @@ namespace DotNetSigningServer.Services.Legal;
 /// unreachable.
 ///
 /// A new row gets <c>Source = backoffice</c>, <c>Content = ""</c> and <c>IsDraft = false</c>.
-/// A hand-maintained row of the same version is never taken over: only the snapshot columns
+/// A row of the same version that is not from the service is never taken over: only the snapshot columns
 /// (<c>ContentHtml</c>, <c>ContentHash</c>, <c>ChangeKind</c>, <c>TypeKey</c>,
-/// <c>FetchedAt</c>) are filled in, so switching the module Off still shows exactly the
-/// hand-written Markdown, title and date.
+/// <c>FetchedAt</c>) are filled in; its title and date stay.
 /// </summary>
 public sealed partial class LegalDocumentsSnapshotWriter
 {

@@ -242,7 +242,7 @@ public sealed class ConsentNoticeProvider
 
 /// <summary>
 /// The one rule for when <c>docs:meta</c> counts: only with <c>Modules:Docs=On</c>. Otherwise the
-/// reader gets the local text (static page v1 or a hand-maintained row), so both the version a
+/// reader gets the local text (the snapshot, else v1), so both the version a
 /// consent form records (<see cref="ConsentDocumentResolver"/>) and the version the re-consent
 /// gate requires (<see cref="ConsentStatusProvider"/>) come from the same place. Using it in
 /// only one of them makes a user consent v1 and be asked again for v3, forever.

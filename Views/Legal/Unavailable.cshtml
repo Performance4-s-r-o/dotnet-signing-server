@@ -1,0 +1,11 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
+@{
+    ViewData["Title"] = L["LegalUnavailableTitle"].Value;
+    ViewData["MetaDescription"] = L["LegalUnavailableText"].Value;
+}
+
+<div class="legal-document">
+    <h1>@L["LegalUnavailableTitle"]</h1>
+    <p>@L["LegalUnavailableText"]</p>
+    <p><a href="@Url.Action("Index", "Legal")">@L["LegalTitle"]</a></p>
+</div>

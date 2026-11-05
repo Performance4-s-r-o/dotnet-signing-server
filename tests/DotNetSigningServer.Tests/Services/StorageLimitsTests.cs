@@ -42,9 +42,9 @@ public class StorageLimitsTests : IDisposable
 
     private PdfTemplateService Templates(int max)
     {
-        var options = new LimitsOptions { MaxTemplatesPerUser = max };
-        var guard = new ContentLimitGuard(TestHelpers.WrapOptions(options));
-        return new PdfTemplateService(_db, NullLogger<PdfTemplateService>.Instance, guard, new KeyEchoLocalizerFactory());
+        var guard = new ContentLimitGuard(TestHelpers.WrapOptions(new LimitsOptions()));
+        return new PdfTemplateService(_db, NullLogger<PdfTemplateService>.Instance, guard, new KeyEchoLocalizerFactory(),
+            TestRuntimeSettings.With(("MAX_TEMPLATES_PER_USER", max.ToString())));
     }
 
     private static CreateTemplateInput Input(string name) => new()
@@ -74,9 +74,9 @@ public class StorageLimitsTests : IDisposable
     [Fact]
     public void The_caps_have_defaults()
     {
-        var o = new LimitsOptions();
-        Assert.Equal(20, o.MaxPendingPresignsPerUser);
-        Assert.Equal(100, o.MaxTemplatesPerUser);
+        var o = TestRuntimeSettings.Defaults;
+        Assert.Equal(20, DotNetSigningServer.Services.Settings.RuntimeSettingsExtensions.MaxPendingPresignsPerUser(o));
+        Assert.Equal(100, DotNetSigningServer.Services.Settings.RuntimeSettingsExtensions.MaxTemplatesPerUser(o));
     }
 
     [Fact]

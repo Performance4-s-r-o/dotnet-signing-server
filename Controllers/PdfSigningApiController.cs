@@ -1,3 +1,5 @@
+using DotNetSigningServer.Services.Pricing;
+using DotNetSigningServer.Services.Settings;
 using DotNetSigningServer.Filters;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Exceptions;
@@ -109,7 +111,7 @@ namespace DotNetSigningServer.Controllers
             {
                 return InputRefused(new ApiValidationException("CONTENT_STAMP_REQUIRED"));
             }
-            var maxPending = HttpContext.RequestServices.GetRequiredService<IOptions<LimitsOptions>>().Value.MaxPendingPresignsPerUser;
+            var maxPending = HttpContext.RequestServices.GetRequiredService<Services.Settings.IRuntimeSettings>().MaxPendingPresignsPerUser();
             if (maxPending > 0 && await DbContext.SigningData.CountAsync(x => x.UserId == user.Id) >= maxPending)
             {
                 // Each presign is a PDF on disk until it is signed or expires (#74); per account, so per tenant (#131).
@@ -318,17 +320,18 @@ namespace DotNetSigningServer.Controllers
 
                 var credits = 0;
                 if (report.Flatten is DocumentPreparation.FlattenOutcome.Flattened or DocumentPreparation.FlattenOutcome.Unchanged)
-                    credits += BillingOptions.FlattenFormCredits;
+                    credits += Prices.Credits(Services.Pricing.PricedOperations.FlattenForm);
                 if (report.Pdfa == DocumentPreparation.PdfaOutcome.Converted)
-                    credits += CalculateCreditsForPages(result.Pages);
+                    credits += Prices.Credits(Services.Pricing.PricedOperations.PdfaConvert, CalculateCreditsForPages(result.Pages));
                 // The signature pays for it: a presign that /api/sign could never charge is refused now.
-                if (checkCredits && LacksCredits(user, 1 + credits))
+                var signCredits = Prices.Credits(Services.Pricing.PricedOperations.Sign);
+                if (checkCredits && LacksCredits(user, signCredits + credits))
                 {
                     Logger.LogWarning(Logging.LoggingEvents.CreditsInsufficient, "Credits insufficient for {Context} preparation of user {UserId}", context, user.Id);
                     return (null, 0, StatusCode(StatusCodes.Status402PaymentRequired, new
                     {
                         code = ApiOperationService.InsufficientCreditsCode,
-                        message = Localizer["NotEnoughCredits", 1 + credits].Value,
+                        message = Localizer["NotEnoughCredits", signCredits + credits].Value,
                     }));
                 }
                 return (result, credits, null);
@@ -409,7 +412,7 @@ namespace DotNetSigningServer.Controllers
                     // (ECDSA is randomised) is still the same signature.
                     ApiOperationService.Fingerprint("sign", input.Id),
                     // The presign's flattening and PDF/A conversion are paid with the signature (#184).
-                    baseCost: 1 + (presign?.PreparationCredits ?? 0),
+                    baseCost: Prices.Credits(Services.Pricing.PricedOperations.Sign) + (presign?.PreparationCredits ?? 0),
                     work: async _ =>
                     {
                         var signingData = await DbContext.SigningData.AsNoTracking().FirstOrDefaultAsync(x => x.Id == input.Id)
@@ -576,7 +579,7 @@ namespace DotNetSigningServer.Controllers
         {
             try
             {
-                return await RunOperationAsync(user, "sign-pfx", fingerprint, baseCost: 1, async _ =>
+                return await RunOperationAsync(user, "sign-pfx", fingerprint, baseCost: Prices.Credits(Services.Pricing.PricedOperations.SignPfx), async _ =>
                 {
                     if (input.TemplateId.HasValue)
                     {
@@ -662,7 +665,7 @@ namespace DotNetSigningServer.Controllers
             if (refused != null) return refused;
             try
             {
-                return await RunOperationAsync(user, "timestamp", fingerprint, baseCost: 1 + preparationCredits, async _ =>
+                return await RunOperationAsync(user, "timestamp", fingerprint, baseCost: Prices.Credits(Services.Pricing.PricedOperations.Timestamp) + preparationCredits, async _ =>
                 {
                     // Never the unconverted document in place of the prepared one (only a replay skips preparation, and it never runs this).
                     if (prepared == null && DocumentPreparation.Requested(input)) throw new InvalidOperationException("Document preparation did not run.");
@@ -780,7 +783,7 @@ namespace DotNetSigningServer.Controllers
 
             try
             {
-                return await RunOperationAsync(user, "extend-signature", fingerprint, baseCost: 1, _ =>
+                return await RunOperationAsync(user, "extend-signature", fingerprint, baseCost: Prices.Credits(Services.Pricing.PricedOperations.ExtendSignature), _ =>
                 {
                     var pdfBytes = pdf ?? Convert.FromBase64String(input.PdfContent);
                     var required = string.IsNullOrWhiteSpace(input.RequireCompleteRevocationFor) ? null : input.RequireCompleteRevocationFor;
@@ -834,8 +837,9 @@ namespace DotNetSigningServer.Controllers
             }
 
             // No platform seal exists; the field only reports that.
-            var ai = HttpContext.RequestServices.GetService<Microsoft.Extensions.Options.IOptions<DotNetSigningServer.Options.AiOptions>>()?.Value;
-            var aiOn = ai is { Enabled: true } && !string.IsNullOrWhiteSpace(ai.Google?.ApiKey);
+            // AI: switched on, a usable provider and a price for data extraction (never offered free).
+            var aiOn = Prices.IsOffered(PricedOperations.AiExtract)
+                && await HttpContext.RequestServices.GetRequiredService<Services.Ai.AiGateway>().IsAvailableAsync(HttpContext.RequestAborted);
             return Ok(new ServerCapabilities { Seal = new SealCapability { Enabled = false }, Ai = new AiCapability { Enabled = aiOn } });
         }
 
@@ -1113,7 +1117,7 @@ namespace DotNetSigningServer.Controllers
             if (refused != null) return refused;
             try
             {
-                return await RunOperationAsync(user, "visual-sign", fingerprint, baseCost: 1 + preparationCredits, async _ =>
+                return await RunOperationAsync(user, "visual-sign", fingerprint, baseCost: Prices.Credits(Services.Pricing.PricedOperations.VisualSign) + preparationCredits, async _ =>
                 {
                     // Never the unconverted document in place of the prepared one (only a replay skips preparation, and it never runs this).
                     if (prepared == null && DocumentPreparation.Requested(input)) throw new InvalidOperationException("Document preparation did not run.");
@@ -1246,7 +1250,7 @@ namespace DotNetSigningServer.Controllers
                     user,
                     "attachment",
                     fingerprint,
-                    baseCost: 1,
+                    baseCost: Prices.Credits(Services.Pricing.PricedOperations.Attachment),
                     _ =>
                     {
                         var result = pdf == null ? _signingService.AddAttachment(input) : _signingService.AddAttachment(input, pdf);

@@ -15,6 +15,12 @@ public class LimitsOptions
     public int PdfMaxPages { get; set; } = 500;
 
     /// <summary>
+    /// Pages one AI call reads (extract-data, detect-fields): the requested range, or the first
+    /// pages, is cut to this many and the answer says <c>pages_truncated</c>.
+    /// </summary>
+    public int AiMaxPages { get; set; } = 20;
+
+    /// <summary>
     /// Refuse PDFs with a Launch action or with JavaScript that runs on open.
     /// See <c>PdfSafetyGuard</c> for what exactly counts.
     /// </summary>
@@ -67,17 +73,5 @@ public class LimitsOptions
     public long FillImageMaxPixels { get; set; } = 25_000_000;
     public int FillImageMaxSide { get; set; } = 10_000;
 
-    // ── Disk and storage per account (#74), so per provisioned tenant (#131). 0 = no limit. ──
-
-    /// <summary>Presigns waiting for /api/sign, per account. Each holds a PDF of up to 20 MB in /tmp. Default 20.</summary>
-    public int MaxPendingPresignsPerUser { get; set; } = 20;
-
-    /// <summary>
-    /// Live (not revoked, not expired) API tokens per account (#80). Unlike the caps above it has a
-    /// default. 0 = no limit.
-    /// </summary>
-    public int MaxApiTokensPerUser { get; set; } = 100;
-
-    /// <summary>Stored templates (up to 27 MB each), per account. Default 100.</summary>
-    public int MaxTemplatesPerUser { get; set; } = 100;
+    // Per-account caps (pending presigns, templates, API tokens) are runtime settings: Services/Settings.
 }

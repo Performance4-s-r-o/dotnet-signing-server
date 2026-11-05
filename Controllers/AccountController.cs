@@ -1,3 +1,4 @@
+using DotNetSigningServer.Services.Settings;
 using DotNetSigningServer.Data;
 using DotNetSigningServer.Middleware;
 using DotNetSigningServer.Models;
@@ -31,7 +32,7 @@ public class AccountController : Controller
     private readonly IStringLocalizer<SharedStrings> _localizer;
 
     private readonly AuthAttemptLimiter _limiter;
-    private readonly SessionSecurityOptions _security;
+    private readonly Services.Settings.IRuntimeSettings _settings;
 
     /// <summary>
     /// HttpOnly cookie with the sign-in challenge (#80): the 2FA step is bound to the browser that
@@ -47,7 +48,7 @@ public class AccountController : Controller
         IOptions<AppOptions> appOptions,
         IStringLocalizer<SharedStrings> localizer,
         AuthAttemptLimiter limiter,
-        IOptions<SessionSecurityOptions> security)
+        Services.Settings.IRuntimeSettings settings)
     {
         _dbContext = dbContext;
         _authService = authService;
@@ -55,7 +56,7 @@ public class AccountController : Controller
         _appOptions = appOptions.Value;
         _localizer = localizer;
         _limiter = limiter;
-        _security = security.Value;
+        _settings = settings;
     }
 
     private string CurrentLocale => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
@@ -82,7 +83,7 @@ public class AccountController : Controller
     /// guesses. Wider than the per-IP window so the owner is not locked out by a few typos.
     /// </summary>
     private Task<bool> IsAccountRateLimitedAsync(string key) => _limiter.IsLimitedAsync(
-        key, _security.AccountMaxAttempts, _security.AccountWindow, HttpContext.RequestAborted);
+        key, _settings.AccountMaxAttempts(), _settings.AccountWindow(), HttpContext.RequestAborted);
 
     private string RequestIp() => DotNetSigningServer.Middleware.ClientIp.Of(HttpContext);
 
@@ -526,7 +527,7 @@ public class AccountController : Controller
 
     /// <summary>
     /// Checks an e-mailed code against the user's current one. A wrong code is counted and at
-    /// <see cref="SessionSecurityOptions.OtpMaxFailedAttempts"/> the code is void (#80) —
+    /// runtime setting <c>auth_otp_max_failed_attempts</c> the code is void (#80) —
     /// saved here, so the count survives whatever the caller does next.
     /// </summary>
     private async Task<bool> CheckOtpAsync(User user, string code)
@@ -538,7 +539,7 @@ public class AccountController : Controller
         }
 
         user.EmailOtpFailedAttempts++;
-        if (user.EmailOtpFailedAttempts >= Math.Max(1, _security.OtpMaxFailedAttempts)
+        if (user.EmailOtpFailedAttempts >= _settings.OtpMaxFailedAttempts()
             || user.EmailOtpExpiresAt < DateTimeOffset.UtcNow)
         {
             // Void, but the count stays: the next code starts where this one ended.

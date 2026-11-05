@@ -20,7 +20,7 @@ public class FillLimitsTests : IDisposable
         var options = new LimitsOptions();
         tweak?.Invoke(options);
         var guard = new ContentLimitGuard(TestHelpers.WrapOptions(options));
-        return new PdfTemplateService(_dbContext, NullLogger<PdfTemplateService>.Instance, guard, new KeyEchoLocalizerFactory());
+        return new PdfTemplateService(_dbContext, NullLogger<PdfTemplateService>.Instance, guard, new KeyEchoLocalizerFactory(), DotNetSigningServer.Tests.Helpers.TestRuntimeSettings.Defaults);
     }
 
     private static PdfFieldDefinition Text(string name) => new()

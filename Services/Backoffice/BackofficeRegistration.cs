@@ -11,6 +11,7 @@ using DotNetSigningServer.Services.Consents;
 using DotNetSigningServer.Services.Email;
 using DotNetSigningServer.Services.Legal;
 using DotNetSigningServer.Services.Pricing;
+using DotNetSigningServer.Services.Settings;
 using DotNetSigningServer.Services.Support;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -68,6 +69,8 @@ public static class BackofficeRegistration
         AddSupport(services, snapshot);
         BillingRegistration.AddBilling(services, snapshot);
         AddErasure(services, snapshot);
+        AddRuntimeSettings(services, snapshot);
+        AddAi(services, snapshot);
 
         return services;
     }
@@ -157,20 +160,19 @@ public static class BackofficeRegistration
     }
 
     /// <summary>
-    /// Legal documents by <c>Modules:Docs</c>: Off reads the hand-maintained rows (as before), On serves the
-    /// service's texts with the <c>LegalDocuments</c> snapshot and Razor as fallbacks, and the
+    /// Legal documents by <c>Modules:Docs</c>: Off serves only the <c>LegalDocuments</c> snapshot of the
+    /// service's last answer, On serves the service's texts with that snapshot as the fallback, and the
     /// cookie declaration under the cookies policy (<see cref="CookieDeclarationReader"/>).
+    /// There is no static text: without a document the page says so.
     /// </summary>
     internal static void AddLegalDocuments(IServiceCollection services, P4BackofficeProductOptions options)
     {
         var mode = options.ModeFor(BackofficeModule.Docs);
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<LegalDocumentsSnapshotWriter>();
-        // On: the hand-maintained rows are the fallback, and the snapshot is read with them.
         services.TryAddScoped(sp => new DbLegalDocumentSource(
             sp.GetRequiredService<ApplicationDbContext>(),
             sp.GetRequiredService<ILogger<DbLegalDocumentSource>>(),
-            includeSnapshots: mode == BackofficeMode.On,
             sp.GetRequiredService<TimeProvider>()));
 
         if (mode == BackofficeMode.Off)
@@ -230,6 +232,10 @@ public static class BackofficeRegistration
     {
         services.TryAddSingleton(TimeProvider.System);
 
+        // Credits of each operation: from the snapshot when Pricing is On, otherwise every price is missing.
+        services.TryAddSingleton<IOperationPrices>(sp => new OperationPrices(
+            sp.GetService<PricingSnapshotHolder>(), sp.GetRequiredService<ILogger<OperationPrices>>()));
+
         var mode = options.ModeFor(BackofficeModule.Pricing);
         if (mode == BackofficeMode.Off)
         {
@@ -262,6 +268,7 @@ public static class BackofficeRegistration
         AddPriceEventHandler<PriceUnscheduledHandler>(services);
         services.AddScoped<IBackofficeEventHandler, PriceSyncFailedHandler>();
         services.AddHostedService<PricingUpcomingCheck>();
+        services.AddHostedService<OperationsManifestPublisher>();
 
         services.TryAddSingleton<BackofficeCreditPricingProvider>();
         services.TryAddSingleton<ICreditPricingProvider>(sp => sp.GetRequiredService<BackofficeCreditPricingProvider>());
@@ -317,6 +324,77 @@ public static class BackofficeRegistration
         services.AddScoped<IBackofficeEventHandler, ErasureRequestedHandler>();
     }
 
+    /// <summary>
+    /// Runtime settings (<c>GET /v1/settings</c>): always registered, because request paths read
+    /// them. With the service (<see cref="P4BackofficeProductOptions.RuntimeServiceEnabled"/>) they are
+    /// polled and refreshed on <c>settings.changed</c>; without it env overrides and defaults in code
+    /// apply and the kill switches stay closed.
+    /// </summary>
+    internal static void AddRuntimeSettings(IServiceCollection services, P4BackofficeProductOptions options)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton(sp => RuntimeSettingsOverrides.From(sp.GetRequiredService<IConfiguration>()));
+        services.TryAddSingleton<RuntimeSettings>();
+        services.TryAddSingleton<IRuntimeSettings>(sp => sp.GetRequiredService<RuntimeSettings>());
+        var enabled = options.RuntimeServiceEnabled;
+        services.AddHostedService(sp => new RuntimeSettingsStartupReport(
+            sp.GetRequiredService<RuntimeSettingsOverrides>(),
+            enabled,
+            sp.GetRequiredService<ILogger<RuntimeSettingsStartupReport>>()));
+        if (!enabled) return;
+
+        var baseUrl = options.BaseUrl?.Trim() ?? "";
+        var secretKey = options.SecretKey?.Trim() ?? "";
+        services.AddHttpClient(RuntimeSettingsClient.HttpClientName, client =>
+        {
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            client.Timeout = RuntimeSettingsClient.RequestTimeout;
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretKey);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-settings");
+        });
+        services.TryAddSingleton<RuntimeSettingsClient>();
+        services.AddHostedService<RuntimeSettingsWorker>();
+        services.AddScoped<IBackofficeEventHandler, SettingsChangedHandler>();
+    }
+
+    /// <summary>
+    /// AI through the provider pool of the AI credentials endpoint (<c>POST /v1/ai/credentials</c>, scope
+    /// <c>ai:credentials</c>; usage needs <c>ai:usage</c>). Without the service there are never credentials,
+    /// so every AI call is refused; a provider key from env or configuration does not exist.
+    /// </summary>
+    internal static void AddAi(IServiceCollection services, P4BackofficeProductOptions options)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        // The gateway bounds every provider call itself (60 s, 75 s for the whole call).
+        services.AddHttpClient(DotNetSigningServer.Services.Ai.AiProviderHttp.HttpClientName, client =>
+        {
+            client.Timeout = Timeout.InfiniteTimeSpan;
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/ai");
+        });
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<DotNetSigningServer.Services.Ai.IAiProviderClient, DotNetSigningServer.Services.Ai.AnthropicProviderClient>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<DotNetSigningServer.Services.Ai.IAiProviderClient, DotNetSigningServer.Services.Ai.GoogleProviderClient>());
+        services.TryAddSingleton<DotNetSigningServer.Services.Ai.AiGateway>();
+        services.TryAddScoped<TemplateAiService>();
+
+        if (!options.RuntimeServiceEnabled)
+        {
+            services.TryAddSingleton<DotNetSigningServer.Services.Ai.IAiCredentialsSource, DotNetSigningServer.Services.Ai.NoAiCredentials>();
+            return;
+        }
+
+        var baseUrl = options.BaseUrl?.Trim() ?? "";
+        var secretKey = options.SecretKey?.Trim() ?? "";
+        services.AddHttpClient(DotNetSigningServer.Services.Ai.AiCredentialsClient.HttpClientName, client =>
+        {
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            client.Timeout = DotNetSigningServer.Services.Ai.AiCredentialsClient.RequestTimeout;
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretKey);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-ai");
+        });
+        services.TryAddSingleton<DotNetSigningServer.Services.Ai.AiCredentialsClient>();
+        services.TryAddSingleton<DotNetSigningServer.Services.Ai.IAiCredentialsSource>(sp => sp.GetRequiredService<DotNetSigningServer.Services.Ai.AiCredentialsClient>());
+    }
+
     /// <summary>A <c>price.*</c> handler, also resolvable as itself.</summary>
     private static void AddPriceEventHandler<T>(IServiceCollection services)
         where T : class, IBackofficeEventHandler
@@ -360,6 +438,8 @@ public static class BackofficeRegistration
         services.AddSingleton<IOutboxHandler, SupportTicketOutboxHandler>();
         services.AddSingleton<IOutboxHandler, ErasureRequestOutboxHandler>();
         services.AddSingleton<IOutboxHandler, ErasureAckOutboxHandler>();
+        services.AddSingleton<IOutboxHandler, DotNetSigningServer.Services.Ai.AiUsageOutboxHandler>();
+        services.AddSingleton<IOutboxHandler, DotNetSigningServer.Services.Ai.AiProviderEventOutboxHandler>();
         services.AddHostedService<BackofficeOutboxDispatcher>();
     }
 

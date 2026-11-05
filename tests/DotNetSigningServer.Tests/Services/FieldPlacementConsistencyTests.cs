@@ -37,7 +37,8 @@ public class FieldPlacementConsistencyTests : IDisposable
             _dbContext,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<PdfTemplateService>.Instance,
             limitGuard,
-            new KeyEchoLocalizerFactory());
+            new KeyEchoLocalizerFactory(),
+            DotNetSigningServer.Tests.Helpers.TestRuntimeSettings.Defaults);
     }
 
     public void Dispose() => _dbContext.Dispose();

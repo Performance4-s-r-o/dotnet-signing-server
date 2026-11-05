@@ -57,7 +57,7 @@ public class FlattenFormEndpointTests
         }
     }
 
-    private static Harness Controller(HttpContent? multipart = null, BillingOptions? billing = null, int maxPages = 5)
+    private static Harness Controller(HttpContent? multipart = null, BillingOptions? billing = null, int maxPages = 5, DotNetSigningServer.Services.Pricing.IOperationPrices? prices = null)
     {
         var limitOptions = new LimitsOptions { PdfMaxPages = maxPages, RejectActiveContent = true };
         var limits = new ContentLimitGuard(TestHelpers.WrapOptions(limitOptions));
@@ -69,11 +69,12 @@ public class FlattenFormEndpointTests
 
         var localizer = new Mock<IStringLocalizer<SharedStrings>>();
         localizer.Setup(l => l[It.IsAny<string>()]).Returns((string k) => new LocalizedString(k, k));
-        var templates = new PdfTemplateService(db, NullLogger<PdfTemplateService>.Instance, limits, new Mock<IStringLocalizerFactory>().Object);
+        var templates = new PdfTemplateService(db, NullLogger<PdfTemplateService>.Instance, limits, new Mock<IStringLocalizerFactory>().Object, DotNetSigningServer.Tests.Helpers.TestRuntimeSettings.Defaults);
 
         var services = new ServiceCollection()
             .AddSingleton(new PdfSafetyGuard(TestHelpers.WrapOptions(limitOptions)))
             .AddSingleton(TestHelpers.WrapOptions(limitOptions))
+            .AddSingleton(prices ?? DotNetSigningServer.Tests.Helpers.TestRuntimeSettings.NoPriceList)
             .AddSingleton(Microsoft.Extensions.Options.Options.Create(new Microsoft.AspNetCore.Mvc.JsonOptions()))
             .BuildServiceProvider();
         var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, user.Id.ToString()) };
@@ -253,9 +254,9 @@ public class FlattenFormEndpointTests
     [Theory]
     [InlineData(0)]
     [InlineData(3)]
-    public async Task Price_comes_from_the_configuration(int credits)
+    public async Task Price_comes_from_the_price_list(int credits)
     {
-        var controller = Controller(billing: new BillingOptions { FlattenFormCredits = credits });
+        var controller = Controller(prices: DotNetSigningServer.Tests.Helpers.TestRuntimeSettings.Prices(("flatten_form", credits)));
 
         await controller.FlattenForm(new FlattenFormInput { PdfContent = Convert.ToBase64String(ScriptedForm()) });
 
@@ -263,5 +264,12 @@ public class FlattenFormEndpointTests
     }
 
     [Fact]
-    public void Default_price_is_one_credit() => Assert.Equal(1, new BillingOptions().FlattenFormCredits);
+    public async Task Without_a_price_it_costs_one_credit()
+    {
+        var controller = Controller();
+
+        await controller.FlattenForm(new FlattenFormInput { PdfContent = Convert.ToBase64String(ScriptedForm()) });
+
+        Assert.Equal(1, Assert.Single(controller.Calls).BaseCost);
+    }
 }

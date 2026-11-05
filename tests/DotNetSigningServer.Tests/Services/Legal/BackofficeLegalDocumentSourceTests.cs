@@ -61,7 +61,7 @@ public class BackofficeLegalDocumentSourceTests
     public async Task ServiceDown_WithSnapshot_ServesTheSnapshot()
     {
         using var host = new LegalDocsTestHost();
-        await host.SeedAsync(LegalDocsTestHost.Manual(), LegalDocsTestHost.Snapshot());
+        await host.SeedAsync(LegalDocsTestHost.Snapshot());
         host.EnqueueStatus(HttpStatusCode.ServiceUnavailable);
 
         var (result, _) = await GetAsync(host);
@@ -126,13 +126,13 @@ public class BackofficeLegalDocumentSourceTests
     public async Task NotPublishedType_IsNotAnOutage_AndIsNotAskedAgainWithinTheTtl()
     {
         using var host = new LegalDocsTestHost();
-        await host.SeedAsync(LegalDocsTestHost.Manual(slug: "open-source-notices"));
+        await host.SeedAsync(LegalDocsTestHost.Snapshot(slug: "refund-policy", title: "Refund (snapshot)"));
         host.EnqueueStatus(HttpStatusCode.NotFound);
 
-        var (oss, _) = await GetAsync(host, slug: "open-source-notices");
-        await GetAsync(host, slug: "open-source-notices");
+        var (oss, _) = await GetAsync(host, slug: "refund-policy");
+        await GetAsync(host, slug: "refund-policy");
 
-        Assert.Equal("Terms (manual)", oss!.Title);
+        Assert.Equal("Refund (snapshot)", oss!.Title);
         Assert.Equal(1, host.RequestCount);
         Assert.False(host.Refresher.InBackoff);
 

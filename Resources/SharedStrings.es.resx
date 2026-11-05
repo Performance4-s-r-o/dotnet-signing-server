@@ -150,9 +150,7 @@
   <data name="PdfContentRequired" xml:space="preserve"><value>PdfContent es obligatorio.</value></data>
   <data name="TemplateCreateError" xml:space="preserve"><value>Se produjo un error al crear la plantilla</value></data>
   <data name="TemplateRetrieveError" xml:space="preserve"><value>Se produjo un error al recuperar la plantilla</value></data>
-  <data name="AiNotConfigured" xml:space="preserve"><value>La detección de AI no está configurada.</value></data>
   <data name="AiDetectionFailed" xml:space="preserve"><value>La detección de AI falló. Verifique la configuración de AI e inténtelo de nuevo.</value></data>
-  <data name="AiExtractionNotConfigured" xml:space="preserve"><value>La extracción de AI no está configurada.</value></data>
   <data name="ColumnsRequired" xml:space="preserve"><value>Se requiere al menos una definición de columna.</value></data>
   <data name="AiExtractionFailed" xml:space="preserve"><value>La extracción de datos de AI falló. Verifique la configuración de AI e inténtelo de nuevo.</value></data>
   <data name="ProvideAtLeastOneChange" xml:space="preserve"><value>Proporcione al menos un cambio (fields, pdfContent o templateName).</value></data>
@@ -398,6 +396,8 @@
   <data name="LegalDocVersion" xml:space="preserve"><value>Versión {0}</value></data>
   <data name="LegalDocEffectiveFrom" xml:space="preserve"><value>Vigente desde el {0:d 'de' MMMM 'de' yyyy}</value></data>
   <data name="LegalDocKeyChanges" xml:space="preserve"><value>Cambios principales:</value></data>
+  <data name="LegalUnavailableTitle" xml:space="preserve"><value>Documento no disponible</value></data>
+  <data name="LegalUnavailableText" xml:space="preserve"><value>Este documento no se puede mostrar ahora. Inténtelo de nuevo en unos minutos.</value></data>
   <data name="LegalTitle" xml:space="preserve"><value>Documentos legales</value></data>
   <data name="LegalDescription" xml:space="preserve"><value>Aquí puede encontrar todos los documentos legales y de políticas relacionados con el uso del servicio Performance4PDF de Performance4 s.r.o.</value></data>
   <data name="LegalTermsOfService" xml:space="preserve"><value>Condiciones de uso</value></data>
@@ -456,12 +456,6 @@
   <data name="PricingMetaDescription" xml:space="preserve"><value>Precios de Performance4PDF: pague por crédito la firma de PDF, los sellos de tiempo, la conversión a PDF/A y el renderizado de plantillas. Sin licencias por usuario ni gasto mínimo.</value></data>
   <data name="ContactMetaDescription" xml:space="preserve"><value>Póngase en contacto con el equipo de Performance4PDF para consultas sobre la API de firma de PDF, precios o soporte de integración.</value></data>
   <data name="LegalMetaDescription" xml:space="preserve"><value>Términos, política de privacidad, acuerdo de tratamiento de datos, SLA y demás documentos legales del servicio Performance4PDF.</value></data>
-  <data name="LegalTermsOfServiceMeta" xml:space="preserve"><value>Las condiciones que rigen su uso del servicio de firma y automatización de PDF de Performance4PDF.</value></data>
-  <data name="LegalPrivacyPolicyMeta" xml:space="preserve"><value>Cómo Performance4PDF recoge, trata y protege los datos personales, y qué derechos tiene usted sobre ellos.</value></data>
-  <data name="LegalDpaMeta" xml:space="preserve"><value>El acuerdo de tratamiento de datos que cubre los documentos que envía a Performance4PDF para su procesamiento.</value></data>
-  <data name="LegalSlaMeta" xml:space="preserve"><value>Compromisos de disponibilidad y soporte de la API de Performance4PDF.</value></data>
-  <data name="LegalRefundPolicyMeta" xml:space="preserve"><value>Cuándo se pueden reembolsar los créditos y las suscripciones adquiridos en Performance4PDF.</value></data>
-  <data name="LegalCookiesPolicyMeta" xml:space="preserve"><value>Qué cookies utiliza Performance4PDF y para qué sirve cada una.</value></data>
   <data name="LegalOpenSourceNoticesMeta" xml:space="preserve"><value>Componentes de código abierto utilizados por Performance4PDF y sus licencias.</value></data>
   <data name="LegalAgplLicenseMeta" xml:space="preserve"><value>La licencia AGPL bajo la que se publica el servidor de firma de Performance4PDF.</value></data>
   <data name="ApiDocsTitle" xml:space="preserve"><value>API Documentation</value></data>
@@ -626,6 +620,13 @@
   <data name="Error_ACCOUNT_BLOCKED" xml:space="preserve"><value>Esta cuenta está bloqueada. Póngase en contacto con soporte.</value></data>
   <data name="Error_FEATURE_DISABLED" xml:space="preserve"><value>Esta función no está disponible temporalmente.</value></data>
   <data name="Error_AI_DISABLED" xml:space="preserve"><value>Las funciones de IA están desactivadas en este servidor.</value></data>
+  <data name="Error_OPERATION_NOT_OFFERED" xml:space="preserve"><value>Esta operación no se ofrece: la lista de precios no tiene precio para ella.</value></data>
+  <data name="Error_AI_UNAVAILABLE" xml:space="preserve"><value>La IA no está disponible ahora. Inténtelo más tarde.</value></data>
+  <data name="Error_AI_REFUSED" xml:space="preserve"><value>El proveedor de IA se negó a procesar este documento.</value></data>
+  <data name="Error_AI_INVALID_OUTPUT" xml:space="preserve"><value>La respuesta de la IA no se pudo usar. Inténtelo de nuevo.</value></data>
+  <data name="Error_AI_PROVIDER_ERROR" xml:space="preserve"><value>El proveedor de IA rechazó la solicitud.</value></data>
+  <data name="Error_AI_INVALID_COLUMNS" xml:space="preserve"><value>Las definiciones de columnas no son válidas (clave, título hasta 128 y descripción hasta 500 caracteres sin caracteres de control, como máximo 50 columnas, tipo y opciones).</value></data>
+  <data name="Error_AI_INVALID_PAGE_RANGE" xml:space="preserve"><value>El rango de páginas no es válido.</value></data>
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Demasiadas solicitudes. Inténtelo más tarde.</value></data>
   <data name="Error_CONTENT_STAMP_REQUIRED" xml:space="preserve"><value>El campo de firma debe colocarse junto a la firma de imagen, pero la solicitud no incluye ninguna firma de imagen.</value></data>
   <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Demasiados documentos esperan la firma. Termínelos o espere a que caduquen.</value></data>
@@ -726,15 +727,6 @@
   <data name="AdminConsentsBackfillOff" xml:space="preserve"><value>Switch the Consents module to On first.</value></data>
   <data name="EmailLanguage" xml:space="preserve"><value>Idioma del correo</value></data>
   <data name="EmailBounced" xml:space="preserve"><value>Correo rebotado / queja</value></data>
-  <data name="CookiesPolicyIntro" xml:space="preserve"><value>This Cookies Policy explains which cookies Performance4PDF uses and why.</value></data>
-  <data name="CookiesPolicyWhatTitle" xml:space="preserve"><value>1. What are cookies?</value></data>
-  <data name="CookiesPolicyWhatText" xml:space="preserve"><value>Cookies are small text files a website stores in your browser. They let the website remember, for example, that you are signed in or which language you chose.</value></data>
-  <data name="CookiesPolicyUsedTitle" xml:space="preserve"><value>2. Cookies we use</value></data>
-  <data name="CookiesPolicyUsedText" xml:space="preserve"><value>We use only strictly necessary cookies. The Service cannot work without them (sign-in, security, the language you chose), so they do not require your consent. We do not use analytics, advertising or other tracking cookies.</value></data>
-  <data name="CookiesPolicyManageTitle" xml:space="preserve"><value>3. Managing cookies</value></data>
-  <data name="CookiesPolicyManageText" xml:space="preserve"><value>You can delete cookies or block them in your browser settings at any time. Without these cookies you cannot sign in and forms will not work.</value></data>
-  <data name="CookiesPolicyChangesTitle" xml:space="preserve"><value>4. Changes</value></data>
-  <data name="CookiesPolicyChangesText" xml:space="preserve"><value>If we ever start using cookies that are not strictly necessary (for example analytics), we will update this policy and ask for your consent before setting them.</value></data>
   <data name="CookieTableCaption" xml:space="preserve"><value>Cookies used by Performance4PDF</value></data>
   <data name="CookieTableName" xml:space="preserve"><value>Name</value></data>
   <data name="CookieTableProvider" xml:space="preserve"><value>Provider</value></data>

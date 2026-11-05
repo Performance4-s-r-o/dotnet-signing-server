@@ -24,7 +24,8 @@ public class ConsentDocsModeConsistencyTests
         + "\"privacy\":{\"requires_consent\":true,\"current_version\":1,\"required_version\":1}}}";
 
     /// <summary>Resolves what a sign-up form shows, records exactly that, and asks the gate.</summary>
-    private static async Task<ConsentStatus> SignUpThenGateAsync(string docs, string? meta)
+    private static async Task<ConsentStatus> SignUpThenGateAsync(string docs, string? meta,
+        BackofficeDisabledReason reason = BackofficeDisabledReason.None, bool production = false)
     {
         var options = new P4BackofficeProductOptions
         {
@@ -32,7 +33,8 @@ public class ConsentDocsModeConsistencyTests
             BaseUrl = OutboxTestHost.BaseUrl,
             SecretKey = OutboxTestHost.SecretKey,
             Environment = "test",
-            DisabledReason = BackofficeDisabledReason.None,
+            DisabledReason = reason,
+            DefaultOn = production,
         };
         using var host = new OutboxTestHost(null, services =>
             services.AddSingleton(Microsoft.Extensions.Options.Options.Create(options)));
@@ -88,6 +90,22 @@ public class ConsentDocsModeConsistencyTests
     }
 
     [Fact]
-    public async Task OnPremDocsOff_NoMeta_SignUpThenGate_IsCurrent() =>
+    public async Task DevDocsOff_NoMeta_SignUpThenGate_IsCurrent() =>
         Assert.True((await SignUpThenGateAsync("Off", null)).IsCurrent);
+
+    [Fact]
+    public async Task ProductionDocsOff_NeverRecordsAVersionNobodyCanRead() =>
+        await Assert.ThrowsAsync<ConsentVersionUnknownException>(() => SignUpThenGateAsync("Off", null, production: true));
+
+    [Fact]
+    public async Task PrivateServer_NeverRecordsConsentToTheServiceDocuments() =>
+        await Assert.ThrowsAsync<ConsentVersionUnknownException>(() =>
+            SignUpThenGateAsync("Off", null, BackofficeDisabledReason.PrivateServer));
+
+    [Fact]
+    public void PrivateServer_HasNoSignUpAndNoConsentPage()
+    {
+        Assert.Contains("SignUp", DotNetSigningServer.Conventions.PrivateServerConvention.RemovedActionNames);
+        Assert.Contains("Consent", DotNetSigningServer.Conventions.PrivateServerConvention.RemovedActionNames);
+    }
 }

@@ -293,7 +293,7 @@ public class SignUpIntegrationTests : IClassFixture<SignUpPostgresFixture>
         Assert.False(await DbAsync(db => db.Users.AnyAsync(u => u.Email == email)));
     }
 
-    /// <summary>Terms v2 as a hand-maintained row in force since <paramref name="termsSince"/> (Docs is Off).</summary>
+    /// <summary>Terms v2 as a snapshot row in force since <paramref name="termsSince"/> (Docs is Off).</summary>
     private Task<int> SetDocsMetaAsync(DateTimeOffset termsSince) =>
         DbAsync(async db =>
         {
@@ -306,7 +306,8 @@ public class SignUpIntegrationTests : IClassFixture<SignUpPostgresFixture>
                     Locale = "en",
                     Version = 2,
                     Title = "Terms",
-                    Content = "Terms v2",
+                    Content = "",
+                    ContentHtml = "<p>Terms v2</p>",
                     EffectiveFrom = termsSince,
                 });
             }

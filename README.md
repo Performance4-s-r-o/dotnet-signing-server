@@ -92,8 +92,8 @@ document as it is: `GET /api/capabilities` reports `presignPreparation: true` wh
 The answer gains `preparation`: `flatten` (`flattened` / `unchanged` / `skipped-signed`),
 `flattenedFields`, `removed[]`, `pdfa` (`converted` / `already-pdfa`), `conformance`,
 `credits`. The credits are charged by `/api/sign` together with the signature:
-`FLATTEN_FORM_CREDIT_COST` for flattening, one per started three pages for the
-conversion (as `convert/pdfa`); an Enterprise account (a provisioned one inherits it) is not debited. Presign refuses with
+the price of `flatten_form` for flattening, the price of `pdfa_convert` per started three pages for the
+conversion (as `convert/pdfa`; see [Operation prices](#operation-prices)); an Enterprise account (a provisioned one inherits it) is not debited. Presign refuses with
 `402` when the balance does not cover the signature with them.
 
 | Answer | When |
@@ -230,12 +230,75 @@ for any other client. Two limits of that:
 | `GET POST PUT DELETE /api/pdf-template[/{id}]` | Template CRUD |
 | `POST /api/fill-pdf` | Render a template with supplied field data |
 | `POST /api/convert/pdfa` | Convert a PDF to PDF/A. Before signing prefer `presign` with `convertToPdfa` (one call, checked result). PDF/A-3 targets keep embedded files as associated files; other targets still drop them |
-| `POST /api/flatten-form` | Flatten filled form fields into the page and remove active content (JavaScript, Launch, trigger actions), so the document can be signed. `409` `PDF_ALREADY_SIGNED` / `PDF_XFA_DYNAMIC` / `FLATTEN_INCOMPLETE` / `PDF_FORM_INVALID`. Answers `result`, `sourceSha256`, `resultSha256`, `changed`, `flattenedFields`, `removed[]`. Price `FLATTEN_FORM_CREDIT_COST` (default 1) |
+| `POST /api/flatten-form` | Flatten filled form fields into the page and remove active content (JavaScript, Launch, trigger actions), so the document can be signed. `409` `PDF_ALREADY_SIGNED` / `PDF_XFA_DYNAMIC` / `FLATTEN_INCOMPLETE` / `PDF_FORM_INVALID`. Answers `result`, `sourceSha256`, `resultSha256`, `changed`, `flattenedFields`, `removed[]`. Price `flatten_form` (see [Operation prices](#operation-prices)) |
 | `POST /api/find-codes` | Detect barcodes and QR codes |
-| `POST /api/ai/detect-fields` | Suggest template fields from a PDF (optional, needs `AI__Enabled`) |
+| `POST /api/ai/detect-fields` | Suggest template fields from a PDF (optional, see [AI](#ai)) |
 | `POST /api/ai/extract-data` | Extract structured data from a PDF (optional) |
 
 ## Configuration
+
+### Runtime settings
+
+Tuning values live in the settings service of the P4 Backoffice integration and are read
+with `GET /v1/settings` (scope `settings:read`; the product and its environment come from the
+key): at start, every `poll_interval_seconds` with `If-None-Match`, and at once on the
+`settings.changed` event. Values are read on use, never copied at start. Keys:
+`max_pending_presigns_per_user`, `max_templates_per_user`, `max_api_tokens_per_user`,
+`auth_reauth_minutes`, `auth_otp_max_failed_attempts`, `auth_account_max_attempts`,
+`auth_account_window_minutes` (last known value, before the first read the default in code)
+and `ai_enabled` (a kill switch, `fail_mode=closed`: on only while the service said so within
+`closed_max_stale_seconds`; before the first read and after that it is off; the default in code
+is never used). An env variable of the key's name in upper case overrides it: it wins for the
+limits (`0` = no limit is possible only there; nonsense stops the start) and can only close a
+switch (`AI_ENABLED=false`; anything else is ignored with a warning). Without the service (a
+private server, no `P4Backoffice__BaseUrl` / `__SecretKey`, or a global `P4Backoffice__Mode=Off`)
+the service is never called: env overrides and defaults in code apply and AI stays off.
+Counters are per instance, so an effective limit is the limit × the number of instances.
+
+### Operation prices
+
+Credits per operation come from the price list in force (`credit_costs` of
+`GET /v1/pricing/current`, the last known snapshot during an outage): `sign`, `sign_pfx`,
+`timestamp`, `visual_sign`, `extend_signature`, `attachment`, `flatten_form`, `pdfa_convert`
+(per started three pages), `fill_pdf` (per started three pages of each document), `find_codes`
+(per started three scanned pages), `ai_detect_fields`, `ai_extract`. A missing price costs 1 credit;
+`0` is free. The AI operations require a price: without one they are not offered
+(`503 OPERATION_NOT_OFFERED`), never free. With `Modules:Pricing` Off (on-prem) there is no price
+list: every operation costs 1 credit, and AI is not offered. At start the server sends its
+operations manifest (`PUT /v1/pricing/operations`); a failure does not stop the start.
+
+### AI
+
+`/api/ai/detect-fields` and `/api/ai/extract-data` call AI providers with keys handed out by the
+AI credentials endpoint of the P4 Backoffice integration (`POST /v1/ai/credentials`, scope
+`ai:credentials`; usage is reported with `ai:usage`). There is no provider key in env or
+configuration. The keys stay in memory until `expires_at`; providers are tried in the service's
+order, at most `max_providers_per_call` per call, and the next one only on exhaustion or an outage
+(credit, rate limit, overload, 5xx, timeout, network) — never on another 4xx, a refusal or output off
+the schema. A provider with an unknown credential kind, an unknown provider name or a region outside
+`allowed_regions` is skipped. Switches are reported (`POST /v1/ai/provider-events`) and each answer's
+tokens recorded (`POST /v1/ai/usage`), both through the outbox. One provider call has 60 s, the whole
+call 75 s.
+
+Off: `403 AI_DISABLED` while the runtime setting `ai_enabled` is not fresh and on (before the body,
+the charge or the model); `503 AI_UNAVAILABLE` without credentials or a usable provider, or when
+every provider failed; `422 AI_REFUSED` when the provider declined; `502 AI_INVALID_OUTPUT` /
+`AI_PROVIDER_ERROR`; `503 OPERATION_NOT_OFFERED` without a price.
+
+Both read at most `Limits__AiMaxPages` (20) pages: `pageFrom` / `pageTo` (default the whole
+document) are cut to it and the answer carries `pages_truncated`. Text a person cannot see (render
+mode 3 or 7, under 2 pt, near-white, outside the CropBox, covered later by an image or a near-white
+fill), optional content (layers) and annotations or form fields other than links make the server send page images
+(150 DPI, grey) instead of the PDF and answer `hidden_text_detected`, every value then `low`.
+
+`extract-data` takes `columns` (`key` `^[A-Za-z0-9_]{1,64}$`, `title` ≤ 128, `description` ≤ 500,
+no control characters, at most 50; `type` `text|number|integer|date|boolean|choice|email|iban`,
+`choices`, `maxLength` ≤ 1000) and optional `examples` (≤ 20, `value` ≤ 200); anything else is
+`400 AI_INVALID_COLUMNS`. They go to the model as JSON data beside fixed rules, never interpolated
+into instructions. Each value comes back as `key`, `result`, `confidence` (`high` only when the
+quoted `evidence` is on the page's text layer), `page`, `evidence` and `invalid` (the value failed its
+type or format, e.g. a mod-97 IBAN check; `result` is then null), with `warnings`, `pagesProcessed`,
+`provider` and `model`.
 
 Configuration binds from `appsettings.json`, then environment variables (`__`
 separates nested keys). `appsettings.json` holds defaults and empty
@@ -249,11 +312,12 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `Token__Secret` | yes | Signing key for issued API tokens |
 | `FqdnServerName` | yes | Public hostname, used in generated links |
 | `AllowedHosts` | recommended | Host filtering, `*` by default |
+| `AI_ENABLED` | no (empty) | Emergency stop of AI: exactly `false` closes the runtime setting `ai_enabled` whatever the service says; it can never open it (anything else is ignored with a warning) |
 | `CORS_ALLOWED_ORIGINS` (`Cors__AllowedOrigins`) | no | Optional operator restriction of browser origins on `/api` (#177), comma-separated. Empty = a preflight passes an origin that an active browser token lists (cached 30 s), the server's own origin, or localhost in Development; set = the origin must also be in this list. The real request is always checked against the origin of its own token. `Access-Control-Allow-Credentials` is never sent and a cross-origin request loses its session cookie |
-| `AUTH_REAUTH_MINUTES` | no (15) | Step-up re-authentication: creating an API token and changing billing need a password or e-mailed code confirmed within this many minutes; otherwise `403 REAUTH_REQUIRED` and a confirmation form (`/Account/Reauth`) |
-| `AUTH_OTP_MAX_FAILED_ATTEMPTS` | no (5) | Wrong 2FA codes after which the code is void. The count is cleared only by a successful code or a password reset, not by signing in again |
-| `AUTH_ACCOUNT_MAX_ATTEMPTS` / `AUTH_ACCOUNT_WINDOW_MINUTES` | no (30 / 15) | Sign-in and 2FA attempts per account whatever the IP (on top of the per-IP+address limit), counted in PostgreSQL |
-| `MAX_API_TOKENS_PER_USER` | no (100) | Live API tokens per account; 0 = no limit |
+| `AUTH_REAUTH_MINUTES` | no (runtime setting, 15) | Step-up re-authentication: creating an API token and changing billing need a password or e-mailed code confirmed within this many minutes; otherwise `403 REAUTH_REQUIRED` and a confirmation form (`/Account/Reauth`) |
+| `AUTH_OTP_MAX_FAILED_ATTEMPTS` | no (runtime setting, 5) | Wrong 2FA codes after which the code is void. The count is cleared only by a successful code or a password reset, not by signing in again |
+| `AUTH_ACCOUNT_MAX_ATTEMPTS` / `AUTH_ACCOUNT_WINDOW_MINUTES` | no (runtime settings, 30 / 15) | Sign-in and 2FA attempts per account whatever the IP (on top of the per-IP+address limit), counted in PostgreSQL |
+| `MAX_API_TOKENS_PER_USER` / `MAX_PENDING_PRESIGNS_PER_USER` / `MAX_TEMPLATES_PER_USER` | no (runtime settings, 100 / 20 / 100) | Live API tokens, presigns waiting for `/api/sign` and stored templates per account; 0 = no limit (env only) |
 | `GLOBAL_CONCURRENCY_LIMIT` / `GLOBAL_CONCURRENCY_WAIT_MS` | no (off / 2000) | Cap on concurrent operations of the whole server (#69), taken after the user's own slot. Empty or `0` = off; a start hypothesis is H + R + A (logged at startup), to be set only once every caller's own limit is below it (otherwise the caller gets `503`). A request waits up to the given milliseconds for a slot of the global, heavy or AI pool, then gets `503` + `Retry-After`. Negative values stop the server at start; this variable wins over `Billing__GlobalConcurrencyLimit`. Note: a flood of find-codes scans holds a slot of G and of the user's limit for up to `RASTER_WAIT_MS` (30 s) per page while it waits for pool R |
 | `THREADPOOL_MIN_WORKER_THREADS` | no (CPUs + TSA call limit) | Minimum worker threads of the thread pool (#69): below it the pool adds threads at once, above it about one or two a second, and every timestamp-authority call blocks a thread. Empty = CPUs + `TSA_MAX_CONCURRENT_CALLS`; `0` = the .NET default; `1`-`10000` as given; anything else stops the start. It only raises the .NET default. The value in force is logged at startup and shown on `/internal/concurrency` |
 | `HEAVY_OPERATIONS_LIMIT` / `AI_OPERATIONS_LIMIT` | no (off / off) | Pools H and A (#69): presign, sign, sign-pfx, visual-sign, timestamp, extend-signature, fill-pdf and PDF/A at once, and AI calls at once. Empty or `0` = off. Start hypotheses: H = the CPU count, A = 4. Full after `GLOBAL_CONCURRENCY_WAIT_MS` = `503` + `Retry-After: 10`. Negative or above 10000 stops the server at start |
@@ -275,7 +339,6 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `P4Backoffice__Email__From` / `__ReplyTo` (compose: `P4_BACKOFFICE_EMAIL_FROM` / `_REPLY_TO`) | | Sender and Reply-To of every message; the sender's domain must be the one configured for the environment in the service. Empty = the service's default |
 | `EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64` / `EVIDENCE_ENCRYPTION_CERTIFICATE_PEM` | no, but see purpose | Public RSA certificate that encrypts the SES evidence attachment (CMS, key transport RSA PKCS#1 v1.5 + AES-256-CBC) when `/api/attachment` asks for `UseConfiguredEncryptionCertificate` (#513). A certificate sent in the request (`EncryptForCertificatePem`) wins; the SaaS portal sends one from Key Vault (`EVIDENCE_ENCRYPTION_SOURCE=keyvault`), so this is for TEST, a standalone server and on-prem. Neither one = `503 EVIDENCE_CERT_NOT_CONFIGURED` before any operation or charge, and a Production start logs an error (it does not stop: the caller may send the certificate). Never put the private key here |
 | `OsTicket__Url` / `OsTicket__ApiKey` | | Support form; without them (and with `Modules:Support` not `On`) the routes 404 and the nav entry hides |
-| `AI__Enabled` / `AI__Google__ApiKey` | | AI-assisted template field detection; `AI__Enabled` is on only when exactly `true`, otherwise every `/api/ai/*` route answers 403 `AI_DISABLED` |
 | `Sentry__Dsn` | | Error monitoring; disabled when empty |
 | `Loki__Url` | | Log shipping; disabled when empty |
 | `Limits__*` | | Request/PDF/image/attachment size caps |
@@ -397,24 +460,25 @@ modules `Off` (processing and polling stop; the tables stay).
 The `/Legal/*` pages (`Controllers/LegalController.cs`) read their text through
 `ILegalDocumentSource` (`Services/Legal/`):
 
-- `Off` — the hand-maintained `LegalDocuments` rows (`Source = manual`,
-  Markdown), then the static Razor views. Exactly the behaviour before the
-  integration.
-- `On` — the service's sanitized HTML (all eight documents, `oss` and
-  `license` included; slug ↔ type map in `LegalSlugMap`). A page reads the
-  in-memory copy and never waits for the service: a stale copy is shown while
-  it is revalidated (`If-None-Match`) in the background, and without one the
-  page reads the snapshot in `LegalDocuments` (`Source = backoffice`, or the
-  service HTML stored next to a manual row of the same version), then English,
-  then Razor. After a failed call the service is left alone for 30 s.
-  `document.published` / `document.minor_corrected` refetch the text right
-  away; `document.scheduled` / `unscheduled` update `docs:meta` in
+- `Off` — only the `LegalDocuments` snapshot (the service's last answer).
+- `On` — the service's sanitized HTML (terms, privacy, DPA, SLA, refund and
+  cookies; slug ↔ type map in `LegalSlugMap`). A page reads the in-memory copy
+  and never waits for the service: a stale copy is shown while it is
+  revalidated (`If-None-Match`) in the background, and without one the page
+  reads the snapshot in `LegalDocuments`, then English. After a failed call the
+  service is left alone for 30 s. `document.published` /
+  `document.minor_corrected` refetch the text right away;
+  `document.scheduled` / `unscheduled` update `docs:meta` in
   `BackofficeStates` (`requires_consent`, `current_version`,
   `required_version`, `upcoming`). A startup warm-up and the `window_clamped`
   resync rebuild both.
 
-Rollback: `P4Backoffice__Modules__Docs=Off`. Snapshot rows are ignored in
-`Off` and can stay.
+There is no static text: without a document (service down, cold start, empty
+snapshot, type not published) the page answers 503 with `Retry-After` and a
+notice. Only `License` and `OpenSourceNotices` (AGPL obligations) are static
+pages. A private server has no `/Legal` routes at all.
+
+Rollback: `P4Backoffice__Modules__Docs=Off` (snapshot only).
 
 The cookies policy (`/Legal/CookiesPolicy`) lists the cookies in a table under
 the text. With `Docs=On` the table comes from the service's cookie declaration
@@ -423,8 +487,7 @@ read from memory or the `cookies:{locale}` snapshot in `BackofficeStates`,
 revalidated in the background, and refetched on `cookie_declaration.published`
 (webhook or polling), at startup and on the `window_clamped` resync. Otherwise
 — and whenever no declaration is available — the table shows the audited
-cookies in `Services/Legal/AuditedCookies.cs`; the Razor fallback page shows
-the same list.
+cookies in `Services/Legal/AuditedCookies.cs`.
 
 #### Cookie banner
 

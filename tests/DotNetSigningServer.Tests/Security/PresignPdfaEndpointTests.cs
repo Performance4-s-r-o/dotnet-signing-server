@@ -75,13 +75,15 @@ public class PresignPdfaEndpointTests : IDisposable
             Ok((await work(CancellationToken.None)).Body);
     }
 
-    private Harness Controller(BillingOptions? billing = null, HttpContent? multipart = null, bool runWork = false)
+    private Harness Controller(BillingOptions? billing = null, HttpContent? multipart = null, bool runWork = false, DotNetSigningServer.Services.Pricing.IOperationPrices? prices = null)
     {
         var limits = new LimitsOptions { RejectActiveContent = true };
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddMvcCore();
         services.AddSingleton(_db);
+        services.AddSingleton(prices ?? TestRuntimeSettings.NoPriceList);
+        services.AddSingleton<DotNetSigningServer.Services.Settings.IRuntimeSettings>(TestRuntimeSettings.Defaults);
         services.AddSingleton(TestHelpers.WrapOptions(limits));
         services.AddSingleton(new PdfSafetyGuard(TestHelpers.WrapOptions(limits)));
         services.AddSingleton(new PdfConversionService(NullLogger<PdfConversionService>.Instance));
@@ -225,7 +227,7 @@ public class PresignPdfaEndpointTests : IDisposable
     [Fact]
     public async Task Flatten_and_convert_in_one_presign_and_the_price_waits_for_the_signature()
     {
-        var controller = Controller(billing: new BillingOptions { FlattenFormCredits = 1 });
+        var controller = Controller();
         var (status, _, body) = Describe(await controller.PreSign(Input(PresignPdfaTests.ScriptedFormEmbedded(), flatten: true, convert: true)));
 
         Assert.Equal(200, status);
@@ -323,7 +325,7 @@ public class PresignPdfaEndpointTests : IDisposable
     [Fact]
     public async Task Visual_sign_prepares_draws_into_the_PDFA_and_adds_the_preparation_to_its_price()
     {
-        var controller = Controller(billing: new BillingOptions { FlattenFormCredits = 1 }, runWork: true);
+        var controller = Controller(runWork: true);
         var (status, _, body) = Describe(await controller.ApplyVisualSign(VisualInput(PresignPdfaTests.ScriptedFormEmbedded(), flatten: true, convert: true, conformance: "PDF/A-3B")));
 
         Assert.Equal(200, status);
@@ -351,7 +353,7 @@ public class PresignPdfaEndpointTests : IDisposable
     [Fact]
     public async Task Timestamp_takes_the_preparation_into_its_reservation()
     {
-        var paying = Controller(billing: new BillingOptions { FlattenFormCredits = 1 });
+        var paying = Controller();
         Assert.Equal(200, Describe(await paying.ApplyTimestamp(TimestampInput(PresignPdfaTests.ScriptedFormEmbedded(), flatten: true, convert: true))).Status);
         Assert.Equal(("timestamp", 3), paying.Calls.Single());
     }

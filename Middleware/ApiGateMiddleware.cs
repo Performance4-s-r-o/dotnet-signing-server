@@ -79,9 +79,8 @@ public class ApiGateMiddleware
             return;
         }
 
-        // AI switch (fail-closed): before the body, billing and the model.
-        if (IsAiPath(value)
-            && context.RequestServices.GetService<IOptions<AiOptions>>()?.Value.Enabled != true)
+        // AI kill switch (runtime setting ai_enabled, fail-closed): before the body, billing and the model.
+        if (IsAiPath(value) && !AiEnabled(context.RequestServices))
         {
             await WriteAsync(context, StatusCodes.Status403Forbidden, "AI_DISABLED");
             return;
@@ -219,6 +218,11 @@ public class ApiGateMiddleware
         }
         return _switches.Names;
     }
+
+    /// <summary>Off without the settings service registered, as without a fresh "on" from it.</summary>
+    private static bool AiEnabled(IServiceProvider services) =>
+        services.GetService<DotNetSigningServer.Services.Settings.IRuntimeSettings>() is { } settings
+        && DotNetSigningServer.Services.Settings.RuntimeSettingsExtensions.AiEnabled(settings);
 
     private static bool IsAiPath(string value) =>
         value.Equals("/api/ai", StringComparison.OrdinalIgnoreCase)

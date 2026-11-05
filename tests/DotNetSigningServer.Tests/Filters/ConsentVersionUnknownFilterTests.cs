@@ -32,7 +32,9 @@ public class ConsentVersionUnknownFilterTests
         Filter().OnException(context);
 
         Assert.True(context.ExceptionHandled);
-        Assert.Equal(503, Assert.IsType<ContentResult>(context.Result).StatusCode);
+        var result = Assert.IsType<ContentResult>(context.Result);
+        Assert.Equal(503, result.StatusCode);
+        Assert.StartsWith("LEGAL_DOCUMENT_UNAVAILABLE: ", result.Content);
     }
 
     [Fact]

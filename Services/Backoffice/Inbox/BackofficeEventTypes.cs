@@ -21,6 +21,9 @@ public static class BackofficeEventTypes
     public const string BillingPaymentFailed = "billing.payment.failed";
     public const string BillingPaymentMethodDetached = "billing.payment_method.detached";
 
+    /// <summary>A runtime setting changed in the environment of the key; data carries keys and a version, never values.</summary>
+    public const string SettingsChanged = "settings.changed";
+
     /// <summary>The subject asked P4 to be erased (#217): erase locally and ack the product target.</summary>
     public const string SubjectErasureRequested = "subject.erasure.requested";
 
@@ -40,5 +43,6 @@ public static class BackofficeEventTypes
         SupportTicketFailed,
         BillingCheckoutCompleted, BillingPaymentSucceeded, BillingPaymentFailed, BillingPaymentMethodDetached,
         SubjectErasureRequested,
+        SettingsChanged,
     ];
 }

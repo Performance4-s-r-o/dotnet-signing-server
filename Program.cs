@@ -207,8 +207,6 @@ DotNetSigningServer.Services.Ops.OpsAlertRegistration.AddOpsAlerts(builder.Servi
 DotNetSigningServer.Services.Ops.JobHeartbeatRegistration.AddJobHeartbeats(builder.Services, builder.Configuration);
 // Ship all ILogger output (not just unhandled exceptions) to Loki.
 builder.Services.AddSingleton<ILoggerProvider, DotNetSigningServer.Logging.LokiLoggerProvider>();
-// The model gets 60 s; the caller's RequestAborted is passed on per call (#72).
-builder.Services.AddHttpClient<TemplateAiService>(c => c.Timeout = TimeSpan.FromSeconds(60));
 builder.Services.AddHttpClient("osticket", client =>
 {
     var timeout = builder.Configuration.GetValue<int?>("OsTicket:TimeoutSeconds") ?? 10;
@@ -230,29 +228,12 @@ builder.Services.AddSwaggerGen(options =>
 });
 builder.Services.Configure<BillingOptions>(builder.Configuration.GetSection("Billing"));
 builder.Services.Configure<TokenOptions>(builder.Configuration.GetSection("Token"));
-builder.Services.AddOptions<SessionSecurityOptions>()
-    .Bind(builder.Configuration.GetSection(SessionSecurityOptions.SectionName))
-    .PostConfigure(options =>
-    {
-        // docker-compose passes the raw names (#80); see EnvValues for why not Auth__*.
-        options.ReauthMinutes = EnvValues.Int(builder.Configuration, "AUTH_REAUTH_MINUTES") ?? options.ReauthMinutes;
-        options.OtpMaxFailedAttempts = EnvValues.Int(builder.Configuration, "AUTH_OTP_MAX_FAILED_ATTEMPTS") ?? options.OtpMaxFailedAttempts;
-        options.AccountMaxAttempts = EnvValues.Int(builder.Configuration, "AUTH_ACCOUNT_MAX_ATTEMPTS") ?? options.AccountMaxAttempts;
-        options.AccountWindowMinutes = EnvValues.Int(builder.Configuration, "AUTH_ACCOUNT_WINDOW_MINUTES") ?? options.AccountWindowMinutes;
-    })
-    .ValidateOnStart();
-builder.Services.AddOptions<LimitsOptions>()
-    .PostConfigure(options =>
-        options.MaxApiTokensPerUser = EnvValues.Int(builder.Configuration, "MAX_API_TOKENS_PER_USER") ?? options.MaxApiTokensPerUser)
-    .ValidateOnStart();
+// Auth limits and the per-account caps are runtime settings (Services/Settings), env = override.
 builder.Services.AddScoped<AuthAttemptLimiter>();
 // Provisioning API of the integrator (#131): limits from PROVISIONING_*; nonsense stops the start.
 builder.Services.AddSingleton(ProvisioningOptions.From(builder.Configuration));
 builder.Services.AddScoped<DotNetSigningServer.Services.Provisioning.AccountProvisioner>();
 builder.Services.Configure<LokiOptions>(builder.Configuration.GetSection("Loki"));
-builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("AI"));
-// The switch is read from the raw text, not bound: only exactly "true" turns AI on.
-builder.Services.PostConfigure<AiOptions>(o => o.Enabled = AiSwitch.IsOn(builder.Configuration["AI:Enabled"]));
 builder.Services.Configure<LimitsOptions>(builder.Configuration.GetSection("Limits"));
 builder.Services.Configure<RateLimitOptions>(builder.Configuration.GetSection("RateLimits"));
 DotNetSigningServer.Middleware.RateLimiting.Register(builder.Services, builder.Configuration);
@@ -404,11 +385,6 @@ builder.Services.AddOptions<BillingOptions>()
     .Bind(builder.Configuration.GetSection("Billing"))
     .PostConfigure(options =>
     {
-        options.FlattenFormCredits = EnvValues.Int(builder.Configuration, "FLATTEN_FORM_CREDIT_COST") ?? options.FlattenFormCredits;
-        if (options.FlattenFormCredits < 0)
-        {
-            throw new InvalidOperationException("FLATTEN_FORM_CREDIT_COST must be 0 (free) or a positive number of credits.");
-        }
         options.GlobalConcurrencyLimit = EnvValues.Int(builder.Configuration, "GLOBAL_CONCURRENCY_LIMIT") ?? options.GlobalConcurrencyLimit;
         options.GlobalConcurrencyWaitMilliseconds = EnvValues.Int(builder.Configuration, "GLOBAL_CONCURRENCY_WAIT_MS") ?? options.GlobalConcurrencyWaitMilliseconds;
         // A value that makes no sense stops the server, it does not quietly switch the cap off.

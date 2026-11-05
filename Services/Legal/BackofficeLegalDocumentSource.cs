@@ -10,7 +10,7 @@ namespace DotNetSigningServer.Services.Legal;
 /// Without a copy in memory (cold start, outage) the page reads the snapshot in
 /// <c>LegalDocuments</c> through <see cref="DbLegalDocumentSource"/> (the requested locale, then
 /// English) and a fetch starts in the background; with an empty snapshot the result is null and
-/// the controller renders the static Razor view. The request never waits for the service and
+/// the controller renders the "not available" page. The request never waits for the service and
 /// this never throws.
 /// </summary>
 public sealed class BackofficeLegalDocumentSource : ILegalDocumentSource

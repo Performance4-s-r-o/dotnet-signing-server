@@ -1,3 +1,4 @@
+using DotNetSigningServer.Services.Settings;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using DotNetSigningServer.Data;
@@ -221,7 +222,7 @@ public sealed class ProvisionedAccountApiController : ProvisioningControllerBase
         }
 
         var hash = _provisioner.HashOf(value);
-        var max = _limits.Value.MaxApiTokensPerUser;
+        var max = HttpContext.RequestServices.GetRequiredService<Services.Settings.IRuntimeSettings>().MaxApiTokensPerUser();
         // Check and insert under the value's lock (#131), as when provisioning.
         var (outcome, _) = await _provisioner.UnderTokenLockAsync(hash, async token =>
         {

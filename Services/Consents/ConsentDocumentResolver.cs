@@ -28,13 +28,13 @@ public sealed record ConsentDocumentVersion(
 /// <summary>
 /// Which version of each consent document a form shows, from local data only — never from the
 /// service: the text a reader of <c>/Legal/…</c> gets (<see cref="ILegalDocumentSource"/>: the
-/// service's cached copy, the <c>LegalDocuments</c> snapshot or hand-maintained rows), then
+/// service's cached copy, or the <c>LegalDocuments</c> snapshot), then
 /// <c>docs:meta</c>, then version 1 for a document with a static page. A document with none of these
 /// throws <see cref="ConsentVersionUnknownException"/> (no consent is recorded with a made-up version).
 /// </summary>
 public sealed class ConsentDocumentResolver
 {
-    /// <summary>The static Razor page of a legal document, imported into the service as v1.</summary>
+    /// <summary>Version 1 of a legal document in the service (the former static page, imported there).</summary>
     public const int StaticPageVersion = 1;
 
     private readonly ApplicationDbContext _db;
@@ -72,6 +72,17 @@ public sealed class ConsentDocumentResolver
             _logger.LogWarning(ex, "[consents] docs:meta unavailable; using the legal documents only");
         }
 
+        // A private server (on-prem) never asks for nor records consent to the service's documents:
+        // it has no sign-up, and the documents are not its own. Refused here too, should a path appear.
+        var options = _options?.Value;
+        if (options?.DisabledReason == BackofficeDisabledReason.PrivateServer)
+        {
+            throw new ConsentVersionUnknownException(requirements.FirstOrDefault()?.Document ?? "terms");
+        }
+        // Version 1 without a published text is a development and test convenience only: in
+        // Production (DefaultOn) a document nobody can read is never consented to.
+        var staticFallback = !docsOn && options is not { DefaultOn: true };
+
         var result = new List<ConsentDocumentVersion>();
         foreach (var requirement in requirements)
         {
@@ -79,13 +90,16 @@ public sealed class ConsentDocumentResolver
             var shown = slug is null ? null : await _documents.GetAsync(slug, uiLocale, cancellationToken);
             var entry = meta?.Documents.GetValueOrDefault(requirement.Document);
 
-            // No published text: a document with a static page is v1 (what /Legal/<slug> shows),
+            // No published text: a document of the product is v1,
             // unless docs:meta says a newer one is in force, which the reader cannot see now.
             // A document with no page takes the meta version. Nothing known: refuse, don't invent.
+            // With Docs On there is no fallback to v1: a document the service has not published is
+            // refused loudly (LEGAL_DOCUMENT_UNAVAILABLE). v1 stays only with Docs not On outside
+            // Production (dev, tests).
             int? known = shown?.Version
                 ?? (slug is null
                     ? entry?.CurrentVersion
-                    : entry?.CurrentVersion is null or StaticPageVersion ? StaticPageVersion : null);
+                    : !staticFallback ? null : entry?.CurrentVersion is null or StaticPageVersion ? StaticPageVersion : null);
             var version = known ?? throw new ConsentVersionUnknownException(requirement.Document);
             var locale = shown?.Locale ?? LegalLocales.Default;
             var fromMeta = entry?.CurrentVersion == version;
@@ -137,7 +151,7 @@ public sealed class ConsentDocumentResolver
 
 /// <summary>No local source names a version of a consent document, so no consent can be recorded for it.</summary>
 public sealed class ConsentVersionUnknownException(string document)
-    : InvalidOperationException($"No version of the consent document '{document}' is known (no published text, docs:meta or static page).")
+    : InvalidOperationException($"No version of the consent document '{document}' is known (no published text or docs:meta).")
 {
     public string Document { get; } = document;
 }

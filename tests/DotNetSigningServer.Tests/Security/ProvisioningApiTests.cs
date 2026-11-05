@@ -500,7 +500,7 @@ public class ProvisioningApiTests : IClassFixture<WebUiAuthFixture>
     [DockerFact]
     public async Task The_pending_presign_cap_is_per_tenant()
     {
-        await using var app = _fx.App.WithWebHostBuilder(b => b.UseSetting("Limits:MaxPendingPresignsPerUser", "1")
+        await using var app = _fx.App.WithWebHostBuilder(b => b.UseSetting("MAX_PENDING_PRESIGNS_PER_USER", "1")
             .ConfigureTestServices(s =>
             {
                 s.RemoveAll<ProvisioningOptions>();
