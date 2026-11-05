@@ -28,6 +28,10 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      # Ghostscript renders pages for AI hidden-text protection and code scanning; without it those tests cannot run.
+      - name: Install Ghostscript
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ghostscript
+
       - name: Cache NuGet packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
