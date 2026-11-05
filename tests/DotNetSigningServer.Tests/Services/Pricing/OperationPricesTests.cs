@@ -68,10 +68,14 @@ public class OperationPricesTests
         [
             "sign", "sign_pfx", "timestamp", "visual_sign", "extend_signature", "attachment",
             "pdfa_convert", "flatten_form", "fill_pdf", "find_codes", "ai_detect_fields", "ai_extract",
+            "ai_detect_fields_pages", "ai_extract_pages",
         ];
         Assert.Equal(catalog.Order(), PricedOperations.Manifest.Select(o => o.Key).Order());
         Assert.True(PricedOperations.Get("ai_extract").RequiresPrice);
         Assert.True(PricedOperations.Get("ai_detect_fields").RequiresPrice);
+        Assert.True(PricedOperations.Get("ai_extract_pages").RequiresPrice);
+        Assert.True(PricedOperations.Get("ai_detect_fields_pages").RequiresPrice);
+        Assert.Equal("5 pages", PricedOperations.Get("ai_extract_pages").Unit);
         Assert.All(PricedOperations.Manifest.Where(o => !o.Key.StartsWith("ai_")), o => Assert.False(o.RequiresPrice));
         Assert.All(PricedOperations.Manifest, o => Assert.Matches("^[a-z][a-z0-9_]{1,39}$", o.Key));
     }
@@ -99,6 +103,23 @@ public class OperationPricesTests
             PricedOperations.Get(key!);
         }
         Assert.Equal(charged.Order(), PricedOperations.ByApiOperation.Keys.Order());
+    }
+
+    /// <summary>Every operation of the manifest is charged somewhere in the controllers (no dead entry).</summary>
+    [Fact]
+    public void Every_manifest_operation_is_charged_in_the_code()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "Controllers"))) dir = dir.Parent;
+        var code = string.Concat(Directory.GetFiles(Path.Combine(dir!.FullName, "Controllers"), "*.cs").Select(File.ReadAllText));
+        var constants = typeof(PricedOperations).GetFields()
+            .Where(f => f.IsLiteral && f.FieldType == typeof(string))
+            .ToDictionary(f => (string)f.GetRawConstantValue()!, f => f.Name);
+        foreach (var operation in PricedOperations.Manifest)
+        {
+            Assert.True(constants.TryGetValue(operation.Key, out var name), operation.Key);
+            Assert.True(code.Contains("PricedOperations." + name), $"{operation.Key} is in the manifest but never charged");
+        }
     }
 
     [Fact]

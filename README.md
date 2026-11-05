@@ -261,8 +261,12 @@ Credits per operation come from the price list in force (`credit_costs` of
 `GET /v1/pricing/current`, the last known snapshot during an outage): `sign`, `sign_pfx`,
 `timestamp`, `visual_sign`, `extend_signature`, `attachment`, `flatten_form`, `pdfa_convert`
 (per started three pages), `fill_pdf` (per started three pages of each document), `find_codes`
-(per started three scanned pages), `ai_detect_fields`, `ai_extract`. A missing price costs 1 credit;
-`0` is free. The AI operations require a price: without one they are not offered
+(per started three scanned pages), `ai_detect_fields` and `ai_extract` (the base, which covers the
+first 5 pages sent to the model), `ai_detect_fields_pages` and `ai_extract_pages` (per further started
+5 pages sent to the model: `max(0, ⌈(pages − 5) / 5⌉)`, counted after `pageFrom` / `pageTo` and the
+20-page limit, before the model is called). The unit of each operation is set by this product in the
+manifest; the price list holds the credits per unit. A missing price costs 1 credit;
+`0` is free. The four AI operations require a price: without any of them AI is not offered
 (`503 OPERATION_NOT_OFFERED`), never free. With `Modules:Pricing` Off (on-prem) there is no price
 list: every operation costs 1 credit, and AI is not offered. At start the server sends its
 operations manifest (`PUT /v1/pricing/operations`); a failure does not stop the start.

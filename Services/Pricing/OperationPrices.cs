@@ -28,6 +28,18 @@ public static class PricedOperations
     public const string FindCodes = "find_codes";
     public const string AiDetectFields = "ai_detect_fields";
     public const string AiExtract = "ai_extract";
+    public const string AiDetectFieldsPages = "ai_detect_fields_pages";
+    public const string AiExtractPages = "ai_extract_pages";
+
+    /// <summary>Pages the base price of an AI operation covers.</summary>
+    public const int AiPagesIncluded = 5;
+
+    /// <summary>Pages per unit of the AI page surcharge.</summary>
+    public const int AiPagesPerUnit = 5;
+
+    /// <summary>Surcharge units: every started <see cref="AiPagesPerUnit"/> pages past the first <see cref="AiPagesIncluded"/> sent to the model.</summary>
+    public static int AiExtraPageUnits(int pages) =>
+        Math.Max(0, (pages - AiPagesIncluded + AiPagesPerUnit - 1) / AiPagesPerUnit);
 
     /// <summary>Credits per unit when the price list has no price (and the operation does not require one).</summary>
     public const int MissingPriceCredits = 1;
@@ -44,8 +56,10 @@ public static class PricedOperations
         new(FlattenForm, "Form flattening", "Also when a document is prepared for signing.", "operation", 1, false),
         new(FillPdf, "Template fill", "Per 3 pages of each generated document.", "3 pages", 1, false),
         new(FindCodes, "Code search", "Per 3 scanned pages.", "3 pages", 1, false),
-        new(AiDetectFields, "AI field detection", "/api/ai/detect-fields.", "operation", 2, true),
-        new(AiExtract, "AI data extraction", "/api/ai/extract-data.", "operation", 2, true),
+        new(AiDetectFields, "AI field detection", "/api/ai/detect-fields, including the first 5 pages.", "operation", 2, true),
+        new(AiDetectFieldsPages, "AI field detection, further pages", "Per further started 5 pages sent to the model.", "5 pages", 1, true),
+        new(AiExtract, "AI data extraction", "/api/ai/extract-data, including the first 5 pages.", "operation", 2, true),
+        new(AiExtractPages, "AI data extraction, further pages", "Per further started 5 pages sent to the model.", "5 pages", 1, true),
     ];
 
     /// <summary>The priced key behind each charged API operation (the name passed to <c>RunOperationAsync</c>).</summary>

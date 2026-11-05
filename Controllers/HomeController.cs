@@ -124,7 +124,12 @@ public class HomeController : Controller
     [CookieAuthorize]
     public async Task<IActionResult> TemplateBuilder()
     {
-        ViewData["AiDetectEnabled"] = await _ai.IsAvailableAsync(HttpContext.RequestAborted);
+        // The same rule as ai.detectFields of /api/capabilities: no button for an operation without a price.
+        ViewData["AiDetectEnabled"] = await _ai.IsOfferedAsync(
+            HttpContext.RequestServices.GetRequiredService<DotNetSigningServer.Services.Pricing.IOperationPrices>(),
+            DotNetSigningServer.Services.Pricing.PricedOperations.AiDetectFields,
+            DotNetSigningServer.Services.Pricing.PricedOperations.AiDetectFieldsPages,
+            HttpContext.RequestAborted);
         // The builder compiles JSX in the browser (Babel), which needs eval.
         HttpContext.Items[DotNetSigningServer.Middleware.ContentSecurityPolicyMiddleware.AllowEvalKey] = true;
         return View();

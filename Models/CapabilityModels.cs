@@ -49,4 +49,7 @@ public class AiCapability
 {
     /// <summary>False while the AI switch is off or the feature is not configured.</summary>
     public bool Enabled { get; set; }
+
+    /// <summary>Field detection is offered too (switch on, a usable provider and both its prices).</summary>
+    public bool DetectFields { get; set; }
 }

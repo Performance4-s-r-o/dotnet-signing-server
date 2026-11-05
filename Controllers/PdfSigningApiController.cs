@@ -838,9 +838,15 @@ namespace DotNetSigningServer.Controllers
 
             // No platform seal exists; the field only reports that.
             // AI: switched on, a usable provider and a price for data extraction (never offered free).
-            var aiOn = Prices.IsOffered(PricedOperations.AiExtract)
-                && await HttpContext.RequestServices.GetRequiredService<Services.Ai.AiGateway>().IsAvailableAsync(HttpContext.RequestAborted);
-            return Ok(new ServerCapabilities { Seal = new SealCapability { Enabled = false }, Ai = new AiCapability { Enabled = aiOn } });
+            // `enabled` keeps meaning data extraction; `detectFields` adds field detection (its own prices).
+            var gateway = HttpContext.RequestServices.GetService<Services.Ai.AiGateway>();
+            var aiOn = gateway != null && await gateway.IsOfferedAsync(Prices, PricedOperations.AiExtract, PricedOperations.AiExtractPages, HttpContext.RequestAborted);
+            var detectOn = gateway != null && await gateway.IsOfferedAsync(Prices, PricedOperations.AiDetectFields, PricedOperations.AiDetectFieldsPages, HttpContext.RequestAborted);
+            return Ok(new ServerCapabilities
+            {
+                Seal = new SealCapability { Enabled = false },
+                Ai = new AiCapability { Enabled = aiOn, DetectFields = detectOn },
+            });
         }
 
         [HttpPost("/api/inspect-signatures")]

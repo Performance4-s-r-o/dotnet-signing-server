@@ -176,19 +176,28 @@ namespace DotNetSigningServer.Controllers
             }
 
             // Bad input is refused before payment (400 before 402), like convert/fill/find-codes.
-            byte[] pdf;
+            // The pages are selected here too: the price depends on how many the model reads.
+            AiDocument document;
             try
             {
-                pdf = GuardedPdfFromBase64(input.PdfContent, "AI detect");
                 EnsurePageRange(input.PageFrom, input.PageTo);
+                var pdf = GuardedPdfFromBase64(input.PdfContent, "AI detect");
+                document = _templateAiService.SelectPages(pdf, input.PageFrom, input.PageTo);
             }
             catch (ApiValidationException ex)
             {
                 return InputRefused(ex);
             }
+            catch (Exception ex)
+            {
+                // Reading the pages failed in a way the guards did not foresee: nothing was charged.
+                Logger.LogError(Logging.LoggingEvents.ApiError, ex, "AI page selection failed");
+                return Problem(Localizer["AiDetectionFailed"].Value);
+            }
 
-            return await RunAiAsync(user, "ai-detect-fields", PricedOperations.AiDetectFields, input, "AiDetectionFailed",
-                async ct => new PaidResult(await _templateAiService.DetectFieldsAsync(input, pdf, ct)));
+            return await RunAiAsync(user, "ai-detect-fields", PricedOperations.AiDetectFields, PricedOperations.AiDetectFieldsPages,
+                document.PageCount, input, "AiDetectionFailed",
+                async ct => new PaidResult(await _templateAiService.DetectFieldsAsync(input, document, ct)));
         }
 
         [CapacityPool(CapacityPoolKind.Ai)]
@@ -209,12 +218,13 @@ namespace DotNetSigningServer.Controllers
             }
 
             // Columns, examples and the page range are checked before payment and before the model (#222).
-            byte[] pdf;
+            AiDocument document;
             try
             {
                 AiExtraction.Validate(input.Columns, input.Examples);
                 EnsurePageRange(input.PageFrom, input.PageTo);
-                pdf = GuardedPdfFromBase64(input.PdfContent, "AI extract-data");
+                var pdf = GuardedPdfFromBase64(input.PdfContent, "AI extract-data");
+                document = _templateAiService.SelectPages(pdf, input.PageFrom, input.PageTo);
             }
             catch (ApiValidationException ex)
             {
@@ -224,9 +234,16 @@ namespace DotNetSigningServer.Controllers
                 }
                 return InputRefused(ex);
             }
+            catch (Exception ex)
+            {
+                // Reading the pages failed in a way the guards did not foresee: nothing was charged.
+                Logger.LogError(Logging.LoggingEvents.ApiError, ex, "AI page selection failed");
+                return Problem(Localizer["AiExtractionFailed"].Value);
+            }
 
-            return await RunAiAsync(user, "ai-extract-data", PricedOperations.AiExtract, input, "AiExtractionFailed",
-                async ct => new PaidResult(await _templateAiService.ExtractDataAsync(input, pdf, ct)));
+            return await RunAiAsync(user, "ai-extract-data", PricedOperations.AiExtract, PricedOperations.AiExtractPages,
+                document.PageCount, input, "AiExtractionFailed",
+                async ct => new PaidResult(await _templateAiService.ExtractDataAsync(input, document, ct)));
         }
 
         private static void EnsurePageRange(int? from, int? to)
@@ -238,17 +255,22 @@ namespace DotNetSigningServer.Controllers
         }
 
         /// <summary>
-        /// The paid part of an AI call: the price (not offered without one), the reservation, the call, and
+        /// The paid part of an AI call: the price — the base, which covers the first
+        /// <see cref="PricedOperations.AiPagesIncluded"/> pages, plus the surcharge per further started
+        /// <see cref="PricedOperations.AiPagesPerUnit"/> pages the model gets; not offered when either has
+        /// no price — the reservation, the call, and
         /// its failures as codes — 403 AI_DISABLED, 503 AI_UNAVAILABLE, 422 AI_REFUSED, 502 AI_INVALID_OUTPUT /
         /// AI_PROVIDER_ERROR. A failed call releases the reservation.
         /// </summary>
-        private async Task<IActionResult> RunAiAsync(User user, string operation, string priceKey, object input, string failedKey,
-            Func<CancellationToken, Task<PaidResult>> work)
+        private async Task<IActionResult> RunAiAsync(User user, string operation, string priceKey, string pagesPriceKey, int pages,
+            object input, string failedKey, Func<CancellationToken, Task<PaidResult>> work)
         {
             int cost;
             try
             {
-                cost = Prices.Credits(priceKey);
+                // Both require a price: the surcharge is checked even when it is 0 units, so AI is never
+                // sold with half a price list.
+                cost = checked(Prices.Credits(priceKey) + Prices.Credits(pagesPriceKey, PricedOperations.AiExtraPageUnits(pages)));
             }
             catch (OperationNotOfferedException ex)
             {
