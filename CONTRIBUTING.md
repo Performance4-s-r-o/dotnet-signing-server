@@ -19,6 +19,14 @@ git commit -s -m "fix(signing): ..."
 `-s` appends a `Signed-off-by:` trailer using your `git config user.name` and
 `user.email`.
 
+## Updating dependencies and the lock file
+
+Every NuGet change needs `scripts/refresh-release-lockfile.sh`: Dependabot does
+not refresh `packages.release.lock.json`, so its PRs would fail on `NU1004`
+in `--locked-mode`. The script regenerates all lock files and re-checks them in
+locked mode; commit the result. Major versions of iText and BouncyCastle are
+ignored by Dependabot and go in by hand, with the signing tests.
+
 ## Getting set up
 
 ```bash
