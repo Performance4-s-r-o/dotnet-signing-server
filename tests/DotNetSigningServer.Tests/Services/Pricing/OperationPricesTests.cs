@@ -87,7 +87,7 @@ public class OperationPricesTests
         foreach (var file in Directory.GetFiles(Path.Combine(dir!.FullName, "Controllers"), "*.cs"))
         {
             var text = File.ReadAllText(file);
-            foreach (Match m in Regex.Matches(text, @"RunOperationAsync\(\s*user,\s*""([a-z-]+)"""))
+            foreach (Match m in Regex.Matches(text, @"Run(?:Operation|Ai)Async\(\s*user,\s*""([a-z-]+)"""))
             {
                 charged.Add(m.Groups[1].Value);
             }

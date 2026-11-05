@@ -150,9 +150,7 @@
   <data name="PdfContentRequired" xml:space="preserve"><value>PdfContent es obligatorio.</value></data>
   <data name="TemplateCreateError" xml:space="preserve"><value>Se produjo un error al crear la plantilla</value></data>
   <data name="TemplateRetrieveError" xml:space="preserve"><value>Se produjo un error al recuperar la plantilla</value></data>
-  <data name="AiNotConfigured" xml:space="preserve"><value>La detección de AI no está configurada.</value></data>
   <data name="AiDetectionFailed" xml:space="preserve"><value>La detección de AI falló. Verifique la configuración de AI e inténtelo de nuevo.</value></data>
-  <data name="AiExtractionNotConfigured" xml:space="preserve"><value>La extracción de AI no está configurada.</value></data>
   <data name="ColumnsRequired" xml:space="preserve"><value>Se requiere al menos una definición de columna.</value></data>
   <data name="AiExtractionFailed" xml:space="preserve"><value>La extracción de datos de AI falló. Verifique la configuración de AI e inténtelo de nuevo.</value></data>
   <data name="ProvideAtLeastOneChange" xml:space="preserve"><value>Proporcione al menos un cambio (fields, pdfContent o templateName).</value></data>
@@ -626,6 +624,13 @@
   <data name="Error_ACCOUNT_BLOCKED" xml:space="preserve"><value>Esta cuenta está bloqueada. Póngase en contacto con soporte.</value></data>
   <data name="Error_FEATURE_DISABLED" xml:space="preserve"><value>Esta función no está disponible temporalmente.</value></data>
   <data name="Error_AI_DISABLED" xml:space="preserve"><value>Las funciones de IA están desactivadas en este servidor.</value></data>
+  <data name="Error_OPERATION_NOT_OFFERED" xml:space="preserve"><value>Esta operación no se ofrece: la lista de precios no tiene precio para ella.</value></data>
+  <data name="Error_AI_UNAVAILABLE" xml:space="preserve"><value>La IA no está disponible ahora. Inténtelo más tarde.</value></data>
+  <data name="Error_AI_REFUSED" xml:space="preserve"><value>El proveedor de IA se negó a procesar este documento.</value></data>
+  <data name="Error_AI_INVALID_OUTPUT" xml:space="preserve"><value>La respuesta de la IA no se pudo usar. Inténtelo de nuevo.</value></data>
+  <data name="Error_AI_PROVIDER_ERROR" xml:space="preserve"><value>El proveedor de IA rechazó la solicitud.</value></data>
+  <data name="Error_AI_INVALID_COLUMNS" xml:space="preserve"><value>Las definiciones de columnas no son válidas (clave, título hasta 128 y descripción hasta 500 caracteres sin caracteres de control, como máximo 50 columnas, tipo y opciones).</value></data>
+  <data name="Error_AI_INVALID_PAGE_RANGE" xml:space="preserve"><value>El rango de páginas no es válido.</value></data>
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Demasiadas solicitudes. Inténtelo más tarde.</value></data>
   <data name="Error_CONTENT_STAMP_REQUIRED" xml:space="preserve"><value>El campo de firma debe colocarse junto a la firma de imagen, pero la solicitud no incluye ninguna firma de imagen.</value></data>
   <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Demasiados documentos esperan la firma. Termínelos o espere a que caduquen.</value></data>

@@ -15,6 +15,12 @@ public class LimitsOptions
     public int PdfMaxPages { get; set; } = 500;
 
     /// <summary>
+    /// Pages one AI call reads (extract-data, detect-fields): the requested range, or the first
+    /// pages, is cut to this many and the answer says <c>pages_truncated</c>.
+    /// </summary>
+    public int AiMaxPages { get; set; } = 20;
+
+    /// <summary>
     /// Refuse PDFs with a Launch action or with JavaScript that runs on open.
     /// See <c>PdfSafetyGuard</c> for what exactly counts.
     /// </summary>

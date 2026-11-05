@@ -150,12 +150,8 @@ services:
       # Environment tag — set per deployment (e.g. test / production).
       # Defaults to "production" when unset.
       - Sentry__Environment=${SENTRY_ENVIRONMENT:-production}
-      # AI (Google). Off unless AI_ENABLED is exactly "true"; empty = off.
-      - AI__Enabled=${AI_ENABLED:-}
-      - AI__Provider=${AI_PROVIDER:-google}
-      - AI__Google__ApiKey=${AI_GOOGLE_API_KEY:-}
-      - AI__Google__Model=${AI_GOOGLE_MODEL:-gemini-1.5-flash}
-      - AI__Google__Endpoint=${AI_GOOGLE_ENDPOINT:-https://generativelanguage.googleapis.com/v1beta}
+      # AI has no settings here: the switch is the runtime setting ai_enabled and the provider keys come
+      # from the AI credentials endpoint of the backoffice (P4_BACKOFFICE_URL / _SECRET_KEY above).
       # osTicket (support tickets). Url + ApiKey both required — without them the
       # /support contact form is hidden from the nav and its routes return 404.
       - OsTicket__Url=${OSTICKET_URL:-}

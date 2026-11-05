@@ -150,9 +150,7 @@
   <data name="PdfContentRequired" xml:space="preserve"><value>PdfContent je povinný.</value></data>
   <data name="TemplateCreateError" xml:space="preserve"><value>Při vytváření šablony došlo k chybě</value></data>
   <data name="TemplateRetrieveError" xml:space="preserve"><value>Při načítání šablony došlo k chybě</value></data>
-  <data name="AiNotConfigured" xml:space="preserve"><value>AI detekce není nakonfigurována.</value></data>
   <data name="AiDetectionFailed" xml:space="preserve"><value>AI detekce selhala. Zkontrolujte konfiguraci AI a zkuste to znovu.</value></data>
-  <data name="AiExtractionNotConfigured" xml:space="preserve"><value>AI extrakce není nakonfigurována.</value></data>
   <data name="ColumnsRequired" xml:space="preserve"><value>Je vyžadována alespoň jedna definice sloupce.</value></data>
   <data name="AiExtractionFailed" xml:space="preserve"><value>AI extrakce dat selhala. Zkontrolujte konfiguraci AI a zkuste to znovu.</value></data>
   <data name="ProvideAtLeastOneChange" xml:space="preserve"><value>Zadejte alespoň jednu změnu (pole, pdfContent nebo templateName).</value></data>
@@ -636,6 +634,13 @@
   <data name="Error_ACCOUNT_BLOCKED" xml:space="preserve"><value>Tento účet je zablokován. Kontaktujte podporu.</value></data>
   <data name="Error_FEATURE_DISABLED" xml:space="preserve"><value>Tato funkce je dočasně nedostupná.</value></data>
   <data name="Error_AI_DISABLED" xml:space="preserve"><value>Funkce AI je na tomto serveru vypnutá.</value></data>
+  <data name="Error_OPERATION_NOT_OFFERED" xml:space="preserve"><value>Tato operace se nenabízí: ceník pro ni nemá cenu.</value></data>
+  <data name="Error_AI_UNAVAILABLE" xml:space="preserve"><value>AI teď není k dispozici. Zkuste to později.</value></data>
+  <data name="Error_AI_REFUSED" xml:space="preserve"><value>Poskytovatel AI odmítl tento dokument zpracovat.</value></data>
+  <data name="Error_AI_INVALID_OUTPUT" xml:space="preserve"><value>Odpověď AI nešlo použít. Zkuste to znovu.</value></data>
+  <data name="Error_AI_PROVIDER_ERROR" xml:space="preserve"><value>Poskytovatel AI požadavek odmítl.</value></data>
+  <data name="Error_AI_INVALID_COLUMNS" xml:space="preserve"><value>Definice sloupců nejsou platné (klíč, název do 128 a popis do 500 znaků bez řídicích znaků, nejvýš 50 sloupců, typ a volby).</value></data>
+  <data name="Error_AI_INVALID_PAGE_RANGE" xml:space="preserve"><value>Rozsah stran není platný.</value></data>
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Příliš mnoho požadavků. Zkuste to později.</value></data>
   <data name="Error_CONTENT_STAMP_REQUIRED" xml:space="preserve"><value>Pole podpisu se má umístit vedle obrázkového podpisu, ale požadavek žádný obrázkový podpis nenese.</value></data>
   <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Příliš mnoho dokumentů čeká na podpis. Dokončete je, nebo počkejte, až vyprší.</value></data>

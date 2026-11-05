@@ -150,9 +150,7 @@
   <data name="PdfContentRequired" xml:space="preserve"><value>PdfContent is required.</value></data>
   <data name="TemplateCreateError" xml:space="preserve"><value>An error occurred while creating the template</value></data>
   <data name="TemplateRetrieveError" xml:space="preserve"><value>An error occurred while retrieving the template</value></data>
-  <data name="AiNotConfigured" xml:space="preserve"><value>AI detection is not configured.</value></data>
   <data name="AiDetectionFailed" xml:space="preserve"><value>AI detection failed. Check AI configuration and try again.</value></data>
-  <data name="AiExtractionNotConfigured" xml:space="preserve"><value>AI extraction is not configured.</value></data>
   <data name="ColumnsRequired" xml:space="preserve"><value>At least one column definition is required.</value></data>
   <data name="AiExtractionFailed" xml:space="preserve"><value>AI data extraction failed. Check AI configuration and try again.</value></data>
   <data name="ProvideAtLeastOneChange" xml:space="preserve"><value>Provide at least one change (fields, pdfContent, or templateName).</value></data>
@@ -636,6 +634,13 @@
   <data name="Error_ACCOUNT_BLOCKED" xml:space="preserve"><value>This account is blocked. Contact support.</value></data>
   <data name="Error_FEATURE_DISABLED" xml:space="preserve"><value>This function is temporarily unavailable.</value></data>
   <data name="Error_AI_DISABLED" xml:space="preserve"><value>AI features are disabled on this server.</value></data>
+  <data name="Error_OPERATION_NOT_OFFERED" xml:space="preserve"><value>This operation is not offered: the price list has no price for it.</value></data>
+  <data name="Error_AI_UNAVAILABLE" xml:space="preserve"><value>AI is not available right now. Try again later.</value></data>
+  <data name="Error_AI_REFUSED" xml:space="preserve"><value>The AI provider declined to process this document.</value></data>
+  <data name="Error_AI_INVALID_OUTPUT" xml:space="preserve"><value>The AI answer could not be used. Try again.</value></data>
+  <data name="Error_AI_PROVIDER_ERROR" xml:space="preserve"><value>The AI provider rejected the request.</value></data>
+  <data name="Error_AI_INVALID_COLUMNS" xml:space="preserve"><value>The column definitions are not valid (key, title up to 128 and description up to 500 characters without control characters, at most 50 columns, type and choices).</value></data>
+  <data name="Error_AI_INVALID_PAGE_RANGE" xml:space="preserve"><value>The page range is not valid.</value></data>
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Too many requests. Try again later.</value></data>
   <data name="Error_CONTENT_STAMP_REQUIRED" xml:space="preserve"><value>The signature field is to be placed beside the image signature, but the request carries no image signature.</value></data>
   <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Too many documents are waiting to be signed. Finish or wait for them to expire.</value></data>

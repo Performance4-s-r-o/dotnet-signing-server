@@ -150,9 +150,7 @@
   <data name="PdfContentRequired" xml:space="preserve"><value>PdfContent ist erforderlich.</value></data>
   <data name="TemplateCreateError" xml:space="preserve"><value>Beim Erstellen der Vorlage ist ein Fehler aufgetreten</value></data>
   <data name="TemplateRetrieveError" xml:space="preserve"><value>Beim Abrufen der Vorlage ist ein Fehler aufgetreten</value></data>
-  <data name="AiNotConfigured" xml:space="preserve"><value>AI-Erkennung ist nicht konfiguriert.</value></data>
   <data name="AiDetectionFailed" xml:space="preserve"><value>AI-Erkennung fehlgeschlagen. Prüfen Sie die AI-Konfiguration und versuchen Sie es erneut.</value></data>
-  <data name="AiExtractionNotConfigured" xml:space="preserve"><value>AI-Extraktion ist nicht konfiguriert.</value></data>
   <data name="ColumnsRequired" xml:space="preserve"><value>Mindestens eine Spaltendefinition ist erforderlich.</value></data>
   <data name="AiExtractionFailed" xml:space="preserve"><value>AI-Datenextraktion fehlgeschlagen. Prüfen Sie die AI-Konfiguration und versuchen Sie es erneut.</value></data>
   <data name="ProvideAtLeastOneChange" xml:space="preserve"><value>Geben Sie mindestens eine Änderung an (fields, pdfContent oder templateName).</value></data>
@@ -626,6 +624,13 @@
   <data name="Error_ACCOUNT_BLOCKED" xml:space="preserve"><value>Dieses Konto ist gesperrt. Wenden Sie sich an den Support.</value></data>
   <data name="Error_FEATURE_DISABLED" xml:space="preserve"><value>Diese Funktion ist vorübergehend nicht verfügbar.</value></data>
   <data name="Error_AI_DISABLED" xml:space="preserve"><value>Die KI-Funktionen sind auf diesem Server deaktiviert.</value></data>
+  <data name="Error_OPERATION_NOT_OFFERED" xml:space="preserve"><value>Dieser Vorgang wird nicht angeboten: die Preisliste enthält keinen Preis dafür.</value></data>
+  <data name="Error_AI_UNAVAILABLE" xml:space="preserve"><value>KI ist gerade nicht verfügbar. Versuchen Sie es später erneut.</value></data>
+  <data name="Error_AI_REFUSED" xml:space="preserve"><value>Der KI-Anbieter hat die Verarbeitung dieses Dokuments abgelehnt.</value></data>
+  <data name="Error_AI_INVALID_OUTPUT" xml:space="preserve"><value>Die Antwort der KI war nicht verwendbar. Versuchen Sie es erneut.</value></data>
+  <data name="Error_AI_PROVIDER_ERROR" xml:space="preserve"><value>Der KI-Anbieter hat die Anfrage abgelehnt.</value></data>
+  <data name="Error_AI_INVALID_COLUMNS" xml:space="preserve"><value>Die Spaltendefinitionen sind ungültig (Schlüssel, Titel bis 128 und Beschreibung bis 500 Zeichen ohne Steuerzeichen, höchstens 50 Spalten, Typ und Auswahlwerte).</value></data>
+  <data name="Error_AI_INVALID_PAGE_RANGE" xml:space="preserve"><value>Der Seitenbereich ist ungültig.</value></data>
   <data name="Error_RATE_LIMITED" xml:space="preserve"><value>Zu viele Anfragen. Bitte später erneut versuchen.</value></data>
   <data name="Error_CONTENT_STAMP_REQUIRED" xml:space="preserve"><value>Das Signaturfeld soll neben der Bildsignatur stehen, aber die Anfrage enthält keine Bildsignatur.</value></data>
   <data name="Error_TOO_MANY_PENDING_PRESIGNS" xml:space="preserve"><value>Zu viele Dokumente warten auf die Signatur. Schließen Sie sie ab oder warten Sie, bis sie ablaufen.</value></data>

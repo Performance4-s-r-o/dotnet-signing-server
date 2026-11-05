@@ -207,8 +207,6 @@ DotNetSigningServer.Services.Ops.OpsAlertRegistration.AddOpsAlerts(builder.Servi
 DotNetSigningServer.Services.Ops.JobHeartbeatRegistration.AddJobHeartbeats(builder.Services, builder.Configuration);
 // Ship all ILogger output (not just unhandled exceptions) to Loki.
 builder.Services.AddSingleton<ILoggerProvider, DotNetSigningServer.Logging.LokiLoggerProvider>();
-// The model gets 60 s; the caller's RequestAborted is passed on per call (#72).
-builder.Services.AddHttpClient<TemplateAiService>(c => c.Timeout = TimeSpan.FromSeconds(60));
 builder.Services.AddHttpClient("osticket", client =>
 {
     var timeout = builder.Configuration.GetValue<int?>("OsTicket:TimeoutSeconds") ?? 10;
@@ -236,9 +234,6 @@ builder.Services.AddScoped<AuthAttemptLimiter>();
 builder.Services.AddSingleton(ProvisioningOptions.From(builder.Configuration));
 builder.Services.AddScoped<DotNetSigningServer.Services.Provisioning.AccountProvisioner>();
 builder.Services.Configure<LokiOptions>(builder.Configuration.GetSection("Loki"));
-builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("AI"));
-// The switch is read from the raw text, not bound: only exactly "true" turns AI on.
-builder.Services.PostConfigure<AiOptions>(o => o.Enabled = AiSwitch.IsOn(builder.Configuration["AI:Enabled"]));
 builder.Services.Configure<LimitsOptions>(builder.Configuration.GetSection("Limits"));
 builder.Services.Configure<RateLimitOptions>(builder.Configuration.GetSection("RateLimits"));
 DotNetSigningServer.Middleware.RateLimiting.Register(builder.Services, builder.Configuration);

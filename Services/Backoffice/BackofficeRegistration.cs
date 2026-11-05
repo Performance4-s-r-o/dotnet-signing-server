@@ -70,6 +70,7 @@ public static class BackofficeRegistration
         BillingRegistration.AddBilling(services, snapshot);
         AddErasure(services, snapshot);
         AddRuntimeSettings(services, snapshot);
+        AddAi(services, snapshot);
 
         return services;
     }
@@ -357,6 +358,44 @@ public static class BackofficeRegistration
         services.AddScoped<IBackofficeEventHandler, SettingsChangedHandler>();
     }
 
+    /// <summary>
+    /// AI through the provider pool of the AI credentials endpoint (<c>POST /v1/ai/credentials</c>, scope
+    /// <c>ai:credentials</c>; usage needs <c>ai:usage</c>). Without the service there are never credentials,
+    /// so every AI call is refused; a provider key from env or configuration does not exist.
+    /// </summary>
+    internal static void AddAi(IServiceCollection services, P4BackofficeProductOptions options)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        // The gateway bounds every provider call itself (60 s, 75 s for the whole call).
+        services.AddHttpClient(DotNetSigningServer.Services.Ai.AiProviderHttp.HttpClientName, client =>
+        {
+            client.Timeout = Timeout.InfiniteTimeSpan;
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/ai");
+        });
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<DotNetSigningServer.Services.Ai.IAiProviderClient, DotNetSigningServer.Services.Ai.AnthropicProviderClient>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<DotNetSigningServer.Services.Ai.IAiProviderClient, DotNetSigningServer.Services.Ai.GoogleProviderClient>());
+        services.TryAddSingleton<DotNetSigningServer.Services.Ai.AiGateway>();
+        services.TryAddScoped<TemplateAiService>();
+
+        if (!options.RuntimeServiceEnabled)
+        {
+            services.TryAddSingleton<DotNetSigningServer.Services.Ai.IAiCredentialsSource, DotNetSigningServer.Services.Ai.NoAiCredentials>();
+            return;
+        }
+
+        var baseUrl = options.BaseUrl?.Trim() ?? "";
+        var secretKey = options.SecretKey?.Trim() ?? "";
+        services.AddHttpClient(DotNetSigningServer.Services.Ai.AiCredentialsClient.HttpClientName, client =>
+        {
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            client.Timeout = DotNetSigningServer.Services.Ai.AiCredentialsClient.RequestTimeout;
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secretKey);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("dotnet-signing-server/backoffice-ai");
+        });
+        services.TryAddSingleton<DotNetSigningServer.Services.Ai.AiCredentialsClient>();
+        services.TryAddSingleton<DotNetSigningServer.Services.Ai.IAiCredentialsSource>(sp => sp.GetRequiredService<DotNetSigningServer.Services.Ai.AiCredentialsClient>());
+    }
+
     /// <summary>A <c>price.*</c> handler, also resolvable as itself.</summary>
     private static void AddPriceEventHandler<T>(IServiceCollection services)
         where T : class, IBackofficeEventHandler
@@ -400,6 +439,8 @@ public static class BackofficeRegistration
         services.AddSingleton<IOutboxHandler, SupportTicketOutboxHandler>();
         services.AddSingleton<IOutboxHandler, ErasureRequestOutboxHandler>();
         services.AddSingleton<IOutboxHandler, ErasureAckOutboxHandler>();
+        services.AddSingleton<IOutboxHandler, DotNetSigningServer.Services.Ai.AiUsageOutboxHandler>();
+        services.AddSingleton<IOutboxHandler, DotNetSigningServer.Services.Ai.AiProviderEventOutboxHandler>();
         services.AddHostedService<BackofficeOutboxDispatcher>();
     }
 

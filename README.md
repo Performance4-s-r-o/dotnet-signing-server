@@ -232,7 +232,7 @@ for any other client. Two limits of that:
 | `POST /api/convert/pdfa` | Convert a PDF to PDF/A. Before signing prefer `presign` with `convertToPdfa` (one call, checked result). PDF/A-3 targets keep embedded files as associated files; other targets still drop them |
 | `POST /api/flatten-form` | Flatten filled form fields into the page and remove active content (JavaScript, Launch, trigger actions), so the document can be signed. `409` `PDF_ALREADY_SIGNED` / `PDF_XFA_DYNAMIC` / `FLATTEN_INCOMPLETE` / `PDF_FORM_INVALID`. Answers `result`, `sourceSha256`, `resultSha256`, `changed`, `flattenedFields`, `removed[]`. Price `flatten_form` (see [Operation prices](#operation-prices)) |
 | `POST /api/find-codes` | Detect barcodes and QR codes |
-| `POST /api/ai/detect-fields` | Suggest template fields from a PDF (optional, needs `AI__Enabled`) |
+| `POST /api/ai/detect-fields` | Suggest template fields from a PDF (optional, see [AI](#ai)) |
 | `POST /api/ai/extract-data` | Extract structured data from a PDF (optional) |
 
 ## Configuration
@@ -266,6 +266,38 @@ Credits per operation come from the price list in force (`credit_costs` of
 (`503 OPERATION_NOT_OFFERED`), never free. With `Modules:Pricing` Off (on-prem) there is no price
 list: every operation costs 1 credit, and AI is not offered. At start the server sends its
 operations manifest (`PUT /v1/pricing/operations`); a failure does not stop the start.
+
+### AI
+
+`/api/ai/detect-fields` and `/api/ai/extract-data` call AI providers with keys handed out by the
+AI credentials endpoint of the P4 Backoffice integration (`POST /v1/ai/credentials`, scope
+`ai:credentials`; usage is reported with `ai:usage`). There is no provider key in env or
+configuration. The keys stay in memory until `expires_at`; providers are tried in the service's
+order, at most `max_providers_per_call` per call, and the next one only on exhaustion or an outage
+(credit, rate limit, overload, 5xx, timeout, network) — never on another 4xx, a refusal or output off
+the schema. A provider with an unknown credential kind, an unknown provider name or a region outside
+`allowed_regions` is skipped. Switches are reported (`POST /v1/ai/provider-events`) and each answer's
+tokens recorded (`POST /v1/ai/usage`), both through the outbox. One provider call has 60 s, the whole
+call 75 s.
+
+Off: `403 AI_DISABLED` while the runtime setting `ai_enabled` is not fresh and on (before the body,
+the charge or the model); `503 AI_UNAVAILABLE` without credentials or a usable provider, or when
+every provider failed; `422 AI_REFUSED` when the provider declined; `502 AI_INVALID_OUTPUT` /
+`AI_PROVIDER_ERROR`; `503 OPERATION_NOT_OFFERED` without a price.
+
+Both read at most `Limits__AiMaxPages` (20) pages: `pageFrom` / `pageTo` (default the whole
+document) are cut to it and the answer carries `pages_truncated`. Text a person cannot see (render
+mode 3 or 7, under 2 pt, near-white, outside the CropBox) makes the server send page images
+(150 DPI, grey) instead of the PDF and answer `hidden_text_detected`, every value then `low`.
+
+`extract-data` takes `columns` (`key` `^[A-Za-z0-9_]{1,64}$`, `title` ≤ 128, `description` ≤ 500,
+no control characters, at most 50; `type` `text|number|integer|date|boolean|choice|email|iban`,
+`choices`, `maxLength` ≤ 1000) and optional `examples` (≤ 20, `value` ≤ 200); anything else is
+`400 AI_INVALID_COLUMNS`. They go to the model as JSON data beside fixed rules, never interpolated
+into instructions. Each value comes back as `key`, `result`, `confidence` (`high` only when the
+quoted `evidence` is on the page's text layer), `page`, `evidence` and `invalid` (the value failed its
+type or format, e.g. a mod-97 IBAN check; `result` is then null), with `warnings`, `pagesProcessed`,
+`provider` and `model`.
 
 Configuration binds from `appsettings.json`, then environment variables (`__`
 separates nested keys). `appsettings.json` holds defaults and empty
@@ -305,7 +337,6 @@ placeholders only — never commit real secrets to it. Local overrides belong in
 | `P4Backoffice__Email__From` / `__ReplyTo` (compose: `P4_BACKOFFICE_EMAIL_FROM` / `_REPLY_TO`) | | Sender and Reply-To of every message; the sender's domain must be the one configured for the environment in the service. Empty = the service's default |
 | `EVIDENCE_ENCRYPTION_CERTIFICATE_PEM_BASE64` / `EVIDENCE_ENCRYPTION_CERTIFICATE_PEM` | no, but see purpose | Public RSA certificate that encrypts the SES evidence attachment (CMS, key transport RSA PKCS#1 v1.5 + AES-256-CBC) when `/api/attachment` asks for `UseConfiguredEncryptionCertificate` (#513). A certificate sent in the request (`EncryptForCertificatePem`) wins; the SaaS portal sends one from Key Vault (`EVIDENCE_ENCRYPTION_SOURCE=keyvault`), so this is for TEST, a standalone server and on-prem. Neither one = `503 EVIDENCE_CERT_NOT_CONFIGURED` before any operation or charge, and a Production start logs an error (it does not stop: the caller may send the certificate). Never put the private key here |
 | `OsTicket__Url` / `OsTicket__ApiKey` | | Support form; without them (and with `Modules:Support` not `On`) the routes 404 and the nav entry hides |
-| `AI__Enabled` / `AI__Google__ApiKey` | | AI-assisted template field detection; `AI__Enabled` is on only when exactly `true`, otherwise every `/api/ai/*` route answers 403 `AI_DISABLED` |
 | `Sentry__Dsn` | | Error monitoring; disabled when empty |
 | `Loki__Url` | | Log shipping; disabled when empty |
 | `Limits__*` | | Request/PDF/image/attachment size caps |

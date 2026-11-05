@@ -67,7 +67,7 @@ public sealed record RuntimeSettingsSnapshot(
         using var document = JsonDocument.Parse(body);
         var root = document.RootElement;
         if (root.ValueKind != JsonValueKind.Object
-            || !root.TryGetProperty("version", out var v) || !v.TryGetInt64(out var version)
+            || !root.TryGetProperty("version", out var v) || v.ValueKind != JsonValueKind.Number || !v.TryGetInt64(out var version)
             || !root.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
         {
             throw new JsonException("Settings response has no version or items");
@@ -95,7 +95,7 @@ public sealed record RuntimeSettingsSnapshot(
     }
 
     private static int? PositiveInt(JsonElement root, string name) =>
-        root.TryGetProperty(name, out var value) && value.TryGetInt32(out var n) && n > 0 ? n : null;
+        root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var n) && n > 0 ? n : null;
 }
 
 /// <summary>

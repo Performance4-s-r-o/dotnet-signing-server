@@ -10,7 +10,7 @@ using Microsoft.Extensions.Localization;
 
 namespace DotNetSigningServer.Tests.Middleware;
 
-/// <summary>#83: /api/ai/* is refused before anything else while the AI switch is off.</summary>
+/// <summary>#83, #174: /api/ai/* is refused before anything else while the runtime setting ai_enabled is not on.</summary>
 [Collection("ApiGate")]
 public class AiSwitchTests : IDisposable
 {
@@ -33,20 +33,24 @@ public class AiSwitchTests : IDisposable
         public override void Write(byte[] buffer, int offset, int count) { }
     }
 
-    private static AiOptions Options(string? raw)
+    /// <summary>Settings as they are without the service (closed) or with a fresh "on" from it.</summary>
+    private static DotNetSigningServer.Services.Settings.IRuntimeSettings Options(string? raw) =>
+        raw == "on" ? TestRuntimeSettings.AiOn() : raw == "env-off" ? EnvClosed() : TestRuntimeSettings.Defaults;
+
+    private static DotNetSigningServer.Services.Settings.IRuntimeSettings EnvClosed()
     {
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(raw is null ? new Dictionary<string, string?>() : new() { ["AI:Enabled"] = raw })
-            .Build();
-        return new AiOptions { Enabled = AiSwitch.IsOn(config["AI:Enabled"]) };
+        var settings = TestRuntimeSettings.With(("AI_ENABLED", "false"));
+        settings.Apply(DotNetSigningServer.Services.Settings.RuntimeSettingsSnapshot.Parse(
+            """{"version":1,"items":[{"key":"ai_enabled","type":"bool","value":true,"fail_mode":"closed"}]}"""), DateTimeOffset.UtcNow);
+        return settings;
     }
 
-    private async Task<(DefaultHttpContext Context, int Calls, ExplodingBody Body)> RunAsync(AiOptions ai, string path)
+    private async Task<(DefaultHttpContext Context, int Calls, ExplodingBody Body)> RunAsync(DotNetSigningServer.Services.Settings.IRuntimeSettings ai, string path)
     {
         var services = new ServiceCollection();
         services.AddSingleton<IStringLocalizerFactory>(new KeyEchoLocalizerFactory());
         services.AddScoped(_ => _db);
-        services.AddSingleton(Microsoft.Extensions.Options.Options.Create(ai));
+        services.AddSingleton(ai);
         var provider = services.BuildServiceProvider();
         var calls = 0;
         var gate = new ApiGateMiddleware(_ => { calls++; return Task.CompletedTask; },
@@ -82,7 +86,7 @@ public class AiSwitchTests : IDisposable
     [Fact]
     public async Task On_the_request_goes_through()
     {
-        var (context, calls, _) = await RunAsync(Options("true"), "/api/ai/extract-data");
+        var (context, calls, _) = await RunAsync(Options("on"), "/api/ai/extract-data");
 
         Assert.Equal(1, calls);
         Assert.Equal(200, context.Response.StatusCode);
@@ -96,18 +100,12 @@ public class AiSwitchTests : IDisposable
     }
 
     [Theory]
-    [InlineData("true", true)]
-    [InlineData("True", false)]
-    [InlineData("TRUE", false)]
-    [InlineData("1", false)]
-    [InlineData("yes", false)]
-    [InlineData("", false)]
-    [InlineData(" true", false)]
-    [InlineData("{{project.DOTNET_AI_ENABLED}}", false)]
-    [InlineData(null, false)]
-    public void Only_the_exact_text_true_turns_ai_on(string? raw, bool expected)
+    [InlineData(null)]
+    [InlineData("env-off")]
+    public async Task Without_a_fresh_on_from_the_service_or_closed_by_env_it_is_403(string? state)
     {
-        Assert.Equal(expected, AiSwitch.IsOn(raw));
-        Assert.Equal(expected, Options(raw).Enabled);
+        var (context, calls, _) = await RunAsync(Options(state), "/api/ai/extract-data");
+        Assert.Equal(403, context.Response.StatusCode);
+        Assert.Equal(0, calls);
     }
 }

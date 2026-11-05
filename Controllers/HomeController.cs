@@ -15,16 +15,16 @@ public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
     private readonly PdfTemplateService _templateService;
-    private readonly AiOptions _aiOptions;
+    private readonly DotNetSigningServer.Services.Ai.AiGateway _ai;
     private readonly AppOptions _appOptions;
     private readonly IWebHostEnvironment _env;
     private readonly IStringLocalizer<SharedStrings> _localizer;
 
-    public HomeController(ILogger<HomeController> logger, PdfTemplateService templateService, IOptions<AiOptions> aiOptions, IOptions<AppOptions> appOptions, IWebHostEnvironment env, IStringLocalizer<SharedStrings> localizer)
+    public HomeController(ILogger<HomeController> logger, PdfTemplateService templateService, DotNetSigningServer.Services.Ai.AiGateway ai, IOptions<AppOptions> appOptions, IWebHostEnvironment env, IStringLocalizer<SharedStrings> localizer)
     {
         _logger = logger;
         _templateService = templateService;
-        _aiOptions = aiOptions.Value;
+        _ai = ai;
         _appOptions = appOptions.Value;
         _env = env;
         _localizer = localizer;
@@ -122,12 +122,9 @@ public class HomeController : Controller
 
     [HttpGet("/template-builder")]
     [CookieAuthorize]
-    public IActionResult TemplateBuilder()
+    public async Task<IActionResult> TemplateBuilder()
     {
-        var aiEnabled = _aiOptions.Enabled
-                        && string.Equals(_aiOptions.Provider, "google", StringComparison.OrdinalIgnoreCase)
-                        && !string.IsNullOrWhiteSpace(_aiOptions.Google?.ApiKey);
-        ViewData["AiDetectEnabled"] = aiEnabled;
+        ViewData["AiDetectEnabled"] = await _ai.IsAvailableAsync(HttpContext.RequestAborted);
         // The builder compiles JSX in the browser (Babel), which needs eval.
         HttpContext.Items[DotNetSigningServer.Middleware.ContentSecurityPolicyMiddleware.AllowEvalKey] = true;
         return View();

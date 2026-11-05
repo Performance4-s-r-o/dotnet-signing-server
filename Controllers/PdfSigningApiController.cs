@@ -837,8 +837,9 @@ namespace DotNetSigningServer.Controllers
             }
 
             // No platform seal exists; the field only reports that.
-            var ai = HttpContext.RequestServices.GetService<Microsoft.Extensions.Options.IOptions<DotNetSigningServer.Options.AiOptions>>()?.Value;
-            var aiOn = ai is { Enabled: true } && !string.IsNullOrWhiteSpace(ai.Google?.ApiKey);
+            // AI: switched on, a usable provider and a price for data extraction (never offered free).
+            var aiOn = Prices.IsOffered(PricedOperations.AiExtract)
+                && await HttpContext.RequestServices.GetRequiredService<Services.Ai.AiGateway>().IsAvailableAsync(HttpContext.RequestAborted);
             return Ok(new ServerCapabilities { Seal = new SealCapability { Enabled = false }, Ai = new AiCapability { Enabled = aiOn } });
         }
 
