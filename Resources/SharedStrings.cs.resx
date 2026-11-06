@@ -813,4 +813,42 @@
   <data name="AdminProvisionedLabel" xml:space="preserve"><value>Název od integrátora</value></data>
   <data name="AdminChildAccounts" xml:space="preserve"><value>Založené účty</value></data>
   <data name="AdminProvisionedBadge" xml:space="preserve"><value>Založený</value></data>
+  <data name="InvoicesTitle" xml:space="preserve"><value>Faktury</value></data>
+  <data name="InvoiceNumber" xml:space="preserve"><value>Číslo faktury</value></data>
+  <data name="InvoicePrice" xml:space="preserve"><value>Cena</value></data>
+  <data name="InvoiceStatus" xml:space="preserve"><value>Stav</value></data>
+  <data name="InvoiceDownload" xml:space="preserve"><value>Stáhnout</value></data>
+  <data name="InvoiceOpen" xml:space="preserve"><value>Otevřít</value></data>
+  <data name="InvoicesNone" xml:space="preserve"><value>Žádné faktury nenalezeny.</value></data>
+  <data name="InvoiceStatus_paid" xml:space="preserve"><value>Zaplaceno</value></data>
+  <data name="InvoiceStatus_open" xml:space="preserve"><value>Otevřená</value></data>
+  <data name="InvoiceStatus_draft" xml:space="preserve"><value>Koncept</value></data>
+  <data name="InvoiceStatus_void" xml:space="preserve"><value>Zrušená</value></data>
+  <data name="InvoiceStatus_uncollectible" xml:space="preserve"><value>Nedobytná</value></data>
+  <data name="BillingTitle" xml:space="preserve"><value>Fakturace</value></data>
+  <data name="BillingYourCredits" xml:space="preserve"><value>Vaše kredity</value></data>
+  <data name="BillingRemaining" xml:space="preserve"><value>Zbývá:</value></data>
+  <data name="BillingFreeCreditsNote" xml:space="preserve"><value>Zahrnuje prvních 10 kreditů zdarma na vašem účtu.</value></data>
+  <data name="BillingPricing" xml:space="preserve"><value>Ceník</value></data>
+  <data name="BillingPackLine" xml:space="preserve"><value>{0} kreditů: {1} {2}</value></data>
+  <data name="BillingPercentOff" xml:space="preserve"><value>(sleva {0} %)</value></data>
+  <data name="AutoRechargeTitle" xml:space="preserve"><value>Automatické dobíjení</value></data>
+  <data name="AutoRechargeActive" xml:space="preserve"><value>Aktivní</value></data>
+  <data name="AutoRechargeActiveDescription" xml:space="preserve"><value>Automaticky se nakoupí &lt;strong&gt;{0} kreditů&lt;/strong&gt;, jakmile zůstatek klesne pod &lt;strong&gt;{1}&lt;/strong&gt; kreditů.</value></data>
+  <data name="AutoRechargePriceChanged" xml:space="preserve"><value>Cena se od aktivace změnila ({0} {1} → {2} {1} / 100 kreditů).</value></data>
+  <data name="AutoRechargeDisableConfirm" xml:space="preserve"><value>Opravdu chcete vypnout automatické dobíjení?</value></data>
+  <data name="AutoRechargeDisable" xml:space="preserve"><value>Vypnout automatické dobíjení</value></data>
+  <data name="AutoRechargeEnableDescription" xml:space="preserve"><value>Automaticky nakoupit &lt;strong&gt;{0} kreditů&lt;/strong&gt;, jakmile zůstatek klesne pod {1} kreditů. Podle vašeho posledního nákupu.</value></data>
+  <data name="AutoRechargeEnable" xml:space="preserve"><value>Zapnout automatické dobíjení</value></data>
+  <data name="AutoRechargePurchaseFirst" xml:space="preserve"><value>Nejdřív nakupte kredity, pak můžete zapnout automatické dobíjení. Zapnout ho lze i při platbě.</value></data>
+  <data name="BuyMoreCredits" xml:space="preserve"><value>Koupit další kredity</value></data>
+  <data name="BuyCreditsDescription" xml:space="preserve"><value>Kredity si koupíte pro použití na svém účtu.</value></data>
+  <data name="CreditsToBuy" xml:space="preserve"><value>Kolik kreditů koupit</value></data>
+  <data name="PackCredits" xml:space="preserve"><value>{0} kreditů</value></data>
+  <data name="PackFor" xml:space="preserve"><value>za {0} {1}</value></data>
+  <data name="PaymentNextStep" xml:space="preserve"><value>Platební údaje zadáte v dalším kroku.</value></data>
+  <data name="PlaceOrder" xml:space="preserve"><value>Objednat</value></data>
+  <data name="CheckoutNote" xml:space="preserve"><value>K zabezpečenému nákupu kreditů předem se používá Stripe Checkout. Kliknutím na „Objednat“ souhlasíte s našimi {0} a {1}.</value></data>
+  <data name="CheckoutTermsLink" xml:space="preserve"><value>podmínkami</value></data>
+  <data name="CheckoutPrivacyLink" xml:space="preserve"><value>zásadami ochrany osobních údajů</value></data>
 </root>

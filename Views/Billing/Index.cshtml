@@ -1,7 +1,7 @@
 @model DotNetSigningServer.Controllers.BillingController.BillingViewModel
 @inject Microsoft.Extensions.Localization.IStringLocalizer<DotNetSigningServer.Resources.SharedStrings> L
 @{
-    ViewData["Title"] = "Billing";
+    ViewData["Title"] = L["BillingTitle"].Value;
     var culture = System.Globalization.CultureInfo.CurrentUICulture;
     string money(decimal v) => DotNetSigningServer.Services.Pricing.CreditPricing.FormatAmount(v, culture);
     int discount(DotNetSigningServer.Services.Pricing.CreditPack p) => p.DiscountPercentVersus(Model.PricePer100 ?? 0m);
@@ -9,8 +9,15 @@
     bool hasPacks = Model.Packs.Count > 0;
     var pm = Model.SavedPaymentMethod;
     bool hasCard = pm != null;
+    // Known statuses are translated; an unknown one is shown as the service sent it.
+    string InvoiceStatusLabel(string status)
+    {
+        var key = "InvoiceStatus_" + status.ToLowerInvariant();
+        var translated = L[key];
+        return translated.ResourceNotFound ? char.ToUpper(status[0]) + status.Substring(1) : translated.Value;
+    }
 }
-<h1 class="content-box-title">Billing</h1>
+<h1 class="content-box-title">@L["BillingTitle"]</h1>
 
 @if (TempData["Error"] != null)
 {
@@ -121,20 +128,20 @@ else
 {
     <div class="billing-grid">
         <div class="card">
-            <h2 class="card-title">Your credits</h2>
-            <p class="billing-credits-remaining"><strong>Remaining:</strong> @Model.CreditsRemaining</p>
-            <p class="billing-credits-note">Includes the first 10 free credits on your account.</p>
+            <h2 class="card-title">@L["BillingYourCredits"]</h2>
+            <p class="billing-credits-remaining"><strong>@L["BillingRemaining"]</strong> @Model.CreditsRemaining</p>
+            <p class="billing-credits-note">@L["BillingFreeCreditsNote"]</p>
 
             @if (hasPacks)
             {
-                <h3 class="billing-pricing-title" id="pricing">Pricing</h3>
+                <h3 class="billing-pricing-title" id="pricing">@L["BillingPricing"]</h3>
                 <div class="billing-pricing-list">
                     @foreach (var pack in Model.Packs)
                     {
-                        <p class="billing-pricing-item">@pack.Quantity credits: @money(pack.Amount) @pack.Currency
+                        <p class="billing-pricing-item">@L["BillingPackLine", pack.Quantity, money(pack.Amount), pack.Currency]
                             @if (discount(pack) > 0)
                             {
-                                <span class="discount">(@discount(pack)% off)</span>
+                                <span class="discount">@L["BillingPercentOff", discount(pack)]</span>
                             }
                         </p>
                     }
@@ -188,51 +195,48 @@ else
 
             <hr style="border:none;border-top:1px solid var(--color-card-border,#e5e7eb);margin:1.25rem 0" />
 
-            <h3 class="billing-pricing-title">Auto-recharge</h3>
+            <h3 class="billing-pricing-title">@L["AutoRechargeTitle"]</h3>
             @if (Model.AutoRechargeEnabled)
             {
                 <p style="margin-bottom:0.5rem">
                     <span class="billing-status billing-status--active">
-                        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#16a34a;margin-right:6px"></span>Active
+                        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#16a34a;margin-right:6px"></span>@L["AutoRechargeActive"]
                     </span>
                 </p>
                 <p class="muted" style="font-size:0.875rem;margin-bottom:0.25rem">
-                    <strong>@Model.AutoRechargeQuantity credits</strong> will be purchased automatically when your balance drops below
-                    <strong>@DotNetSigningServer.Services.AutoRechargeService.ThresholdCredits</strong> credits.
+                    @Html.Raw(string.Format(L["AutoRechargeActiveDescription"].Value, Model.AutoRechargeQuantity, DotNetSigningServer.Services.AutoRechargeService.ThresholdCredits))
                 </p>
                 @if (Model.PricePer100 is { } nowPer100 && Model.AutoRechargePricePer100 > 0 && nowPer100 != Model.AutoRechargePricePer100)
                 {
                     <p style="font-size:0.875rem;color:#dc2626;margin-bottom:0.5rem">
-                        Price has changed since enrollment (@money(Model.AutoRechargePricePer100) @Model.Currency &rarr; @money(nowPer100) @Model.Currency / 100 credits).
+                        @L["AutoRechargePriceChanged", money(Model.AutoRechargePricePer100), Model.Currency, money(nowPer100)]
                     </p>
                 }
                 <form method="post" action="/Billing/AutoRecharge/Disable" style="margin-top:0.5rem">
                     @Html.AntiForgeryToken()
                     <button type="submit" class="btn-small btn-secondary" style="color:#dc2626;border-color:#fca5a5;background:transparent"
-                        data-confirm="Are you sure you want to disable auto-recharge?">
-                        Disable auto-recharge
+                        data-confirm="@L["AutoRechargeDisableConfirm"]">
+                        @L["AutoRechargeDisable"]
                     </button>
                 </form>
             }
             else if (Model.LastPurchaseQuantity > 0)
             {
                 <p class="muted" style="font-size:0.875rem;margin-bottom:0.75rem">
-                    Automatically purchase <strong>@Model.LastPurchaseQuantity credits</strong> when your balance drops below @DotNetSigningServer.Services.AutoRechargeService.ThresholdCredits credits.
-                    Based on your last purchase.
+                    @Html.Raw(string.Format(L["AutoRechargeEnableDescription"].Value, Model.LastPurchaseQuantity, DotNetSigningServer.Services.AutoRechargeService.ThresholdCredits))
                 </p>
                 <form method="post" action="/Billing/AutoRecharge/Enable">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="quantity" value="@Model.LastPurchaseQuantity" />
                     <button type="submit" class="btn-small btn-secondary">
-                        Enable auto-recharge
+                        @L["AutoRechargeEnable"]
                     </button>
                 </form>
             }
             else
             {
                 <p class="muted" style="font-size:0.875rem">
-                    Purchase credits first, then you can enable automatic recharging.
-                    You can also enable it during checkout.
+                    @L["AutoRechargePurchaseFirst"]
                 </p>
             }
         </div>
@@ -240,11 +244,11 @@ else
         @if (hasPacks)
         {
             <div class="card">
-                <h2 class="card-title">Buy more credits</h2>
-                <p class="billing-buy-description">Purchase credits to use on your account.</p>
+                <h2 class="card-title">@L["BuyMoreCredits"]</h2>
+                <p class="billing-buy-description">@L["BuyCreditsDescription"]</p>
                 <form method="post" action="/Billing/Checkout" style="display:flex;flex-direction:column;gap:0.5rem;">
                     @Html.AntiForgeryToken()
-                    <p class="billing-buy-label">Credits to buy</p>
+                    <p class="billing-buy-label">@L["CreditsToBuy"]</p>
 
                     <div class="billing-options">
                         @for (var i = 0; i < Model.Packs.Count; i++)
@@ -254,11 +258,11 @@ else
                                 <input type="radio" id="credits-@pack.Quantity" name="documentsToBuy" value="@pack.Quantity" checked="@(i == 0)">
                                 <label for="credits-@pack.Quantity" class="billing-option-label">
                                     <span class="billing-option-radio"></span>
-                                    <span class="billing-option-credits">@pack.Quantity credits</span>
-                                    <span class="billing-option-price">for @money(pack.Amount) @pack.Currency</span>
+                                    <span class="billing-option-credits">@L["PackCredits", pack.Quantity]</span>
+                                    <span class="billing-option-price">@L["PackFor", money(pack.Amount), pack.Currency]</span>
                                     @if (discount(pack) > 0)
                                     {
-                                        <span class="billing-option-discount">(@discount(pack)% off)</span>
+                                        <span class="billing-option-discount">@L["BillingPercentOff", discount(pack)]</span>
                                     }
                                 </label>
                             </div>
@@ -273,13 +277,14 @@ else
                         </span>
                     </label>
 
-                    <p class="billing-payment-note">You will provide your payment information in the next step.</p>
+                    <p class="billing-payment-note">@L["PaymentNextStep"]</p>
 
-                    <button class="full-w btn-secondary" type="submit">Place order</button>
+                    <button class="full-w btn-secondary" type="submit">@L["PlaceOrder"]</button>
 
                     <p class="muted">
-                        Stripe Checkout is used for secure prepaid purchases. By clicking "Place order", you agree to our
-                        <a href="/Legal/TermsOfService">terms</a> and <a href="/Legal/PrivacyPolicy">privacy policy</a>.
+                        @Html.Raw(string.Format(L["CheckoutNote"].Value,
+                            "<a href=\"/Legal/TermsOfService\">" + System.Net.WebUtility.HtmlEncode(L["CheckoutTermsLink"].Value) + "</a>",
+                            "<a href=\"/Legal/PrivacyPolicy\">" + System.Net.WebUtility.HtmlEncode(L["CheckoutPrivacyLink"].Value) + "</a>"))
                     </p>
                 </form>
             </div>
@@ -288,18 +293,18 @@ else
 }
 
 <section class="billing-invoices">
-    <h2 class="billing-invoices-title">Invoices</h2>
+    <h2 class="billing-invoices-title">@L["InvoicesTitle"]</h2>
     <div class="table-wrapper">
         @if (Model.StripeInvoices.Any())
         {
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Invoice number</th>
-                        <th>Price</th>
-                        <th>Status</th>
-                        <th>Download</th>
-                        <th>Date</th>
+                        <th>@L["InvoiceNumber"]</th>
+                        <th>@L["InvoicePrice"]</th>
+                        <th>@L["InvoiceStatus"]</th>
+                        <th>@L["InvoiceDownload"]</th>
+                        <th>@L["Date"]</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -309,13 +314,13 @@ else
                             <td>@(invoice.Number ?? "-")</td>
                             <td>@(invoice.AmountDueMinor / 100.0m) @invoice.Currency</td>
                             <td><span
-                                    class="billing-status billing-status--@invoice.Status.ToLower()">@char.ToUpper(invoice.Status[0])@invoice.Status.Substring(1)</span>
+                                    class="billing-status billing-status--@invoice.Status.ToLower()">@InvoiceStatusLabel(invoice.Status)</span>
                             </td>
                             <td>
                                 @if (!string.IsNullOrWhiteSpace(invoice.HostedInvoiceUrl))
                                 {
                                     <a href="@invoice.HostedInvoiceUrl" class="billing-download-link" target="_blank"
-                                        rel="noreferrer noopener">Open</a>
+                                        rel="noreferrer noopener">@L["InvoiceOpen"]</a>
                                 }
                                 else
                                 {
@@ -336,7 +341,7 @@ else
         }
         else
         {
-            <p class="muted m-4">No invoices found.</p>
+            <p class="muted m-4">@L["InvoicesNone"]</p>
         }
     </div>
 </section>

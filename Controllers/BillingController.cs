@@ -60,14 +60,6 @@ public class BillingController : Controller
             return RedirectToAction("SignIn", "Account");
         }
 
-        var invoices = await _dbContext.Invoices
-            .Include(i => i.User)
-            .AsNoTracking()
-            .Where(i => i.UserId == userId.Value)
-            .OrderByDescending(i => i.CreatedAt)
-            .Take(20)
-            .ToListAsync();
-
         IReadOnlyList<InvoiceSummary> stripeInvoices = Array.Empty<InvoiceSummary>();
         if (!string.IsNullOrWhiteSpace(user.StripeCustomerId))
         {
@@ -98,7 +90,6 @@ public class BillingController : Controller
 
         var model = new BillingViewModel
         {
-            Invoices = invoices,
             PricePer100 = _pricing.PricePer100,
             Currency = _pricing.Currency,
             Packs = _pricing.GetPacks(),
@@ -397,7 +388,6 @@ public class BillingController : Controller
 
     public class BillingViewModel
     {
-        public IEnumerable<DotNetSigningServer.Models.Invoice> Invoices { get; set; } = Enumerable.Empty<DotNetSigningServer.Models.Invoice>();
         /// <summary>Price of 100 credits; null when the price list sells no 100-pack.</summary>
         public decimal? PricePer100 { get; set; }
         /// <summary>Currency of the price list in force; null when nothing is sold.</summary>

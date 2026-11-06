@@ -812,4 +812,42 @@
   <data name="AdminProvisionedLabel" xml:space="preserve"><value>Name from the integrator</value></data>
   <data name="AdminChildAccounts" xml:space="preserve"><value>Provisioned accounts</value></data>
   <data name="AdminProvisionedBadge" xml:space="preserve"><value>Provisioned</value></data>
+  <data name="InvoicesTitle" xml:space="preserve"><value>Facturas</value></data>
+  <data name="InvoiceNumber" xml:space="preserve"><value>Número de factura</value></data>
+  <data name="InvoicePrice" xml:space="preserve"><value>Precio</value></data>
+  <data name="InvoiceStatus" xml:space="preserve"><value>Estado</value></data>
+  <data name="InvoiceDownload" xml:space="preserve"><value>Descargar</value></data>
+  <data name="InvoiceOpen" xml:space="preserve"><value>Abrir</value></data>
+  <data name="InvoicesNone" xml:space="preserve"><value>No se encontraron facturas.</value></data>
+  <data name="InvoiceStatus_paid" xml:space="preserve"><value>Pagada</value></data>
+  <data name="InvoiceStatus_open" xml:space="preserve"><value>Abierta</value></data>
+  <data name="InvoiceStatus_draft" xml:space="preserve"><value>Borrador</value></data>
+  <data name="InvoiceStatus_void" xml:space="preserve"><value>Anulada</value></data>
+  <data name="InvoiceStatus_uncollectible" xml:space="preserve"><value>Incobrable</value></data>
+  <data name="BillingTitle" xml:space="preserve"><value>Facturación</value></data>
+  <data name="BillingYourCredits" xml:space="preserve"><value>Sus créditos</value></data>
+  <data name="BillingRemaining" xml:space="preserve"><value>Restantes:</value></data>
+  <data name="BillingFreeCreditsNote" xml:space="preserve"><value>Incluye los primeros 10 créditos gratuitos de su cuenta.</value></data>
+  <data name="BillingPricing" xml:space="preserve"><value>Precios</value></data>
+  <data name="BillingPackLine" xml:space="preserve"><value>{0} créditos: {1} {2}</value></data>
+  <data name="BillingPercentOff" xml:space="preserve"><value>({0} % de descuento)</value></data>
+  <data name="AutoRechargeTitle" xml:space="preserve"><value>Recarga automática</value></data>
+  <data name="AutoRechargeActive" xml:space="preserve"><value>Activa</value></data>
+  <data name="AutoRechargeActiveDescription" xml:space="preserve"><value>Se comprarán automáticamente &lt;strong&gt;{0} créditos&lt;/strong&gt; cuando su saldo baje de &lt;strong&gt;{1}&lt;/strong&gt; créditos.</value></data>
+  <data name="AutoRechargePriceChanged" xml:space="preserve"><value>El precio ha cambiado desde la activación ({0} {1} → {2} {1} / 100 créditos).</value></data>
+  <data name="AutoRechargeDisableConfirm" xml:space="preserve"><value>¿Seguro que desea desactivar la recarga automática?</value></data>
+  <data name="AutoRechargeDisable" xml:space="preserve"><value>Desactivar recarga automática</value></data>
+  <data name="AutoRechargeEnableDescription" xml:space="preserve"><value>Comprar automáticamente &lt;strong&gt;{0} créditos&lt;/strong&gt; cuando su saldo baje de {1} créditos. Según su última compra.</value></data>
+  <data name="AutoRechargeEnable" xml:space="preserve"><value>Activar recarga automática</value></data>
+  <data name="AutoRechargePurchaseFirst" xml:space="preserve"><value>Primero compre créditos y después podrá activar la recarga automática. También puede activarla durante el pago.</value></data>
+  <data name="BuyMoreCredits" xml:space="preserve"><value>Comprar más créditos</value></data>
+  <data name="BuyCreditsDescription" xml:space="preserve"><value>Compre créditos para usar en su cuenta.</value></data>
+  <data name="CreditsToBuy" xml:space="preserve"><value>Créditos a comprar</value></data>
+  <data name="PackCredits" xml:space="preserve"><value>{0} créditos</value></data>
+  <data name="PackFor" xml:space="preserve"><value>por {0} {1}</value></data>
+  <data name="PaymentNextStep" xml:space="preserve"><value>Introducirá los datos de pago en el siguiente paso.</value></data>
+  <data name="PlaceOrder" xml:space="preserve"><value>Realizar pedido</value></data>
+  <data name="CheckoutNote" xml:space="preserve"><value>Stripe Checkout se usa para compras prepagadas seguras. Al hacer clic en «Realizar pedido», acepta nuestros {0} y {1}.</value></data>
+  <data name="CheckoutTermsLink" xml:space="preserve"><value>términos</value></data>
+  <data name="CheckoutPrivacyLink" xml:space="preserve"><value>política de privacidad</value></data>
 </root>

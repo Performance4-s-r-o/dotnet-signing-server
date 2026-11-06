@@ -14,11 +14,6 @@ public class Payment
     [ForeignKey(nameof(UserId))]
     public User? User { get; set; }
 
-    public Guid? InvoiceId { get; set; }
-
-    [ForeignKey(nameof(InvoiceId))]
-    public Invoice? Invoice { get; set; }
-
     [MaxLength(128)]
     public string? StripePaymentIntentId { get; set; }
 

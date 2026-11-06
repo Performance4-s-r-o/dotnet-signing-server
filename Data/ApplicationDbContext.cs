@@ -18,7 +18,6 @@ namespace DotNetSigningServer.Data
         public DbSet<Document> Documents { get; set; }
         public DbSet<UsageRecord> UsageRecords { get; set; }
         public DbSet<PricingPlan> PricingPlans { get; set; }
-        public DbSet<Invoice> Invoices { get; set; }
         public DbSet<Payment> Payments { get; set; }
         public DbSet<WebhookEvent> WebhookEvents { get; set; }
         public DbSet<CreditGrant> CreditGrants { get; set; }
@@ -174,14 +173,6 @@ namespace DotNetSigningServer.Data
                 .WithMany(d => d.UsageRecords)
                 .HasForeignKey(r => r.DocumentId);
 
-            modelBuilder.Entity<Invoice>()
-                .HasIndex(i => i.StripeInvoiceId);
-
-            modelBuilder.Entity<Invoice>()
-                .HasOne(i => i.User)
-                .WithMany(u => u.Invoices)
-                .HasForeignKey(i => i.UserId);
-
             modelBuilder.Entity<Payment>()
                 .HasIndex(p => p.StripePaymentIntentId);
 
@@ -189,12 +180,6 @@ namespace DotNetSigningServer.Data
                 .HasOne(p => p.User)
                 .WithMany(u => u.Payments)
                 .HasForeignKey(p => p.UserId);
-
-            modelBuilder.Entity<Payment>()
-                .HasOne(p => p.Invoice)
-                .WithMany(i => i.Payments)
-                .HasForeignKey(p => p.InvoiceId)
-                .OnDelete(DeleteBehavior.SetNull);
 
             modelBuilder.Entity<WebhookEvent>()
                 .HasIndex(w => w.EventId)

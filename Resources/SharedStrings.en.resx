@@ -813,4 +813,42 @@
   <data name="AdminProvisionedLabel" xml:space="preserve"><value>Name from the integrator</value></data>
   <data name="AdminChildAccounts" xml:space="preserve"><value>Provisioned accounts</value></data>
   <data name="AdminProvisionedBadge" xml:space="preserve"><value>Provisioned</value></data>
+  <data name="InvoicesTitle" xml:space="preserve"><value>Invoices</value></data>
+  <data name="InvoiceNumber" xml:space="preserve"><value>Invoice number</value></data>
+  <data name="InvoicePrice" xml:space="preserve"><value>Price</value></data>
+  <data name="InvoiceStatus" xml:space="preserve"><value>Status</value></data>
+  <data name="InvoiceDownload" xml:space="preserve"><value>Download</value></data>
+  <data name="InvoiceOpen" xml:space="preserve"><value>Open</value></data>
+  <data name="InvoicesNone" xml:space="preserve"><value>No invoices found.</value></data>
+  <data name="InvoiceStatus_paid" xml:space="preserve"><value>Paid</value></data>
+  <data name="InvoiceStatus_open" xml:space="preserve"><value>Open</value></data>
+  <data name="InvoiceStatus_draft" xml:space="preserve"><value>Draft</value></data>
+  <data name="InvoiceStatus_void" xml:space="preserve"><value>Void</value></data>
+  <data name="InvoiceStatus_uncollectible" xml:space="preserve"><value>Uncollectible</value></data>
+  <data name="BillingTitle" xml:space="preserve"><value>Billing</value></data>
+  <data name="BillingYourCredits" xml:space="preserve"><value>Your credits</value></data>
+  <data name="BillingRemaining" xml:space="preserve"><value>Remaining:</value></data>
+  <data name="BillingFreeCreditsNote" xml:space="preserve"><value>Includes the first 10 free credits on your account.</value></data>
+  <data name="BillingPricing" xml:space="preserve"><value>Pricing</value></data>
+  <data name="BillingPackLine" xml:space="preserve"><value>{0} credits: {1} {2}</value></data>
+  <data name="BillingPercentOff" xml:space="preserve"><value>({0}% off)</value></data>
+  <data name="AutoRechargeTitle" xml:space="preserve"><value>Auto-recharge</value></data>
+  <data name="AutoRechargeActive" xml:space="preserve"><value>Active</value></data>
+  <data name="AutoRechargeActiveDescription" xml:space="preserve"><value>&lt;strong&gt;{0} credits&lt;/strong&gt; will be purchased automatically when your balance drops below &lt;strong&gt;{1}&lt;/strong&gt; credits.</value></data>
+  <data name="AutoRechargePriceChanged" xml:space="preserve"><value>Price has changed since enrollment ({0} {1} → {2} {1} / 100 credits).</value></data>
+  <data name="AutoRechargeDisableConfirm" xml:space="preserve"><value>Are you sure you want to disable auto-recharge?</value></data>
+  <data name="AutoRechargeDisable" xml:space="preserve"><value>Disable auto-recharge</value></data>
+  <data name="AutoRechargeEnableDescription" xml:space="preserve"><value>Automatically purchase &lt;strong&gt;{0} credits&lt;/strong&gt; when your balance drops below {1} credits. Based on your last purchase.</value></data>
+  <data name="AutoRechargeEnable" xml:space="preserve"><value>Enable auto-recharge</value></data>
+  <data name="AutoRechargePurchaseFirst" xml:space="preserve"><value>Purchase credits first, then you can enable automatic recharging. You can also enable it during checkout.</value></data>
+  <data name="BuyMoreCredits" xml:space="preserve"><value>Buy more credits</value></data>
+  <data name="BuyCreditsDescription" xml:space="preserve"><value>Purchase credits to use on your account.</value></data>
+  <data name="CreditsToBuy" xml:space="preserve"><value>Credits to buy</value></data>
+  <data name="PackCredits" xml:space="preserve"><value>{0} credits</value></data>
+  <data name="PackFor" xml:space="preserve"><value>for {0} {1}</value></data>
+  <data name="PaymentNextStep" xml:space="preserve"><value>You will provide your payment information in the next step.</value></data>
+  <data name="PlaceOrder" xml:space="preserve"><value>Place order</value></data>
+  <data name="CheckoutNote" xml:space="preserve"><value>Stripe Checkout is used for secure prepaid purchases. By clicking "Place order", you agree to our {0} and {1}.</value></data>
+  <data name="CheckoutTermsLink" xml:space="preserve"><value>terms</value></data>
+  <data name="CheckoutPrivacyLink" xml:space="preserve"><value>privacy policy</value></data>
 </root>

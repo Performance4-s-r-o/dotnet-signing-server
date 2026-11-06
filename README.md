@@ -571,7 +571,7 @@ pseudonymises the personal data in one database transaction and queues outbox it
 `subject.erase` (`POST /v1/erasures`) in it. An erasure requested by the service
 (`subject.erasure.requested` webhook / event) runs the same erasure and queues
 `subject.erasure.ack`. Both kinds are retried for 30 days, alert from 72 h on, and are never
-dropped quietly (Dead, kept). Invoices, audit actions and pseudonymised consent records are
+dropped quietly (Dead, kept). Payments, audit actions and pseudonymised consent records are
 retained and acknowledged as `retained`.
 
 #### E-mail

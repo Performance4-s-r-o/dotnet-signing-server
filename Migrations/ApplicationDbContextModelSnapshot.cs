@@ -18,7 +18,7 @@ namespace dotnetsigningserver.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("dotnet_signing")
-                .HasAnnotation("ProductVersion", "9.0.21")
+                .HasAnnotation("ProductVersion", "9.0.22")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -561,50 +561,6 @@ namespace dotnetsigningserver.Migrations
                     b.ToTable("Documents", "dotnet_signing");
                 });
 
-            modelBuilder.Entity("DotNetSigningServer.Models.Invoice", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("AmountCents")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasMaxLength(8)
-                        .HasColumnType("character varying(8)");
-
-                    b.Property<DateTimeOffset>("PeriodEnd")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("PeriodStart")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("StripeInvoiceId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StripeInvoiceId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("Invoices", "dotnet_signing");
-                });
-
             modelBuilder.Entity("DotNetSigningServer.Models.LegalDocument", b =>
                 {
                     b.Property<Guid>("Id")
@@ -720,9 +676,6 @@ namespace dotnetsigningserver.Migrations
                         .HasMaxLength(8)
                         .HasColumnType("character varying(8)");
 
-                    b.Property<Guid?>("InvoiceId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -736,8 +689,6 @@ namespace dotnetsigningserver.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("InvoiceId");
 
                     b.HasIndex("StripePaymentIntentId");
 
@@ -1127,31 +1078,13 @@ namespace dotnetsigningserver.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("DotNetSigningServer.Models.Invoice", b =>
-                {
-                    b.HasOne("DotNetSigningServer.Models.User", "User")
-                        .WithMany("Invoices")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("DotNetSigningServer.Models.Payment", b =>
                 {
-                    b.HasOne("DotNetSigningServer.Models.Invoice", "Invoice")
-                        .WithMany("Payments")
-                        .HasForeignKey("InvoiceId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("DotNetSigningServer.Models.User", "User")
                         .WithMany("Payments")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Invoice");
 
                     b.Navigation("User");
                 });
@@ -1188,11 +1121,6 @@ namespace dotnetsigningserver.Migrations
                     b.Navigation("UsageRecords");
                 });
 
-            modelBuilder.Entity("DotNetSigningServer.Models.Invoice", b =>
-                {
-                    b.Navigation("Payments");
-                });
-
             modelBuilder.Entity("DotNetSigningServer.Models.User", b =>
                 {
                     b.Navigation("ApiTokens");
@@ -1200,8 +1128,6 @@ namespace dotnetsigningserver.Migrations
                     b.Navigation("Children");
 
                     b.Navigation("Documents");
-
-                    b.Navigation("Invoices");
 
                     b.Navigation("Payments");
 
