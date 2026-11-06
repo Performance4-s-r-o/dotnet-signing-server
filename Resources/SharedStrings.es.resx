@@ -812,4 +812,16 @@
   <data name="AdminProvisionedLabel" xml:space="preserve"><value>Name from the integrator</value></data>
   <data name="AdminChildAccounts" xml:space="preserve"><value>Provisioned accounts</value></data>
   <data name="AdminProvisionedBadge" xml:space="preserve"><value>Provisioned</value></data>
+  <data name="InvoicesTitle" xml:space="preserve"><value>Facturas</value></data>
+  <data name="InvoiceNumber" xml:space="preserve"><value>Número de factura</value></data>
+  <data name="InvoicePrice" xml:space="preserve"><value>Precio</value></data>
+  <data name="InvoiceStatus" xml:space="preserve"><value>Estado</value></data>
+  <data name="InvoiceDownload" xml:space="preserve"><value>Descargar</value></data>
+  <data name="InvoiceOpen" xml:space="preserve"><value>Abrir</value></data>
+  <data name="InvoicesNone" xml:space="preserve"><value>No se encontraron facturas.</value></data>
+  <data name="InvoiceStatus_paid" xml:space="preserve"><value>Pagada</value></data>
+  <data name="InvoiceStatus_open" xml:space="preserve"><value>Abierta</value></data>
+  <data name="InvoiceStatus_draft" xml:space="preserve"><value>Borrador</value></data>
+  <data name="InvoiceStatus_void" xml:space="preserve"><value>Anulada</value></data>
+  <data name="InvoiceStatus_uncollectible" xml:space="preserve"><value>Incobrable</value></data>
 </root>

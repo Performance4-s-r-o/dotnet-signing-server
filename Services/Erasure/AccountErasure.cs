@@ -50,7 +50,7 @@ public static class AccountErasure
     /// <summary>Values of <c>retained_reason</c> used here (closed list of the contract).</summary>
     public static class RetainedReasons
     {
-        /// <summary>Invoices and payments: Act on accounting § 31–32, 10 years.</summary>
+        /// <summary>Payments: Act on accounting § 31–32, 10 years.</summary>
         public const string Accounting = "accounting_10y";
 
         /// <summary>The account's own administrator actions in the audit trail (art. 17(3)(e)).</summary>

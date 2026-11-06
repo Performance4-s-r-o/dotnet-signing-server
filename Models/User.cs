@@ -193,6 +193,5 @@ public class User
     public ICollection<ApiToken> ApiTokens { get; set; } = new List<ApiToken>();
     public ICollection<Document> Documents { get; set; } = new List<Document>();
     public ICollection<UsageRecord> UsageRecords { get; set; } = new List<UsageRecord>();
-    public ICollection<Invoice> Invoices { get; set; } = new List<Invoice>();
     public ICollection<Payment> Payments { get; set; } = new List<Payment>();
 }

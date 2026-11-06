@@ -124,9 +124,7 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
         db.StoredPdfTemplates.Add(new StoredPdfTemplate { UserId = id, Base64Content = "JVBERi0=", FieldsJson = "[]", Name = "t" });
         db.ApiOperations.Add(new ApiOperation { UserId = id, OperationId = "op-" + id.ToString("N"), Operation = "sign", RequestFingerprint = "f", State = ApiOperationState.Completed, ResultProtected = [1, 2, 3] });
         db.ApiTokens.Add(new ApiToken { UserId = id, Label = "t", TokenHash = [1, 2, 3], TokenPrefix = "p4_" + id.ToString("N")[..5] });
-        var invoice = new Invoice { UserId = id, AmountCents = 1000, Currency = "EUR", StripeInvoiceId = "in_" + id.ToString("N") };
-        db.Invoices.Add(invoice);
-        db.Payments.Add(new Payment { UserId = id, InvoiceId = invoice.Id, AmountCents = 1000, Currency = "EUR" });
+        db.Payments.Add(new Payment { UserId = id, AmountCents = 1000, Currency = "EUR" });
         db.ConsentRecords.Add(new ConsentRecord
         {
             UserId = id,
@@ -243,8 +241,7 @@ public class AccountErasureTests : IClassFixture<OutboxPostgresFixture>, IDispos
             Assert.False(await db.AuthAttemptCounters.AnyAsync(c => c.Key.EndsWith(a.Email.ToLowerInvariant()) && !c.Key.EndsWith(b.Email.ToLowerInvariant())));
             Assert.False(await db.AuthAttemptCounters.AnyAsync(c => c.Key == "reauth:" + a.UserId.ToString("D")));
 
-            // Kept: invoices and payments (10 years), usage on the tombstone, consents without the user agent.
-            Assert.Equal(1, await db.Invoices.CountAsync(i => i.UserId == a.UserId));
+            // Kept: payments (10 years), usage on the tombstone, consents without the user agent.
             Assert.Equal(1, await db.Payments.CountAsync(p => p.UserId == a.UserId));
             var usage = await db.UsageRecords.SingleAsync(r => r.UserId == a.UserId);
             Assert.Null(usage.DocumentId);

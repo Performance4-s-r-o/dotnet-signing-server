@@ -395,9 +395,7 @@ public sealed class AccountErasureService
             .Where(c => c.Key.EndsWith(idKey) || (emailKey != null && c.Key.EndsWith(emailKey)))
             .ExecuteDeleteAsync(ct);
 
-        var invoicesKept = await db.Invoices.CountAsync(i => i.UserId == userId, ct);
         var paymentsKept = await db.Payments.CountAsync(p => p.UserId == userId, ct);
-        counts["invoices_kept"] = invoicesKept;
         counts["payments_kept"] = paymentsKept;
         counts["usage_records_kept"] = await db.UsageRecords.CountAsync(r => r.UserId == userId, ct);
         counts["consents_kept"] = consentsKept;
@@ -425,7 +423,7 @@ public sealed class AccountErasureService
 
         var retainedReasons = new List<string>();
         if (auditRowsKept > 0) retainedReasons.Add(AccountErasure.RetainedReasons.LegalClaims);
-        if (invoicesKept + paymentsKept > 0) retainedReasons.Add(AccountErasure.RetainedReasons.Accounting);
+        if (paymentsKept > 0) retainedReasons.Add(AccountErasure.RetainedReasons.Accounting);
         if (consentsKept > 0) retainedReasons.Add(AccountErasure.RetainedReasons.ConsentEvidence);
         var retainedReason = retainedReasons.FirstOrDefault();
 

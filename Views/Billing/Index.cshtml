@@ -9,6 +9,13 @@
     bool hasPacks = Model.Packs.Count > 0;
     var pm = Model.SavedPaymentMethod;
     bool hasCard = pm != null;
+    // Known statuses are translated; an unknown one is shown as the service sent it.
+    string InvoiceStatusLabel(string status)
+    {
+        var key = "InvoiceStatus_" + status.ToLowerInvariant();
+        var translated = L[key];
+        return translated.ResourceNotFound ? char.ToUpper(status[0]) + status.Substring(1) : translated.Value;
+    }
 }
 <h1 class="content-box-title">Billing</h1>
 
@@ -288,18 +295,18 @@ else
 }
 
 <section class="billing-invoices">
-    <h2 class="billing-invoices-title">Invoices</h2>
+    <h2 class="billing-invoices-title">@L["InvoicesTitle"]</h2>
     <div class="table-wrapper">
         @if (Model.StripeInvoices.Any())
         {
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Invoice number</th>
-                        <th>Price</th>
-                        <th>Status</th>
-                        <th>Download</th>
-                        <th>Date</th>
+                        <th>@L["InvoiceNumber"]</th>
+                        <th>@L["InvoicePrice"]</th>
+                        <th>@L["InvoiceStatus"]</th>
+                        <th>@L["InvoiceDownload"]</th>
+                        <th>@L["Date"]</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -309,13 +316,13 @@ else
                             <td>@(invoice.Number ?? "-")</td>
                             <td>@(invoice.AmountDueMinor / 100.0m) @invoice.Currency</td>
                             <td><span
-                                    class="billing-status billing-status--@invoice.Status.ToLower()">@char.ToUpper(invoice.Status[0])@invoice.Status.Substring(1)</span>
+                                    class="billing-status billing-status--@invoice.Status.ToLower()">@InvoiceStatusLabel(invoice.Status)</span>
                             </td>
                             <td>
                                 @if (!string.IsNullOrWhiteSpace(invoice.HostedInvoiceUrl))
                                 {
                                     <a href="@invoice.HostedInvoiceUrl" class="billing-download-link" target="_blank"
-                                        rel="noreferrer noopener">Open</a>
+                                        rel="noreferrer noopener">@L["InvoiceOpen"]</a>
                                 }
                                 else
                                 {
@@ -336,7 +343,7 @@ else
         }
         else
         {
-            <p class="muted m-4">No invoices found.</p>
+            <p class="muted m-4">@L["InvoicesNone"]</p>
         }
     </div>
 </section>

@@ -17,7 +17,7 @@ namespace DotNetSigningServer.Services;
 /// document is cut.</item>
 /// </list>
 /// The backoffice inbox/outbox are cleaned by their own workers
-/// (<c>BackofficeInboxProcessor</c>, <c>OutboxHealth</c>). Invoices and payments stay (10 years).
+/// (<c>BackofficeInboxProcessor</c>, <c>OutboxHealth</c>). Payments stay (10 years).
 /// </summary>
 public sealed class DataRetentionService(IServiceProvider services, TimeProvider time, ILogger<DataRetentionService> logger, IJobHeartbeat? heartbeat = null) : BackgroundService
 {
