@@ -824,4 +824,30 @@
   <data name="InvoiceStatus_draft" xml:space="preserve"><value>Entwurf</value></data>
   <data name="InvoiceStatus_void" xml:space="preserve"><value>Storniert</value></data>
   <data name="InvoiceStatus_uncollectible" xml:space="preserve"><value>Uneinbringlich</value></data>
+  <data name="BillingTitle" xml:space="preserve"><value>Abrechnung</value></data>
+  <data name="BillingYourCredits" xml:space="preserve"><value>Ihre Credits</value></data>
+  <data name="BillingRemaining" xml:space="preserve"><value>Verbleibend:</value></data>
+  <data name="BillingFreeCreditsNote" xml:space="preserve"><value>Enthält die ersten 10 kostenlosen Credits Ihres Kontos.</value></data>
+  <data name="BillingPricing" xml:space="preserve"><value>Preise</value></data>
+  <data name="BillingPackLine" xml:space="preserve"><value>{0} Credits: {1} {2}</value></data>
+  <data name="BillingPercentOff" xml:space="preserve"><value>({0} % Rabatt)</value></data>
+  <data name="AutoRechargeTitle" xml:space="preserve"><value>Automatisches Aufladen</value></data>
+  <data name="AutoRechargeActive" xml:space="preserve"><value>Aktiv</value></data>
+  <data name="AutoRechargeActiveDescription" xml:space="preserve"><value>&lt;strong&gt;{0} Credits&lt;/strong&gt; werden automatisch gekauft, sobald Ihr Guthaben unter &lt;strong&gt;{1}&lt;/strong&gt; Credits fällt.</value></data>
+  <data name="AutoRechargePriceChanged" xml:space="preserve"><value>Der Preis hat sich seit der Aktivierung geändert ({0} {1} → {2} {1} / 100 Credits).</value></data>
+  <data name="AutoRechargeDisableConfirm" xml:space="preserve"><value>Möchten Sie das automatische Aufladen wirklich deaktivieren?</value></data>
+  <data name="AutoRechargeDisable" xml:space="preserve"><value>Automatisches Aufladen deaktivieren</value></data>
+  <data name="AutoRechargeEnableDescription" xml:space="preserve"><value>&lt;strong&gt;{0} Credits&lt;/strong&gt; automatisch kaufen, sobald Ihr Guthaben unter {1} Credits fällt. Basierend auf Ihrem letzten Kauf.</value></data>
+  <data name="AutoRechargeEnable" xml:space="preserve"><value>Automatisches Aufladen aktivieren</value></data>
+  <data name="AutoRechargePurchaseFirst" xml:space="preserve"><value>Kaufen Sie zuerst Credits, dann können Sie das automatische Aufladen aktivieren. Sie können es auch beim Bezahlen aktivieren.</value></data>
+  <data name="BuyMoreCredits" xml:space="preserve"><value>Weitere Credits kaufen</value></data>
+  <data name="BuyCreditsDescription" xml:space="preserve"><value>Kaufen Sie Credits für Ihr Konto.</value></data>
+  <data name="CreditsToBuy" xml:space="preserve"><value>Zu kaufende Credits</value></data>
+  <data name="PackCredits" xml:space="preserve"><value>{0} Credits</value></data>
+  <data name="PackFor" xml:space="preserve"><value>für {0} {1}</value></data>
+  <data name="PaymentNextStep" xml:space="preserve"><value>Ihre Zahlungsdaten geben Sie im nächsten Schritt ein.</value></data>
+  <data name="PlaceOrder" xml:space="preserve"><value>Bestellen</value></data>
+  <data name="CheckoutNote" xml:space="preserve"><value>Für sichere Vorauszahlungen wird Stripe Checkout verwendet. Mit einem Klick auf „Bestellen“ stimmen Sie unseren {0} und {1} zu.</value></data>
+  <data name="CheckoutTermsLink" xml:space="preserve"><value>Bedingungen</value></data>
+  <data name="CheckoutPrivacyLink" xml:space="preserve"><value>Datenschutzerklärung</value></data>
 </root>
