@@ -72,13 +72,14 @@
 </style>
 
 @* Before CSP_MODE=enforce: go through the template builder in report-only (loading a PDF, the preview,
-   JSX rendering). Babel runs inline text/babel code and pdf.js loads its worker from a blob that imports
-   a cdnjs script; under 'strict-dynamic' either may be blocked. Babel could be replaced by a precompiled
-   bundle, the worker served from 'self'. *@
-<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin></script>
-<script src="https://unpkg.com/@@babel/standalone/babel.min.js" crossorigin></script>
+   JSX rendering). Babel 7 copies the nonce to the script it inserts; pdf.js loads its worker from a blob
+   that imports a cdnjs script. Babel could be replaced by a precompiled bundle, the worker served from 'self'. *@
+@* Exact versions with SRI: an unpinned @babel/standalone became 8.x, whose react preset emits
+   "import ... from 'react/jsx-runtime'" and the inline script failed to parse (B-10). *@
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@@babel/standalone@7.29.13/babel.min.js" integrity="sha384-1lSPw6arbfdXpAdV7sZGLZSzwKC102+rnrnDuIQMKYVnYD1lL7HzMxxzIFc4IeY7" crossorigin="anonymous"></script>
 
 <script type="text/babel" data-presets="env,react">
   const { useEffect, useRef, useState } = React;
