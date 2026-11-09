@@ -137,4 +137,27 @@ public class ContentSecurityPolicyTests
             .ToList();
         Assert.Empty(offenders);
     }
+
+    [Fact]
+    public void Views_LoadExternalScriptsOnlyPinnedAndWithIntegrity()
+    {
+        // An unpinned @babel/standalone moved to 8.x and broke the template builder (B-10).
+        var tag = new Regex(@"<script\b[^>]*\bsrc=""(https?://[^""]+)""[^>]*>", RegexOptions.IgnoreCase);
+        var exactVersion = new Regex(@"(@|/)\d+\.\d+\.\d+/");
+        var offenders = Directory.EnumerateFiles(RepoFile("Views"), "*.cshtml", SearchOption.AllDirectories)
+            .SelectMany(f => tag.Matches(File.ReadAllText(f)).Select(m => (File: Path.GetFileName(f), Tag: m.Value, Url: m.Groups[1].Value)))
+            .Where(s => !exactVersion.IsMatch(s.Url) || !s.Tag.Contains("integrity=\"sha384-") || !s.Tag.Contains("crossorigin=\"anonymous\""))
+            .Select(s => $"{s.File}: {s.Url}")
+            .ToList();
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void TemplateBuilder_UsesBabel7_WhoseReactPresetEmitsClassicScript()
+    {
+        // Babel 8's react preset defaults to the automatic runtime, an ES import a classic script cannot parse.
+        var view = File.ReadAllText(RepoFile(Path.Combine("Views", "Home", "TemplateBuilder.cshtml")));
+        Assert.Matches(@"unpkg\.com/@@babel/standalone@7\.\d+\.\d+/babel\.min\.js", view);
+        Assert.Contains("<script type=\"text/babel\" data-presets=\"env,react\">", view);
+    }
 }
