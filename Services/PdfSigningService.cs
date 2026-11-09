@@ -440,6 +440,7 @@ namespace DotNetSigningServer.Services
                 throw new ArgumentException("A filename is required to attach a file to the PDF.", nameof(input.FileName));
             }
 
+            var afRelationship = EmbeddedFiles.ParseRelationship(input.AfRelationship);
             byte[] pdfBytes = pdf ?? Convert.FromBase64String(input.PdfContent);
             byte[] attachmentBytes = Convert.FromBase64String(input.AttachmentContent);
             string attachmentFileName = input.FileName;
@@ -474,6 +475,12 @@ namespace DotNetSigningServer.Services
             var writer = new PdfWriter(msOut);
             var pdfDoc = new PdfDocument(reader, writer, new StampingProperties().UseAppendMode());
 
+            // A file added after a signature shows as a change made after signing.
+            if (input.RejectIfSigned && PdfFormFlattener.CarriesSignature(pdfDoc))
+            {
+                throw new ApiValidationException(PdfFormFlattener.AlreadySignedCode, "document carries a signature");
+            }
+
             // Ensure unique attachment name -- if a file with the same name already
             // exists (e.g. multiple signers each adding evidence), append a suffix.
             var catalog = pdfDoc.GetCatalog();
@@ -497,12 +504,11 @@ namespace DotNetSigningServer.Services
             if (pdfDoc.GetConformance().GetAConformance()?.GetPart() == "3")
             {
                 // A PDF/A-3 document stays one (#184): the file goes in as an associated file with a MIME type.
-                EmbeddedFiles.Add(pdfDoc, uniqueFileName, attachmentBytes, input.Description, uniqueFileName, attachmentMimeType, PdfName.Unspecified);
+                EmbeddedFiles.Add(pdfDoc, uniqueFileName, attachmentBytes, input.Description, uniqueFileName, attachmentMimeType, afRelationship);
                 pdfDoc.Close();
                 return Convert.ToBase64String(msOut.ToArray());
             }
 
-            var afRelationship = PdfName.Unspecified;
             PdfFileSpec fileSpec = string.IsNullOrWhiteSpace(attachmentMimeType)
                 ? PdfFileSpec.CreateEmbeddedFileSpec(pdfDoc, attachmentBytes, input.Description, uniqueFileName, afRelationship)
                 : PdfFileSpec.CreateEmbeddedFileSpec(

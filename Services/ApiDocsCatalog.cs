@@ -313,7 +313,9 @@ Content-Type: application/json
   "attachmentContent": "base64-binary",
   "fileName": "terms.pdf",
   "description": "Terms and conditions",
-  "mimeType": "application/pdf"
+  "mimeType": "application/pdf",
+  "afRelationship": "Supplement",
+  "rejectIfSigned": true
 }
 
 Response:

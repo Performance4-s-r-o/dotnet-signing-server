@@ -634,7 +634,8 @@
   <data name="Error_TOO_MANY_TEMPLATES" xml:space="preserve"><value>Die maximale Anzahl gespeicherter Vorlagen ist erreicht.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Eine Seite des PDF ist zu groß für die Codesuche (mehr als etwa 1,6 m² oder eine Seite länger als 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>Das PDF enthält aktive Inhalte (eine Launch-Aktion oder beim Öffnen ausgeführtes JavaScript) und wurde abgelehnt.</value></data>
-  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>Das Dokument ist bereits signiert; das Formular abzuflachen oder es in PDF/A umzuwandeln würde die vorhandene Signatur ungültig machen.</value></data>
+  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>Das Dokument ist bereits signiert; das Formular abzuflachen, es in PDF/A umzuwandeln oder einen Anhang hinzuzufügen würde die vorhandene Signatur ungültig machen.</value></data>
+  <data name="Error_ATTACHMENT_RELATIONSHIP_INVALID" xml:space="preserve"><value>Unbekannte Beziehung des Anhangs. Verwenden Sie Source, Data, Alternative, Supplement oder Unspecified.</value></data>
   <data name="Error_PDF_XFA_DYNAMIC" xml:space="preserve"><value>Dies ist ein dynamisches (XFA-)Formular, das nicht reduziert werden kann. Speichern Sie es als statisches PDF-Formular oder drucken Sie es in eine PDF-Datei und signieren Sie diese.</value></data>
   <data name="Error_FLATTEN_INCOMPLETE" xml:space="preserve"><value>Das Dokument enthält nach dem Reduzieren weiterhin aktive Inhalte und wurde abgelehnt.</value></data>
   <data name="Error_PDF_FORM_INVALID" xml:space="preserve"><value>Das Formular im Dokument ist fehlerhaft: Zwei Felder haben denselben Namen und unterschiedliche Werte. Korrigieren Sie das Formular im Ursprungsprogramm (oder drucken Sie es in eine PDF-Datei) und signieren Sie diese.</value></data>

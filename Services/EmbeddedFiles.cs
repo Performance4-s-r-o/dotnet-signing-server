@@ -1,3 +1,4 @@
+using DotNetSigningServer.Exceptions;
 using iText.Kernel.Exceptions;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Filespec;
@@ -19,6 +20,20 @@ public static class EmbeddedFiles
     {
         PdfName.Source, PdfName.Data, PdfName.Alternative, PdfName.Supplement, PdfName.Unspecified,
     };
+
+    /// <summary>Code of an <c>AfRelationship</c> outside the allowed names.</summary>
+    public const string RelationshipInvalidCode = "ATTACHMENT_RELATIONSHIP_INVALID";
+
+    /// <summary>The relationship a caller asked for; empty = <c>Unspecified</c>, an unknown name throws.</summary>
+    public static PdfName ParseRelationship(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return PdfName.Unspecified;
+        foreach (var name in Relationships)
+        {
+            if (string.Equals(name.GetValue(), value.Trim(), StringComparison.OrdinalIgnoreCase)) return name;
+        }
+        throw new ApiValidationException(RelationshipInvalidCode, "unknown AFRelationship");
+    }
 
     /// <summary>Embedded files of the name tree, by key.</summary>
     public static IReadOnlyList<(string Key, PdfDictionary Spec)> Of(PdfDocument document)
