@@ -634,7 +634,8 @@
   <data name="Error_TOO_MANY_TEMPLATES" xml:space="preserve"><value>Se ha alcanzado el número máximo de plantillas almacenadas.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Una página del PDF es demasiado grande para buscar códigos (más de unos 1,6 m² o un lado de más de 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>El PDF contiene contenido activo (una acción Launch o JavaScript que se ejecuta al abrir) y fue rechazado.</value></data>
-  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>El documento ya está firmado; aplanar su formulario o convertirlo a PDF/A invalidaría la firma existente.</value></data>
+  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>El documento ya está firmado; aplanar su formulario, convertirlo a PDF/A o añadir un adjunto invalidaría la firma existente.</value></data>
+  <data name="Error_ATTACHMENT_RELATIONSHIP_INVALID" xml:space="preserve"><value>Relación de adjunto desconocida. Use Source, Data, Alternative, Supplement o Unspecified.</value></data>
   <data name="Error_PDF_XFA_DYNAMIC" xml:space="preserve"><value>Se trata de un formulario dinámico (XFA) que no se puede aplanar. Guárdelo como formulario PDF estático o imprímalo en PDF y firme ese archivo.</value></data>
   <data name="Error_FLATTEN_INCOMPLETE" xml:space="preserve"><value>El documento sigue conteniendo contenido activo después del aplanado y fue rechazado.</value></data>
   <data name="Error_PDF_FORM_INVALID" xml:space="preserve"><value>El formulario del documento está dañado: dos campos tienen el mismo nombre y valores distintos. Corrija el formulario en el programa de origen (o imprímalo en PDF) y firme ese archivo.</value></data>

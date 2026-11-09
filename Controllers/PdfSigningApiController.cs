@@ -1203,6 +1203,7 @@ namespace DotNetSigningServer.Controllers
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Attachment PDF");
                 SafetyGuard.EnsureSafePdf(input.PdfContent, "Attachment PDF");
                 LimitGuard.EnsureAttachmentWithinLimit(input.AttachmentContent, "Attachment");
+                EmbeddedFiles.ParseRelationship(input.AfRelationship);
             }
             catch (ApiValidationException ex)
             {
@@ -1232,6 +1233,7 @@ namespace DotNetSigningServer.Controllers
             {
                 SafetyGuard.EnsureSafePdf(pdf!, "Attachment PDF");
                 LimitGuard.EnsureAttachmentWithinLimit(input!.AttachmentContent, "Attachment");
+                EmbeddedFiles.ParseRelationship(input.AfRelationship);
             }
             catch (ApiValidationException ex)
             {
@@ -1266,6 +1268,15 @@ namespace DotNetSigningServer.Controllers
             catch (ApiValidationException ex) when (ex.Code == PdfSigningService.EvidenceCertNotConfiguredCode)
             {
                 return EvidenceCertNotConfigured();
+            }
+            catch (ApiValidationException ex) when (ex.Code == PdfFormFlattener.AlreadySignedCode)
+            {
+                // Refusal of the document as it is, like flatten-form: 409, nothing charged.
+                return Conflict(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
             }
             catch (Exception ex)
             {

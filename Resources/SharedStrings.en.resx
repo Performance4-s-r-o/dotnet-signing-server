@@ -644,7 +644,8 @@
   <data name="Error_TOO_MANY_TEMPLATES" xml:space="preserve"><value>The maximum number of stored templates has been reached.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>A page of the PDF is too large to scan for codes (more than about 1.6 m², or one side longer than 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>The PDF contains active content (a launch action or JavaScript that runs on open) and was refused.</value></data>
-  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>The document is already signed; flattening its form or converting it to PDF/A would break the existing signature.</value></data>
+  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>The document is already signed; flattening its form, converting it to PDF/A or adding an attachment would break the existing signature.</value></data>
+  <data name="Error_ATTACHMENT_RELATIONSHIP_INVALID" xml:space="preserve"><value>Unknown attachment relationship. Use Source, Data, Alternative, Supplement or Unspecified.</value></data>
   <data name="Error_PDF_XFA_DYNAMIC" xml:space="preserve"><value>This is a dynamic (XFA) form, which cannot be flattened. Save it as a static PDF form or print it to PDF and sign that.</value></data>
   <data name="Error_FLATTEN_INCOMPLETE" xml:space="preserve"><value>The document still contains active content after flattening and was refused.</value></data>
   <data name="Error_PDF_FORM_INVALID" xml:space="preserve"><value>The form in the document is broken: two fields have the same name and different values. Fix the form in the program it came from (or print it to PDF) and sign that.</value></data>

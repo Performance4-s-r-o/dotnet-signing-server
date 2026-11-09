@@ -644,7 +644,8 @@
   <data name="Error_TOO_MANY_TEMPLATES" xml:space="preserve"><value>Byl dosažen maximální počet uložených šablon.</value></data>
   <data name="Error_PDF_PAGE_TOO_LARGE" xml:space="preserve"><value>Stránka PDF je pro hledání kódů příliš velká (víc než asi 1,6 m² nebo strana delší než 5 m).</value></data>
   <data name="Error_PDF_ACTIVE_CONTENT" xml:space="preserve"><value>PDF obsahuje aktivní obsah (akci Launch nebo JavaScript spouštěný při otevření) a bylo odmítnuto.</value></data>
-  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>Dokument už je podepsaný; zploštění formuláře ani převod na PDF/A nejdou bez porušení dosavadního podpisu.</value></data>
+  <data name="Error_PDF_ALREADY_SIGNED" xml:space="preserve"><value>Dokument už je podepsaný; zploštění formuláře, převod na PDF/A ani přidání přílohy nejdou bez porušení dosavadního podpisu.</value></data>
+  <data name="Error_ATTACHMENT_RELATIONSHIP_INVALID" xml:space="preserve"><value>Neznámý vztah přílohy. Použijte Source, Data, Alternative, Supplement nebo Unspecified.</value></data>
   <data name="Error_PDF_XFA_DYNAMIC" xml:space="preserve"><value>Jde o dynamický formulář (XFA), který nejde zploštit. Uložte ho jako statický PDF formulář nebo ho vytiskněte do PDF a podepište ten.</value></data>
   <data name="Error_FLATTEN_INCOMPLETE" xml:space="preserve"><value>Dokument i po zploštění obsahuje aktivní obsah, a byl proto odmítnut.</value></data>
   <data name="Error_PDF_FORM_INVALID" xml:space="preserve"><value>Formulář v dokumentu je poškozený: dvě pole mají stejný název a různé hodnoty. Opravte formulář v programu, ze kterého pochází (nebo ho vytiskněte do PDF), a podepište ten.</value></data>

@@ -323,6 +323,80 @@ public class PdfSigningServiceTests : IDisposable
         Assert.True(bytes.Length > 0);
     }
 
+    [Theory]
+    [InlineData("Data", "Data")]
+    [InlineData("source", "Source")]
+    [InlineData(null, "Unspecified")]
+    public void AddAttachment_SetsRequestedAfRelationship(string? requested, string expected)
+    {
+        var result = _sut.AddAttachment(new AddAttachmentInput
+        {
+            PdfContent = TestHelpers.CreateMinimalPdfBase64(),
+            AttachmentContent = Convert.ToBase64String("<invoice/>"u8.ToArray()),
+            FileName = "invoice.xml",
+            MimeType = "application/xml",
+            AfRelationship = requested,
+        });
+
+        using var doc = new PdfDocument(new PdfReader(new MemoryStream(Convert.FromBase64String(result))));
+        var spec = (PdfDictionary)doc.GetCatalog().GetNameTree(PdfName.EmbeddedFiles).GetNames()[new PdfString("invoice.xml")];
+        Assert.Equal(expected, spec.GetAsName(PdfName.AFRelationship)?.GetValue());
+    }
+
+    [Fact]
+    public void AddAttachment_UnknownAfRelationship_ThrowsCoded()
+    {
+        var ex = Assert.Throws<ApiValidationException>(() => _sut.AddAttachment(new AddAttachmentInput
+        {
+            PdfContent = TestHelpers.CreateMinimalPdfBase64(),
+            AttachmentContent = Convert.ToBase64String(new byte[] { 1 }),
+            FileName = "a.bin",
+            AfRelationship = "Invoice",
+        }));
+        Assert.Equal(EmbeddedFiles.RelationshipInvalidCode, ex.Code);
+    }
+
+    [Fact]
+    public void AddAttachment_RejectIfSigned_RefusesSignedDocument_AndAllowsItWithoutTheFlag()
+    {
+        var (_, pfxBase64, password) = TestHelpers.CreateTestCertificate();
+        var signed = _sut.SignWithPfx(new PfxSignInput
+        {
+            PdfContent = TestHelpers.CreateMinimalPdfBase64(),
+            PfxContent = pfxBase64,
+            PfxPassword = password,
+            FieldName = "Signature1",
+            SignRect = new SignRect { X = 10, Y = 10, Width = 200, Height = 50 },
+        });
+        var input = new AddAttachmentInput
+        {
+            PdfContent = signed,
+            AttachmentContent = Convert.ToBase64String("<invoice/>"u8.ToArray()),
+            FileName = "invoice.xml",
+            RejectIfSigned = true,
+        };
+
+        var ex = Assert.Throws<ApiValidationException>(() => _sut.AddAttachment(input));
+        Assert.Equal(PdfFormFlattener.AlreadySignedCode, ex.Code);
+
+        // The evidence of a further signer still goes onto a signed document.
+        input.RejectIfSigned = false;
+        Assert.False(string.IsNullOrWhiteSpace(_sut.AddAttachment(input)));
+    }
+
+    [Fact]
+    public void AddAttachment_RejectIfSigned_AcceptsUnsignedDocument()
+    {
+        var result = _sut.AddAttachment(new AddAttachmentInput
+        {
+            PdfContent = TestHelpers.CreateMinimalPdfBase64(),
+            AttachmentContent = Convert.ToBase64String("<invoice/>"u8.ToArray()),
+            FileName = "invoice.xml",
+            RejectIfSigned = true,
+        });
+        Assert.False(string.IsNullOrWhiteSpace(result));
+    }
+
     [Fact]
     public void AddAttachment_WithEvidenceEncryption_EncryptsPayload()
     {
