@@ -645,6 +645,7 @@
   <data name="Error_PDFA_EMBEDDED_FILES" xml:space="preserve"><value>El documento contiene archivos incrustados (un adjunto o pruebas de la firma) y PDF/A-2B no los admite. Elija PDF/A-3B, que los conserva.</value></data>
   <data name="FlattenFormError" xml:space="preserve"><value>Se produjo un error al aplanar el formulario</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>El archivo adjunto supera el tamaño máximo permitido.</value></data>
+  <data name="Error_ATTACHMENT_TYPE_NOT_ALLOWED" xml:space="preserve"><value>Este tipo de archivo no se puede adjuntar (no se permiten ejecutables ni scripts).</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>El contenido del PDF es obligatorio.</value></data>
   <data name="Error_FIELDS_REQUIRED" xml:space="preserve"><value>Se requiere al menos una definición de campo.</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED_NO_TEMPLATE" xml:space="preserve"><value>El contenido del PDF es obligatorio cuando no se proporciona una plantilla.</value></data>

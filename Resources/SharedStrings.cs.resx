@@ -655,6 +655,7 @@
   <data name="Error_PDFA_EMBEDDED_FILES" xml:space="preserve"><value>Dokument obsahuje vložené soubory (přílohu nebo důkazy o podpisu) a PDF/A-2B je nepřipouští. Zvolte PDF/A-3B, které je ponechá.</value></data>
   <data name="FlattenFormError" xml:space="preserve"><value>Při zplošťování formuláře došlo k chybě</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>Příloha překračuje maximální povolenou velikost.</value></data>
+  <data name="Error_ATTACHMENT_TYPE_NOT_ALLOWED" xml:space="preserve"><value>Tento typ souboru nelze vložit jako přílohu (spustitelné soubory a skripty nejsou povolené).</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>Obsah PDF je povinný.</value></data>
   <data name="Error_FIELDS_REQUIRED" xml:space="preserve"><value>Je vyžadována alespoň jedna definice pole.</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED_NO_TEMPLATE" xml:space="preserve"><value>Obsah PDF je povinný, pokud není zadána šablona.</value></data>

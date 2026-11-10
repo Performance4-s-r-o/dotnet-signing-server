@@ -93,6 +93,23 @@ public class ContentLimitGuard
         }
     }
 
+    /// <summary>Spustitelné a skriptové typy, které do PDF nevkládáme (Acrobat je jinak nabídne otevřít).</summary>
+    public static readonly IReadOnlySet<string> BlockedAttachmentExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ".exe", ".dll", ".com", ".scr", ".pif", ".cpl", ".msi", ".msp", ".msc", ".bat", ".cmd", ".ps1", ".psm1",
+        ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".hta", ".jar", ".lnk", ".reg", ".sh", ".app", ".dmg", ".pkg",
+    };
+
+    public static void EnsureAttachmentTypeAllowed(string? fileName)
+    {
+        // Windows ignoruje koncové tečky a mezery, „x.exe.“ je pořád .exe.
+        var trimmed = (fileName ?? string.Empty).TrimEnd('.', ' ');
+        if (BlockedAttachmentExtensions.Contains(Path.GetExtension(trimmed)))
+        {
+            throw new ApiValidationException("ATTACHMENT_TYPE_NOT_ALLOWED");
+        }
+    }
+
     public long GetSizeBytes(string base64)
     {
         if (string.IsNullOrWhiteSpace(base64)) return 0;

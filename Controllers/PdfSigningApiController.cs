@@ -1203,6 +1203,7 @@ namespace DotNetSigningServer.Controllers
                 LimitGuard.EnsurePdfWithinLimit(input.PdfContent, "Attachment PDF");
                 SafetyGuard.EnsureSafePdf(input.PdfContent, "Attachment PDF");
                 LimitGuard.EnsureAttachmentWithinLimit(input.AttachmentContent, "Attachment");
+                ContentLimitGuard.EnsureAttachmentTypeAllowed(input.FileName);
                 EmbeddedFiles.ParseRelationship(input.AfRelationship);
             }
             catch (ApiValidationException ex)
@@ -1233,6 +1234,7 @@ namespace DotNetSigningServer.Controllers
             {
                 SafetyGuard.EnsureSafePdf(pdf!, "Attachment PDF");
                 LimitGuard.EnsureAttachmentWithinLimit(input!.AttachmentContent, "Attachment");
+                ContentLimitGuard.EnsureAttachmentTypeAllowed(input.FileName);
                 EmbeddedFiles.ParseRelationship(input.AfRelationship);
             }
             catch (ApiValidationException ex)
