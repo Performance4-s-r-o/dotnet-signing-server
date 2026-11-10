@@ -139,16 +139,16 @@
       },
       "Magick.NET-Q16-AnyCPU": {
         "type": "Transitive",
-        "resolved": "15.0.0",
-        "contentHash": "zcwOVCGvx4y+7xV+1Vlp1SMhfL5vc22xf7ahBMZ38xot/1Cmzi6lMZeZLlbjkD73PedRjStDu9v1qX8S0XmKjA==",
+        "resolved": "15.1.0",
+        "contentHash": "Kd/emkp1qInFIHdCtm3z7u4+Gtvwvvuokt0DzhfOl69OXGH/ZugziGJSNhvl9G4EqdSKoWWTC9ulYhsd1D0U2g==",
         "dependencies": {
-          "Magick.NET.Core": "15.0.0"
+          "Magick.NET.Core": "15.1.0"
         }
       },
       "Magick.NET.Core": {
         "type": "Transitive",
-        "resolved": "15.0.0",
-        "contentHash": "mP/VovMRuXBX2Rcnn1wWu0Zur6cjsf8IQhmTUCrasEk8cyAtN5sjHE7NxiH88whw8/2mjRvuphKUwj6bAZslpQ=="
+        "resolved": "15.1.0",
+        "contentHash": "WIaemRN4tJvw5BNUfsO8/V3LojV5FOCojQ/sQ4ruXme1o2frRYfcvHPhKV5E6TbYoEdVEvtGX+8Wbut0F2lJHg=="
       },
       "Microsoft.AspNetCore.TestHost": {
         "type": "Transitive",
@@ -1060,7 +1060,7 @@
         "type": "Project",
         "dependencies": {
           "BouncyCastle.Cryptography": "[2.7.0, )",
-          "Magick.NET-Q16-AnyCPU": "[15.0.0, )",
+          "Magick.NET-Q16-AnyCPU": "[15.1.0, )",
           "Microsoft.EntityFrameworkCore.Sqlite": "[9.0.22, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[9.0.4, )",
           "Sentry.AspNetCore": "[6.12.1, )",
