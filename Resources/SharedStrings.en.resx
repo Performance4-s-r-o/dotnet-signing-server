@@ -655,6 +655,7 @@
   <data name="Error_PDFA_EMBEDDED_FILES" xml:space="preserve"><value>The document contains embedded files (an attachment or signature evidence) and PDF/A-2B does not allow them. Choose PDF/A-3B, which keeps them.</value></data>
   <data name="FlattenFormError" xml:space="preserve"><value>An error occurred while flattening the form</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>The attachment exceeds the maximum allowed size.</value></data>
+  <data name="Error_ATTACHMENT_TYPE_NOT_ALLOWED" xml:space="preserve"><value>This file type cannot be attached (executables and scripts are not allowed).</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>PDF content is required.</value></data>
   <data name="Error_FIELDS_REQUIRED" xml:space="preserve"><value>At least one field definition is required.</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED_NO_TEMPLATE" xml:space="preserve"><value>PDF content is required when no template is provided.</value></data>

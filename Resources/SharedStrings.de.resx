@@ -645,6 +645,7 @@
   <data name="Error_PDFA_EMBEDDED_FILES" xml:space="preserve"><value>Das Dokument enthält eingebettete Dateien (einen Anhang oder Signaturnachweise), und PDF/A-2B lässt sie nicht zu. Wählen Sie PDF/A-3B, das sie beibehält.</value></data>
   <data name="FlattenFormError" xml:space="preserve"><value>Beim Reduzieren des Formulars ist ein Fehler aufgetreten</value></data>
   <data name="Error_ATTACHMENT_SIZE_EXCEEDED" xml:space="preserve"><value>Der Anhang überschreitet die maximal zulässige Größe.</value></data>
+  <data name="Error_ATTACHMENT_TYPE_NOT_ALLOWED" xml:space="preserve"><value>Dieser Dateityp kann nicht angehängt werden (ausführbare Dateien und Skripte sind nicht erlaubt).</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED" xml:space="preserve"><value>PDF-Inhalt ist erforderlich.</value></data>
   <data name="Error_FIELDS_REQUIRED" xml:space="preserve"><value>Mindestens eine Felddefinition ist erforderlich.</value></data>
   <data name="Error_PDF_CONTENT_REQUIRED_NO_TEMPLATE" xml:space="preserve"><value>PDF-Inhalt ist erforderlich, wenn keine Vorlage angegeben wird.</value></data>

@@ -37,6 +37,28 @@ public class InputLimitsTests
 
     private static string CodeOf(Action act) => Assert.Throws<ApiValidationException>(act).Code;
 
+    // ── Typ přílohy ──────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("tool.exe")]
+    [InlineData("SCRIPT.JS")]
+    [InlineData("invoice.pdf.exe")]
+    [InlineData("run.bat. ")]
+    public void Executable_attachment_is_refused(string fileName)
+    {
+        Assert.Equal("ATTACHMENT_TYPE_NOT_ALLOWED", CodeOf(() => ContentLimitGuard.EnsureAttachmentTypeAllowed(fileName)));
+    }
+
+    [Theory]
+    [InlineData("invoice.xml")]
+    [InlineData("data.json")]
+    [InlineData("scan.pdf")]
+    [InlineData("README")]
+    public void Ordinary_attachment_passes(string fileName)
+    {
+        ContentLimitGuard.EnsureAttachmentTypeAllowed(fileName);
+    }
+
     // ── PDF ────────────────────────────────────────────────────────────────
 
     [Fact]
