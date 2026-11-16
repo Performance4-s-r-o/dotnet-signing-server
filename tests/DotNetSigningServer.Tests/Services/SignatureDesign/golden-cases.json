@@ -1012,8 +1012,8 @@
    },
    "zones": [
     {
-     "section": "left",
-     "kind": "logo",
+     "section": "right",
+     "kind": "sig",
      "rect": {
       "x": 3,
       "y": 3,
@@ -4464,8 +4464,8 @@
    },
    "zones": [
     {
-     "section": "right",
-     "kind": "logo",
+     "section": "left",
+     "kind": "sig",
      "rect": {
       "x": 3,
       "y": 3,
@@ -5144,8 +5144,8 @@
    },
    "zones": [
     {
-     "section": "left",
-     "kind": "logo",
+     "section": "right",
+     "kind": "image",
      "rect": {
       "x": 3,
       "y": 3,
@@ -5279,8 +5279,8 @@
    },
    "zones": [
     {
-     "section": "left",
-     "kind": "logo",
+     "section": "right",
+     "kind": "image",
      "rect": {
       "x": 3,
       "y": 3,

@@ -340,15 +340,23 @@ namespace DotNetSigningServer.Services.SignatureDesign
             }
 
             var sides = model.Order.Where(pos => SideKind(pos) != null).ToList();
+            // A small frame keeps one zone: the handwritten signature, else the custom image (a seal's
+            // stamp), else the first in order — same as the portal engine.
+            List<string> Keep()
+            {
+                var pick = sides.FirstOrDefault(pos => SideKind(pos) == "sig")
+                    ?? sides.FirstOrDefault(pos => SideKind(pos) == "image")
+                    ?? sides.FirstOrDefault();
+                return pick != null ? new List<string> { pick } : new List<string>();
+            }
             if (tiny)
             {
                 items = items.Take(1).ToList();
-                var sig = sides.FirstOrDefault(pos => SideKind(pos) == "sig");
-                sides = sig != null ? new List<string> { sig } : sides.Take(1).ToList();
+                sides = Keep();
             }
             else if (narrow)
             {
-                sides = sides.Take(1).ToList();
+                sides = Keep();
             }
             var inner = new Box(pad, pad, Math.Max(0, W - 2 * pad), Math.Max(0, H - 2 * pad));
 

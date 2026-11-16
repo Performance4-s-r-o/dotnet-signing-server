@@ -51,7 +51,7 @@ public class SignatureAppearanceTests
     }
 
     [Fact]
-    public void Pdfa1_flattens_a_drawn_signature_but_refuses_a_watermark()
+    public void Pdfa1_flattens_a_drawn_signature_and_leaves_out_a_translucent_watermark()
     {
         // The production ImageMagick policy (read-only except raw grey) must not break flattening.
         DotNetSigningServer.Services.CodeScanRaster.EnsureConfigured();
@@ -67,12 +67,14 @@ public class SignatureAppearanceTests
 
             var watermark = new SignatureLayoutModel();
             watermark.Background.Kind = "watermark";
-            var ex = Assert.Throws<ApiValidationException>(() => SignatureAppearance.Render(doc, new SignatureAppearanceContent
+            var warnings = SignatureAppearance.BeginWarnings();
+            // Drawn without what needs transparency; the PDF/A-1 check on close is the proof.
+            new PdfCanvas(doc.GetFirstPage()).AddXObjectAt(SignatureAppearance.Render(doc, new SignatureAppearanceContent
             {
                 Options = new SignatureAppearanceOptions { Layout = watermark },
                 LogoImage = RgbaPng,
-            }, 200, 70));
-            Assert.Equal(SignatureAppearance.TransparencyNotAllowedCode, ex.Code);
+            }, 200, 70), 10, 80);
+            Assert.Contains(SignatureAppearance.Pdfa1SimplifiedWarning, warnings);
         });
 
         using var read = new PdfDocument(new PdfReader(new MemoryStream(pdf)));
@@ -105,20 +107,22 @@ public class SignatureAppearanceTests
     }
 
     [Fact]
-    public void Pdfa1_refuses_a_drawn_signature_over_a_background_image()
+    public void Pdfa1_leaves_out_a_background_image_under_a_drawn_signature()
     {
         var model = new SignatureLayoutModel();
         model.Background.Kind = "image";
         model.Background.Opacity = 100;
         Pdfa1(doc =>
         {
-            var ex = Assert.Throws<ApiValidationException>(() => SignatureAppearance.Render(doc, new SignatureAppearanceContent
+            var warnings = SignatureAppearance.BeginWarnings();
+            // Drawn without what needs transparency; the PDF/A-1 check on close is the proof.
+            new PdfCanvas(doc.GetFirstPage()).AddXObjectAt(SignatureAppearance.Render(doc, new SignatureAppearanceContent
             {
                 Options = new SignatureAppearanceOptions { Layout = model },
                 SignImage = RgbaPng,
                 BackgroundImage = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAEElEQVR4nGP4z8DAwMDAAAAJ/gH/H0VY8QAAAABJRU5ErkJggg==",
-            }, 200, 70));
-            Assert.Equal(SignatureAppearance.TransparencyNotAllowedCode, ex.Code);
+            }, 200, 70), 10, 80);
+            Assert.Contains(SignatureAppearance.Pdfa1SimplifiedWarning, warnings);
         });
     }
 
@@ -139,7 +143,7 @@ public class SignatureAppearanceTests
     }
 
     [Fact]
-    public void Pdfa1_refuses_a_drawn_signature_over_an_opaque_watermark()
+    public void Pdfa1_leaves_out_an_opaque_watermark_under_a_drawn_signature()
     {
         DotNetSigningServer.Services.CodeScanRaster.EnsureConfigured();
         var model = new SignatureLayoutModel();
@@ -147,18 +151,20 @@ public class SignatureAppearanceTests
         model.Background.Opacity = 100;
         Pdfa1(doc =>
         {
-            var ex = Assert.Throws<ApiValidationException>(() => SignatureAppearance.Render(doc, new SignatureAppearanceContent
+            var warnings = SignatureAppearance.BeginWarnings();
+            // Drawn without what needs transparency; the PDF/A-1 check on close is the proof.
+            new PdfCanvas(doc.GetFirstPage()).AddXObjectAt(SignatureAppearance.Render(doc, new SignatureAppearanceContent
             {
                 Options = new SignatureAppearanceOptions { Layout = model },
                 SignImage = RgbaPng,
                 LogoImage = Convert.ToBase64String(RgbaPngOf(4, 2, opaque: true)),
-            }, 200, 70));
-            Assert.Equal(SignatureAppearance.TransparencyNotAllowedCode, ex.Code);
+            }, 200, 70), 10, 80);
+            Assert.Contains(SignatureAppearance.Pdfa1SimplifiedWarning, warnings);
         });
     }
 
     [Fact]
-    public void Pdfa1_refuses_a_background_image_with_real_transparency()
+    public void Pdfa1_leaves_out_a_background_image_with_real_transparency()
     {
         DotNetSigningServer.Services.CodeScanRaster.EnsureConfigured();
         var model = new SignatureLayoutModel();
@@ -166,12 +172,14 @@ public class SignatureAppearanceTests
         model.Background.Opacity = 100;
         Pdfa1(doc =>
         {
-            var ex = Assert.Throws<ApiValidationException>(() => SignatureAppearance.Render(doc, new SignatureAppearanceContent
+            var warnings = SignatureAppearance.BeginWarnings();
+            // Drawn without what needs transparency; the PDF/A-1 check on close is the proof.
+            new PdfCanvas(doc.GetFirstPage()).AddXObjectAt(SignatureAppearance.Render(doc, new SignatureAppearanceContent
             {
                 Options = new SignatureAppearanceOptions { Layout = model },
                 BackgroundImage = Convert.ToBase64String(RgbaPngOf(4, 2)),
-            }, 200, 70));
-            Assert.Equal(SignatureAppearance.TransparencyNotAllowedCode, ex.Code);
+            }, 200, 70), 10, 80);
+            Assert.Contains(SignatureAppearance.Pdfa1SimplifiedWarning, warnings);
         });
     }
 
@@ -179,6 +187,7 @@ public class SignatureAppearanceTests
     public void Pdfa1_accepts_an_rgba_logo_without_transparency_over_a_background_image()
     {
         DotNetSigningServer.Services.CodeScanRaster.EnsureConfigured();
+        var warnings = SignatureAppearance.BeginWarnings();
         var model = new SignatureLayoutModel { Left = "logo" };
         model.Background.Kind = "image";
         model.Background.Opacity = 100;
@@ -190,6 +199,7 @@ public class SignatureAppearanceTests
             BackgroundImage = opaqueRgba,
             Name = "Jana",
         }, 200, 70), 10, 10));
+        Assert.Empty(warnings);
     }
 
     [Fact]
@@ -273,5 +283,19 @@ public class SignatureFieldAppearanceTests
         var inner = n2.GetAsDictionary(PdfName.Resources).GetAsDictionary(PdfName.XObject);
         var appearance = inner.GetAsStream(inner.KeySet().Single());
         Assert.Equal(new[] { 0f, 0f, 260f, 90f }, appearance.GetAsArray(PdfName.BBox).ToFloatArray());
+    }
+}
+
+public class AppearanceWarningResponseTests
+{
+    [Fact]
+    public void Warnings_are_added_to_the_answer_only_when_there_are_some()
+    {
+        var plain = DotNetSigningServer.Controllers.PdfSigningApiController.WithWarnings(new { id = "x" }, new HashSet<string>());
+        Assert.Equal("{\"id\":\"x\"}", System.Text.Json.JsonSerializer.Serialize(plain, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
+        var warned = DotNetSigningServer.Controllers.PdfSigningApiController.WithWarnings(
+            new { id = "x", hashToSign = "h" }, new HashSet<string> { SignatureAppearance.Pdfa1SimplifiedWarning });
+        Assert.Equal("{\"id\":\"x\",\"hashToSign\":\"h\",\"appearanceWarnings\":[\"APPEARANCE_PDFA1_SIMPLIFIED\"]}",
+            System.Text.Json.JsonSerializer.Serialize(warned));
     }
 }
