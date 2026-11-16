@@ -41,6 +41,32 @@ namespace DotNetSigningServer.Services.SignatureDesign
         /// <summary>PDF/A-1 and a background image or watermark (422).</summary>
         public const string TransparencyNotAllowedCode = SignatureLayoutRenderer.TransparencyNotAllowed;
 
+        /// <summary>
+        /// Warning: the document is PDF/A-1, so the signature was drawn without transparency — transparent
+        /// images flattened, a background that needs transparency left out (decision of 16 Nov 2026).
+        /// </summary>
+        public const string Pdfa1SimplifiedWarning = "APPEARANCE_PDFA1_SIMPLIFIED";
+
+        private static readonly AsyncLocal<HashSet<string>?> WarningSink = new();
+
+        /// <summary>
+        /// Starts collecting appearance warnings for the current request (flows into awaited work).
+        /// Call at the start of an endpoint; read the set once the operation finished.
+        /// </summary>
+        public static HashSet<string> BeginWarnings()
+        {
+            var set = new HashSet<string>(StringComparer.Ordinal);
+            WarningSink.Value = set;
+            return set;
+        }
+
+        private static void Warn(string code)
+        {
+            var set = WarningSink.Value;
+            if (set == null) return;
+            lock (set) set.Add(code);
+        }
+
         /// <summary>Box used when the request gives no size (width or height 0): size M.</summary>
         public const float DefaultWidth = 200;
         public const float DefaultHeight = 70;
@@ -90,8 +116,8 @@ namespace DotNetSigningServer.Services.SignatureDesign
 
         /// <summary>
         /// The appearance as one form XObject of <paramref name="width"/> × <paramref name="height"/> pt.
-        /// In PDF/A-1 an image with an alpha channel (a drawn signature) is flattened onto the colour under it;
-        /// a translucent background image or watermark is refused (<see cref="TransparencyNotAllowedCode"/>).
+        /// In PDF/A-1 an image with an alpha channel (a drawn signature) is flattened onto the colour under it
+        /// and a background that needs transparency is left out, with <see cref="Pdfa1SimplifiedWarning"/>.
         /// </summary>
         public static PdfFormXObject Render(PdfDocument doc, SignatureAppearanceContent content, double width, double height)
         {
@@ -143,25 +169,30 @@ namespace DotNetSigningServer.Services.SignatureDesign
             bool pdfA1 = doc.GetConformance().GetAConformance()?.GetPart() == "1";
             if (pdfA1)
             {
-                // PDF/A-1 has no transparency and no 16-bit images. A PNG with an alpha channel or 16 bits is
-                // made 8-bit RGB: real transparency is flattened onto the frame's background colour, without
-                // one onto white, so its box covers what lies under it. Over a background image that would be
-                // a white box on the picture, and a background with real transparency would turn white: both
-                // are refused. An alpha channel that is fully opaque (common for logos) passes. A colour-key
-                // (8-bit tRNS) needs no change; a binary mask is treated as transparency (conservative).
+                // PDF/A-1 has no transparency and no 16-bit images (decision of 16 Nov: sign, do not refuse, and
+                // warn). A PNG with an alpha channel or 16 bits is made 8-bit RGB: real transparency is flattened
+                // onto the frame's colour, without one onto white. A background that needs transparency (a
+                // translucent or transparent image or watermark, or one with a transparent image over it) is left
+                // out. An alpha channel that is fully opaque (common for logos) changes nothing and warns of nothing.
                 var under = layout.Background.Kind is "color" or "pattern" ? layout.Background.Color ?? "#ffffff" : "#ffffff";
                 var (flatSig, sigAlpha) = Opaque(sig, under);
                 var (flatLogo, logoAlpha) = Opaque(logo, under);
                 var (flatStamp, stampAlpha) = Opaque(stamp, under);
                 var (flatBackground, backgroundAlpha) = Opaque(background, "#ffffff");
-                // The watermark is the logo itself, so a logo with alpha would be a white block there too.
-                if (layout.Background.Kind is "image" or "watermark" && (sigAlpha || logoAlpha || stampAlpha))
-                    throw new ApiValidationException(TransparencyNotAllowedCode,
-                        "An image with transparency over a background image or watermark needs transparency, which PDF/A-1 does not allow.");
-                if (backgroundAlpha)
-                    throw new ApiValidationException(TransparencyNotAllowedCode,
-                        "A background image with transparency needs transparency, which PDF/A-1 does not allow.");
                 (sig, logo, stamp, background) = (flatSig, flatLogo, flatStamp, flatBackground);
+
+                bool overlay = sigAlpha || logoAlpha || stampAlpha;
+                var bg = layout.Background;
+                bool translucent = (bg.Alpha ?? 1) < 1;
+                bool dropBackground =
+                    (bg.Kind == "image" && (translucent || backgroundAlpha || overlay))
+                    || (bg.Kind == "watermark" && (translucent || overlay));
+                if (dropBackground)
+                {
+                    layout.Background = new LayoutBackground { Kind = "none" };
+                    background = null;
+                }
+                if (overlay || dropBackground) Warn(Pdfa1SimplifiedWarning);
             }
 
             var images = new SignatureLayoutImages

@@ -117,6 +117,7 @@ namespace DotNetSigningServer.Controllers
             {
                 return appearanceRefused;
             }
+            var appearanceWarnings = SignatureAppearance.BeginWarnings();
             var maxPending = HttpContext.RequestServices.GetRequiredService<Services.Settings.IRuntimeSettings>().MaxPendingPresignsPerUser();
             if (maxPending > 0 && await DbContext.SigningData.CountAsync(x => x.UserId == user.Id) >= maxPending)
             {
@@ -190,16 +191,16 @@ namespace DotNetSigningServer.Controllers
                 if (prepared == null)
                 {
                     return stampPlacement == null
-                        ? Ok(new { id = signingData.Id, hashToSign = signingData.HashToSign })
-                        : Ok(new { id = signingData.Id, hashToSign = signingData.HashToSign, contentStamp = stampPlacement });
+                        ? Ok(WithWarnings(new { id = signingData.Id, hashToSign = signingData.HashToSign }, appearanceWarnings))
+                        : Ok(WithWarnings(new { id = signingData.Id, hashToSign = signingData.HashToSign, contentStamp = stampPlacement }, appearanceWarnings));
                 }
-                return Ok(new
+                return Ok(WithWarnings(new
                 {
                     id = signingData.Id,
                     hashToSign = signingData.HashToSign,
                     preparation = PreparationBody(prepared.Report, preparationCredits),
                     contentStamp = stampPlacement,
-                });
+                }, appearanceWarnings));
             }
             catch (ApiValidationException ex) when (StampRefusalCodes.Contains(ex.Code))
             {
@@ -240,6 +241,28 @@ namespace DotNetSigningServer.Controllers
             SealPlacement.NoRoomCode, PdfSigningService.CertifiedNoChangesCode,
             SignatureAppearance.ImageInvalidCode, SignatureAppearance.TransparencyNotAllowedCode, SignatureAppearance.FrameInvalidCode,
         };
+
+        /// <summary>Header with the appearance warnings of a raw PDF answer (comma-separated codes).</summary>
+        internal const string AppearanceWarningsHeader = "X-P4-Appearance-Warnings";
+
+        private static readonly System.Text.Json.JsonSerializerOptions WarningJson = new(System.Text.Json.JsonSerializerDefaults.Web);
+
+        /// <summary>
+        /// The answer with <c>appearanceWarnings</c> (e.g. <see cref="SignatureAppearance.Pdfa1SimplifiedWarning"/>)
+        /// when the appearance had to be simplified; unchanged otherwise.
+        /// </summary>
+        internal static object WithWarnings(object body, IReadOnlyCollection<string> warnings)
+        {
+            if (warnings.Count == 0) return body;
+            var node = System.Text.Json.JsonSerializer.SerializeToNode(body, WarningJson)!.AsObject();
+            node["appearanceWarnings"] = new System.Text.Json.Nodes.JsonArray(
+                warnings.OrderBy(w => w, StringComparer.Ordinal).Select(w => (System.Text.Json.Nodes.JsonNode?)w).ToArray());
+            return node;
+        }
+
+        private static PaidResult Paid(object body, string? pdf, IReadOnlyCollection<string> warnings) =>
+            new(WithWarnings(body, warnings), pdf, warnings.Count == 0 ? null
+                : new Dictionary<string, string> { [AppearanceWarningsHeader] = string.Join(",", warnings.OrderBy(w => w, StringComparer.Ordinal)) });
 
         /// <summary>The appearance or the size of its box is refused before anything is done (400, #116).</summary>
         private IActionResult? AppearanceRefused(SignatureAppearanceOptions? appearance, SignRect? rect) =>
@@ -596,6 +619,7 @@ namespace DotNetSigningServer.Controllers
         private async Task<IActionResult> SignWithPfxCoreAsync(User user, PfxSignInput input, byte[]? pdf, string fingerprint)
         {
             if (AppearanceRefused(input.Appearance, input.SignRect) is { } appearanceRefused) return appearanceRefused;
+            var appearanceWarnings = SignatureAppearance.BeginWarnings();
             try
             {
                 return await RunOperationAsync(user, "sign-pfx", fingerprint, baseCost: Prices.Credits(Services.Pricing.PricedOperations.SignPfx), async _ =>
@@ -610,7 +634,7 @@ namespace DotNetSigningServer.Controllers
                             : signatureField.FieldName;
                     }
                     var result = pdf == null ? _signingService.SignWithPfx(input) : _signingService.SignWithPfx(input, pdf);
-                    return new PaidResult(new { result }, result);
+                    return Paid(new { result }, result, appearanceWarnings);
                 });
             }
             catch (ApiValidationException ex) when (SignatureAppearance.RenderRefusalCodes.Contains(ex.Code))
@@ -683,6 +707,7 @@ namespace DotNetSigningServer.Controllers
         private async Task<IActionResult> TimestampCoreAsync(User user, DocumentTimestampInput input, byte[]? pdf, string fingerprint)
         {
             if (input.Visible && AppearanceRefused(input.Appearance, input.SignRect) is { } appearanceRefused) return appearanceRefused;
+            var appearanceWarnings = SignatureAppearance.BeginWarnings();
             // Flattening and PDF/A before the timestamp (#184), the step of presign.
             var (prepared, preparationCredits, refused) = await PrepareForOperationAsync(
                 user, input, () => pdf ?? Convert.FromBase64String(input.PdfContent), "Timestamp", "TimestampError");
@@ -705,10 +730,10 @@ namespace DotNetSigningServer.Controllers
                     if (prepared != null)
                     {
                         var stamped = _signingService.ApplyDocumentTimestamp(input, prepared.Pdf, prepared.KeepPdfA);
-                        return new PaidResult(new { result = stamped, preparation = PreparationBody(prepared.Report, preparationCredits) }, stamped);
+                        return Paid(new { result = stamped, preparation = PreparationBody(prepared.Report, preparationCredits) }, stamped, appearanceWarnings);
                     }
                     var result = pdf == null ? _signingService.ApplyDocumentTimestamp(input) : _signingService.ApplyDocumentTimestamp(input, pdf);
-                    return new PaidResult(new { result }, result);
+                    return Paid(new { result }, result, appearanceWarnings);
                 });
             }
             catch (ApiValidationException ex) when (SignatureAppearance.RenderRefusalCodes.Contains(ex.Code))
@@ -1146,6 +1171,7 @@ namespace DotNetSigningServer.Controllers
         private async Task<IActionResult> VisualSignCoreAsync(User user, VisualSignInput input, byte[]? pdf, string fingerprint)
         {
             if (AppearanceRefused(input.Appearance, input.SignRect) is { } appearanceRefused) return appearanceRefused;
+            var appearanceWarnings = SignatureAppearance.BeginWarnings();
             // Flattening and PDF/A before the visual signature (#184), the step of presign.
             var (prepared, preparationCredits, refused) = await PrepareForOperationAsync(
                 user, input, () => pdf ?? Convert.FromBase64String(input.PdfContent), "Visual sign", "VisualSignError");
@@ -1169,11 +1195,11 @@ namespace DotNetSigningServer.Controllers
                     if (prepared != null)
                     {
                         var drawn = _signingService.ApplyVisualSign(input, prepared.Pdf, prepared.KeepPdfA);
-                        return new PaidResult(new { result = drawn, preparation = PreparationBody(prepared.Report, preparationCredits) }, drawn);
+                        return Paid(new { result = drawn, preparation = PreparationBody(prepared.Report, preparationCredits) }, drawn, appearanceWarnings);
                     }
                     var result = pdf == null ? _signingService.ApplyVisualSign(input) : _signingService.ApplyVisualSign(input, pdf);
                     Logger.LogInformation("[visual-sign] Success, result length={Len}", result?.Length ?? 0);
-                    return new PaidResult(new { result }, result);
+                    return Paid(new { result }, result, appearanceWarnings);
                 });
             }
             catch (ApiValidationException ex) when (SignatureAppearance.RenderRefusalCodes.Contains(ex.Code))
