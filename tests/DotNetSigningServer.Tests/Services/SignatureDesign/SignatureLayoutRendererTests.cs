@@ -17,6 +17,10 @@ public class SignatureLayoutRendererTests
     private static readonly byte[] Png = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAEElEQVR4nGP4z8DAwMDAAAAJ/gH/H0VY8QAAAABJRU5ErkJggg==");
 
+    // 2x1 PNG with an alpha channel (colour type 6), like most signature and logo images.
+    private static readonly byte[] RgbaPng = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8AAQg0AD3oDfnfpf5cAAAAASUVORK5CYII=");
+
     private static SignatureLayoutImages Images()
     {
         var img = ImageDataFactory.Create(Png);
@@ -106,11 +110,29 @@ public class SignatureLayoutRendererTests
         {
             var page = doc.AddNewPage(new PageSize(300, 120));
             var layout = Layout(m => { m.Background.Kind = "pattern"; m.Elements.Reason.Enabled = true; });
-            // PDF/A-1 forbids the PNG soft mask of the test image, so zones stay empty there.
-            var images = pdfa1 ? new SignatureLayoutImages() : Images();
+            var images = Images();
             new PdfCanvas(page).AddXObjectAt(SignatureLayoutRenderer.Render(doc, layout, images, transparencyAllowed: !pdfa1), 10, 10);
         }
         Assert.True(ms.ToArray().Length > 0);
+    }
+
+    [Fact]
+    public void Pdfa1_refuses_an_image_with_alpha_before_anything_is_written()
+    {
+        using var doc = new PdfDocument(new PdfWriter(new MemoryStream()));
+        var rgba = ImageDataFactory.Create(RgbaPng);
+        var images = new SignatureLayoutImages { Sig = rgba };
+        var ex = Assert.Throws<SignatureAppearanceUnsupportedException>(() =>
+            SignatureLayoutRenderer.Render(doc, Layout(), images, transparencyAllowed: false));
+        Assert.Equal(SignatureLayoutRenderer.TransparencyNotAllowed, ex.Code);
+        SignatureLayoutRenderer.Render(doc, Layout(), images, transparencyAllowed: true);
+    }
+
+    [Fact]
+    public void Muted_text_mixes_with_a_solid_background()
+    {
+        Assert.Equal("#1b3a8c", SignatureLayoutRenderer.MutedBase(new LayoutBackground { Kind = "color", Color = "#1b3a8c" }));
+        Assert.Equal("#ffffff", SignatureLayoutRenderer.MutedBase(new LayoutBackground { Kind = "image" }));
     }
 
     [Fact]

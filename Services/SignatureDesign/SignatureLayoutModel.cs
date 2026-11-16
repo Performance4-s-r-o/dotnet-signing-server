@@ -29,12 +29,12 @@ namespace DotNetSigningServer.Services.SignatureDesign
         /// Strict JSON for the model (and the layout input): camelCase only, no numbers as strings. With the
         /// required members and unknown members refused it accepts what the portal's zod schema accepts.
         /// </summary>
-        public static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new()
+        public static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new System.Text.Json.JsonSerializerOptions()
         {
             PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
             PropertyNameCaseInsensitive = false,
             NumberHandling = JsonNumberHandling.Strict,
-        };
+        }.Frozen();
 
         [JsonRequired]
         public int Version { get; set; } = 1;
@@ -111,6 +111,17 @@ namespace DotNetSigningServer.Services.SignatureDesign
             if (!ImageFits.Contains(bg.ImageFit)) return "background.imageFit must be cover or repeat";
             if (!Radii.Contains(Radius)) return "radius must be none, soft or round";
             return null;
+        }
+    }
+
+    internal static class JsonOptionsExtensions
+    {
+        /// <summary>Read-only options, so the shared static instance cannot be changed by accident.</summary>
+        public static System.Text.Json.JsonSerializerOptions Frozen(this System.Text.Json.JsonSerializerOptions options)
+        {
+            options.TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver();
+            options.MakeReadOnly();
+            return options;
         }
     }
 

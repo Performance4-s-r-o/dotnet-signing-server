@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using iText.IO.Image;
 using iText.Kernel.Colors;
@@ -12,7 +13,8 @@ namespace DotNetSigningServer.Services.SignatureDesign
 {
     /// <summary>
     /// Decoded images of a signature appearance; a missing one leaves its zone empty. Each image becomes one
-    /// image XObject per document, however often it is drawn (repeat tiles, page stamp plus field appearance).
+    /// image XObject per document, however often it is drawn (repeat tiles, page stamp plus field appearance);
+    /// the XObjects live with the document, not with this object, so an instance may be reused safely.
     /// </summary>
     public sealed class SignatureLayoutImages
     {
@@ -21,7 +23,8 @@ namespace DotNetSigningServer.Services.SignatureDesign
         public ImageData? Image { get; init; }
         public ImageData? Background { get; init; }
 
-        private readonly Dictionary<(ImageData, PdfDocument), PdfImageXObject> _xobjects = new();
+        // Weak on the document: a finished document and its buffers are never kept alive by the cache.
+        private static readonly ConditionalWeakTable<PdfDocument, Dictionary<ImageData, PdfImageXObject>> XObjects = new();
 
         public ImageData? For(string zoneKind) => zoneKind switch
         {
@@ -31,14 +34,27 @@ namespace DotNetSigningServer.Services.SignatureDesign
             _ => null,
         };
 
-        internal PdfImageXObject XObject(ImageData image, PdfDocument doc)
+        internal static PdfImageXObject XObject(ImageData image, PdfDocument doc)
         {
-            if (!_xobjects.TryGetValue((image, doc), out var xobject))
+            var perDoc = XObjects.GetValue(doc, _ => new Dictionary<ImageData, PdfImageXObject>());
+            lock (perDoc)
             {
-                xobject = new PdfImageXObject(image);
-                _xobjects[(image, doc)] = xobject;
+                if (!perDoc.TryGetValue(image, out var xobject))
+                {
+                    xobject = new PdfImageXObject(image);
+                    perDoc[image] = xobject;
+                }
+                return xobject;
             }
-            return xobject;
+        }
+
+        /// <summary>Images the layout will actually draw (zones, background image, watermark logo).</summary>
+        internal IEnumerable<ImageData> Used(SignatureLayoutResult layout)
+        {
+            foreach (var zone in layout.Zones)
+                if (For(zone.Kind) is { } img) yield return img;
+            if (layout.Background.Kind == "image" && Background != null) yield return Background;
+            if (layout.Background.Kind == "watermark" && Logo != null) yield return Logo;
         }
     }
 
@@ -70,10 +86,15 @@ namespace DotNetSigningServer.Services.SignatureDesign
         /// <param name="transparencyAllowed">False for PDF/A-1: a background image or watermark is then refused.</param>
         public static PdfFormXObject Render(PdfDocument doc, SignatureLayoutResult layout, SignatureLayoutImages images, bool transparencyAllowed = true)
         {
-            if (!transparencyAllowed && layout.Background.Kind is "image" or "watermark")
+            if (!transparencyAllowed)
             {
-                throw new SignatureAppearanceUnsupportedException(TransparencyNotAllowed,
-                    "A background image or watermark needs transparency, which PDF/A-1 does not allow.");
+                if (layout.Background.Kind is "image" or "watermark")
+                    throw new SignatureAppearanceUnsupportedException(TransparencyNotAllowed,
+                        "A background image or watermark needs transparency, which PDF/A-1 does not allow.");
+                // A PNG with alpha (or tRNS) becomes an image with a soft mask, which PDF/A-1 refuses on close.
+                if (images.Used(layout).Any(img => img.GetImageMask() != null))
+                    throw new SignatureAppearanceUnsupportedException(TransparencyNotAllowed,
+                        "An image of the appearance has transparency, which PDF/A-1 does not allow.");
             }
 
             float W = (float)layout.Width;
@@ -93,7 +114,7 @@ namespace DotNetSigningServer.Services.SignatureDesign
             foreach (var zone in layout.Zones)
             {
                 var image = images.For(zone.Kind);
-                if (image != null) DrawContained(canvas, images.XObject(image, doc), image, zone.Rect, H);
+                if (image != null) DrawContained(canvas, SignatureLayoutImages.XObject(image, doc), image, zone.Rect, H);
             }
 
             if (layout.Text != null) DrawText(canvas, layout, H);
@@ -118,7 +139,7 @@ namespace DotNetSigningServer.Services.SignatureDesign
                 case "image" when images.Background != null:
                     {
                         var img = images.Background;
-                        var x = images.XObject(img, doc);
+                        var x = SignatureLayoutImages.XObject(img, doc);
                         canvas.SaveState();
                         canvas.SetExtGState(new PdfExtGState().SetFillOpacity((float)(bg.Alpha ?? 1)));
                         if (bg.Fit == "repeat")
@@ -141,7 +162,7 @@ namespace DotNetSigningServer.Services.SignatureDesign
                 case "watermark" when images.Logo != null && bg.Rect != null:
                     canvas.SaveState();
                     canvas.SetExtGState(new PdfExtGState().SetFillOpacity((float)(bg.Alpha ?? 1)));
-                    DrawContained(canvas, images.XObject(images.Logo, doc), images.Logo, bg.Rect, H);
+                    DrawContained(canvas, SignatureLayoutImages.XObject(images.Logo, doc), images.Logo, bg.Rect, H);
                     canvas.RestoreState();
                     break;
             }
@@ -230,7 +251,7 @@ namespace DotNetSigningServer.Services.SignatureDesign
             PdfFont? regular = null;
             PdfFont? bold = null;
             var primary = Color(layout.TextColor);
-            var muted = Color(Mix(layout.TextColor, "#ffffff", MutedMix));
+            var muted = Color(Mix(layout.TextColor, MutedBase(layout.Background), MutedMix));
             float size = (float)text.FontSize;
             foreach (var line in text.Lines)
             {
@@ -247,6 +268,10 @@ namespace DotNetSigningServer.Services.SignatureDesign
                 }
             }
         }
+
+        /// <summary>What muted text is mixed with: the solid background colour, otherwise white.</summary>
+        internal static string MutedBase(LayoutBackground bg) =>
+            bg.Kind is "color" or "pattern" && bg.Color != null ? bg.Color : "#ffffff";
 
         /// <summary>Solid colour <paramref name="a"/> mixed with <paramref name="b"/> at <paramref name="t"/>; same as the portal's <c>mixColor</c>.</summary>
         internal static string Mix(string? a, string? b, double t)
