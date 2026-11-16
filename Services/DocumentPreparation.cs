@@ -159,34 +159,6 @@ public static class DocumentPreparation
         }
     }
 
-    /// <summary>
-    /// The appearance for a signature in a PDF/A document: without a family iText draws in plain
-    /// Helvetica, which is never embedded, so the embedded Liberation Sans (Helvetica's metrics) is
-    /// used. Any other document, or a family given, gets <paramref name="appearance"/> unchanged.
-    /// </summary>
-    public static SignatureAppearanceOptions? AppearanceFor(PdfDocument document, SignatureAppearanceOptions? appearance)
-    {
-        if (!document.GetConformance().IsPdfA() || !string.IsNullOrWhiteSpace(appearance?.FontFamily)) return appearance;
-        var s = appearance ?? new SignatureAppearanceOptions();
-        // A copy: the caller's options stay untouched (they are part of the operation's fingerprint).
-        return new SignatureAppearanceOptions
-        {
-            DescriptionText = s.DescriptionText,
-            ForegroundColor = s.ForegroundColor,
-            BackgroundColor = s.BackgroundColor,
-            FontFamily = "Helvetica",
-            FontSize = s.FontSize,
-            ShowReason = s.ShowReason,
-            ShowLocation = s.ShowLocation,
-            ShowDate = s.ShowDate,
-            ShowSignerName = s.ShowSignerName,
-            ShowCompanyName = s.ShowCompanyName,
-            BackgroundRepeat = s.BackgroundRepeat,
-            AutoFontSize = s.AutoFontSize,
-            Labels = s.Labels,
-        };
-    }
-
     private static byte[] Convert(byte[] pdf, string name, PdfAConformance conformance, PdfConversionService conversion)
     {
         byte[] converted;

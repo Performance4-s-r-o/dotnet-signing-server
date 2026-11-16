@@ -800,6 +800,11 @@
   <data name="AccountDeleteRechargeInProgressStopped" xml:space="preserve"><value>Právě probíhalo automatické dobití kreditů, proto účet smazán nebyl. Automatické dobíjení jsme vypnuli. Zkuste to prosím za pár minut.</value></data>
   <data name="Error_SEAL_PLACEMENT_NO_ROOM" xml:space="preserve"><value>Podpis se na tomto místě nevejde: obrázek podpisu nebo pečeť vedle něj by překryly jiný podpis nebo by přesáhly stránku. Přesuňte podpis na volné místo.</value></data>
   <data name="Error_DOCUMENT_CERTIFIED_NO_CHANGES" xml:space="preserve"><value>Dokument je certifikovaný a jeho certifikace nedovoluje přidat obrázek podpisu. Nic nebylo podepsáno.</value></data>
+  <data name="Error_APPEARANCE_INVALID" xml:space="preserve"><value>Vzhled podpisu není platný. Nic nebylo podepsáno.</value></data>
+  <data name="Error_APPEARANCE_SEAL_VIOLATION" xml:space="preserve"><value>Pečeť nesmí obsahovat vlastnoruční podpis ani jméno podepisujícího. Nic nebylo podepsáno.</value></data>
+  <data name="Error_SIGN_RECT_INVALID" xml:space="preserve"><value>Rámeček podpisu musí mít šířku i výšku 20 až 1000 bodů. Nic nebylo podepsáno.</value></data>
+  <data name="Error_APPEARANCE_IMAGE_INVALID" xml:space="preserve"><value>Obrázek ve vzhledu podpisu nejde přečíst, nebo je v CMYK, které dokument PDF/A nedovoluje. Nahrajte ho jako PNG nebo JPEG v RGB. Nic nebylo podepsáno.</value></data>
+  <data name="Error_APPEARANCE_TRANSPARENCY_NOT_ALLOWED" xml:space="preserve"><value>Dokument je ve formátu PDF/A-1, který v podpisu nedovoluje průhlednost: průsvitný obrázek na pozadí, vodoznak ani průhledný obrázek přes obrázek na pozadí. Zvolte vzhled bez nich. Nic nebylo podepsáno.</value></data>
   <data name="Error_TOKEN_WEAK" xml:space="preserve"><value>Token je příliš slabý: aspoň 43 znaků náhodných dat (32 náhodných bajtů, base64url), bez mezer, uvozovek a čárek.</value></data>
   <data name="Error_EXTERNAL_ID_INVALID" xml:space="preserve"><value>externalId musí mít 1 až 64 znaků z písmen, číslic a . _ : -</value></data>
   <data name="Error_LABEL_INVALID" xml:space="preserve"><value>label smí mít nejvýš 128 znaků a žádné řídicí znaky.</value></data>

@@ -91,7 +91,7 @@ public class PresignPdfaTests : IDisposable
             PfxContent = pfx,
             PfxPassword = password,
             SignRect = new SignRect { X = 300, Y = 50, Width = 200, Height = 50 },
-            Appearance = new SignatureAppearanceOptions { FontFamily = "Helvetica" },
+            Appearance = new SignatureAppearanceOptions(),
         }, pdf);
         return Convert.FromBase64String(signed);
     }

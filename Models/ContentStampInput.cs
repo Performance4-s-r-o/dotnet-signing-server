@@ -18,9 +18,6 @@ namespace DotNetSigningServer.Models
         public string? SignerName { get; set; }
         /// <summary>Company row of the stamp; empty = none (there is no certificate to read it from).</summary>
         public string? CompanyName { get; set; }
-        public float? DesignWidth { get; set; }
-        public float? DesignHeight { get; set; }
-        public bool? AutoHeight { get; set; }
 
         internal VisualSignInput ToVisualSign() => new()
         {
@@ -34,9 +31,6 @@ namespace DotNetSigningServer.Models
             BackgroundImageContent = BackgroundImageContent,
             Appearance = Appearance,
             SignerName = SignerName,
-            DesignWidth = DesignWidth,
-            DesignHeight = DesignHeight,
-            AutoHeight = AutoHeight,
         };
     }
 
