@@ -76,7 +76,7 @@ namespace DotNetSigningServer.Services.SignatureDesign
     /// </summary>
     public static class SignatureLayoutRenderer
     {
-        /// <summary>Muted lines (reason, location, date) and separators: text colour mixed with 30 % white.</summary>
+        /// <summary>Muted lines (reason, location, date) and separators: text colour mixed with 30 % of <see cref="MutedBase"/>.</summary>
         public const double MutedMix = 0.7;
 
         public const string TransparencyNotAllowed = "APPEARANCE_TRANSPARENCY_NOT_ALLOWED";
@@ -91,7 +91,7 @@ namespace DotNetSigningServer.Services.SignatureDesign
                 if (layout.Background.Kind is "image" or "watermark")
                     throw new SignatureAppearanceUnsupportedException(TransparencyNotAllowed,
                         "A background image or watermark needs transparency, which PDF/A-1 does not allow.");
-                // A PNG with alpha (or tRNS) becomes an image with a soft mask, which PDF/A-1 refuses on close.
+                // An alpha channel or partial tRNS becomes an image with a soft mask, which PDF/A-1 refuses on close.
                 if (images.Used(layout).Any(img => img.GetImageMask() != null))
                     throw new SignatureAppearanceUnsupportedException(TransparencyNotAllowed,
                         "An image of the appearance has transparency, which PDF/A-1 does not allow.");
