@@ -21,12 +21,6 @@ namespace DotNetSigningServer.Models
         public string? TsaBackupUsername { get; set; }
         public string? TsaBackupPassword { get; set; }
         public Guid? TemplateId { get; set; }
-        /// <summary>Signature design width in PDF points. When set, layout uses this instead of SignRect.Width.</summary>
-        public float? DesignWidth { get; set; }
-        /// <summary>Signature design height in PDF points. When set, layout uses this instead of SignRect.Height.</summary>
-        public float? DesignHeight { get; set; }
-        /// <summary>When true, signature box height grows to fit content regardless of DesignHeight.</summary>
-        public bool? AutoHeight { get; set; }
         /// <summary>Display name used in the signer row. Falls back to empty when unset.</summary>
         public string? SignerName { get; set; }
         /// <summary>

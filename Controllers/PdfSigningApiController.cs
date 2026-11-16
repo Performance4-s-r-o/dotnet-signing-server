@@ -5,6 +5,7 @@ using DotNetSigningServer.Data;
 using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services;
+using DotNetSigningServer.Services.SignatureDesign;
 using DotNetSigningServer.Services.SignatureLayout;
 using DotNetSigningServer.Services.Operations;
 using iText.Signatures;
@@ -110,6 +111,11 @@ namespace DotNetSigningServer.Controllers
             if (input.PlaceBesideContentStamp && input.ContentStamp == null)
             {
                 return InputRefused(new ApiValidationException("CONTENT_STAMP_REQUIRED"));
+            }
+            if ((AppearanceRefused(input.Appearance, input.SignRect)
+                ?? AppearanceRefused(input.ContentStamp?.Appearance, input.ContentStamp?.SignRect)) is { } appearanceRefused)
+            {
+                return appearanceRefused;
             }
             var maxPending = HttpContext.RequestServices.GetRequiredService<Services.Settings.IRuntimeSettings>().MaxPendingPresignsPerUser();
             if (maxPending > 0 && await DbContext.SigningData.CountAsync(x => x.UserId == user.Id) >= maxPending)
@@ -232,7 +238,19 @@ namespace DotNetSigningServer.Controllers
         internal static readonly IReadOnlySet<string> StampRefusalCodes = new HashSet<string>(StringComparer.Ordinal)
         {
             SealPlacement.NoRoomCode, PdfSigningService.CertifiedNoChangesCode,
+            SignatureAppearance.ImageInvalidCode, SignatureAppearance.TransparencyNotAllowedCode, SignatureAppearance.FrameInvalidCode,
         };
+
+        /// <summary>The appearance or the size of its box is refused before anything is done (400, #116).</summary>
+        private IActionResult? AppearanceRefused(SignatureAppearanceOptions? appearance, SignRect? rect) =>
+            SignatureAppearance.Refusal(appearance, rect) is { } code ? InputRefused(new ApiValidationException(code)) : null;
+
+        /// <summary>The appearance could not be drawn into this document (422, #116); nothing was charged.</summary>
+        private IActionResult AppearanceNotDrawn(ApiValidationException ex, string operation)
+        {
+            Logger.LogInformation("{Operation} refused: {Code} ({Detail})", operation, ex.Code, ex.Message);
+            return UnprocessableEntity(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
+        }
 
         private IActionResult StampRefused(ApiValidationException ex) =>
             UnprocessableEntity(new { code = ex.Code, message = Localizer[$"Error_{ex.Code}"].Value });
@@ -577,6 +595,7 @@ namespace DotNetSigningServer.Controllers
         /// <summary>sign-pfx po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
         private async Task<IActionResult> SignWithPfxCoreAsync(User user, PfxSignInput input, byte[]? pdf, string fingerprint)
         {
+            if (AppearanceRefused(input.Appearance, input.SignRect) is { } appearanceRefused) return appearanceRefused;
             try
             {
                 return await RunOperationAsync(user, "sign-pfx", fingerprint, baseCost: Prices.Credits(Services.Pricing.PricedOperations.SignPfx), async _ =>
@@ -593,6 +612,10 @@ namespace DotNetSigningServer.Controllers
                     var result = pdf == null ? _signingService.SignWithPfx(input) : _signingService.SignWithPfx(input, pdf);
                     return new PaidResult(new { result }, result);
                 });
+            }
+            catch (ApiValidationException ex) when (SignatureAppearance.RenderRefusalCodes.Contains(ex.Code))
+            {
+                return AppearanceNotDrawn(ex, "PFX sign");
             }
             catch (Exception ex)
             {
@@ -659,6 +682,7 @@ namespace DotNetSigningServer.Controllers
         /// <summary>timestamp po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
         private async Task<IActionResult> TimestampCoreAsync(User user, DocumentTimestampInput input, byte[]? pdf, string fingerprint)
         {
+            if (input.Visible && AppearanceRefused(input.Appearance, input.SignRect) is { } appearanceRefused) return appearanceRefused;
             // Flattening and PDF/A before the timestamp (#184), the step of presign.
             var (prepared, preparationCredits, refused) = await PrepareForOperationAsync(
                 user, input, () => pdf ?? Convert.FromBase64String(input.PdfContent), "Timestamp", "TimestampError");
@@ -686,6 +710,10 @@ namespace DotNetSigningServer.Controllers
                     var result = pdf == null ? _signingService.ApplyDocumentTimestamp(input) : _signingService.ApplyDocumentTimestamp(input, pdf);
                     return new PaidResult(new { result }, result);
                 });
+            }
+            catch (ApiValidationException ex) when (SignatureAppearance.RenderRefusalCodes.Contains(ex.Code))
+            {
+                return AppearanceNotDrawn(ex, "Timestamp");
             }
             catch (ApiValidationException ex) when (PreparationRefusalCodes.Contains(ex.Code))
             {
@@ -1117,6 +1145,7 @@ namespace DotNetSigningServer.Controllers
         /// <summary>visual-sign po vstupní kontrole, společné oběma kanálům; <c>pdf == null</c> = dokument je v <c>input.PdfContent</c>.</summary>
         private async Task<IActionResult> VisualSignCoreAsync(User user, VisualSignInput input, byte[]? pdf, string fingerprint)
         {
+            if (AppearanceRefused(input.Appearance, input.SignRect) is { } appearanceRefused) return appearanceRefused;
             // Flattening and PDF/A before the visual signature (#184), the step of presign.
             var (prepared, preparationCredits, refused) = await PrepareForOperationAsync(
                 user, input, () => pdf ?? Convert.FromBase64String(input.PdfContent), "Visual sign", "VisualSignError");
@@ -1146,6 +1175,10 @@ namespace DotNetSigningServer.Controllers
                     Logger.LogInformation("[visual-sign] Success, result length={Len}", result?.Length ?? 0);
                     return new PaidResult(new { result }, result);
                 });
+            }
+            catch (ApiValidationException ex) when (SignatureAppearance.RenderRefusalCodes.Contains(ex.Code))
+            {
+                return AppearanceNotDrawn(ex, "Visual sign");
             }
             catch (ApiValidationException ex) when (PreparationRefusalCodes.Contains(ex.Code))
             {

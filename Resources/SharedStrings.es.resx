@@ -799,6 +799,11 @@
   <data name="AccountDeleteRechargeInProgressStopped" xml:space="preserve"><value>An automatic top-up was being processed, so your account was not deleted. Auto-recharge has been switched off. Please try again in a few minutes.</value></data>
   <data name="Error_SEAL_PLACEMENT_NO_ROOM" xml:space="preserve"><value>La firma no cabe aquí: la imagen de la firma o el sello a su lado cubriría otra firma o se saldría de la página. Mueva la firma a un lugar libre.</value></data>
   <data name="Error_DOCUMENT_CERTIFIED_NO_CHANGES" xml:space="preserve"><value>El documento está certificado y su certificación no permite añadir una imagen de firma. No se ha firmado nada.</value></data>
+  <data name="Error_APPEARANCE_INVALID" xml:space="preserve"><value>La apariencia de la firma no es válida. No se ha firmado nada.</value></data>
+  <data name="Error_APPEARANCE_SEAL_VIOLATION" xml:space="preserve"><value>Un sello no puede mostrar una firma manuscrita ni el nombre del firmante. No se ha firmado nada.</value></data>
+  <data name="Error_SIGN_RECT_INVALID" xml:space="preserve"><value>El recuadro de la firma debe medir de 20 a 1000 puntos de ancho y alto. No se ha firmado nada.</value></data>
+  <data name="Error_APPEARANCE_IMAGE_INVALID" xml:space="preserve"><value>No se puede leer una imagen de la apariencia de la firma. No se ha firmado nada.</value></data>
+  <data name="Error_APPEARANCE_TRANSPARENCY_NOT_ALLOWED" xml:space="preserve"><value>El documento es PDF/A-1, que no permite una imagen de fondo ni una marca de agua en la firma. Elija una apariencia sin ellas. No se ha firmado nada.</value></data>
   <data name="Error_TOKEN_WEAK" xml:space="preserve"><value>The token is too weak: at least 43 characters of random data (32 random bytes, base64url), no spaces, quotes or commas.</value></data>
   <data name="Error_EXTERNAL_ID_INVALID" xml:space="preserve"><value>externalId must be 1 to 64 characters of letters, digits and . _ : -</value></data>
   <data name="Error_LABEL_INVALID" xml:space="preserve"><value>label may have at most 128 characters and no control characters.</value></data>

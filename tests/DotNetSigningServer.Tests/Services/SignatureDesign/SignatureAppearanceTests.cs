@@ -1,0 +1,131 @@
+using DotNetSigningServer.Exceptions;
+using DotNetSigningServer.Models;
+using DotNetSigningServer.Services.SignatureDesign;
+using iText.Kernel.Geom;
+using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas;
+using iText.Kernel.Pdf.Canvas.Parser;
+
+namespace DotNetSigningServer.Tests.Services.SignatureDesign;
+
+public class SignatureAppearanceTests
+{
+    // 2x1 PNG with an alpha channel, like a signature drawn on a canvas.
+    private const string RgbaPng = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8AAQg0AD3oDfnfpf5cAAAAASUVORK5CYII=";
+
+    [Fact]
+    public void A_seal_with_a_handwritten_signature_or_name_is_refused()
+    {
+        var withSig = new SignatureAppearanceOptions { Seal = true, Layout = new SignatureLayoutModel() };
+        Assert.Equal(SignatureAppearance.SealViolationCode, SignatureAppearance.Refusal(withSig));
+
+        var withName = new SignatureAppearanceOptions { Seal = true, Layout = SignatureAppearance.DefaultSeal() };
+        withName.Layout.Elements.Name.Enabled = true;
+        Assert.Equal(SignatureAppearance.SealViolationCode, SignatureAppearance.Refusal(withName));
+
+        Assert.Null(SignatureAppearance.Refusal(new SignatureAppearanceOptions { Seal = true }));
+        Assert.Null(SignatureAppearance.Refusal(new SignatureAppearanceOptions { Layout = new SignatureLayoutModel() }));
+    }
+
+    [Fact]
+    public void An_invalid_model_label_or_box_is_refused()
+    {
+        var model = new SignatureLayoutModel { SplitLeft = 90 };
+        Assert.Equal(SignatureAppearance.InvalidCode, SignatureAppearance.Refusal(new SignatureAppearanceOptions { Layout = model }));
+        var labels = new SignatureAppearanceOptions { Labels = new SignatureLabels { Reason = "a\nb" } };
+        Assert.Equal(SignatureAppearance.InvalidCode, SignatureAppearance.Refusal(labels));
+
+        Assert.Equal(SignatureAppearance.FrameInvalidCode, SignatureAppearance.Refusal(null, new SignRect { Width = 10, Height = 50 }));
+        Assert.Equal(SignatureAppearance.FrameInvalidCode, SignatureAppearance.Refusal(null, new SignRect { Width = 200, Height = 1200 }));
+        Assert.Null(SignatureAppearance.Refusal(null, new SignRect { Width = 0, Height = 0 }));
+        Assert.Equal((200f, 70f), SignatureAppearance.Size(new SignRect()));
+    }
+
+    [Fact]
+    public void An_unreadable_image_is_refused_not_left_out()
+    {
+        using var doc = new PdfDocument(new PdfWriter(new MemoryStream()));
+        var ex = Assert.Throws<ApiValidationException>(() => SignatureAppearance.Render(doc,
+            new SignatureAppearanceContent { StampImage = Convert.ToBase64String(new byte[] { 1, 2, 3, 4 }) }, 200, 70));
+        Assert.Equal(SignatureAppearance.ImageInvalidCode, ex.Code);
+    }
+
+    [Fact]
+    public void Pdfa1_flattens_a_drawn_signature_but_refuses_a_watermark()
+    {
+        var pdf = Pdfa1(doc =>
+        {
+            var xobject = SignatureAppearance.Render(doc, new SignatureAppearanceContent
+            {
+                SignImage = RgbaPng,
+                Name = "Jana Nováková",
+                Company = "Firma s.r.o.",
+            }, 200, 70);
+            new PdfCanvas(doc.GetFirstPage()).AddXObjectAt(xobject, 10, 10);
+
+            var watermark = new SignatureLayoutModel();
+            watermark.Background.Kind = "watermark";
+            var ex = Assert.Throws<ApiValidationException>(() => SignatureAppearance.Render(doc, new SignatureAppearanceContent
+            {
+                Options = new SignatureAppearanceOptions { Layout = watermark },
+                LogoImage = RgbaPng,
+            }, 200, 70));
+            Assert.Equal(SignatureAppearance.TransparencyNotAllowedCode, ex.Code);
+        });
+
+        using var read = new PdfDocument(new PdfReader(new MemoryStream(pdf)));
+        var text = PdfTextExtractor.GetTextFromPage(read.GetFirstPage());
+        Assert.Contains("Jana Nováková", text);
+        Assert.Contains("Firma s.r.o.", text);
+    }
+
+    [Fact]
+    public void The_default_seal_has_no_person()
+    {
+        var seal = SignatureAppearance.ModelFor(new SignatureAppearanceOptions { Seal = true });
+        Assert.Null(seal.SealViolation());
+        Assert.Null(seal.Validate());
+        Assert.Equal("sig", SignatureAppearance.ModelFor(null).Left);
+    }
+
+    private static byte[] Pdfa1(Action<PdfDocument> draw)
+    {
+        using var icc = File.OpenRead(System.IO.Path.Combine(AppContext.BaseDirectory, "Resources", "srgb.icc"));
+        using var ms = new MemoryStream();
+        using (var doc = new iText.Pdfa.PdfADocument(new PdfWriter(ms), PdfAConformance.PDF_A_1B,
+                   new PdfOutputIntent("Custom", "", "http://www.color.org", "sRGB IEC61966-2.1", icc)))
+        {
+            doc.AddNewPage(new PageSize(300, 120));
+            draw(doc);
+        }
+        return ms.ToArray();
+    }
+}
+
+public class SignatureFieldAppearanceTests
+{
+    [Fact]
+    public void The_certificate_field_draws_the_appearance_edge_to_edge()
+    {
+        var (_, pfx, password) = DotNetSigningServer.Tests.Helpers.TestHelpers.CreateTestCertificate();
+        var signed = new DotNetSigningServer.Services.PdfSigningService().SignWithPfx(new PfxSignInput
+        {
+            PfxContent = pfx,
+            PfxPassword = password,
+            SignerName = "Jana Nováková",
+            SignRect = new SignRect { X = 100, Y = 400, Width = 260, Height = 90 },
+            Appearance = new SignatureAppearanceOptions(),
+        }, DotNetSigningServer.Tests.Services.PresignPdfaTests.Pdf(_ => { }));
+
+        using var doc = new PdfDocument(new PdfReader(new MemoryStream(Convert.FromBase64String(signed))));
+        var widget = iText.Forms.PdfAcroForm.GetAcroForm(doc, false)!.GetAllFormFields().Values.First().GetWidgets()[0];
+        // /N → /FRM → /n2 → the appearance XObject, each at 1 0 0 1 0 0 and the full box.
+        var frm = widget.GetNormalAppearanceObject().GetAsDictionary(PdfName.Resources).GetAsDictionary(PdfName.XObject).GetAsStream(new PdfName("FRM"));
+        var n2 = frm.GetAsDictionary(PdfName.Resources).GetAsDictionary(PdfName.XObject).GetAsStream(new PdfName("n2"));
+        var content = System.Text.Encoding.ASCII.GetString(n2.GetBytes());
+        Assert.Contains("1 0 0 1 0 0 cm", content);
+        var inner = n2.GetAsDictionary(PdfName.Resources).GetAsDictionary(PdfName.XObject);
+        var appearance = inner.GetAsStream(inner.KeySet().Single());
+        Assert.Equal(new[] { 0f, 0f, 260f, 90f }, appearance.GetAsArray(PdfName.BBox).ToFloatArray());
+    }
+}

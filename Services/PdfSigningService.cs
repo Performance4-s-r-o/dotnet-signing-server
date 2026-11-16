@@ -73,8 +73,6 @@ namespace DotNetSigningServer.Services
             ContentStampPlacement? placement = stampPlan?.Placement;
             var signRect = stampPlan?.SignRect ?? input.SignRect;
             var signPage = stampPlan?.SignPage ?? input.SignPageNumber;
-            // The computed box is final: growing it could cover the stamp.
-            var autoHeight = stampPlan?.SignRect != null ? false : input.AutoHeight;
 
             var preSignContainer = new DigestCalcBlankSigner(PdfName.Adobe_PPKLite, PdfCryptoHelper.SignatureSubFilter);
             var chain = PdfCryptoHelper.LoadCertificatesFromPemString(input.CertificatePem);
@@ -98,9 +96,6 @@ namespace DotNetSigningServer.Services
                 input.BackgroundImageContent,
                 input.CompanyLogoContent,
                 visible: true,
-                designWidth: input.DesignWidth,
-                designHeight: input.DesignHeight,
-                autoHeight: autoHeight,
                 signerNameOverride: input.SignerName,
                 stamp: stampPlan));
             DocumentPreparation.EnsurePreserved(pdfWithPlaceholder, keepPdfA);
@@ -240,9 +235,6 @@ namespace DotNetSigningServer.Services
                 tsaUrl: input.TsaUrl,
                 tsaUsername: input.TsaUsername,
                 tsaPassword: input.TsaPassword,
-                designWidth: input.DesignWidth,
-                designHeight: input.DesignHeight,
-                autoHeight: input.AutoHeight,
                 signerNameOverride: input.SignerName,
                 tsaBackup: TsaEndpoint.From(input.TsaBackupUrl, input.TsaBackupUsername, input.TsaBackupPassword));
 
@@ -301,6 +293,7 @@ namespace DotNetSigningServer.Services
             var signerFrame = PageFrame.Of(signer.GetDocument().GetPage(resolvedPage));
 
             SignerProperties signerProperties = PdfVisualSigningService.BuildSignerProperties(
+                signer.GetDocument(),
                 fieldName,
                 input.SignRect,
                 input.Reason,
@@ -308,14 +301,11 @@ namespace DotNetSigningServer.Services
                 input.SignPageNumber,
                 input.SignImageContent,
                 null,
-                DocumentPreparation.AppearanceFor(signer.GetDocument(), input.Appearance),
+                input.Appearance,
                 input.StampImageContent,
                 input.BackgroundImageContent,
                 input.CompanyLogoContent,
                 visible: input.Visible,
-                designWidth: input.DesignWidth,
-                designHeight: input.DesignHeight,
-                autoHeight: input.AutoHeight,
                 frame: signerFrame,
                 signerNameOverride: input.SignerName);
 
@@ -544,9 +534,6 @@ namespace DotNetSigningServer.Services
             string? tsaUrl,
             string? tsaUsername,
             string? tsaPassword,
-            float? designWidth = null,
-            float? designHeight = null,
-            bool? autoHeight = null,
             string? signerNameOverride = null,
             bool disableTsa = false,
             TsaEndpoint? tsaBackup = null)
@@ -569,9 +556,6 @@ namespace DotNetSigningServer.Services
                 backgroundImageContent,
                 companyLogoContent,
                 visible,
-                designWidth,
-                designHeight,
-                autoHeight,
                 signerNameOverride);
 
             byte[] signatureBytes = PdfCryptoHelper.SignAuthenticatedAttributes(preSignContainer.GetDocBytesHash(), privateKey);
@@ -600,9 +584,6 @@ namespace DotNetSigningServer.Services
             string? backgroundImageContent = null,
             string? companyLogoContent = null,
             bool visible = true,
-            float? designWidth = null,
-            float? designHeight = null,
-            bool? autoHeight = null,
             string? signerNameOverride = null,
             ContentStampPlan? stamp = null)
         {
@@ -622,10 +603,8 @@ namespace DotNetSigningServer.Services
                 else PdfVisualSigningService.DrawIntoContent(stamp.Stamp, signer.GetDocument());
             }
 
-            // PDF/A wants every font embedded; without a family iText falls back to plain Helvetica and fails.
-            appearance = DocumentPreparation.AppearanceFor(signer.GetDocument(), appearance);
-
             SignerProperties signerProperties = PdfVisualSigningService.BuildSignerProperties(
+                signer.GetDocument(),
                 fieldName,
                 signRect,
                 reason,
@@ -638,9 +617,6 @@ namespace DotNetSigningServer.Services
                 backgroundImageContent,
                 companyLogoContent,
                 visible,
-                designWidth,
-                designHeight,
-                autoHeight,
                 frame: signerFrame,
                 signerNameOverride: signerNameOverride);
 

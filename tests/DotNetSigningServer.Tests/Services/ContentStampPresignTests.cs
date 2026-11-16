@@ -94,9 +94,9 @@ public class ContentStampPresignTests : IDisposable
     {
         var input = Stamp();
         var (_, _, rect) = PdfVisualSigningService.StampContent(input, Blank(), keepPdfA: null);
+        using var doc = new PdfDocument(new PdfReader(new MemoryStream(Blank())), new PdfWriter(new MemoryStream()));
         var props = PdfVisualSigningService.BuildSignerProperties(
-            "f", input.SignRect, input.Reason, input.Location, 1, input.SignImageContent, null, input.Appearance,
-            designWidth: input.DesignWidth, designHeight: input.DesignHeight, autoHeight: input.AutoHeight,
+            doc, "f", input.SignRect, input.Reason, input.Location, 1, input.SignImageContent, null, input.Appearance,
             frame: PageFrame.Plain(A4), signerNameOverride: input.SignerName);
         var field = props.GetPageRect();
         Assert.Equal(field.GetX(), rect.GetX(), 2);
@@ -305,7 +305,8 @@ public class ContentStampPresignTests : IDisposable
         Assert.StartsWith("q", content.TrimStart());
         int cm = content.IndexOf("300 300 cm", StringComparison.Ordinal);
         int restore = content.IndexOf('Q', cm);
-        Assert.True(cm > 0 && restore > cm && restore < content.IndexOf("BT", StringComparison.Ordinal), content);
+        // The stamp is one form XObject (#116), drawn after the old content is closed.
+        Assert.True(cm > 0 && restore > cm && restore < content.IndexOf(" Do", StringComparison.Ordinal), content);
     }
 
     [Fact]
@@ -415,7 +416,7 @@ public class ContentStampPresignTests : IDisposable
         {
             CertificatePem = certPem,
             SignRect = new SignRect { Width = 150, Height = 50 },
-            Appearance = new SignatureAppearanceOptions { DescriptionText = "Electronic seal", ShowSignerName = false, ShowReason = false, ShowLocation = false },
+            Appearance = new SignatureAppearanceOptions { Seal = true },
             ContentStamp = stamp ?? Stamp(),
             PlaceBesideContentStamp = true,
             Occupied = occupied,
@@ -434,9 +435,7 @@ public class ContentStampPresignTests : IDisposable
         Reason = "Souhlas",
         Location = "Praha",
         SignerName = "Jana Nováková",
-        Appearance = new SignatureAppearanceOptions { FontFamily = "Helvetica" },
-        DesignWidth = 200,
-        DesignHeight = 60,
+        Appearance = new SignatureAppearanceOptions(),
     };
 
     private static byte[] Blank() => PresignPdfaTests.Pdf(_ => { });

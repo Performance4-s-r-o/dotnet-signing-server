@@ -799,6 +799,11 @@
   <data name="AccountDeleteRechargeInProgressStopped" xml:space="preserve"><value>An automatic top-up was being processed, so your account was not deleted. Auto-recharge has been switched off. Please try again in a few minutes.</value></data>
   <data name="Error_SEAL_PLACEMENT_NO_ROOM" xml:space="preserve"><value>Die Signatur passt hier nicht: Das Signaturbild oder das Siegel daneben würde eine andere Signatur überdecken oder über die Seite hinausragen. Verschieben Sie die Signatur an eine freie Stelle.</value></data>
   <data name="Error_DOCUMENT_CERTIFIED_NO_CHANGES" xml:space="preserve"><value>Das Dokument ist zertifiziert und seine Zertifizierung erlaubt kein Hinzufügen eines Signaturbildes. Es wurde nichts signiert.</value></data>
+  <data name="Error_APPEARANCE_INVALID" xml:space="preserve"><value>Das Erscheinungsbild der Signatur ist ungültig. Es wurde nichts signiert.</value></data>
+  <data name="Error_APPEARANCE_SEAL_VIOLATION" xml:space="preserve"><value>Ein Siegel darf weder eine handschriftliche Unterschrift noch den Namen des Unterzeichners zeigen. Es wurde nichts signiert.</value></data>
+  <data name="Error_SIGN_RECT_INVALID" xml:space="preserve"><value>Das Signaturfeld muss 20 bis 1000 Punkte breit und hoch sein. Es wurde nichts signiert.</value></data>
+  <data name="Error_APPEARANCE_IMAGE_INVALID" xml:space="preserve"><value>Ein Bild des Signatur-Erscheinungsbilds kann nicht gelesen werden. Es wurde nichts signiert.</value></data>
+  <data name="Error_APPEARANCE_TRANSPARENCY_NOT_ALLOWED" xml:space="preserve"><value>Das Dokument ist PDF/A-1, das kein Hintergrundbild und kein Wasserzeichen in der Signatur erlaubt. Wählen Sie ein Erscheinungsbild ohne diese. Es wurde nichts signiert.</value></data>
   <data name="Error_TOKEN_WEAK" xml:space="preserve"><value>The token is too weak: at least 43 characters of random data (32 random bytes, base64url), no spaces, quotes or commas.</value></data>
   <data name="Error_EXTERNAL_ID_INVALID" xml:space="preserve"><value>externalId must be 1 to 64 characters of letters, digits and . _ : -</value></data>
   <data name="Error_LABEL_INVALID" xml:space="preserve"><value>label may have at most 128 characters and no control characters.</value></data>

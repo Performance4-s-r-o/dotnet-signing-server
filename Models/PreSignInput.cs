@@ -27,12 +27,6 @@ namespace DotNetSigningServer.Models
         public string? VerificationUrl { get; set; }
         /// <summary>"disabled" | "link" (PDF metadata) | "qr" (append QR page).</summary>
         public string? VerificationMode { get; set; }
-        /// <summary>Signature design width in PDF points. When set, layout uses this instead of SignRect.Width.</summary>
-        public float? DesignWidth { get; set; }
-        /// <summary>Signature design height in PDF points. When set, layout uses this instead of SignRect.Height.</summary>
-        public float? DesignHeight { get; set; }
-        /// <summary>When true, signature box height grows to fit content regardless of DesignHeight.</summary>
-        public bool? AutoHeight { get; set; }
         /// <summary>Display name used in the signer row. Overrides CN/GN+SN extracted from the cert chain when provided.</summary>
         public string? SignerName { get; set; }
         /// <summary>Custom fillable text fields stamped into the PDF before the hash is computed, so they fall under this signature.</summary>
