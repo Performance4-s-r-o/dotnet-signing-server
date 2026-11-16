@@ -136,8 +136,8 @@ namespace DotNetSigningServer.Services.SignatureDesign
             var stamp = drawn.Contains("image") ? Decode(content.StampImage, "stamp") : null;
             var background = layout.Background.Kind == "image" ? Decode(content.BackgroundImage, "background") : null;
 
+            // A CMYK JPEG does not match an sRGB output intent (the only one this server writes).
             if (doc.GetConformance().IsPdfA() && new[] { sig, logo, stamp, background }.Any(i => i?.Data.GetColorEncodingComponentsNumber() == 4))
-                // A CMYK JPEG does not match the sRGB output intent of a PDF/A document.
                 throw new ApiValidationException(ImageInvalidCode, "CMYK image in a PDF/A document");
 
             bool pdfA1 = doc.GetConformance().GetAConformance()?.GetPart() == "1";
@@ -147,19 +147,20 @@ namespace DotNetSigningServer.Services.SignatureDesign
                 // made 8-bit RGB: real transparency is flattened onto the frame's background colour, without
                 // one onto white, so its box covers what lies under it. Over a background image that would be
                 // a white box on the picture, and a background with real transparency would turn white: both
-                // are refused. A PNG with an alpha channel that is fully opaque (common for logos) passes.
-                var overImage = layout.Background.Kind == "image";
-                if (overImage && new[] { sig, logo, stamp }.Any(HasRealAlpha))
+                // are refused. An alpha channel that is fully opaque (common for logos) passes. A colour-key
+                // (8-bit tRNS) needs no change; a binary mask is treated as transparency (conservative).
+                var under = layout.Background.Kind is "color" or "pattern" ? layout.Background.Color ?? "#ffffff" : "#ffffff";
+                var (flatSig, sigAlpha) = Opaque(sig, under);
+                var (flatLogo, logoAlpha) = Opaque(logo, under);
+                var (flatStamp, stampAlpha) = Opaque(stamp, under);
+                var (flatBackground, backgroundAlpha) = Opaque(background, "#ffffff");
+                if (layout.Background.Kind == "image" && (sigAlpha || logoAlpha || stampAlpha))
                     throw new ApiValidationException(TransparencyNotAllowedCode,
                         "An image with transparency over a background image needs transparency, which PDF/A-1 does not allow.");
-                if (HasRealAlpha(background))
+                if (backgroundAlpha)
                     throw new ApiValidationException(TransparencyNotAllowedCode,
                         "A background image with transparency needs transparency, which PDF/A-1 does not allow.");
-                var under = layout.Background.Kind is "color" or "pattern" ? layout.Background.Color ?? "#ffffff" : "#ffffff";
-                sig = Opaque(sig, under);
-                logo = Opaque(logo, under);
-                stamp = Opaque(stamp, under);
-                background = Opaque(background, "#ffffff");
+                (sig, logo, stamp, background) = (flatSig, flatLogo, flatStamp, flatBackground);
             }
 
             var images = new SignatureLayoutImages
@@ -185,22 +186,6 @@ namespace DotNetSigningServer.Services.SignatureDesign
 
         /// <summary>Longest side an image with alpha keeps when it is flattened for PDF/A-1.</summary>
         public const int MaxFlattenSidePx = 2000;
-
-        /// <summary>Does the PNG have a pixel that is not fully opaque? An alpha channel alone is not enough.</summary>
-        private static bool HasRealAlpha(Decoded? image)
-        {
-            if (image == null || image.Data.GetImageMask() == null) return false;
-            try
-            {
-                CodeScanRaster.EnsureConfigured();
-                using var magick = new MagickImage(image.Bytes);
-                return !magick.IsOpaque;
-            }
-            catch (MagickException ex)
-            {
-                throw new ApiValidationException(ImageInvalidCode, $"alpha check: {ex.GetType().Name}");
-            }
-        }
 
         internal sealed record Decoded(byte[] Bytes, ImageData Data);
 
@@ -229,9 +214,10 @@ namespace DotNetSigningServer.Services.SignatureDesign
         /// only reads here (the process policy allows writing raw grey bytes and nothing else, see
         /// <see cref="CodeScanRaster.Policy"/>): the pixels are composited by hand into raw RGB for iText.
         /// </summary>
-        internal static Decoded? Opaque(Decoded? image, string hex)
+        /// <returns>The 8-bit RGB image and whether it had a pixel that was not fully opaque.</returns>
+        internal static (Decoded? Image, bool RealAlpha) Opaque(Decoded? image, string hex)
         {
-            if (image == null || (image.Data.GetImageMask() == null && image.Data.GetBpc() <= 8)) return image;
+            if (image == null || (image.Data.GetImageMask() == null && image.Data.GetBpc() <= 8)) return (image, false);
             try
             {
                 CodeScanRaster.EnsureConfigured();
@@ -246,14 +232,16 @@ namespace DotNetSigningServer.Services.SignatureDesign
                     ?? throw new ApiValidationException(ImageInvalidCode, "flatten: no pixels");
                 int br = Convert.ToInt32(hex.Substring(1, 2), 16), bgc = Convert.ToInt32(hex.Substring(3, 2), 16), bb = Convert.ToInt32(hex.Substring(5, 2), 16);
                 var rgb = new byte[w * h * 3];
+                bool realAlpha = false;
                 for (int i = 0, j = 0; i + 3 < rgba.Length && j + 2 < rgb.Length; i += 4, j += 3)
                 {
                     int a = rgba[i + 3];
+                    realAlpha |= a < 255;
                     rgb[j] = (byte)((rgba[i] * a + br * (255 - a) + 127) / 255);
                     rgb[j + 1] = (byte)((rgba[i + 1] * a + bgc * (255 - a) + 127) / 255);
                     rgb[j + 2] = (byte)((rgba[i + 2] * a + bb * (255 - a) + 127) / 255);
                 }
-                return new Decoded(image.Bytes, ImageDataFactory.Create(w, h, 3, 8, rgb, null));
+                return (new Decoded(image.Bytes, ImageDataFactory.Create(w, h, 3, 8, rgb, null)), realAlpha);
             }
             catch (MagickException ex)
             {

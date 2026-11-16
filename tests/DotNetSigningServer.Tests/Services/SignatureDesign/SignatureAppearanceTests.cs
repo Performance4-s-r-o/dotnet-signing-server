@@ -128,10 +128,32 @@ public class SignatureAppearanceTests
         DotNetSigningServer.Services.CodeScanRaster.EnsureConfigured();
         // ImageMagick may not write under the policy: the PNG is built by hand.
         var bytes = RgbaPngOf(4000, 1000);
-        var flat = SignatureAppearance.Opaque(new SignatureAppearance.Decoded(bytes, iText.IO.Image.ImageDataFactory.Create(bytes)), "#ffffff")!;
-        Assert.Equal(SignatureAppearance.MaxFlattenSidePx, (int)flat.Data.GetWidth());
+        var (flat, realAlpha) = SignatureAppearance.Opaque(new SignatureAppearance.Decoded(bytes, iText.IO.Image.ImageDataFactory.Create(bytes)), "#ffffff");
+        Assert.True(realAlpha);
+        Assert.Equal(SignatureAppearance.MaxFlattenSidePx, (int)flat!.Data.GetWidth());
         Assert.Equal(500, (int)flat.Data.GetHeight());
         Assert.Null(flat.Data.GetImageMask());
+        // End to end: the scaled image passes the PDF/A-1 check on close.
+        Pdfa1(doc => new PdfCanvas(doc.GetFirstPage()).AddXObjectAt(SignatureAppearance.Render(doc,
+            new SignatureAppearanceContent { SignImage = Convert.ToBase64String(bytes), Name = "Jana" }, 200, 70), 10, 10));
+    }
+
+    [Fact]
+    public void Pdfa1_refuses_a_background_image_with_real_transparency()
+    {
+        DotNetSigningServer.Services.CodeScanRaster.EnsureConfigured();
+        var model = new SignatureLayoutModel();
+        model.Background.Kind = "image";
+        model.Background.Opacity = 100;
+        Pdfa1(doc =>
+        {
+            var ex = Assert.Throws<ApiValidationException>(() => SignatureAppearance.Render(doc, new SignatureAppearanceContent
+            {
+                Options = new SignatureAppearanceOptions { Layout = model },
+                BackgroundImage = Convert.ToBase64String(RgbaPngOf(4, 2)),
+            }, 200, 70));
+            Assert.Equal(SignatureAppearance.TransparencyNotAllowedCode, ex.Code);
+        });
     }
 
     [Fact]
