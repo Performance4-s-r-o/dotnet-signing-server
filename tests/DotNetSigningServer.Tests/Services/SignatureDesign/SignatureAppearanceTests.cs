@@ -105,12 +105,69 @@ public class SignatureAppearanceTests
     }
 
     [Fact]
+    public void Pdfa1_refuses_a_drawn_signature_over_a_background_image()
+    {
+        var model = new SignatureLayoutModel();
+        model.Background.Kind = "image";
+        model.Background.Opacity = 100;
+        Pdfa1(doc =>
+        {
+            var ex = Assert.Throws<ApiValidationException>(() => SignatureAppearance.Render(doc, new SignatureAppearanceContent
+            {
+                Options = new SignatureAppearanceOptions { Layout = model },
+                SignImage = RgbaPng,
+                BackgroundImage = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAEElEQVR4nGP4z8DAwMDAAAAJ/gH/H0VY8QAAAABJRU5ErkJggg==",
+            }, 200, 70));
+            Assert.Equal(SignatureAppearance.TransparencyNotAllowedCode, ex.Code);
+        });
+    }
+
+    [Fact]
+    public void A_large_drawn_signature_is_scaled_down_when_flattened()
+    {
+        DotNetSigningServer.Services.CodeScanRaster.EnsureConfigured();
+        // ImageMagick may not write under the policy: the PNG is built by hand.
+        var png = Convert.ToBase64String(RgbaPngOf(4000, 1000));
+        Pdfa1(doc => new PdfCanvas(doc.GetFirstPage()).AddXObjectAt(
+            SignatureAppearance.Render(doc, new SignatureAppearanceContent { SignImage = png, Name = "Jana" }, 200, 70), 10, 10));
+    }
+
+    [Fact]
     public void The_default_seal_has_no_person()
     {
         var seal = SignatureAppearance.ModelFor(new SignatureAppearanceOptions { Seal = true });
         Assert.Null(seal.SealViolation());
         Assert.Null(seal.Validate());
         Assert.Equal("sig", SignatureAppearance.ModelFor(null).Left);
+    }
+
+    /// <summary>A transparent RGBA PNG of the given size (one opaque pixel), built without ImageMagick.</summary>
+    private static byte[] RgbaPngOf(int width, int height)
+    {
+        var raw = new byte[height * (1 + width * 4)];
+        raw[1 + 3] = 255; // first pixel opaque black
+        using var deflated = new MemoryStream();
+        using (var z = new System.IO.Compression.ZLibStream(deflated, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true))
+            z.Write(raw);
+        using var png = new MemoryStream();
+        png.Write(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A });
+        void Chunk(string type, byte[] data)
+        {
+            var len = BitConverter.GetBytes(data.Length); Array.Reverse(len); png.Write(len);
+            var body = System.Text.Encoding.ASCII.GetBytes(type).Concat(data).ToArray();
+            png.Write(body);
+            uint crc = 0xFFFFFFFF;
+            foreach (var b in body) { crc ^= b; for (int k = 0; k < 8; k++) crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320 : crc >> 1; }
+            var c = BitConverter.GetBytes(~crc); Array.Reverse(c); png.Write(c);
+        }
+        var ihdr = new byte[13];
+        var wb = BitConverter.GetBytes(width); Array.Reverse(wb); wb.CopyTo(ihdr, 0);
+        var hb = BitConverter.GetBytes(height); Array.Reverse(hb); hb.CopyTo(ihdr, 4);
+        ihdr[8] = 8; ihdr[9] = 6;
+        Chunk("IHDR", ihdr);
+        Chunk("IDAT", deflated.ToArray());
+        Chunk("IEND", Array.Empty<byte>());
+        return png.ToArray();
     }
 
     private static byte[] Pdfa1(Action<PdfDocument> draw)

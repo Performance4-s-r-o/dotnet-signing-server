@@ -140,12 +140,17 @@ namespace DotNetSigningServer.Services.SignatureDesign
             if (pdfA1)
             {
                 // PDF/A-1 has no transparency: an image with alpha is flattened onto the frame's background
-                // colour, without one onto white, so it covers the page under its box. Transparent margins
-                // are trimmed first, so the opaque area is as small as the drawing itself.
+                // colour, without one onto white, so its box covers what lies under it. Over a background
+                // image that would be a white box on the picture, so that combination is refused.
+                if (layout.Background.Kind == "image" && new[] { sig, logo, stamp }.Any(i => i?.Data.GetImageMask() != null))
+                    throw new ApiValidationException(TransparencyNotAllowedCode,
+                        "An image with transparency over a background image needs transparency, which PDF/A-1 does not allow.");
                 var under = layout.Background.Kind is "color" or "pattern" ? layout.Background.Color ?? "#ffffff" : "#ffffff";
                 sig = Opaque(sig, under);
                 logo = Opaque(logo, under);
                 stamp = Opaque(stamp, under);
+                // An RGBA background without real transparency is drawn as is.
+                background = Opaque(background, "#ffffff");
             }
 
             var images = new SignatureLayoutImages
@@ -165,6 +170,13 @@ namespace DotNetSigningServer.Services.SignatureDesign
             }
         }
 
+        private static bool IsPngOrJpeg(byte[] b) =>
+            (b.Length >= 8 && b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47 && b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A)
+            || (b.Length >= 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF);
+
+        /// <summary>Longest side an image with alpha keeps when it is flattened for PDF/A-1.</summary>
+        public const int MaxFlattenSidePx = 2000;
+
         private sealed record Decoded(byte[] Bytes, ImageData Data);
 
         /// <summary>Raw base64 or a data URI; anything that is not an image is refused, never left out.</summary>
@@ -177,9 +189,11 @@ namespace DotNetSigningServer.Services.SignatureDesign
             try
             {
                 var bytes = Convert.FromBase64String(payload);
+                // PNG and JPEG only, like the portal: other formats iText reads but ImageMagick may not (PDF/A-1).
+                if (!IsPngOrJpeg(bytes)) throw new ApiValidationException(ImageInvalidCode, $"{kind} image: not PNG or JPEG");
                 return new Decoded(bytes, ImageDataFactory.Create(bytes));
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not ApiValidationException)
             {
                 throw new ApiValidationException(ImageInvalidCode, $"{kind} image: {ex.GetType().Name}");
             }
@@ -197,9 +211,10 @@ namespace DotNetSigningServer.Services.SignatureDesign
             {
                 CodeScanRaster.EnsureConfigured();
                 using var magick = new MagickImage(image.Bytes);
-                // Transparent margins go first, so the opaque area is as small as the drawing itself.
-                magick.Trim();
-                magick.ResetPage();
+                // Expanded to raw RGB below: a large, well-compressed PNG is scaled down first (still about
+                // 450 dpi in the largest frame), so it cannot take hundreds of MB.
+                if (Math.Max(magick.Width, magick.Height) > MaxFlattenSidePx)
+                    magick.Resize(new MagickGeometry(MaxFlattenSidePx, MaxFlattenSidePx));
                 int w = (int)magick.Width, h = (int)magick.Height;
                 using var pixels = magick.GetPixelsUnsafe();
                 var rgba = pixels.ToByteArray(PixelMapping.RGBA)
