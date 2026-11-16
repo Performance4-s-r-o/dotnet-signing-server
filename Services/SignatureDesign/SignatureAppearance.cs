@@ -91,7 +91,7 @@ namespace DotNetSigningServer.Services.SignatureDesign
         /// <summary>
         /// The appearance as one form XObject of <paramref name="width"/> × <paramref name="height"/> pt.
         /// In PDF/A-1 an image with an alpha channel (a drawn signature) is flattened onto the colour under it;
-        /// a background image or watermark is refused (<see cref="TransparencyNotAllowedCode"/>).
+        /// a translucent background image or watermark is refused (<see cref="TransparencyNotAllowedCode"/>).
         /// </summary>
         public static PdfFormXObject Render(PdfDocument doc, SignatureAppearanceContent content, double width, double height)
         {
@@ -100,10 +100,7 @@ namespace DotNetSigningServer.Services.SignatureDesign
                 throw new ApiValidationException(FrameInvalidCode, $"signature box {width} x {height} pt");
 
             var model = ModelFor(content.Options);
-            var sig = Decode(content.SignImage, "signature");
-            var logo = Decode(content.LogoImage, "logo");
-            var stamp = Decode(content.StampImage, "stamp");
-            var background = Decode(content.BackgroundImage, "background");
+            static bool Has(string? base64) => !string.IsNullOrWhiteSpace(base64);
 
             var layout = SignatureLayoutEngine.Compute(new SignatureLayoutInput
             {
@@ -125,17 +122,26 @@ namespace DotNetSigningServer.Services.SignatureDesign
                 },
                 Assets = new SignatureLayoutAssets
                 {
-                    Sig = sig != null,
-                    Logo = logo != null,
-                    Image = stamp != null,
-                    BackgroundImage = background != null,
+                    Sig = Has(content.SignImage),
+                    Logo = Has(content.LogoImage),
+                    Image = Has(content.StampImage),
+                    BackgroundImage = Has(content.BackgroundImage),
                 },
             });
+
+            // Only images the layout draws are decoded: one it leaves out cannot fail the signature.
+            var drawn = layout.Zones.Select(z => z.Kind).ToHashSet(StringComparer.Ordinal);
+            var sig = drawn.Contains("sig") ? Decode(content.SignImage, "signature") : null;
+            var logo = drawn.Contains("logo") || layout.Background.Kind == "watermark" ? Decode(content.LogoImage, "logo") : null;
+            var stamp = drawn.Contains("image") ? Decode(content.StampImage, "stamp") : null;
+            var background = layout.Background.Kind == "image" ? Decode(content.BackgroundImage, "background") : null;
 
             bool pdfA1 = doc.GetConformance().GetAConformance()?.GetPart() == "1";
             if (pdfA1)
             {
-                // Under a zone lies the frame's background colour; without one, white paper.
+                // PDF/A-1 has no transparency: an image with alpha is flattened onto the frame's background
+                // colour, without one onto white, so it covers the page under its box. Transparent margins
+                // are trimmed first, so the opaque area is as small as the drawing itself.
                 var under = layout.Background.Kind is "color" or "pattern" ? layout.Background.Color ?? "#ffffff" : "#ffffff";
                 sig = Opaque(sig, under);
                 logo = Opaque(logo, under);
@@ -179,21 +185,35 @@ namespace DotNetSigningServer.Services.SignatureDesign
             }
         }
 
-        /// <summary>The image flattened onto <paramref name="hex"/> when it has transparency; else unchanged.</summary>
+        /// <summary>
+        /// The image flattened onto <paramref name="hex"/> when it has transparency; else unchanged. ImageMagick
+        /// only reads here (the process policy allows writing raw grey bytes and nothing else, see
+        /// <see cref="CodeScanRaster.Policy"/>): the pixels are composited by hand into raw RGB for iText.
+        /// </summary>
         private static Decoded? Opaque(Decoded? image, string hex)
         {
             if (image == null || image.Data.GetImageMask() == null) return image;
             try
             {
+                CodeScanRaster.EnsureConfigured();
                 using var magick = new MagickImage(image.Bytes);
-                magick.BackgroundColor = new MagickColor(hex);
-                magick.Alpha(AlphaAction.Remove);
-                magick.Alpha(AlphaAction.Off);
-                magick.Format = MagickFormat.Png24;
-                var bytes = magick.ToByteArray();
-                var data = ImageDataFactory.Create(bytes);
-                // Still masked (unexpected): the renderer refuses it with a code instead of a broken PDF/A.
-                return new Decoded(bytes, data);
+                // Transparent margins go first, so the opaque area is as small as the drawing itself.
+                magick.Trim();
+                magick.ResetPage();
+                int w = (int)magick.Width, h = (int)magick.Height;
+                using var pixels = magick.GetPixelsUnsafe();
+                var rgba = pixels.ToByteArray(PixelMapping.RGBA)
+                    ?? throw new ApiValidationException(ImageInvalidCode, "flatten: no pixels");
+                int br = Convert.ToInt32(hex.Substring(1, 2), 16), bgc = Convert.ToInt32(hex.Substring(3, 2), 16), bb = Convert.ToInt32(hex.Substring(5, 2), 16);
+                var rgb = new byte[w * h * 3];
+                for (int i = 0, j = 0; i + 3 < rgba.Length && j + 2 < rgb.Length; i += 4, j += 3)
+                {
+                    int a = rgba[i + 3];
+                    rgb[j] = (byte)((rgba[i] * a + br * (255 - a) + 127) / 255);
+                    rgb[j + 1] = (byte)((rgba[i + 1] * a + bgc * (255 - a) + 127) / 255);
+                    rgb[j + 2] = (byte)((rgba[i + 2] * a + bb * (255 - a) + 127) / 255);
+                }
+                return new Decoded(image.Bytes, ImageDataFactory.Create(w, h, 3, 8, rgb, null));
             }
             catch (MagickException ex)
             {

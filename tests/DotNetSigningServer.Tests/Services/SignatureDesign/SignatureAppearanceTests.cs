@@ -46,13 +46,15 @@ public class SignatureAppearanceTests
     {
         using var doc = new PdfDocument(new PdfWriter(new MemoryStream()));
         var ex = Assert.Throws<ApiValidationException>(() => SignatureAppearance.Render(doc,
-            new SignatureAppearanceContent { StampImage = Convert.ToBase64String(new byte[] { 1, 2, 3, 4 }) }, 200, 70));
+            new SignatureAppearanceContent { SignImage = Convert.ToBase64String(new byte[] { 1, 2, 3, 4 }) }, 200, 70));
         Assert.Equal(SignatureAppearance.ImageInvalidCode, ex.Code);
     }
 
     [Fact]
     public void Pdfa1_flattens_a_drawn_signature_but_refuses_a_watermark()
     {
+        // The production ImageMagick policy (read-only except raw grey) must not break flattening.
+        DotNetSigningServer.Services.CodeScanRaster.EnsureConfigured();
         var pdf = Pdfa1(doc =>
         {
             var xobject = SignatureAppearance.Render(doc, new SignatureAppearanceContent
@@ -77,6 +79,29 @@ public class SignatureAppearanceTests
         var text = PdfTextExtractor.GetTextFromPage(read.GetFirstPage());
         Assert.Contains("Jana Nováková", text);
         Assert.Contains("Firma s.r.o.", text);
+    }
+
+    [Fact]
+    public void An_image_the_layout_does_not_draw_is_not_decoded()
+    {
+        using var doc = new PdfDocument(new PdfWriter(new MemoryStream()));
+        // The default model draws no stamp: garbage in StampImage cannot fail the signature.
+        SignatureAppearance.Render(doc, new SignatureAppearanceContent { StampImage = Convert.ToBase64String(new byte[] { 1, 2, 3 }) }, 200, 70);
+    }
+
+    [Fact]
+    public void Pdfa1_accepts_a_fully_opaque_background_image()
+    {
+        var model = new SignatureLayoutModel();
+        model.Background.Kind = "image";
+        model.Background.Opacity = 100;
+        Pdfa1(doc => new PdfCanvas(doc.GetFirstPage()).AddXObjectAt(SignatureAppearance.Render(doc, new SignatureAppearanceContent
+        {
+            Options = new SignatureAppearanceOptions { Layout = model },
+            // 2x1 PNG without alpha.
+            BackgroundImage = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAEElEQVR4nGP4z8DAwMDAAAAJ/gH/H0VY8QAAAABJRU5ErkJggg==",
+            Name = "Jana",
+        }, 200, 70), 10, 10));
     }
 
     [Fact]
@@ -123,7 +148,8 @@ public class SignatureFieldAppearanceTests
         var frm = widget.GetNormalAppearanceObject().GetAsDictionary(PdfName.Resources).GetAsDictionary(PdfName.XObject).GetAsStream(new PdfName("FRM"));
         var n2 = frm.GetAsDictionary(PdfName.Resources).GetAsDictionary(PdfName.XObject).GetAsStream(new PdfName("n2"));
         var content = System.Text.Encoding.ASCII.GetString(n2.GetBytes());
-        Assert.Contains("1 0 0 1 0 0 cm", content);
+        // The XObject is drawn untransformed: identity matrix directly before its Do.
+        Assert.Matches(@"1 0 0 1 0 0 cm\s*/\w+ Do", content);
         var inner = n2.GetAsDictionary(PdfName.Resources).GetAsDictionary(PdfName.XObject);
         var appearance = inner.GetAsStream(inner.KeySet().Single());
         Assert.Equal(new[] { 0f, 0f, 260f, 90f }, appearance.GetAsArray(PdfName.BBox).ToFloatArray());

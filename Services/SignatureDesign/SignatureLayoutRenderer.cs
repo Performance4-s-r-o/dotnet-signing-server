@@ -83,12 +83,13 @@ namespace DotNetSigningServer.Services.SignatureDesign
 
         private static readonly Regex Hex = new("^#[0-9a-fA-F]{6}$", RegexOptions.CultureInvariant);
 
-        /// <param name="transparencyAllowed">False for PDF/A-1: a background image or watermark is then refused.</param>
+        /// <param name="transparencyAllowed">False for PDF/A-1: a translucent background image or watermark is then refused.</param>
         public static PdfFormXObject Render(PdfDocument doc, SignatureLayoutResult layout, SignatureLayoutImages images, bool transparencyAllowed = true)
         {
             if (!transparencyAllowed)
             {
-                if (layout.Background.Kind is "image" or "watermark")
+                // Fully opaque (opacity 100, alpha 1) needs no transparency group and PDF/A-1 accepts it.
+                if (layout.Background.Kind is "image" or "watermark" && (layout.Background.Alpha ?? 1) < 1)
                     throw new SignatureAppearanceUnsupportedException(TransparencyNotAllowed,
                         "A background image or watermark needs transparency, which PDF/A-1 does not allow.");
                 // An alpha channel or partial tRNS becomes an image with a soft mask, which PDF/A-1 refuses on close.
@@ -141,7 +142,7 @@ namespace DotNetSigningServer.Services.SignatureDesign
                         var img = images.Background;
                         var x = SignatureLayoutImages.XObject(img, doc);
                         canvas.SaveState();
-                        canvas.SetExtGState(new PdfExtGState().SetFillOpacity((float)(bg.Alpha ?? 1)));
+                        if ((bg.Alpha ?? 1) < 1) canvas.SetExtGState(new PdfExtGState().SetFillOpacity((float)bg.Alpha!.Value));
                         if (bg.Fit == "repeat")
                         {
                             // Tiles of H x H, the image contained in each, from the top left corner.
@@ -161,7 +162,7 @@ namespace DotNetSigningServer.Services.SignatureDesign
                     }
                 case "watermark" when images.Logo != null && bg.Rect != null:
                     canvas.SaveState();
-                    canvas.SetExtGState(new PdfExtGState().SetFillOpacity((float)(bg.Alpha ?? 1)));
+                    if ((bg.Alpha ?? 1) < 1) canvas.SetExtGState(new PdfExtGState().SetFillOpacity((float)bg.Alpha!.Value));
                     DrawContained(canvas, SignatureLayoutImages.XObject(images.Logo, doc), images.Logo, bg.Rect, H);
                     canvas.RestoreState();
                     break;
