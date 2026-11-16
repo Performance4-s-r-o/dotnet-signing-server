@@ -139,6 +139,25 @@ public class SignatureAppearanceTests
     }
 
     [Fact]
+    public void Pdfa1_refuses_a_drawn_signature_over_an_opaque_watermark()
+    {
+        DotNetSigningServer.Services.CodeScanRaster.EnsureConfigured();
+        var model = new SignatureLayoutModel();
+        model.Background.Kind = "watermark";
+        model.Background.Opacity = 100;
+        Pdfa1(doc =>
+        {
+            var ex = Assert.Throws<ApiValidationException>(() => SignatureAppearance.Render(doc, new SignatureAppearanceContent
+            {
+                Options = new SignatureAppearanceOptions { Layout = model },
+                SignImage = RgbaPng,
+                LogoImage = Convert.ToBase64String(RgbaPngOf(4, 2, opaque: true)),
+            }, 200, 70));
+            Assert.Equal(SignatureAppearance.TransparencyNotAllowedCode, ex.Code);
+        });
+    }
+
+    [Fact]
     public void Pdfa1_refuses_a_background_image_with_real_transparency()
     {
         DotNetSigningServer.Services.CodeScanRaster.EnsureConfigured();

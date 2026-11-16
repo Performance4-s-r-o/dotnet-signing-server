@@ -154,9 +154,10 @@ namespace DotNetSigningServer.Services.SignatureDesign
                 var (flatLogo, logoAlpha) = Opaque(logo, under);
                 var (flatStamp, stampAlpha) = Opaque(stamp, under);
                 var (flatBackground, backgroundAlpha) = Opaque(background, "#ffffff");
-                if (layout.Background.Kind == "image" && (sigAlpha || logoAlpha || stampAlpha))
+                // The watermark is the logo itself, so a logo with alpha would be a white block there too.
+                if (layout.Background.Kind is "image" or "watermark" && (sigAlpha || logoAlpha || stampAlpha))
                     throw new ApiValidationException(TransparencyNotAllowedCode,
-                        "An image with transparency over a background image needs transparency, which PDF/A-1 does not allow.");
+                        "An image with transparency over a background image or watermark needs transparency, which PDF/A-1 does not allow.");
                 if (backgroundAlpha)
                     throw new ApiValidationException(TransparencyNotAllowedCode,
                         "A background image with transparency needs transparency, which PDF/A-1 does not allow.");
