@@ -33,7 +33,7 @@ public class SignatureLayoutRendererTests
         {
             foreach (var c in cases)
             {
-                var input = c!["input"].Deserialize<SignatureLayoutInput>(Json)!;
+                var input = c!["input"].Deserialize<SignatureLayoutInput>(SignatureLayoutModel.JsonOptions)!;
                 var layout = SignatureLayoutEngine.Compute(input);
                 var page = doc.AddNewPage(new PageSize(360, 140));
                 var xobject = SignatureLayoutRenderer.Render(doc, layout, Images());
@@ -59,7 +59,7 @@ public class SignatureLayoutRendererTests
         int i = 0;
         foreach (var c in cases)
         {
-            var layout = SignatureLayoutEngine.Compute(c!["input"].Deserialize<SignatureLayoutInput>(Json)!);
+            var layout = SignatureLayoutEngine.Compute(c!["input"].Deserialize<SignatureLayoutInput>(SignatureLayoutModel.JsonOptions)!);
             var xobject = SignatureLayoutRenderer.Render(doc, layout, Images());
             float x = 10 + (i % 5) * 300;
             float y = 1400 - 10 - (i / 5 + 1) * 135;
@@ -67,6 +67,81 @@ public class SignatureLayoutRendererTests
             canvas.AddXObjectAt(xobject, x, y);
             i++;
         }
+    }
+
+    private static SignatureLayoutResult Layout(Action<SignatureLayoutModel>? patch = null)
+    {
+        var model = new SignatureLayoutModel();
+        patch?.Invoke(model);
+        return SignatureLayoutEngine.Compute(new SignatureLayoutInput
+        {
+            Model = model,
+            Width = 260,
+            Height = 90,
+            Values = new SignatureLayoutValues { Name = "Jana Nováková", Company = "Performance4 s.r.o.", Date = "12. 11. 2026 14:32" },
+            Assets = new SignatureLayoutAssets { Sig = true, Logo = true, Image = true, BackgroundImage = true },
+        });
+    }
+
+    [Fact]
+    public void Pdfa1_refuses_a_transparent_background_but_draws_a_pattern()
+    {
+        using var doc = new PdfDocument(new PdfWriter(new MemoryStream()));
+        var ex = Assert.Throws<SignatureAppearanceUnsupportedException>(() =>
+            SignatureLayoutRenderer.Render(doc, Layout(m => m.Background.Kind = "watermark"), Images(), transparencyAllowed: false));
+        Assert.Equal(SignatureLayoutRenderer.TransparencyNotAllowed, ex.Code);
+        SignatureLayoutRenderer.Render(doc, Layout(m => { m.Background.Kind = "pattern"; m.Elements.Reason.Enabled = true; }), Images(), transparencyAllowed: false);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Renders_into_pdfa(bool pdfa1)
+    {
+        var icc = File.OpenRead(System.IO.Path.Combine(AppContext.BaseDirectory, "Resources", "srgb.icc"));
+        using var ms = new MemoryStream();
+        var conformance = pdfa1 ? iText.Kernel.Pdf.PdfAConformance.PDF_A_1B : iText.Kernel.Pdf.PdfAConformance.PDF_A_2B;
+        using (var doc = new iText.Pdfa.PdfADocument(new PdfWriter(ms), conformance,
+                   new PdfOutputIntent("Custom", "", "http://www.color.org", "sRGB IEC61966-2.1", icc)))
+        {
+            var page = doc.AddNewPage(new PageSize(300, 120));
+            var layout = Layout(m => { m.Background.Kind = "pattern"; m.Elements.Reason.Enabled = true; });
+            // PDF/A-1 forbids the PNG soft mask of the test image, so zones stay empty there.
+            var images = pdfa1 ? new SignatureLayoutImages() : Images();
+            new PdfCanvas(page).AddXObjectAt(SignatureLayoutRenderer.Render(doc, layout, images, transparencyAllowed: !pdfa1), 10, 10);
+        }
+        Assert.True(ms.ToArray().Length > 0);
+    }
+
+    [Fact]
+    public void Each_image_is_embedded_once_per_document()
+    {
+        using var ms = new MemoryStream();
+        var images = Images();
+        using (var doc = new PdfDocument(new PdfWriter(ms)))
+        {
+            var page = doc.AddNewPage(new PageSize(600, 300));
+            var layout = Layout(m => { m.Right = "image"; m.Background.Kind = "image"; m.Background.ImageFit = "repeat"; });
+            new PdfCanvas(page).AddXObjectAt(SignatureLayoutRenderer.Render(doc, layout, images), 10, 10);
+            new PdfCanvas(page).AddXObjectAt(SignatureLayoutRenderer.Render(doc, layout, images), 10, 150);
+        }
+        using var read = new PdfDocument(new PdfReader(new MemoryStream(ms.ToArray())));
+        int imageXObjects = 0;
+        for (int i = 1; i <= read.GetNumberOfPdfObjects(); i++)
+        {
+            if (read.GetPdfObject(i) is PdfStream stream && PdfName.Image.Equals(stream.GetAsName(PdfName.Subtype)))
+                imageXObjects++;
+        }
+        // The test PNG has no alpha: one image object for every use in both appearances.
+        Assert.Equal(1, imageXObjects);
+    }
+
+    [Fact]
+    public void Mixes_colours_like_the_portal()
+    {
+        Assert.Equal("#4d4d4d", SignatureLayoutRenderer.Mix("#000000", "#ffffff", 0.7));
+        Assert.Equal("#1b3a8c", SignatureLayoutRenderer.Mix("#1b3a8c", "#ffffff", 1));
+        Assert.Equal("#4d4d4d", SignatureLayoutRenderer.Mix("not-a-colour", "#ffffff", 0.7));
     }
 
     [Fact]

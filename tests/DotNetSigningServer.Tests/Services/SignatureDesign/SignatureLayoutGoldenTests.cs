@@ -16,7 +16,8 @@ public class SignatureLayoutGoldenTests
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    private const double Tolerance = 0.011;
+    // Both engines round the same way (R2 = Math.round), so the numbers must match exactly.
+    private const double Tolerance = 1e-9;
 
     public static IEnumerable<object[]> Cases()
     {
@@ -36,7 +37,7 @@ public class SignatureLayoutGoldenTests
     public void Matches_the_portal(string name)
     {
         var c = Case(name);
-        var input = c["input"].Deserialize<SignatureLayoutInput>(Json)!;
+        var input = c["input"].Deserialize<SignatureLayoutInput>(SignatureLayoutModel.JsonOptions)!;
         Assert.Null(input.Model.Validate());
         var actual = JsonSerializer.SerializeToNode(SignatureLayoutEngine.Compute(input), Json);
         var diff = Compare(c["expected"], actual, "$");

@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using iText.IO.Image;
 using iText.Kernel.Colors;
 using iText.Kernel.Font;
@@ -9,13 +10,18 @@ using iText.Kernel.Pdf.Xobject;
 
 namespace DotNetSigningServer.Services.SignatureDesign
 {
-    /// <summary>Decoded images of a signature appearance; a missing one leaves its zone empty.</summary>
+    /// <summary>
+    /// Decoded images of a signature appearance; a missing one leaves its zone empty. Each image becomes one
+    /// image XObject per document, however often it is drawn (repeat tiles, page stamp plus field appearance).
+    /// </summary>
     public sealed class SignatureLayoutImages
     {
         public ImageData? Sig { get; init; }
         public ImageData? Logo { get; init; }
         public ImageData? Image { get; init; }
         public ImageData? Background { get; init; }
+
+        private readonly Dictionary<(ImageData, PdfDocument), PdfImageXObject> _xobjects = new();
 
         public ImageData? For(string zoneKind) => zoneKind switch
         {
@@ -24,6 +30,24 @@ namespace DotNetSigningServer.Services.SignatureDesign
             "image" => Image,
             _ => null,
         };
+
+        internal PdfImageXObject XObject(ImageData image, PdfDocument doc)
+        {
+            if (!_xobjects.TryGetValue((image, doc), out var xobject))
+            {
+                xobject = new PdfImageXObject(image);
+                _xobjects[(image, doc)] = xobject;
+            }
+            return xobject;
+        }
+    }
+
+    /// <summary>The appearance needs something the target document does not allow (e.g. transparency in PDF/A-1).</summary>
+    public sealed class SignatureAppearanceUnsupportedException : Exception
+    {
+        public SignatureAppearanceUnsupportedException(string code, string message) : base(message) => Code = code;
+
+        public string Code { get; }
     }
 
     /// <summary>
@@ -31,15 +55,27 @@ namespace DotNetSigningServer.Services.SignatureDesign
     /// into the page content or an annotation (image signature) and into the signature field (certificate),
     /// so both look the same. It draws only what the engine computed, with the same primitives as the
     /// portal's SVG preview (<c>lib/signature-layout/svg.ts</c>), so the preview matches the PDF.
-    /// Transparency needs PDF/A-2 or later, never PDF/A-1.
+    /// Muted text and patterns are mixed solid colours (allowed in PDF/A-1); only a background image and
+    /// the watermark need transparency.
     /// </summary>
     public static class SignatureLayoutRenderer
     {
-        /// <summary>Opacity of the muted lines (reason, location, date) and separators.</summary>
-        public const float MutedAlpha = 0.7f;
+        /// <summary>Muted lines (reason, location, date) and separators: text colour mixed with 30 % white.</summary>
+        public const double MutedMix = 0.7;
 
-        public static PdfFormXObject Render(PdfDocument doc, SignatureLayoutResult layout, SignatureLayoutImages images)
+        public const string TransparencyNotAllowed = "APPEARANCE_TRANSPARENCY_NOT_ALLOWED";
+
+        private static readonly Regex Hex = new("^#[0-9a-fA-F]{6}$", RegexOptions.CultureInvariant);
+
+        /// <param name="transparencyAllowed">False for PDF/A-1: a background image or watermark is then refused.</param>
+        public static PdfFormXObject Render(PdfDocument doc, SignatureLayoutResult layout, SignatureLayoutImages images, bool transparencyAllowed = true)
         {
+            if (!transparencyAllowed && layout.Background.Kind is "image" or "watermark")
+            {
+                throw new SignatureAppearanceUnsupportedException(TransparencyNotAllowed,
+                    "A background image or watermark needs transparency, which PDF/A-1 does not allow.");
+            }
+
             float W = (float)layout.Width;
             float H = (float)layout.Height;
             var xobject = new PdfFormXObject(new Rectangle(0, 0, W, H));
@@ -52,22 +88,22 @@ namespace DotNetSigningServer.Services.SignatureDesign
             else canvas.Rectangle(0, 0, W, H);
             canvas.Clip().EndPath();
 
-            DrawBackground(canvas, layout, images, W, H);
+            DrawBackground(canvas, doc, layout, images, W, H);
 
             foreach (var zone in layout.Zones)
             {
                 var image = images.For(zone.Kind);
-                if (image != null) DrawContained(canvas, image, zone.Rect, H);
+                if (image != null) DrawContained(canvas, images.XObject(image, doc), image, zone.Rect, H);
             }
 
-            if (layout.Text != null) DrawText(canvas, doc, layout, H);
+            if (layout.Text != null) DrawText(canvas, layout, H);
 
             canvas.RestoreState();
             canvas.Release();
             return xobject;
         }
 
-        private static void DrawBackground(PdfCanvas canvas, SignatureLayoutResult layout, SignatureLayoutImages images, float W, float H)
+        private static void DrawBackground(PdfCanvas canvas, PdfDocument doc, SignatureLayoutResult layout, SignatureLayoutImages images, float W, float H)
         {
             var bg = layout.Background;
             switch (bg.Kind)
@@ -80,29 +116,32 @@ namespace DotNetSigningServer.Services.SignatureDesign
                     DrawPattern(canvas, bg, W, H);
                     break;
                 case "image" when images.Background != null:
-                    canvas.SaveState();
-                    canvas.SetExtGState(new PdfExtGState().SetFillOpacity((float)(bg.Alpha ?? 1)));
-                    if (bg.Fit == "repeat")
-                    {
-                        // Tiles of H x H, the image contained in each, from the top left corner.
-                        for (double ty = 0; ty < H; ty += H)
-                            for (double tx = 0; tx < W; tx += H)
-                                DrawContained(canvas, images.Background, new LayoutRect { X = tx, Y = ty, W = H, H = H }, H);
-                    }
-                    else
                     {
                         var img = images.Background;
-                        double s = Math.Max(W / img.GetWidth(), H / img.GetHeight());
-                        double dw = img.GetWidth() * s;
-                        double dh = img.GetHeight() * s;
-                        canvas.AddImageFittedIntoRectangle(img, new Rectangle((float)((W - dw) / 2), (float)((H - dh) / 2), (float)dw, (float)dh), false);
+                        var x = images.XObject(img, doc);
+                        canvas.SaveState();
+                        canvas.SetExtGState(new PdfExtGState().SetFillOpacity((float)(bg.Alpha ?? 1)));
+                        if (bg.Fit == "repeat")
+                        {
+                            // Tiles of H x H, the image contained in each, from the top left corner.
+                            for (double ty = 0; ty < H; ty += H)
+                                for (double tx = 0; tx < W; tx += H)
+                                    DrawContained(canvas, x, img, new LayoutRect { X = tx, Y = ty, W = H, H = H }, H);
+                        }
+                        else
+                        {
+                            double s = Math.Max(W / img.GetWidth(), H / img.GetHeight());
+                            double dw = img.GetWidth() * s;
+                            double dh = img.GetHeight() * s;
+                            canvas.AddXObjectFittedIntoRectangle(x, new Rectangle((float)((W - dw) / 2), (float)((H - dh) / 2), (float)dw, (float)dh));
+                        }
+                        canvas.RestoreState();
+                        break;
                     }
-                    canvas.RestoreState();
-                    break;
                 case "watermark" when images.Logo != null && bg.Rect != null:
                     canvas.SaveState();
                     canvas.SetExtGState(new PdfExtGState().SetFillOpacity((float)(bg.Alpha ?? 1)));
-                    DrawContained(canvas, images.Logo, bg.Rect, H);
+                    DrawContained(canvas, images.XObject(images.Logo, doc), images.Logo, bg.Rect, H);
                     canvas.RestoreState();
                     break;
             }
@@ -150,10 +189,9 @@ namespace DotNetSigningServer.Services.SignatureDesign
         private static void DrawPattern(PdfCanvas canvas, LayoutBackground bg, float W, float H)
         {
             var (lines, circles, dots) = PatternPrimitives(bg.Pattern ?? "diag", bg.Spacing ?? 0, W, H);
-            var color = Color(bg.PatternColor);
-            float alpha = (float)(bg.Alpha ?? 1);
+            // On an opaque base the pattern's alpha is a mixed solid colour (as in the SVG preview).
+            var color = Color(Mix(bg.PatternColor, bg.Color, bg.Alpha ?? 1));
             canvas.SaveState();
-            canvas.SetExtGState(new PdfExtGState().SetStrokeOpacity(alpha).SetFillOpacity(alpha));
             canvas.SetStrokeColor(color).SetFillColor(color).SetLineWidth((float)(bg.LineWidth ?? 1));
             // y is flipped: the engine measures from the top, PDF from the bottom.
             foreach (var (x1, y1, x2, y2) in lines)
@@ -172,7 +210,7 @@ namespace DotNetSigningServer.Services.SignatureDesign
         }
 
         /// <summary>The image fitted into the rect keeping its aspect ratio, centred (SVG <c>xMidYMid meet</c>).</summary>
-        private static void DrawContained(PdfCanvas canvas, ImageData image, LayoutRect r, float frameHeight)
+        private static void DrawContained(PdfCanvas canvas, PdfImageXObject xobject, ImageData image, LayoutRect r, float frameHeight)
         {
             double iw = image.GetWidth();
             double ih = image.GetHeight();
@@ -182,16 +220,17 @@ namespace DotNetSigningServer.Services.SignatureDesign
             double dh = ih * s;
             double x = r.X + (r.W - dw) / 2;
             double top = r.Y + (r.H - dh) / 2;
-            canvas.AddImageFittedIntoRectangle(image, new Rectangle((float)x, (float)(frameHeight - top - dh), (float)dw, (float)dh), false);
+            canvas.AddXObjectFittedIntoRectangle(xobject, new Rectangle((float)x, (float)(frameHeight - top - dh), (float)dw, (float)dh));
         }
 
-        private static void DrawText(PdfCanvas canvas, PdfDocument doc, SignatureLayoutResult layout, float H)
+        private static void DrawText(PdfCanvas canvas, SignatureLayoutResult layout, float H)
         {
             var text = layout.Text!;
             var family = AppFonts.FamilyFromLegacyName(layout.FontFamily);
             PdfFont? regular = null;
             PdfFont? bold = null;
-            var color = Color(layout.TextColor);
+            var primary = Color(layout.TextColor);
+            var muted = Color(Mix(layout.TextColor, "#ffffff", MutedMix));
             float size = (float)text.FontSize;
             foreach (var line in text.Lines)
             {
@@ -199,20 +238,32 @@ namespace DotNetSigningServer.Services.SignatureDesign
                 {
                     if (string.IsNullOrEmpty(run.Text)) continue;
                     var font = run.Bold ? bold ??= AppFonts.Load(family, bold: true) : regular ??= AppFonts.Load(family);
-                    canvas.SaveState();
-                    if (run.Tone == "muted") canvas.SetExtGState(new PdfExtGState().SetFillOpacity(MutedAlpha));
                     canvas.BeginText()
                         .SetFontAndSize(font, size)
-                        .SetFillColor(color)
+                        .SetFillColor(run.Tone == "muted" ? muted : primary)
                         .MoveText(run.X, H - line.Baseline)
                         .ShowText(run.Text)
                         .EndText();
-                    canvas.RestoreState();
                 }
             }
         }
 
-        private static DeviceRgb Color(string? hex) =>
-            string.IsNullOrWhiteSpace(hex) ? new DeviceRgb(0, 0, 0) : PdfCryptoHelper.ParseHexColor(hex);
+        /// <summary>Solid colour <paramref name="a"/> mixed with <paramref name="b"/> at <paramref name="t"/>; same as the portal's <c>mixColor</c>.</summary>
+        internal static string Mix(string? a, string? b, double t)
+        {
+            int pa = Convert.ToInt32(Valid(a).Substring(1), 16);
+            int pb = Convert.ToInt32(Valid(b).Substring(1), 16);
+            int Channel(int shift)
+            {
+                int ca = (pa >> shift) & 255;
+                int cb = (pb >> shift) & 255;
+                return (int)Math.Floor(ca * t + cb * (1 - t) + 0.5);
+            }
+            return $"#{Channel(16):x2}{Channel(8):x2}{Channel(0):x2}";
+        }
+
+        private static string Valid(string? hex) => hex != null && Hex.IsMatch(hex) ? hex : "#000000";
+
+        private static DeviceRgb Color(string? hex) => PdfCryptoHelper.ParseHexColor(Valid(hex));
     }
 }

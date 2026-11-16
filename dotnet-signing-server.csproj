@@ -64,6 +64,7 @@
 
   <ItemGroup>
     <!-- Font widths shared with the portal's layout engine (tools/gen-font-metrics.py). -->
+    <Content Remove="Services/SignatureDesign/font-metrics.json" />
     <EmbeddedResource Include="Services/SignatureDesign/font-metrics.json" LogicalName="SignatureDesign.font-metrics.json" />
   </ItemGroup>
 

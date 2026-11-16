@@ -49,13 +49,18 @@ public class SignatureLayoutModelTests
 
 public class SignatureLayoutHygieneTests
 {
-    private static readonly System.Text.Json.JsonSerializerOptions Json = new(System.Text.Json.JsonSerializerDefaults.Web);
+    private static readonly System.Text.Json.JsonSerializerOptions Json = SignatureLayoutModel.JsonOptions;
 
     [Fact]
     public void Normalizes_like_the_portal()
     {
-        Assert.Equal("Jana Nováková", SignatureLayoutEngine.NormalizeText("﻿ Jana\t\nNováková\u0085 "));
-        Assert.Equal("a�b", SignatureLayoutEngine.NormalizeText("a\uD800b"));
+        // Built from code points so no invisible character sits in the source.
+        string bom = char.ConvertFromUtf32(0xFEFF), nel = char.ConvertFromUtf32(0x85), acute = char.ConvertFromUtf32(0x301);
+        string lone = new string((char)0xD800, 1);
+        Assert.Equal("Jana Nováková", SignatureLayoutEngine.NormalizeText(bom + " Jana\t\nNováková" + nel + " "));
+        Assert.Equal("a?b", SignatureLayoutEngine.NormalizeText("a" + lone + "b"));
+        Assert.Equal("Nováková", SignatureLayoutEngine.NormalizeText("Nova" + acute + "kova" + acute));
+        Assert.Equal("Jana ?? ?", SignatureLayoutEngine.NormalizeText("Jana " + char.ConvertFromUtf32(0x4E2D) + char.ConvertFromUtf32(0x6587) + " " + char.ConvertFromUtf32(0x1F600)));
         Assert.Equal(200, SignatureLayoutEngine.NormalizeText(new string('x', 500)).Length);
     }
 
@@ -83,6 +88,8 @@ public class SignatureLayoutHygieneTests
         Assert.NotNull(System.Text.Json.JsonSerializer.Deserialize<SignatureLayoutModel>(full, Json));
         var missing = full.Replace("\"version\":1,", "");
         Assert.ThrowsAny<System.Text.Json.JsonException>(() => System.Text.Json.JsonSerializer.Deserialize<SignatureLayoutModel>(missing, Json));
+        Assert.ThrowsAny<System.Text.Json.JsonException>(() => System.Text.Json.JsonSerializer.Deserialize<SignatureLayoutModel>(full.Replace("\"left\":", "\"Left\":"), Json));
+        Assert.ThrowsAny<System.Text.Json.JsonException>(() => System.Text.Json.JsonSerializer.Deserialize<SignatureLayoutModel>(full.Replace("\"splitLeft\":32", "\"splitLeft\":\"32\""), Json));
         var extra = full.Replace("\"version\":1,", "\"version\":1,\"extra\":true,");
         Assert.ThrowsAny<System.Text.Json.JsonException>(() => System.Text.Json.JsonSerializer.Deserialize<SignatureLayoutModel>(extra, Json));
     }

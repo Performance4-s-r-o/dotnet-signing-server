@@ -25,6 +25,17 @@ namespace DotNetSigningServer.Services.SignatureDesign
         public const int CustomTextMax = 120;
         public const int PrefixMax = 40;
 
+        /// <summary>
+        /// Strict JSON for the model (and the layout input): camelCase only, no numbers as strings. With the
+        /// required members and unknown members refused it accepts what the portal's zod schema accepts.
+        /// </summary>
+        public static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new()
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = false,
+            NumberHandling = JsonNumberHandling.Strict,
+        };
+
         [JsonRequired]
         public int Version { get; set; } = 1;
         [JsonRequired]

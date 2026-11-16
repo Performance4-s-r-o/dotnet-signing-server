@@ -48,16 +48,18 @@ namespace DotNetSigningServer.Services.SignatureDesign
         private static int JsRound(double n) => (int)Math.Floor(n + 0.5);
 
         /// <summary>
-        /// Control, format and separator characters (tab, new line, U+FEFF…) become one space, a lone surrogate
-        /// U+FFFD, only spaces are trimmed, at most <see cref="MaxValueChars"/> code points. Same as the portal's
-        /// <c>normalizeText</c>.
+        /// Same as the portal's <c>normalizeText</c>: a lone surrogate becomes U+FFFD, then NFC, control, format
+        /// and separator characters (tab, new line, U+FEFF…) one space, a character outside the font table (CJK,
+        /// emoji, RTL…) "?", only spaces are trimmed, at most <see cref="MaxValueChars"/> code points.
         /// </summary>
         public static string NormalizeText(string? raw)
         {
             if (string.IsNullOrEmpty(raw)) return "";
-            var sb = new StringBuilder(raw.Length);
+            // EnumerateRunes turns a lone surrogate into U+FFFD, so Normalize never sees invalid UTF-16.
+            var valid = string.Concat(raw.EnumerateRunes().Select(r => r.ToString())).Normalize(NormalizationForm.FormC);
+            var sb = new StringBuilder(valid.Length);
             bool space = false;
-            foreach (var rune in raw.EnumerateRunes())
+            foreach (var rune in valid.EnumerateRunes())
             {
                 var cat = Rune.GetUnicodeCategory(rune);
                 if (cat is UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.SpaceSeparator
@@ -68,7 +70,7 @@ namespace DotNetSigningServer.Services.SignatureDesign
                     continue;
                 }
                 space = false;
-                sb.Append(rune.ToString());
+                sb.Append(FontMetrics.HasWidth(rune.Value) ? rune.ToString() : "?");
             }
             var text = sb.ToString().Trim(' ');
             var runes = text.EnumerateRunes().ToList();
@@ -348,46 +350,61 @@ namespace DotNetSigningServer.Services.SignatureDesign
             {
                 sides = sides.Take(1).ToList();
             }
-            bool hasText = items.Count > 0;
-
-            bool forcedColumn = (tiny || narrow) && W < NarrowWidth && sides.Count > 0 && hasText;
-            string direction = model.Direction == "column" || forcedColumn ? "column" : "row";
-            var sections = forcedColumn
-                ? new List<string> { sides[0], "text" }
-                : model.Order.Where(pos => pos == "text" ? hasText : sides.Contains(pos)).ToList();
-
             var inner = new Box(pad, pad, Math.Max(0, W - 2 * pad), Math.Max(0, H - 2 * pad));
-            double mainTotal = Math.Max(0, (direction == "row" ? inner.W : inner.H) - gap * Math.Max(0, sections.Count - 1));
 
-            var shares = new Dictionary<string, double>();
-            double sideSum = 0;
-            foreach (var pos in sections)
+            (string Direction, List<string> Sections, Dictionary<string, double> Sizes) Plan(bool hasText)
             {
-                if (pos == "text") continue;
-                double share = forcedColumn
-                    ? tiny ? TinySideShare : NarrowSideShare
-                    : (pos == "left" ? model.SplitLeft : model.SplitRight) / 100.0;
-                shares[pos] = share;
-                sideSum = sideSum + share;
-            }
-            var sizes = new Dictionary<string, double>();
-            if (hasText)
-            {
-                double scale = sideSum > MaxSidesShare ? MaxSidesShare / sideSum : 1;
-                double used = 0;
+                bool forcedColumn = (tiny || narrow) && W < NarrowWidth && sides.Count > 0 && hasText;
+                string direction = model.Direction == "column" || forcedColumn ? "column" : "row";
+                var sections = forcedColumn
+                    ? new List<string> { sides[0], "text" }
+                    : model.Order.Where(pos => pos == "text" ? hasText : sides.Contains(pos)).ToList();
+                double mainTotal = Math.Max(0, (direction == "row" ? inner.W : inner.H) - gap * Math.Max(0, sections.Count - 1));
+
+                var shares = new Dictionary<string, double>();
+                double sideSum = 0;
                 foreach (var pos in sections)
                 {
                     if (pos == "text") continue;
-                    double size = mainTotal * shares[pos] * scale;
-                    sizes[pos] = size;
-                    used = used + size;
+                    double share = forcedColumn
+                        ? tiny ? TinySideShare : NarrowSideShare
+                        : (pos == "left" ? model.SplitLeft : model.SplitRight) / 100.0;
+                    shares[pos] = share;
+                    sideSum = sideSum + share;
                 }
-                sizes["text"] = mainTotal - used;
+                var sizes = new Dictionary<string, double>();
+                if (hasText)
+                {
+                    double scale = sideSum > MaxSidesShare ? MaxSidesShare / sideSum : 1;
+                    double used = 0;
+                    foreach (var pos in sections)
+                    {
+                        if (pos == "text") continue;
+                        double size = mainTotal * shares[pos] * scale;
+                        sizes[pos] = size;
+                        used = used + size;
+                    }
+                    sizes["text"] = mainTotal - used;
+                }
+                else
+                {
+                    foreach (var pos in sections) sizes[pos] = sideSum > 0 ? (mainTotal * shares[pos]) / sideSum : 0;
+                }
+                return (direction, sections, sizes);
             }
-            else
+
+            var planned = Plan(items.Count > 0);
+            // A text band that cannot hold one line at 6 pt gets no room at all.
+            if (items.Count > 0 && sides.Count > 0)
             {
-                foreach (var pos in sections) sizes[pos] = sideSum > 0 ? (mainTotal * shares[pos]) / sideSum : 0;
+                double band = planned.Direction == "column" ? planned.Sizes["text"] : inner.H;
+                if (band < MinFont * LineHeight)
+                {
+                    items = new List<Item>();
+                    planned = Plan(false);
+                }
             }
+            var (direction, sections, sizes) = planned;
 
             var zones = new List<LayoutZone>();
             LayoutTextBox? text = null;

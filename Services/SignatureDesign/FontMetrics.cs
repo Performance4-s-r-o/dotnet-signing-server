@@ -32,6 +32,9 @@ namespace DotNetSigningServer.Services.SignatureDesign
             return (index, fonts);
         }
 
+        /// <summary>Is the code point in the width table (and so in the PDF font)?</summary>
+        public static bool HasWidth(int codePoint) => Data.Value.Index.ContainsKey(codePoint);
+
         /// <summary>Width of <paramref name="text"/> in pt at <paramref name="size"/>, per code point.</summary>
         public static double TextWidth(string text, string family, bool bold, double size)
         {
