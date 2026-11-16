@@ -2,9 +2,13 @@
 import json, sys, os
 from fontTools.ttLib import TTFont
 
+# Usage: python tools/gen-font-metrics.py Fonts > Services/SignatureDesign/font-metrics.json
+# (needs fontTools). Copy the output to the portal's lib/signature-layout/font-metrics.json too.
 FONTS_DIR = sys.argv[1]
 EXTRA = [0x2013, 0x2014, 0x2018, 0x2019, 0x201A, 0x201C, 0x201D, 0x201E, 0x2022, 0x2026, 0x20AC]
-CODEPOINTS = list(range(0x20, 0x7F)) + list(range(0xA0, 0x180)) + EXTRA
+# Latin-1, Latin Extended-A/B, Greek, Cyrillic and typographic marks.
+CODEPOINTS = (list(range(0x20, 0x7F)) + list(range(0xA0, 0x250)) + list(range(0x370, 0x400))
+              + list(range(0x400, 0x500)) + EXTRA)
 FAMILIES = {"Helvetica": "LiberationSans", "Times": "LiberationSerif", "Courier": "LiberationMono"}
 
 out = {"unitsPerEm": 1000, "codepoints": "".join(chr(c) for c in CODEPOINTS), "fonts": {}}

@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace DotNetSigningServer.Services.SignatureDesign
@@ -7,6 +8,7 @@ namespace DotNetSigningServer.Services.SignatureDesign
     /// zone share, background and corner radius. A layout recipe only — the frame comes from whoever
     /// places the signature. Same JSON as the portal's <c>lib/signature-layout/model.ts</c>.
     /// </summary>
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     public sealed class SignatureLayoutModel
     {
         public static readonly string[] SideKinds = { "sig", "logo", "image", "none" };
@@ -23,23 +25,46 @@ namespace DotNetSigningServer.Services.SignatureDesign
         public const int CustomTextMax = 120;
         public const int PrefixMax = 40;
 
+        [JsonRequired]
         public int Version { get; set; } = 1;
+        [JsonRequired]
         public string Left { get; set; } = "sig";
+        [JsonRequired]
         public string Right { get; set; } = "none";
+        [JsonRequired]
         public List<string> Order { get; set; } = new() { "left", "text", "right" };
+        [JsonRequired]
         public string Direction { get; set; } = "row";
+        [JsonRequired]
         public string TextDirection { get; set; } = "column";
+        [JsonRequired]
         public int SplitLeft { get; set; } = 32;
+        [JsonRequired]
         public int SplitRight { get; set; } = 26;
+        [JsonRequired]
         public SignatureTextElements Elements { get; set; } = new();
+        [JsonRequired]
         public string? CustomText { get; set; }
+        [JsonRequired]
         public string FontFamily { get; set; } = "Helvetica";
+        [JsonRequired]
         public float? FontSize { get; set; }
+        [JsonRequired]
         public string TextColor { get; set; } = "#1f1f1f";
+        [JsonRequired]
         public SignatureLayoutBackground Background { get; set; } = new();
+        [JsonRequired]
         public string Radius { get; set; } = "none";
 
         private static readonly Regex Hex = new("^#[0-9a-fA-F]{6}$", RegexOptions.CultureInvariant);
+
+        /// <summary>A seal stands for no person: no handwritten signature, no signer name. Reason or <c>null</c>.</summary>
+        public string? SealViolation()
+        {
+            if (Left == "sig" || Right == "sig") return "A seal cannot show a handwritten signature.";
+            if (Elements?.Name?.Enabled == true) return "A seal cannot show the signer's name.";
+            return null;
+        }
 
         /// <summary>The first problem with the model, or <c>null</c> when it is valid.</summary>
         public string? Validate()
@@ -59,8 +84,10 @@ namespace DotNetSigningServer.Services.SignatureDesign
                 var el = Elements.Get(key);
                 if (el == null) return $"elements.{key} is required";
                 if (el.Prefix is { Length: > PrefixMax }) return $"elements.{key}.prefix is too long";
+                if (el.Prefix != null && el.Prefix.Any(char.IsControl)) return $"elements.{key}.prefix must be one line";
             }
             if (CustomText is { Length: > CustomTextMax }) return "customText is too long";
+            if (CustomText != null && CustomText.Any(char.IsControl)) return "customText must be one line";
             if (!FontFamilies.Contains(FontFamily)) return "fontFamily must be Helvetica, Times or Courier";
             if (FontSize.HasValue && !FixedFontSizes.Contains(FontSize.Value)) return "fontSize must be 8, 10, 12 or null";
             if (!Hex.IsMatch(TextColor ?? "")) return "textColor must be #rrggbb";
@@ -76,13 +103,20 @@ namespace DotNetSigningServer.Services.SignatureDesign
         }
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     public sealed class SignatureTextElements
     {
+        [JsonRequired]
         public SignatureTextElement Name { get; set; } = new() { Enabled = true, Bold = true };
+        [JsonRequired]
         public SignatureTextElement Company { get; set; } = new() { Enabled = true };
+        [JsonRequired]
         public SignatureTextElement Reason { get; set; } = new();
+        [JsonRequired]
         public SignatureTextElement Location { get; set; } = new();
+        [JsonRequired]
         public SignatureTextElement Date { get; set; } = new() { Enabled = true };
+        [JsonRequired]
         public SignatureTextElement Text { get; set; } = new();
 
         public SignatureTextElement? Get(string key) => key switch
@@ -97,21 +131,32 @@ namespace DotNetSigningServer.Services.SignatureDesign
         };
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     public sealed class SignatureTextElement
     {
+        [JsonRequired]
         public bool Enabled { get; set; }
+        [JsonRequired]
         public bool Bold { get; set; }
         /// <summary><c>null</c> = the language's default label (reason and location only), <c>""</c> = none.</summary>
+        [JsonRequired]
         public string? Prefix { get; set; }
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     public sealed class SignatureLayoutBackground
     {
+        [JsonRequired]
         public string Kind { get; set; } = "none";
+        [JsonRequired]
         public string Color { get; set; } = "#ffffff";
+        [JsonRequired]
         public string Pattern { get; set; } = "diag";
+        [JsonRequired]
         public string PatternColor { get; set; } = "#1b3a8c";
+        [JsonRequired]
         public int Opacity { get; set; } = 60;
+        [JsonRequired]
         public string ImageFit { get; set; } = "cover";
     }
 

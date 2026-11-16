@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace DotNetSigningServer.Services.SignatureDesign
@@ -28,8 +29,11 @@ namespace DotNetSigningServer.Services.SignatureDesign
         public const double MaxSidesShare = 0.7;
         public const double NarrowSideShare = 0.45;
         public const double TinySideShare = 0.6;
-        public const string Ellipsis = "…";
-        public const string Separator = " · ";
+        public const string Ellipsis = "\u2026";
+        public const string Separator = " \u00b7 ";
+        public const double MinFrame = 20;
+        public const double MaxFrame = 1000;
+        public const int MaxValueChars = 200;
 
         private static readonly HashSet<string> Muted = new() { "reason", "location", "date" };
 
@@ -42,6 +46,36 @@ namespace DotNetSigningServer.Services.SignatureDesign
             new() { X = R2(x), Y = R2(y), W = R2(w), H = R2(h) };
 
         private static int JsRound(double n) => (int)Math.Floor(n + 0.5);
+
+        /// <summary>
+        /// Control, format and separator characters (tab, new line, U+FEFF…) become one space, a lone surrogate
+        /// U+FFFD, only spaces are trimmed, at most <see cref="MaxValueChars"/> code points. Same as the portal's
+        /// <c>normalizeText</c>.
+        /// </summary>
+        public static string NormalizeText(string? raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return "";
+            var sb = new StringBuilder(raw.Length);
+            bool space = false;
+            foreach (var rune in raw.EnumerateRunes())
+            {
+                var cat = Rune.GetUnicodeCategory(rune);
+                if (cat is UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.SpaceSeparator
+                    or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator)
+                {
+                    if (!space) sb.Append(' ');
+                    space = true;
+                    continue;
+                }
+                space = false;
+                sb.Append(rune.ToString());
+            }
+            var text = sb.ToString().Trim(' ');
+            var runes = text.EnumerateRunes().ToList();
+            return runes.Count > MaxValueChars
+                ? string.Concat(runes.Take(MaxValueChars).Select(r => r.ToString())).TrimEnd(' ')
+                : text;
+        }
 
         private static List<Item> BuildItems(SignatureLayoutModel model, SignatureLayoutValues values, SignatureLayoutLabels labels)
         {
@@ -59,11 +93,11 @@ namespace DotNetSigningServer.Services.SignatureDesign
                     "location" => values.Location,
                     _ => values.Date,
                 };
-                var value = (raw ?? "").Trim();
+                var value = NormalizeText(raw);
                 if (value.Length == 0) continue;
                 string prefix = el.Prefix == null
                     ? key == "reason" ? labels.Reason : key == "location" ? labels.Location : ""
-                    : el.Prefix.Trim();
+                    : NormalizeText(el.Prefix);
                 items.Add(new Item(key, prefix.Length > 0 ? prefix + " " + value : value, el.Bold));
             }
             return items;
@@ -77,7 +111,7 @@ namespace DotNetSigningServer.Services.SignatureDesign
             while (chars.Count > 0)
             {
                 chars.RemoveAt(chars.Count - 1);
-                var candidate = string.Concat(chars).TrimEnd() + Ellipsis;
+                var candidate = string.Concat(chars).TrimEnd(' ') + Ellipsis;
                 if (FontMetrics.TextWidth(candidate, family, bold, size) <= maxWidth) return candidate;
             }
             return "";
@@ -115,7 +149,8 @@ namespace DotNetSigningServer.Services.SignatureDesign
                 }
             }
             double lh = size * LineHeight;
-            int keep = Math.Min(n, Math.Max(1, (int)Math.Floor((tr.H + 1e-6) / lh)));
+            // A line that does not fit even at 6 pt is dropped, the first one too.
+            int keep = Math.Min(n, (int)Math.Floor((tr.H + 1e-6) / lh));
             double top = tr.Y + (tr.H - keep * lh) / 2;
 
             var lines = new List<LayoutTextLine>();
@@ -197,7 +232,7 @@ namespace DotNetSigningServer.Services.SignatureDesign
                 }
             }
             double lh = size * LineHeight;
-            int keep = Math.Min(rows.Count, Math.Max(1, (int)Math.Floor((tr.H + 1e-6) / lh)));
+            int keep = Math.Min(rows.Count, (int)Math.Floor((tr.H + 1e-6) / lh));
             double top = tr.Y + (tr.H - keep * lh) / 2;
             double sepPt = sepWidth * size;
 
@@ -266,8 +301,8 @@ namespace DotNetSigningServer.Services.SignatureDesign
                 case "watermark":
                     {
                         if (!input.Assets.Logo) return new LayoutBackground { Kind = "none" };
-                        double side = 0.8 * H;
-                        return new LayoutBackground { Kind = "watermark", Rect = Rect(W - W * 0.06 - side, 0.1 * H, side, side), Alpha = R2(0.25 * op) };
+                        double side = Math.Min(0.8 * H, 0.8 * W);
+                        return new LayoutBackground { Kind = "watermark", Rect = Rect(Math.Max(0, W - W * 0.06 - side), (H - side) / 2, side, side), Alpha = R2(0.25 * op) };
                     }
                 default:
                     return new LayoutBackground { Kind = "none" };
@@ -279,7 +314,9 @@ namespace DotNetSigningServer.Services.SignatureDesign
             var model = input.Model;
             double W = input.Width;
             double H = input.Height;
-            double pad = Math.Max(3, H * 0.06);
+            if (!(W >= MinFrame && W <= MaxFrame && H >= MinFrame && H <= MaxFrame))
+                throw new ArgumentOutOfRangeException(nameof(input), $"Signature frame must be {MinFrame}-{MaxFrame} pt, got {W} x {H}.");
+            double pad = Math.Max(3, Math.Min(W, H) * 0.06);
             double gap = pad;
 
             var items = BuildItems(model, input.Values, input.Labels);
@@ -375,7 +412,7 @@ namespace DotNetSigningServer.Services.SignatureDesign
                 cursor = cursor + size + gap;
             }
 
-            double radius = model.Radius == "soft" ? H * 0.08 : model.Radius == "round" ? H * 0.2 : 0;
+            double radius = Math.Min(Math.Min(model.Radius == "soft" ? H * 0.08 : model.Radius == "round" ? H * 0.2 : 0, W / 2), H / 2);
             return new SignatureLayoutResult
             {
                 Version = 1,
