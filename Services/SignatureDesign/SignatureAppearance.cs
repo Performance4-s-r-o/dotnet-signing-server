@@ -136,20 +136,29 @@ namespace DotNetSigningServer.Services.SignatureDesign
             var stamp = drawn.Contains("image") ? Decode(content.StampImage, "stamp") : null;
             var background = layout.Background.Kind == "image" ? Decode(content.BackgroundImage, "background") : null;
 
+            if (doc.GetConformance().IsPdfA() && new[] { sig, logo, stamp, background }.Any(i => i?.Data.GetColorEncodingComponentsNumber() == 4))
+                // A CMYK JPEG does not match the sRGB output intent of a PDF/A document.
+                throw new ApiValidationException(ImageInvalidCode, "CMYK image in a PDF/A document");
+
             bool pdfA1 = doc.GetConformance().GetAConformance()?.GetPart() == "1";
             if (pdfA1)
             {
-                // PDF/A-1 has no transparency: an image with alpha is flattened onto the frame's background
-                // colour, without one onto white, so its box covers what lies under it. Over a background
-                // image that would be a white box on the picture, so that combination is refused.
-                if (layout.Background.Kind == "image" && new[] { sig, logo, stamp }.Any(i => i?.Data.GetImageMask() != null))
+                // PDF/A-1 has no transparency and no 16-bit images. A PNG with an alpha channel or 16 bits is
+                // made 8-bit RGB: real transparency is flattened onto the frame's background colour, without
+                // one onto white, so its box covers what lies under it. Over a background image that would be
+                // a white box on the picture, and a background with real transparency would turn white: both
+                // are refused. A PNG with an alpha channel that is fully opaque (common for logos) passes.
+                var overImage = layout.Background.Kind == "image";
+                if (overImage && new[] { sig, logo, stamp }.Any(HasRealAlpha))
                     throw new ApiValidationException(TransparencyNotAllowedCode,
                         "An image with transparency over a background image needs transparency, which PDF/A-1 does not allow.");
+                if (HasRealAlpha(background))
+                    throw new ApiValidationException(TransparencyNotAllowedCode,
+                        "A background image with transparency needs transparency, which PDF/A-1 does not allow.");
                 var under = layout.Background.Kind is "color" or "pattern" ? layout.Background.Color ?? "#ffffff" : "#ffffff";
                 sig = Opaque(sig, under);
                 logo = Opaque(logo, under);
                 stamp = Opaque(stamp, under);
-                // An RGBA background without real transparency is drawn as is.
                 background = Opaque(background, "#ffffff");
             }
 
@@ -177,7 +186,23 @@ namespace DotNetSigningServer.Services.SignatureDesign
         /// <summary>Longest side an image with alpha keeps when it is flattened for PDF/A-1.</summary>
         public const int MaxFlattenSidePx = 2000;
 
-        private sealed record Decoded(byte[] Bytes, ImageData Data);
+        /// <summary>Does the PNG have a pixel that is not fully opaque? An alpha channel alone is not enough.</summary>
+        private static bool HasRealAlpha(Decoded? image)
+        {
+            if (image == null || image.Data.GetImageMask() == null) return false;
+            try
+            {
+                CodeScanRaster.EnsureConfigured();
+                using var magick = new MagickImage(image.Bytes);
+                return !magick.IsOpaque;
+            }
+            catch (MagickException ex)
+            {
+                throw new ApiValidationException(ImageInvalidCode, $"alpha check: {ex.GetType().Name}");
+            }
+        }
+
+        internal sealed record Decoded(byte[] Bytes, ImageData Data);
 
         /// <summary>Raw base64 or a data URI; anything that is not an image is refused, never left out.</summary>
         private static Decoded? Decode(string? input, string kind)
@@ -204,9 +229,9 @@ namespace DotNetSigningServer.Services.SignatureDesign
         /// only reads here (the process policy allows writing raw grey bytes and nothing else, see
         /// <see cref="CodeScanRaster.Policy"/>): the pixels are composited by hand into raw RGB for iText.
         /// </summary>
-        private static Decoded? Opaque(Decoded? image, string hex)
+        internal static Decoded? Opaque(Decoded? image, string hex)
         {
-            if (image == null || image.Data.GetImageMask() == null) return image;
+            if (image == null || (image.Data.GetImageMask() == null && image.Data.GetBpc() <= 8)) return image;
             try
             {
                 CodeScanRaster.EnsureConfigured();

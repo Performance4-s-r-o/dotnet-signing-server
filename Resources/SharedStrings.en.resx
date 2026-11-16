@@ -804,7 +804,7 @@
   <data name="Error_APPEARANCE_SEAL_VIOLATION" xml:space="preserve"><value>A seal cannot show a handwritten signature or the signer's name. Nothing was signed.</value></data>
   <data name="Error_SIGN_RECT_INVALID" xml:space="preserve"><value>The signature box must be 20 to 1000 points wide and high. Nothing was signed.</value></data>
   <data name="Error_APPEARANCE_IMAGE_INVALID" xml:space="preserve"><value>An image of the signature appearance cannot be read. Nothing was signed.</value></data>
-  <data name="Error_APPEARANCE_TRANSPARENCY_NOT_ALLOWED" xml:space="preserve"><value>The document is PDF/A-1, which does not allow transparency in the signature (a translucent background image, a watermark, or a transparent image over a background image). Choose an appearance without them. Nothing was signed.</value></data>
+  <data name="Error_APPEARANCE_TRANSPARENCY_NOT_ALLOWED" xml:space="preserve"><value>The document is PDF/A-1, which does not allow transparency in the signature (a translucent background image or watermark, or a transparent image over a background image). Choose an appearance without them. Nothing was signed.</value></data>
   <data name="Error_TOKEN_WEAK" xml:space="preserve"><value>The token is too weak: at least 43 characters of random data (32 random bytes, base64url), no spaces, quotes or commas.</value></data>
   <data name="Error_EXTERNAL_ID_INVALID" xml:space="preserve"><value>externalId must be 1 to 64 characters of letters, digits and . _ : -</value></data>
   <data name="Error_LABEL_INVALID" xml:space="preserve"><value>label may have at most 128 characters and no control characters.</value></data>

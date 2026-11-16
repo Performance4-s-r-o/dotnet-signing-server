@@ -127,9 +127,28 @@ public class SignatureAppearanceTests
     {
         DotNetSigningServer.Services.CodeScanRaster.EnsureConfigured();
         // ImageMagick may not write under the policy: the PNG is built by hand.
-        var png = Convert.ToBase64String(RgbaPngOf(4000, 1000));
-        Pdfa1(doc => new PdfCanvas(doc.GetFirstPage()).AddXObjectAt(
-            SignatureAppearance.Render(doc, new SignatureAppearanceContent { SignImage = png, Name = "Jana" }, 200, 70), 10, 10));
+        var bytes = RgbaPngOf(4000, 1000);
+        var flat = SignatureAppearance.Opaque(new SignatureAppearance.Decoded(bytes, iText.IO.Image.ImageDataFactory.Create(bytes)), "#ffffff")!;
+        Assert.Equal(SignatureAppearance.MaxFlattenSidePx, (int)flat.Data.GetWidth());
+        Assert.Equal(500, (int)flat.Data.GetHeight());
+        Assert.Null(flat.Data.GetImageMask());
+    }
+
+    [Fact]
+    public void Pdfa1_accepts_an_rgba_logo_without_transparency_over_a_background_image()
+    {
+        DotNetSigningServer.Services.CodeScanRaster.EnsureConfigured();
+        var model = new SignatureLayoutModel { Left = "logo" };
+        model.Background.Kind = "image";
+        model.Background.Opacity = 100;
+        var opaqueRgba = Convert.ToBase64String(RgbaPngOf(4, 2, opaque: true));
+        Pdfa1(doc => new PdfCanvas(doc.GetFirstPage()).AddXObjectAt(SignatureAppearance.Render(doc, new SignatureAppearanceContent
+        {
+            Options = new SignatureAppearanceOptions { Layout = model },
+            LogoImage = opaqueRgba,
+            BackgroundImage = opaqueRgba,
+            Name = "Jana",
+        }, 200, 70), 10, 10));
     }
 
     [Fact]
@@ -142,10 +161,13 @@ public class SignatureAppearanceTests
     }
 
     /// <summary>A transparent RGBA PNG of the given size (one opaque pixel), built without ImageMagick.</summary>
-    private static byte[] RgbaPngOf(int width, int height)
+    private static byte[] RgbaPngOf(int width, int height, bool opaque = false)
     {
         var raw = new byte[height * (1 + width * 4)];
         raw[1 + 3] = 255; // first pixel opaque black
+        if (opaque)
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++) raw[y * (1 + width * 4) + 1 + x * 4 + 3] = 255;
         using var deflated = new MemoryStream();
         using (var z = new System.IO.Compression.ZLibStream(deflated, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true))
             z.Write(raw);
