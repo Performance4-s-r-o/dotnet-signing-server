@@ -1,0 +1,6983 @@
+[
+ {
+  "name": "default@XS",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 120,
+   "height": 40,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 120,
+   "height": 40,
+   "mode": "tiny",
+   "direction": "column",
+   "padding": 3,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 114,
+      "h": 18.6
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 3,
+     "y": 24.6,
+     "w": 114,
+     "h": 12.4
+    },
+    "fontSize": 10.25,
+    "lineHeight": 12.3,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 34.39,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 22.68,
+        "width": 74.63,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "default@S",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 150,
+   "height": 50,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 150,
+   "height": 50,
+   "mode": "narrow",
+   "direction": "column",
+   "padding": 3,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 144,
+      "h": 18.45
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 3,
+     "y": 24.45,
+     "w": 144,
+     "h": 22.55
+    },
+    "fontSize": 6.25,
+    "lineHeight": 7.5,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 30.41,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 52.25,
+        "width": 45.51,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 37.91,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 47.56,
+        "width": 54.88,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 45.41,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 48.94,
+        "width": 52.13,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "default@M",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 200,
+   "height": 70,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 200,
+   "height": 70,
+   "mode": "full",
+   "direction": "row",
+   "padding": 4.2,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 4.2,
+      "y": 4.2,
+      "w": 59.97,
+      "h": 61.6
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 68.37,
+     "y": 4.2,
+     "w": 127.43,
+     "h": 61.6
+    },
+    "fontSize": 14,
+    "lineHeight": 16.8,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 23.1,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 68.37,
+        "width": 101.93,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 39.9,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 68.37,
+        "width": 122.93,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 56.7,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 68.37,
+        "width": 116.76,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "default@L",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 260,
+   "height": 90,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 260,
+   "height": 90,
+   "mode": "full",
+   "direction": "row",
+   "padding": 5.4,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 5.4,
+      "y": 5.4,
+      "w": 78.02,
+      "h": 79.2
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 88.82,
+     "y": 5.4,
+     "w": 165.78,
+     "h": 79.2
+    },
+    "fontSize": 14,
+    "lineHeight": 16.8,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 33.1,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 88.82,
+        "width": 101.93,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 49.9,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 88.82,
+        "width": 122.93,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 66.7,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 88.82,
+        "width": 116.76,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "default@XL",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 320,
+   "height": 110,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 320,
+   "height": 110,
+   "mode": "full",
+   "direction": "row",
+   "padding": 6.6,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 6.6,
+      "y": 6.6,
+      "w": 96.06,
+      "h": 96.8
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 109.26,
+     "y": 6.6,
+     "w": 204.14,
+     "h": 96.8
+    },
+    "fontSize": 14,
+    "lineHeight": 16.8,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 43.1,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 109.26,
+        "width": 101.93,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 59.9,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 109.26,
+        "width": 122.93,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 76.7,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 109.26,
+        "width": 116.76,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "logo-text-sig-soft@XS",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "logo",
+    "right": "sig",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "color",
+     "color": "#eef4fb",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "soft"
+   },
+   "width": 120,
+   "height": 40,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 120,
+   "height": 40,
+   "mode": "tiny",
+   "direction": "column",
+   "padding": 3,
+   "radius": 3.2,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "color",
+    "color": "#eef4fb"
+   },
+   "zones": [
+    {
+     "section": "right",
+     "kind": "sig",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 114,
+      "h": 18.6
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 3,
+     "y": 24.6,
+     "w": 114,
+     "h": 12.4
+    },
+    "fontSize": 10.25,
+    "lineHeight": 12.3,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 34.39,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 22.68,
+        "width": 74.63,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "logo-text-sig-soft@S",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "logo",
+    "right": "sig",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "color",
+     "color": "#eef4fb",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "soft"
+   },
+   "width": 150,
+   "height": 50,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 150,
+   "height": 50,
+   "mode": "narrow",
+   "direction": "column",
+   "padding": 3,
+   "radius": 4,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "color",
+    "color": "#eef4fb"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "logo",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 144,
+      "h": 18.45
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 3,
+     "y": 24.45,
+     "w": 144,
+     "h": 22.55
+    },
+    "fontSize": 6.25,
+    "lineHeight": 7.5,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 30.41,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 52.25,
+        "width": 45.51,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 37.91,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 47.56,
+        "width": 54.88,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 45.41,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 48.94,
+        "width": 52.13,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "logo-text-sig-soft@M",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "logo",
+    "right": "sig",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "color",
+     "color": "#eef4fb",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "soft"
+   },
+   "width": 200,
+   "height": 70,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 200,
+   "height": 70,
+   "mode": "full",
+   "direction": "row",
+   "padding": 4.2,
+   "radius": 5.6,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "color",
+    "color": "#eef4fb"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "logo",
+     "rect": {
+      "x": 4.2,
+      "y": 4.2,
+      "w": 58.62,
+      "h": 61.6
+     }
+    },
+    {
+     "section": "right",
+     "kind": "sig",
+     "rect": {
+      "x": 148.17,
+      "y": 4.2,
+      "w": 47.63,
+      "h": 61.6
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 67.02,
+     "y": 4.2,
+     "w": 76.94,
+     "h": 61.6
+    },
+    "fontSize": 8.75,
+    "lineHeight": 10.5,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 27.56,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 67.02,
+        "width": 63.71,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 38.06,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 67.02,
+        "width": 76.83,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 48.56,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 67.02,
+        "width": 72.97,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "logo-text-sig-soft@L",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "logo",
+    "right": "sig",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "color",
+     "color": "#eef4fb",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "soft"
+   },
+   "width": 260,
+   "height": 90,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 260,
+   "height": 90,
+   "mode": "full",
+   "direction": "row",
+   "padding": 5.4,
+   "radius": 7.2,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "color",
+    "color": "#eef4fb"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "logo",
+     "rect": {
+      "x": 5.4,
+      "y": 5.4,
+      "w": 76.29,
+      "h": 79.2
+     }
+    },
+    {
+     "section": "right",
+     "kind": "sig",
+     "rect": {
+      "x": 192.62,
+      "y": 5.4,
+      "w": 61.98,
+      "h": 79.2
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 87.09,
+     "y": 5.4,
+     "w": 100.13,
+     "h": 79.2
+    },
+    "fontSize": 11.25,
+    "lineHeight": 13.5,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 35.44,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 87.09,
+        "width": 81.91,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 48.94,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 87.09,
+        "width": 98.79,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 62.44,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 87.09,
+        "width": 93.83,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "logo-text-sig-soft@XL",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "logo",
+    "right": "sig",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "color",
+     "color": "#eef4fb",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "soft"
+   },
+   "width": 320,
+   "height": 110,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 320,
+   "height": 110,
+   "mode": "full",
+   "direction": "row",
+   "padding": 6.6,
+   "radius": 8.8,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "color",
+    "color": "#eef4fb"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "logo",
+     "rect": {
+      "x": 6.6,
+      "y": 6.6,
+      "w": 93.95,
+      "h": 96.8
+     }
+    },
+    {
+     "section": "right",
+     "kind": "sig",
+     "rect": {
+      "x": 237.06,
+      "y": 6.6,
+      "w": 76.34,
+      "h": 96.8
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 107.15,
+     "y": 6.6,
+     "w": 123.31,
+     "h": 96.8
+    },
+    "fontSize": 14,
+    "lineHeight": 16.8,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 43.1,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 107.15,
+        "width": 101.93,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 59.9,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 107.15,
+        "width": 122.93,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 76.7,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 107.15,
+        "width": 116.76,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "text-image-watermark@XS",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "none",
+    "right": "image",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "watermark",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 120,
+   "height": 40,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 120,
+   "height": 40,
+   "mode": "tiny",
+   "direction": "column",
+   "padding": 3,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "watermark",
+    "rect": {
+     "x": 80.8,
+     "y": 4,
+     "w": 32,
+     "h": 32
+    },
+    "alpha": 0.15
+   },
+   "zones": [
+    {
+     "section": "right",
+     "kind": "image",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 114,
+      "h": 18.6
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 3,
+     "y": 24.6,
+     "w": 114,
+     "h": 12.4
+    },
+    "fontSize": 10.25,
+    "lineHeight": 12.3,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 34.39,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 22.68,
+        "width": 74.63,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "text-image-watermark@S",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "none",
+    "right": "image",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "watermark",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 150,
+   "height": 50,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 150,
+   "height": 50,
+   "mode": "narrow",
+   "direction": "column",
+   "padding": 3,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "watermark",
+    "rect": {
+     "x": 101,
+     "y": 5,
+     "w": 40,
+     "h": 40
+    },
+    "alpha": 0.15
+   },
+   "zones": [
+    {
+     "section": "right",
+     "kind": "image",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 144,
+      "h": 18.45
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 3,
+     "y": 24.45,
+     "w": 144,
+     "h": 22.55
+    },
+    "fontSize": 6.25,
+    "lineHeight": 7.5,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 30.41,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 52.25,
+        "width": 45.51,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 37.91,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 47.56,
+        "width": 54.88,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 45.41,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 48.94,
+        "width": 52.13,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "text-image-watermark@M",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "none",
+    "right": "image",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "watermark",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 200,
+   "height": 70,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 200,
+   "height": 70,
+   "mode": "full",
+   "direction": "row",
+   "padding": 4.2,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "watermark",
+    "rect": {
+     "x": 132,
+     "y": 7,
+     "w": 56,
+     "h": 56
+    },
+    "alpha": 0.15
+   },
+   "zones": [
+    {
+     "section": "right",
+     "kind": "image",
+     "rect": {
+      "x": 147.08,
+      "y": 4.2,
+      "w": 48.72,
+      "h": 61.6
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 4.2,
+     "y": 4.2,
+     "w": 138.68,
+     "h": 61.6
+    },
+    "fontSize": 14,
+    "lineHeight": 16.8,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 23.1,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 4.2,
+        "width": 101.93,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 39.9,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 4.2,
+        "width": 122.93,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 56.7,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 4.2,
+        "width": 116.76,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "text-image-watermark@L",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "none",
+    "right": "image",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "watermark",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 260,
+   "height": 90,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 260,
+   "height": 90,
+   "mode": "full",
+   "direction": "row",
+   "padding": 5.4,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "watermark",
+    "rect": {
+     "x": 172.4,
+     "y": 9,
+     "w": 72,
+     "h": 72
+    },
+    "alpha": 0.15
+   },
+   "zones": [
+    {
+     "section": "right",
+     "kind": "image",
+     "rect": {
+      "x": 191.21,
+      "y": 5.4,
+      "w": 63.39,
+      "h": 79.2
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 5.4,
+     "y": 5.4,
+     "w": 180.41,
+     "h": 79.2
+    },
+    "fontSize": 14,
+    "lineHeight": 16.8,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 33.1,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 5.4,
+        "width": 101.93,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 49.9,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 5.4,
+        "width": 122.93,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 66.7,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 5.4,
+        "width": 116.76,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "text-image-watermark@XL",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "none",
+    "right": "image",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "watermark",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 320,
+   "height": 110,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 320,
+   "height": 110,
+   "mode": "full",
+   "direction": "row",
+   "padding": 6.6,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "watermark",
+    "rect": {
+     "x": 212.8,
+     "y": 11,
+     "w": 88,
+     "h": 88
+    },
+    "alpha": 0.15
+   },
+   "zones": [
+    {
+     "section": "right",
+     "kind": "image",
+     "rect": {
+      "x": 235.35,
+      "y": 6.6,
+      "w": 78.05,
+      "h": 96.8
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 6.6,
+     "y": 6.6,
+     "w": 222.15,
+     "h": 96.8
+    },
+    "fontSize": 14,
+    "lineHeight": 16.8,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 43.1,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 6.6,
+        "width": 101.93,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 59.9,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 6.6,
+        "width": 122.93,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 76.7,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 6.6,
+        "width": 116.76,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "column-all-elements@XS",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "image",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "column",
+    "textDirection": "column",
+    "splitLeft": 30,
+    "splitRight": 20,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": "Podepsáno elektronicky",
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "pattern",
+     "color": "#ffffff",
+     "pattern": "guilloche",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 120,
+   "height": 40,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 120,
+   "height": 40,
+   "mode": "tiny",
+   "direction": "column",
+   "padding": 3,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "pattern",
+    "color": "#ffffff",
+    "pattern": "guilloche",
+    "patternColor": "#1b3a8c",
+    "alpha": 0.21,
+    "spacing": 3,
+    "lineWidth": 0.75,
+    "dotRadius": 0.64
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 114,
+      "h": 18.6
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 3,
+     "y": 24.6,
+     "w": 114,
+     "h": 12.4
+    },
+    "fontSize": 10.25,
+    "lineHeight": 12.3,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 34.39,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 22.68,
+        "width": 74.63,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "column-all-elements@S",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "image",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "column",
+    "textDirection": "column",
+    "splitLeft": 30,
+    "splitRight": 20,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": "Podepsáno elektronicky",
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "pattern",
+     "color": "#ffffff",
+     "pattern": "guilloche",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 150,
+   "height": 50,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 150,
+   "height": 50,
+   "mode": "narrow",
+   "direction": "column",
+   "padding": 3,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "pattern",
+    "color": "#ffffff",
+    "pattern": "guilloche",
+    "patternColor": "#1b3a8c",
+    "alpha": 0.21,
+    "spacing": 3,
+    "lineWidth": 0.75,
+    "dotRadius": 0.64
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 144,
+      "h": 18.45
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 3,
+     "y": 24.45,
+     "w": 144,
+     "h": 22.55
+    },
+    "fontSize": 6,
+    "lineHeight": 7.2,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 30.63,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 53.16,
+        "width": 43.69,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 37.83,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 48.66,
+        "width": 52.69,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 45.03,
+      "runs": [
+       {
+        "element": "reason",
+        "text": "Důvod: Schvaluji obsah smlouvy",
+        "x": 31.82,
+        "width": 86.36,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "column-all-elements@M",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "image",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "column",
+    "textDirection": "column",
+    "splitLeft": 30,
+    "splitRight": 20,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": "Podepsáno elektronicky",
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "pattern",
+     "color": "#ffffff",
+     "pattern": "guilloche",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 200,
+   "height": 70,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 200,
+   "height": 70,
+   "mode": "full",
+   "direction": "column",
+   "padding": 4.2,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "pattern",
+    "color": "#ffffff",
+    "pattern": "guilloche",
+    "patternColor": "#1b3a8c",
+    "alpha": 0.21,
+    "spacing": 3,
+    "lineWidth": 0.75,
+    "dotRadius": 0.64
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 4.2,
+      "y": 4.2,
+      "w": 191.6,
+      "h": 15.96
+     }
+    },
+    {
+     "section": "right",
+     "kind": "image",
+     "rect": {
+      "x": 4.2,
+      "y": 55.16,
+      "w": 191.6,
+      "h": 10.64
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 4.2,
+     "y": 24.36,
+     "w": 191.6,
+     "h": 26.6
+    },
+    "fontSize": 6,
+    "lineHeight": 7.2,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 32.56,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 78.16,
+        "width": 43.69,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 39.76,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 73.66,
+        "width": 52.69,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 46.96,
+      "runs": [
+       {
+        "element": "reason",
+        "text": "Důvod: Schvaluji obsah smlouvy",
+        "x": 56.82,
+        "width": 86.36,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "column-all-elements@L",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "image",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "column",
+    "textDirection": "column",
+    "splitLeft": 30,
+    "splitRight": 20,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": "Podepsáno elektronicky",
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "pattern",
+     "color": "#ffffff",
+     "pattern": "guilloche",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 260,
+   "height": 90,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 260,
+   "height": 90,
+   "mode": "full",
+   "direction": "column",
+   "padding": 5.4,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "pattern",
+    "color": "#ffffff",
+    "pattern": "guilloche",
+    "patternColor": "#1b3a8c",
+    "alpha": 0.21,
+    "spacing": 3.15,
+    "lineWidth": 0.75,
+    "dotRadius": 0.72
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 5.4,
+      "y": 5.4,
+      "w": 249.2,
+      "h": 20.52
+     }
+    },
+    {
+     "section": "right",
+     "kind": "image",
+     "rect": {
+      "x": 5.4,
+      "y": 70.92,
+      "w": 249.2,
+      "h": 13.68
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 5.4,
+     "y": 31.32,
+     "w": 249.2,
+     "h": 34.2
+    },
+    "fontSize": 6,
+    "lineHeight": 7.2,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 39.72,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 108.16,
+        "width": 43.69,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 46.92,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 103.66,
+        "width": 52.69,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 54.12,
+      "runs": [
+       {
+        "element": "reason",
+        "text": "Důvod: Schvaluji obsah smlouvy",
+        "x": 86.82,
+        "width": 86.36,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     },
+     {
+      "baseline": 61.32,
+      "runs": [
+       {
+        "element": "location",
+        "text": "Místo: Praha",
+        "x": 112.99,
+        "width": 34.01,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "column-all-elements@XL",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "image",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "column",
+    "textDirection": "column",
+    "splitLeft": 30,
+    "splitRight": 20,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": "Podepsáno elektronicky",
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "pattern",
+     "color": "#ffffff",
+     "pattern": "guilloche",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 320,
+   "height": 110,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 320,
+   "height": 110,
+   "mode": "full",
+   "direction": "column",
+   "padding": 6.6,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "pattern",
+    "color": "#ffffff",
+    "pattern": "guilloche",
+    "patternColor": "#1b3a8c",
+    "alpha": 0.21,
+    "spacing": 3.85,
+    "lineWidth": 0.75,
+    "dotRadius": 0.88
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 6.6,
+      "y": 6.6,
+      "w": 306.8,
+      "h": 25.08
+     }
+    },
+    {
+     "section": "right",
+     "kind": "image",
+     "rect": {
+      "x": 6.6,
+      "y": 86.68,
+      "w": 306.8,
+      "h": 16.72
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 6.6,
+     "y": 38.28,
+     "w": 306.8,
+     "h": 41.8
+    },
+    "fontSize": 6,
+    "lineHeight": 7.2,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 46.88,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 138.16,
+        "width": 43.69,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 54.08,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 133.66,
+        "width": 52.69,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 61.28,
+      "runs": [
+       {
+        "element": "reason",
+        "text": "Důvod: Schvaluji obsah smlouvy",
+        "x": 116.82,
+        "width": 86.36,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     },
+     {
+      "baseline": 68.48,
+      "runs": [
+       {
+        "element": "location",
+        "text": "Místo: Praha",
+        "x": 142.99,
+        "width": 34.01,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     },
+     {
+      "baseline": 75.68,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 134.98,
+        "width": 50.04,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "row-text-inline@XS",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "row",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": true,
+      "bold": false,
+      "prefix": ""
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "pattern",
+     "color": "#ffffff",
+     "pattern": "dots",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "round"
+   },
+   "width": 120,
+   "height": 40,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 120,
+   "height": 40,
+   "mode": "tiny",
+   "direction": "column",
+   "padding": 3,
+   "radius": 8,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "pattern",
+    "color": "#ffffff",
+    "pattern": "dots",
+    "patternColor": "#1b3a8c",
+    "alpha": 0.21,
+    "spacing": 4,
+    "lineWidth": 1,
+    "dotRadius": 0.64
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 114,
+      "h": 18.6
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 3,
+     "y": 24.6,
+     "w": 114,
+     "h": 12.4
+    },
+    "fontSize": 10.25,
+    "lineHeight": 12.3,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 34.39,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 22.68,
+        "width": 74.63,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "row-text-inline@S",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "row",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": true,
+      "bold": false,
+      "prefix": ""
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "pattern",
+     "color": "#ffffff",
+     "pattern": "dots",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "round"
+   },
+   "width": 150,
+   "height": 50,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 150,
+   "height": 50,
+   "mode": "narrow",
+   "direction": "column",
+   "padding": 3,
+   "radius": 10,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "pattern",
+    "color": "#ffffff",
+    "pattern": "dots",
+    "patternColor": "#1b3a8c",
+    "alpha": 0.21,
+    "spacing": 4,
+    "lineWidth": 1,
+    "dotRadius": 0.64
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 144,
+      "h": 18.45
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 3,
+     "y": 24.45,
+     "w": 144,
+     "h": 22.55
+    },
+    "fontSize": 6.25,
+    "lineHeight": 7.5,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 30.41,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 22.03,
+        "width": 45.51,
+        "bold": true,
+        "tone": "primary"
+       },
+       {
+        "element": null,
+        "text": " · ",
+        "x": 67.53,
+        "width": 5.56,
+        "bold": false,
+        "tone": "muted"
+       },
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 73.09,
+        "width": 54.88,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 37.91,
+      "runs": [
+       {
+        "element": "reason",
+        "text": "Důvod: Schvaluji obsah smlouvy",
+        "x": 18.9,
+        "width": 89.96,
+        "bold": false,
+        "tone": "muted"
+       },
+       {
+        "element": null,
+        "text": " · ",
+        "x": 108.87,
+        "width": 5.56,
+        "bold": false,
+        "tone": "muted"
+       },
+       {
+        "element": "location",
+        "text": "Praha",
+        "x": 114.42,
+        "width": 16.68,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     },
+     {
+      "baseline": 45.41,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 48.94,
+        "width": 52.13,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "row-text-inline@M",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "row",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": true,
+      "bold": false,
+      "prefix": ""
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "pattern",
+     "color": "#ffffff",
+     "pattern": "dots",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "round"
+   },
+   "width": 200,
+   "height": 70,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 200,
+   "height": 70,
+   "mode": "full",
+   "direction": "row",
+   "padding": 4.2,
+   "radius": 14,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "pattern",
+    "color": "#ffffff",
+    "pattern": "dots",
+    "patternColor": "#1b3a8c",
+    "alpha": 0.21,
+    "spacing": 4,
+    "lineWidth": 1,
+    "dotRadius": 0.64
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 4.2,
+      "y": 4.2,
+      "w": 59.97,
+      "h": 61.6
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 68.37,
+     "y": 4.2,
+     "w": 127.43,
+     "h": 61.6
+    },
+    "fontSize": 10.5,
+    "lineHeight": 12.6,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 19.77,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 68.37,
+        "width": 76.45,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 32.38,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 68.37,
+        "width": 92.2,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 44.98,
+      "runs": [
+       {
+        "element": "reason",
+        "text": "Důvod: Schvaluji obsah…",
+        "x": 68.37,
+        "width": 120.21,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     },
+     {
+      "baseline": 57.58,
+      "runs": [
+       {
+        "element": "location",
+        "text": "Praha",
+        "x": 68.37,
+        "width": 28.01,
+        "bold": false,
+        "tone": "muted"
+       },
+       {
+        "element": null,
+        "text": " · ",
+        "x": 96.38,
+        "width": 9.33,
+        "bold": false,
+        "tone": "muted"
+       },
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 105.72,
+        "width": 87.57,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "row-text-inline@L",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "row",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": true,
+      "bold": false,
+      "prefix": ""
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "pattern",
+     "color": "#ffffff",
+     "pattern": "dots",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "round"
+   },
+   "width": 260,
+   "height": 90,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 260,
+   "height": 90,
+   "mode": "full",
+   "direction": "row",
+   "padding": 5.4,
+   "radius": 18,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "pattern",
+    "color": "#ffffff",
+    "pattern": "dots",
+    "patternColor": "#1b3a8c",
+    "alpha": 0.21,
+    "spacing": 4.5,
+    "lineWidth": 1,
+    "dotRadius": 0.72
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 5.4,
+      "y": 5.4,
+      "w": 78.02,
+      "h": 79.2
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 88.82,
+     "y": 5.4,
+     "w": 165.78,
+     "h": 79.2
+    },
+    "fontSize": 9.75,
+    "lineHeight": 11.7,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 36.71,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 88.82,
+        "width": 70.99,
+        "bold": true,
+        "tone": "primary"
+       },
+       {
+        "element": null,
+        "text": " · ",
+        "x": 159.81,
+        "width": 8.67,
+        "bold": false,
+        "tone": "muted"
+       },
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 168.47,
+        "width": 85.61,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 48.41,
+      "runs": [
+       {
+        "element": "reason",
+        "text": "Důvod: Schvaluji obsah smlouvy",
+        "x": 88.82,
+        "width": 140.34,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     },
+     {
+      "baseline": 60.11,
+      "runs": [
+       {
+        "element": "location",
+        "text": "Praha",
+        "x": 88.82,
+        "width": 26.01,
+        "bold": false,
+        "tone": "muted"
+       },
+       {
+        "element": null,
+        "text": " · ",
+        "x": 114.83,
+        "width": 8.67,
+        "bold": false,
+        "tone": "muted"
+       },
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 123.5,
+        "width": 81.32,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "row-text-inline@XL",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "row",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": true,
+      "bold": false,
+      "prefix": ""
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "pattern",
+     "color": "#ffffff",
+     "pattern": "dots",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "round"
+   },
+   "width": 320,
+   "height": 110,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 320,
+   "height": 110,
+   "mode": "full",
+   "direction": "row",
+   "padding": 6.6,
+   "radius": 22,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "pattern",
+    "color": "#ffffff",
+    "pattern": "dots",
+    "patternColor": "#1b3a8c",
+    "alpha": 0.21,
+    "spacing": 5.5,
+    "lineWidth": 1.1,
+    "dotRadius": 0.88
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 6.6,
+      "y": 6.6,
+      "w": 96.06,
+      "h": 96.8
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 109.26,
+     "y": 6.6,
+     "w": 204.14,
+     "h": 96.8
+    },
+    "fontSize": 12,
+    "lineHeight": 14.4,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 44.8,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 109.26,
+        "width": 87.37,
+        "bold": true,
+        "tone": "primary"
+       },
+       {
+        "element": null,
+        "text": " · ",
+        "x": 196.64,
+        "width": 10.67,
+        "bold": false,
+        "tone": "muted"
+       },
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 207.3,
+        "width": 105.37,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 59.2,
+      "runs": [
+       {
+        "element": "reason",
+        "text": "Důvod: Schvaluji obsah smlouvy",
+        "x": 109.26,
+        "width": 172.73,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     },
+     {
+      "baseline": 73.6,
+      "runs": [
+       {
+        "element": "location",
+        "text": "Praha",
+        "x": 109.26,
+        "width": 32.02,
+        "bold": false,
+        "tone": "muted"
+       },
+       {
+        "element": null,
+        "text": " · ",
+        "x": 141.28,
+        "width": 10.67,
+        "bold": false,
+        "tone": "muted"
+       },
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 151.95,
+        "width": 100.08,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "reordered-wide-splits@XS",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "logo",
+    "order": [
+     "text",
+     "right",
+     "left"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 60,
+    "splitRight": 60,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Times",
+    "fontSize": 10,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "image",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "repeat"
+    },
+    "radius": "none"
+   },
+   "width": 120,
+   "height": 40,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 120,
+   "height": 40,
+   "mode": "tiny",
+   "direction": "column",
+   "padding": 3,
+   "radius": 0,
+   "fontFamily": "Times",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "image",
+    "fit": "repeat",
+    "alpha": 0.6
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 114,
+      "h": 18.6
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 3,
+     "y": 24.6,
+     "w": 114,
+     "h": 12.4
+    },
+    "fontSize": 10,
+    "lineHeight": 12,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 34.3,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 27.08,
+        "width": 65.84,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "reordered-wide-splits@S",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "logo",
+    "order": [
+     "text",
+     "right",
+     "left"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 60,
+    "splitRight": 60,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Times",
+    "fontSize": 10,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "image",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "repeat"
+    },
+    "radius": "none"
+   },
+   "width": 150,
+   "height": 50,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 150,
+   "height": 50,
+   "mode": "narrow",
+   "direction": "column",
+   "padding": 3,
+   "radius": 0,
+   "fontFamily": "Times",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "image",
+    "fit": "repeat",
+    "alpha": 0.6
+   },
+   "zones": [
+    {
+     "section": "right",
+     "kind": "logo",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 144,
+      "h": 18.45
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 3,
+     "y": 24.45,
+     "w": 144,
+     "h": 22.55
+    },
+    "fontSize": 6.25,
+    "lineHeight": 7.5,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 30.41,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 54.43,
+        "width": 41.15,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 37.91,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 50.53,
+        "width": 48.94,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 45.41,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 51.48,
+        "width": 47.05,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "reordered-wide-splits@M",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "logo",
+    "order": [
+     "text",
+     "right",
+     "left"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 60,
+    "splitRight": 60,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Times",
+    "fontSize": 10,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "image",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "repeat"
+    },
+    "radius": "none"
+   },
+   "width": 200,
+   "height": 70,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 200,
+   "height": 70,
+   "mode": "full",
+   "direction": "row",
+   "padding": 4.2,
+   "radius": 0,
+   "fontFamily": "Times",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "image",
+    "fit": "repeat",
+    "alpha": 0.6
+   },
+   "zones": [
+    {
+     "section": "right",
+     "kind": "logo",
+     "rect": {
+      "x": 63.36,
+      "y": 4.2,
+      "w": 64.12,
+      "h": 61.6
+     }
+    },
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 131.68,
+      "y": 4.2,
+      "w": 64.12,
+      "h": 61.6
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 4.2,
+     "y": 4.2,
+     "w": 54.96,
+     "h": 61.6
+    },
+    "fontSize": 10,
+    "lineHeight": 12,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 26.5,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nov…",
+        "x": 4.2,
+        "width": 50.28,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 38.5,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performan…",
+        "x": 4.2,
+        "width": 52.21,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 50.5,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 20…",
+        "x": 4.2,
+        "width": 50,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "reordered-wide-splits@L",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "logo",
+    "order": [
+     "text",
+     "right",
+     "left"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 60,
+    "splitRight": 60,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Times",
+    "fontSize": 10,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "image",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "repeat"
+    },
+    "radius": "none"
+   },
+   "width": 260,
+   "height": 90,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 260,
+   "height": 90,
+   "mode": "full",
+   "direction": "row",
+   "padding": 5.4,
+   "radius": 0,
+   "fontFamily": "Times",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "image",
+    "fit": "repeat",
+    "alpha": 0.6
+   },
+   "zones": [
+    {
+     "section": "right",
+     "kind": "logo",
+     "rect": {
+      "x": 82.32,
+      "y": 5.4,
+      "w": 83.44,
+      "h": 79.2
+     }
+    },
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 171.16,
+      "y": 5.4,
+      "w": 83.44,
+      "h": 79.2
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 5.4,
+     "y": 5.4,
+     "w": 71.52,
+     "h": 79.2
+    },
+    "fontSize": 10,
+    "lineHeight": 12,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 36.5,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 5.4,
+        "width": 65.84,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 48.5,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4…",
+        "x": 5.4,
+        "width": 66.09,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 60.5,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 1…",
+        "x": 5.4,
+        "width": 67.5,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "reordered-wide-splits@XL",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "logo",
+    "order": [
+     "text",
+     "right",
+     "left"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 60,
+    "splitRight": 60,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Times",
+    "fontSize": 10,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "image",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "repeat"
+    },
+    "radius": "none"
+   },
+   "width": 320,
+   "height": 110,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 320,
+   "height": 110,
+   "mode": "full",
+   "direction": "row",
+   "padding": 6.6,
+   "radius": 0,
+   "fontFamily": "Times",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "image",
+    "fit": "repeat",
+    "alpha": 0.6
+   },
+   "zones": [
+    {
+     "section": "right",
+     "kind": "logo",
+     "rect": {
+      "x": 101.28,
+      "y": 6.6,
+      "w": 102.76,
+      "h": 96.8
+     }
+    },
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 210.64,
+      "y": 6.6,
+      "w": 102.76,
+      "h": 96.8
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 6.6,
+     "y": 6.6,
+     "w": 88.08,
+     "h": 96.8
+    },
+    "fontSize": 10,
+    "lineHeight": 12,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 46.5,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 6.6,
+        "width": 65.84,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 58.5,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 6.6,
+        "width": 78.31,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 70.5,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 6.6,
+        "width": 75.28,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "seal@XS",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "logo",
+    "right": "image",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 120,
+   "height": 40,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 120,
+   "height": 40,
+   "mode": "tiny",
+   "direction": "column",
+   "padding": 3,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "logo",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 114,
+      "h": 18.6
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 3,
+     "y": 24.6,
+     "w": 114,
+     "h": 12.4
+    },
+    "fontSize": 10.25,
+    "lineHeight": 12.3,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 34.39,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 12.15,
+        "width": 95.7,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "seal@S",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "logo",
+    "right": "image",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 150,
+   "height": 50,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 150,
+   "height": 50,
+   "mode": "narrow",
+   "direction": "column",
+   "padding": 3,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "logo",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 144,
+      "h": 18.45
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 3,
+     "y": 24.45,
+     "w": 144,
+     "h": 22.55
+    },
+    "fontSize": 9.25,
+    "lineHeight": 11.1,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 33.41,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 31.82,
+        "width": 86.37,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 44.51,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 36.43,
+        "width": 77.15,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "seal@M",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "logo",
+    "right": "image",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 200,
+   "height": 70,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 200,
+   "height": 70,
+   "mode": "full",
+   "direction": "row",
+   "padding": 4.2,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "logo",
+     "rect": {
+      "x": 4.2,
+      "y": 4.2,
+      "w": 58.62,
+      "h": 61.6
+     }
+    },
+    {
+     "section": "right",
+     "kind": "image",
+     "rect": {
+      "x": 148.17,
+      "y": 4.2,
+      "w": 47.63,
+      "h": 61.6
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 67.02,
+     "y": 4.2,
+     "w": 76.94,
+     "h": 61.6
+    },
+    "fontSize": 8,
+    "lineHeight": 9.6,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 33,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 67.02,
+        "width": 74.7,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 42.6,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 67.02,
+        "width": 66.72,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "seal@L",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "logo",
+    "right": "image",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 260,
+   "height": 90,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 260,
+   "height": 90,
+   "mode": "full",
+   "direction": "row",
+   "padding": 5.4,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "logo",
+     "rect": {
+      "x": 5.4,
+      "y": 5.4,
+      "w": 76.29,
+      "h": 79.2
+     }
+    },
+    {
+     "section": "right",
+     "kind": "image",
+     "rect": {
+      "x": 192.62,
+      "y": 5.4,
+      "w": 61.98,
+      "h": 79.2
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 87.09,
+     "y": 5.4,
+     "w": 100.13,
+     "h": 79.2
+    },
+    "fontSize": 10.5,
+    "lineHeight": 12.6,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 42.38,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 87.09,
+        "width": 98.04,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 54.98,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 87.09,
+        "width": 87.57,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "seal@XL",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "logo",
+    "right": "image",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 320,
+   "height": 110,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 320,
+   "height": 110,
+   "mode": "full",
+   "direction": "row",
+   "padding": 6.6,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "logo",
+     "rect": {
+      "x": 6.6,
+      "y": 6.6,
+      "w": 93.95,
+      "h": 96.8
+     }
+    },
+    {
+     "section": "right",
+     "kind": "image",
+     "rect": {
+      "x": 237.06,
+      "y": 6.6,
+      "w": 76.34,
+      "h": 96.8
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 107.15,
+     "y": 6.6,
+     "w": 123.31,
+     "h": 96.8
+    },
+    "fontSize": 13,
+    "lineHeight": 15.6,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 51.75,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 107.15,
+        "width": 121.38,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 67.35,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 107.15,
+        "width": 108.42,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "only-sig@XS",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": false,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 120,
+   "height": 40,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 120,
+   "height": 40,
+   "mode": "tiny",
+   "direction": "row",
+   "padding": 3,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 114,
+      "h": 34
+     }
+    }
+   ],
+   "text": null
+  }
+ },
+ {
+  "name": "only-sig@S",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": false,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 150,
+   "height": 50,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 150,
+   "height": 50,
+   "mode": "narrow",
+   "direction": "row",
+   "padding": 3,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 144,
+      "h": 44
+     }
+    }
+   ],
+   "text": null
+  }
+ },
+ {
+  "name": "only-sig@M",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": false,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 200,
+   "height": 70,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 200,
+   "height": 70,
+   "mode": "full",
+   "direction": "row",
+   "padding": 4.2,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 4.2,
+      "y": 4.2,
+      "w": 191.6,
+      "h": 61.6
+     }
+    }
+   ],
+   "text": null
+  }
+ },
+ {
+  "name": "only-sig@L",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": false,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 260,
+   "height": 90,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 260,
+   "height": 90,
+   "mode": "full",
+   "direction": "row",
+   "padding": 5.4,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 5.4,
+      "y": 5.4,
+      "w": 249.2,
+      "h": 79.2
+     }
+    }
+   ],
+   "text": null
+  }
+ },
+ {
+  "name": "only-sig@XL",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": false,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 320,
+   "height": 110,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 320,
+   "height": 110,
+   "mode": "full",
+   "direction": "row",
+   "padding": 6.6,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 6.6,
+      "y": 6.6,
+      "w": 306.8,
+      "h": 96.8
+     }
+    }
+   ],
+   "text": null
+  }
+ },
+ {
+  "name": "default@narrow-tall",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 150,
+   "height": 90,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 150,
+   "height": 90,
+   "mode": "narrow",
+   "direction": "column",
+   "padding": 5.4,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 5.4,
+      "y": 5.4,
+      "w": 139.2,
+      "h": 33.21
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 5.4,
+     "y": 44.01,
+     "w": 139.2,
+     "h": 40.59
+    },
+    "fontSize": 11.25,
+    "lineHeight": 13.5,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 54.74,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 34.04,
+        "width": 81.91,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 68.24,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 25.61,
+        "width": 98.79,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 81.74,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 28.09,
+        "width": 93.83,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "default@long-name",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "none",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "none",
+     "color": "#ffffff",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 200,
+   "height": 70,
+   "values": {
+    "name": "Mgr. Ing. Jana Marie Nováková Dvořáková Šťastná, Ph.D.",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 200,
+   "height": 70,
+   "mode": "full",
+   "direction": "row",
+   "padding": 4.2,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "none"
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 4.2,
+      "y": 4.2,
+      "w": 59.97,
+      "h": 61.6
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 68.37,
+     "y": 4.2,
+     "w": 127.43,
+     "h": 61.6
+    },
+    "fontSize": 6,
+    "lineHeight": 7.2,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 29.9,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Mgr. Ing. Jana Marie Nováková Dvořáková…",
+        "x": 68.37,
+        "width": 126.04,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 37.1,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 68.37,
+        "width": 52.69,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 44.3,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 68.37,
+        "width": 50.04,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "logo-text-sig-soft@missing-assets",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "logo",
+    "right": "sig",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "row",
+    "textDirection": "column",
+    "splitLeft": 32,
+    "splitRight": 26,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": false,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": null,
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "color",
+     "color": "#eef4fb",
+     "pattern": "diag",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "soft"
+   },
+   "width": 260,
+   "height": 90,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": false,
+    "image": false,
+    "backgroundImage": false
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 260,
+   "height": 90,
+   "mode": "full",
+   "direction": "row",
+   "padding": 5.4,
+   "radius": 7.2,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "color",
+    "color": "#eef4fb"
+   },
+   "zones": [
+    {
+     "section": "right",
+     "kind": "sig",
+     "rect": {
+      "x": 191.21,
+      "y": 5.4,
+      "w": 63.39,
+      "h": 79.2
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 5.4,
+     "y": 5.4,
+     "w": 180.41,
+     "h": 79.2
+    },
+    "fontSize": 14,
+    "lineHeight": 16.8,
+    "align": "left",
+    "lines": [
+     {
+      "baseline": 33.1,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 5.4,
+        "width": 101.93,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 49.9,
+      "runs": [
+       {
+        "element": "company",
+        "text": "Performance4 s.r.o.",
+        "x": 5.4,
+        "width": 122.93,
+        "bold": false,
+        "tone": "primary"
+       }
+      ]
+     },
+     {
+      "baseline": 66.7,
+      "runs": [
+       {
+        "element": "date",
+        "text": "12. 11. 2026 14:32",
+        "x": 5.4,
+        "width": 116.76,
+        "bold": false,
+        "tone": "muted"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "column-all-elements@wide-low",
+  "input": {
+   "model": {
+    "version": 1,
+    "left": "sig",
+    "right": "image",
+    "order": [
+     "left",
+     "text",
+     "right"
+    ],
+    "direction": "column",
+    "textDirection": "column",
+    "splitLeft": 30,
+    "splitRight": 20,
+    "elements": {
+     "name": {
+      "enabled": true,
+      "bold": true,
+      "prefix": null
+     },
+     "company": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "reason": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "location": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "date": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     },
+     "text": {
+      "enabled": true,
+      "bold": false,
+      "prefix": null
+     }
+    },
+    "customText": "Podepsáno elektronicky",
+    "fontFamily": "Helvetica",
+    "fontSize": null,
+    "textColor": "#1f1f1f",
+    "background": {
+     "kind": "pattern",
+     "color": "#ffffff",
+     "pattern": "guilloche",
+     "patternColor": "#1b3a8c",
+     "opacity": 60,
+     "imageFit": "cover"
+    },
+    "radius": "none"
+   },
+   "width": 320,
+   "height": 45,
+   "values": {
+    "name": "Jana Nováková",
+    "company": "Performance4 s.r.o.",
+    "reason": "Schvaluji obsah smlouvy",
+    "location": "Praha",
+    "date": "12. 11. 2026 14:32"
+   },
+   "labels": {
+    "reason": "Důvod:",
+    "location": "Místo:"
+   },
+   "assets": {
+    "sig": true,
+    "logo": true,
+    "image": true,
+    "backgroundImage": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "width": 320,
+   "height": 45,
+   "mode": "tiny",
+   "direction": "column",
+   "padding": 3,
+   "radius": 0,
+   "fontFamily": "Helvetica",
+   "textColor": "#1f1f1f",
+   "background": {
+    "kind": "pattern",
+    "color": "#ffffff",
+    "pattern": "guilloche",
+    "patternColor": "#1b3a8c",
+    "alpha": 0.21,
+    "spacing": 3,
+    "lineWidth": 0.75,
+    "dotRadius": 0.64
+   },
+   "zones": [
+    {
+     "section": "left",
+     "kind": "sig",
+     "rect": {
+      "x": 3,
+      "y": 3,
+      "w": 314,
+      "h": 10.8
+     }
+    }
+   ],
+   "text": {
+    "rect": {
+     "x": 3,
+     "y": 16.8,
+     "w": 314,
+     "h": 25.2
+    },
+    "fontSize": 14,
+    "lineHeight": 16.8,
+    "align": "center",
+    "lines": [
+     {
+      "baseline": 34.3,
+      "runs": [
+       {
+        "element": "name",
+        "text": "Jana Nováková",
+        "x": 109.03,
+        "width": 101.93,
+        "bold": true,
+        "tone": "primary"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ }
+]
