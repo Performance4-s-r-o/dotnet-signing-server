@@ -83,17 +83,21 @@ namespace DotNetSigningServer.Services
         public static byte[] Preview(VisualSignInput input, byte[] pdfBytes, string? locale)
         {
             var watermark = PreviewWatermark(locale);
+            // Read only first: a refused page must not cost a full write of the document.
+            int requested = input.SignPageNumber <= 0 ? 1 : input.SignPageNumber;
+            using (var probe = new PdfDocument(new PdfReader(new MemoryStream(pdfBytes))))
+            {
+                if (requested > probe.GetNumberOfPages())
+                {
+                    throw new ApiValidationException(PreviewPageInvalidCode, "Appearance preview: page not in the document");
+                }
+            }
             byte[] drawn;
             int pageNumber;
             using (var msDrawn = new MemoryStream())
             {
                 using (var pdfDoc = new PdfDocument(new PdfReader(new MemoryStream(pdfBytes)), new PdfWriter(msDrawn)))
                 {
-                    int requested = input.SignPageNumber <= 0 ? 1 : input.SignPageNumber;
-                    if (requested > pdfDoc.GetNumberOfPages())
-                    {
-                        throw new ApiValidationException(PreviewPageInvalidCode, "Appearance preview: page not in the document");
-                    }
                     var plan = PlanStamp(input, pdfDoc, companyName: null);
                     var xobject = Render(plan, pdfDoc);
                     var stampCanvas = new PdfCanvas(xobject, pdfDoc);
