@@ -31,7 +31,7 @@ public class AppearancePreviewTests
     [Fact]
     public void Only_the_signed_page_comes_back_with_the_stamp_and_the_watermark()
     {
-        var result = PdfVisualSigningService.Preview(Input(2), ThreePages(), "NÁHLED");
+        var result = PdfVisualSigningService.Preview(Input(2), ThreePages(), "cs");
 
         using var doc = new PdfDocument(new PdfReader(new MemoryStream(result)));
         Assert.Equal(1, doc.GetNumberOfPages());
@@ -50,7 +50,7 @@ public class AppearancePreviewTests
         {
             doc.AddNewPage(PageSize.A4).SetRotation(90);
         }
-        var result = PdfVisualSigningService.Preview(Input(1), ms.ToArray(), "PREVIEW");
+        var result = PdfVisualSigningService.Preview(Input(1), ms.ToArray(), "xx");
 
         using var preview = new PdfDocument(new PdfReader(new MemoryStream(result)));
         Assert.Contains("PREVIEW", PdfTextExtractor.GetTextFromPage(preview.GetPage(1)));
@@ -80,7 +80,27 @@ public class AppearancePreviewTests
         input.BackgroundImageContent = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8AAQg0AD3oDfnfpf5cAAAAASUVORK5CYII=";
 
         var warnings = SignatureAppearance.BeginWarnings();
-        PdfVisualSigningService.Preview(input, pdfa1, "NÁHLED");
+        PdfVisualSigningService.Preview(input, pdfa1, "cs");
         Assert.Contains(SignatureAppearance.Pdfa1SimplifiedWarning, warnings);
+    }
+
+    [Fact]
+    public void The_watermark_is_also_inside_the_stamp()
+    {
+        var result = PdfVisualSigningService.Preview(Input(1), ThreePages(), "en");
+        using var doc = new PdfDocument(new PdfReader(new MemoryStream(result)));
+        var xobjects = doc.GetPage(1).GetResources().GetResource(PdfName.XObject);
+        Assert.NotNull(xobjects);
+        var stamp = (PdfStream)xobjects.Values().First(o => o is PdfStream);
+        var content = System.Text.Encoding.Latin1.GetString(stamp.GetBytes());
+        Assert.Contains("Tj", content);
+        Assert.True(content.LastIndexOf("Tj", StringComparison.Ordinal) > content.LastIndexOf("Do", StringComparison.Ordinal) || !content.Contains("Do"));
+    }
+
+    [Fact]
+    public void A_page_outside_the_document_is_refused()
+    {
+        var ex = Assert.Throws<DotNetSigningServer.Exceptions.ApiValidationException>(() => PdfVisualSigningService.Preview(Input(4), ThreePages(), "en"));
+        Assert.Equal("SIGN_PAGE_INVALID", ex.Code);
     }
 }

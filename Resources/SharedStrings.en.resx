@@ -614,7 +614,7 @@
   <!-- Validation Error Codes -->
   <data name="Error_PDF_SIZE_EXCEEDED" xml:space="preserve"><value>The PDF file exceeds the maximum allowed size.</value></data>
   <data name="Error_IMAGE_SIZE_EXCEEDED" xml:space="preserve"><value>The image file exceeds the maximum allowed size.</value></data>
-  <data name="Error_PREVIEW_WATERMARK_INVALID" xml:space="preserve"><value>The preview needs a short watermark text (at most 40 characters).</value></data>
+  <data name="Error_SIGN_PAGE_INVALID" xml:space="preserve"><value>The page with the signature is not in the document.</value></data>
   <data name="Error_PDF_INVALID" xml:space="preserve"><value>The file is not a valid PDF.</value></data>
   <data name="Error_PDF_ENCRYPTED" xml:space="preserve"><value>The PDF is encrypted. Remove the password and try again.</value></data>
   <data name="Error_PDF_TOO_MANY_PAGES" xml:space="preserve"><value>The PDF has more pages than allowed.</value></data>

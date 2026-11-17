@@ -7,10 +7,7 @@ namespace DotNetSigningServer.Models
     /// </summary>
     public class AppearancePreviewInput : VisualSignInput
     {
-        /// <summary>Text drawn diagonally across the page (e.g. "PREVIEW" in the caller's language); required.</summary>
-        public string WatermarkText { get; set; } = "";
-
-        /// <summary>Upper limit of <see cref="WatermarkText"/>.</summary>
-        public const int WatermarkMaxLength = 40;
+        /// <summary>Language of the watermark ("en", "cs", "de", "es"); the text itself is the server's, anything else is English.</summary>
+        public string? Locale { get; set; }
     }
 }

@@ -322,12 +322,6 @@ namespace DotNetSigningServer.Controllers
             byte[] pdf;
             try
             {
-                var watermark = input.WatermarkText?.Trim() ?? "";
-                if (watermark.Length == 0 || watermark.Length > AppearancePreviewInput.WatermarkMaxLength || watermark.Any(char.IsControl))
-                {
-                    throw new ApiValidationException("PREVIEW_WATERMARK_INVALID", "Appearance preview: watermark text missing or invalid");
-                }
-                input.WatermarkText = watermark;
                 pdf = GuardedPdfFromBase64(input.PdfContent, "Appearance preview");
                 input.PdfContent = string.Empty;
                 foreach (var image in new[] { input.SignImageContent, input.StampImageContent, input.CompanyLogoContent, input.BackgroundImageContent })
@@ -344,12 +338,16 @@ namespace DotNetSigningServer.Controllers
             var appearanceWarnings = SignatureAppearance.BeginWarnings();
             try
             {
-                var result = PdfVisualSigningService.Preview(input, pdf, input.WatermarkText);
+                var result = PdfVisualSigningService.Preview(input, pdf, input.Locale);
                 return Ok(WithWarnings(new { result = Convert.ToBase64String(result) }, appearanceWarnings));
             }
             catch (ApiValidationException ex) when (SignatureAppearance.RenderRefusalCodes.Contains(ex.Code))
             {
                 return AppearanceNotDrawn(ex, "Appearance preview");
+            }
+            catch (ApiValidationException ex) when (ex.Code == PdfVisualSigningService.PreviewPageInvalidCode)
+            {
+                return InputRefused(ex);
             }
             catch (Exception ex)
             {
