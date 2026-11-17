@@ -306,6 +306,58 @@ namespace DotNetSigningServer.Controllers
             }
         }
 
+        /// <summary>
+        /// The signature appearance drawn on its page, alone and watermarked (#117): what a signer checks
+        /// before signing. Same appearance input and refusals as visual-sign; nothing is signed or charged.
+        /// Answers <c>{ result, appearanceWarnings? }</c> with a one-page PDF.
+        /// </summary>
+        [CapacityPool(CapacityPoolKind.Heavy)]
+        [HttpPost("/api/appearance-preview")]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> AppearancePreview([FromBody] AppearancePreviewInput input)
+        {
+            var (user, error) = await EnsureUserWithCreditsAsync(requiredCredits: 0, originHeader: Request.Headers["Origin"].ToString());
+            if (error != null || user == null) return error!;
+
+            byte[] pdf;
+            try
+            {
+                var watermark = input.WatermarkText?.Trim() ?? "";
+                if (watermark.Length == 0 || watermark.Length > AppearancePreviewInput.WatermarkMaxLength || watermark.Any(char.IsControl))
+                {
+                    throw new ApiValidationException("PREVIEW_WATERMARK_INVALID", "Appearance preview: watermark text missing or invalid");
+                }
+                input.WatermarkText = watermark;
+                pdf = GuardedPdfFromBase64(input.PdfContent, "Appearance preview");
+                input.PdfContent = string.Empty;
+                foreach (var image in new[] { input.SignImageContent, input.StampImageContent, input.CompanyLogoContent, input.BackgroundImageContent })
+                {
+                    LimitGuard.EnsureImageWithinLimit(image, "Appearance preview image");
+                }
+            }
+            catch (ApiValidationException ex)
+            {
+                return InputRefused(ex);
+            }
+            if (AppearanceRefused(input.Appearance, input.SignRect) is { } appearanceRefused) return appearanceRefused;
+
+            var appearanceWarnings = SignatureAppearance.BeginWarnings();
+            try
+            {
+                var result = PdfVisualSigningService.Preview(input, pdf, input.WatermarkText);
+                return Ok(WithWarnings(new { result = Convert.ToBase64String(result) }, appearanceWarnings));
+            }
+            catch (ApiValidationException ex) when (SignatureAppearance.RenderRefusalCodes.Contains(ex.Code))
+            {
+                return AppearanceNotDrawn(ex, "Appearance preview");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(Logging.LoggingEvents.ApiError, ex, "[appearance-preview] Failed: {Message}", ex.Message);
+                return SafeProblem(Localizer["VisualSignError"], ex);
+            }
+        }
+
         /// <summary>The document as it is cannot be prepared or signed as asked (409): retrying the same request will not help.</summary>
         internal static readonly IReadOnlySet<string> PreparationRefusalCodes = new HashSet<string>(StringComparer.Ordinal)
         {

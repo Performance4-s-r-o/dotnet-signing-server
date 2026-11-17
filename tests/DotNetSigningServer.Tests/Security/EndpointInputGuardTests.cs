@@ -68,7 +68,7 @@ public class EndpointInputGuardTests
         // A new route that takes a PDF has to be added here — and has to call both guards.
         var expected = new[]
         {
-            "/api/ai/detect-fields", "/api/ai/extract-data", "/api/attachment", "/api/convert/pdfa",
+            "/api/ai/detect-fields", "/api/ai/extract-data", "/api/appearance-preview", "/api/attachment", "/api/convert/pdfa",
             "/api/extend-signature", "/api/fill-pdf", "/api/find-codes", "/api/flatten-form", "/api/inspect-signatures",
             "/api/pdf-template", "/api/pdf-template/{templateId:guid}", "/api/presign", "/api/presign/placement",
             "/api/sign-pfx", "/api/timestamp", "/api/visual-sign",

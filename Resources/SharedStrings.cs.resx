@@ -614,6 +614,7 @@
   <!-- Validation Error Codes -->
   <data name="Error_PDF_SIZE_EXCEEDED" xml:space="preserve"><value>Soubor PDF překračuje maximální povolenou velikost.</value></data>
   <data name="Error_IMAGE_SIZE_EXCEEDED" xml:space="preserve"><value>Soubor s obrázkem překračuje maximální povolenou velikost.</value></data>
+  <data name="Error_PREVIEW_WATERMARK_INVALID" xml:space="preserve"><value>Náhled potřebuje krátký text vodoznaku (nejvýš 40 znaků).</value></data>
   <data name="Error_PDF_INVALID" xml:space="preserve"><value>Soubor není platné PDF.</value></data>
   <data name="Error_PDF_ENCRYPTED" xml:space="preserve"><value>PDF je šifrované. Odstraňte heslo a zkuste to znovu.</value></data>
   <data name="Error_PDF_TOO_MANY_PAGES" xml:space="preserve"><value>PDF má víc stran, než je povoleno.</value></data>

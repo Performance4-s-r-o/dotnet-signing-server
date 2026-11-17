@@ -55,6 +55,64 @@ namespace DotNetSigningServer.Services
             return (msOut.ToArray(), plan.Page, plan.Rect);
         }
 
+        /// <summary>
+        /// Preview of the appearance (#117): the page with the stamp drawn as visual-sign draws it, alone,
+        /// with <paramref name="watermark"/> across it. Nothing is signed; the document is not kept as PDF/A,
+        /// but its conformance is read, so a PDF/A-1 document is simplified (and warned about) as when signing.
+        /// The one-page, watermarked result is no usable signed document, which is why it is free.
+        /// </summary>
+        public static byte[] Preview(VisualSignInput input, byte[] pdfBytes, string watermark)
+        {
+            using var msIn = new MemoryStream(pdfBytes);
+            using var msOut = new MemoryStream();
+            var pdfDoc = new PdfDocument(new PdfReader(msIn), new PdfWriter(msOut));
+
+            var plan = PlanStamp(input, pdfDoc, companyName: null);
+            DrawIntoContent(plan, pdfDoc);
+            for (int i = pdfDoc.GetNumberOfPages(); i >= 1; i--)
+            {
+                if (i != plan.Page) pdfDoc.RemovePage(i);
+            }
+            DrawWatermark(pdfDoc.GetPage(1), watermark);
+            pdfDoc.Close();
+            return msOut.ToArray();
+        }
+
+        /// <summary>Light grey text across the visible page, over everything, upright to the reader.</summary>
+        private static void DrawWatermark(PdfPage page, string text)
+        {
+            var frame = PageFrame.Of(page);
+            var box = frame.Box;
+            var font = AppFonts.Load(AppFontFamily.Sans, bold: true);
+            float diagonal = (float)Math.Sqrt(box.GetWidth() * box.GetWidth() + box.GetHeight() * box.GetHeight());
+            float unitWidth = font.GetWidth(text, 1);
+            if (unitWidth <= 0) return;
+            float size = Math.Min(diagonal * 0.6f / unitWidth, 160f);
+            double angle = Math.Atan2(box.GetHeight(), box.GetWidth());
+            float cos = (float)Math.Cos(angle), sin = (float)Math.Sin(angle);
+            float textWidth = unitWidth * size;
+            float cx = box.GetX() + box.GetWidth() / 2, cy = box.GetY() + box.GetHeight() / 2;
+            // Start so that the text's middle (and half its cap height) sits in the middle of the page.
+            float x = cx - cos * textWidth / 2 + sin * size * 0.35f;
+            float y = cy - sin * textWidth / 2 - cos * size * 0.35f;
+
+            var canvas = new PdfCanvas(page.NewContentStreamAfter(), page.GetResources(), page.GetDocument());
+            canvas.SaveState();
+            if (!frame.IsIdentity)
+            {
+                var m = frame.ToPageMatrix();
+                canvas.ConcatMatrix(m[0], m[1], m[2], m[3], m[4], m[5]);
+            }
+            canvas.SetFillColor(new iText.Kernel.Colors.DeviceRgb(190, 190, 190));
+            canvas.BeginText();
+            canvas.SetFontAndSize(font, size);
+            canvas.SetTextMatrix(cos, sin, -sin, cos, x, y);
+            canvas.ShowText(text);
+            canvas.EndText();
+            canvas.RestoreState();
+            canvas.Release();
+        }
+
         /// <summary>Where a stamp lands, before anything is drawn.</summary>
         public sealed class StampPlan
         {
