@@ -1,3 +1,4 @@
+using DotNetSigningServer.Exceptions;
 using DotNetSigningServer.Models;
 using DotNetSigningServer.Services.SignatureDesign;
 using DotNetSigningServer.Services.SignatureLayout;
@@ -55,6 +56,107 @@ namespace DotNetSigningServer.Services
             return (msOut.ToArray(), plan.Page, plan.Rect);
         }
 
+        /// <summary>The page asked for is not in the document (preview, #117).</summary>
+        public const string PreviewPageInvalidCode = "SIGN_PAGE_INVALID";
+
+        /// <summary>Watermark of the preview by language; the server chooses it, never the caller (#117).</summary>
+        private static readonly IReadOnlyDictionary<string, string> PreviewWatermarks =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["en"] = "PREVIEW",
+                ["cs"] = "NÁHLED",
+                ["de"] = "VORSCHAU",
+                ["es"] = "VISTA PREVIA",
+            };
+
+        public static string PreviewWatermark(string? locale) =>
+            locale != null && PreviewWatermarks.TryGetValue(locale.Trim(), out var text) ? text : PreviewWatermarks["en"];
+
+        /// <summary>
+        /// Preview of the appearance (#117): the page with the stamp drawn as visual-sign draws it, alone,
+        /// with the watermark across the page and across the stamp itself (so the stamp cannot be lifted
+        /// out clean). Nothing is signed; the document is not kept as PDF/A, but its conformance is read,
+        /// so a PDF/A-1 document is simplified (and warned about) as when signing.
+        /// Two linear passes: draw into the whole document, then copy that one page into a new document
+        /// (removing pages one by one rebuilds the form each time).
+        /// </summary>
+        public static byte[] Preview(VisualSignInput input, byte[] pdfBytes, string? locale)
+        {
+            var watermark = PreviewWatermark(locale);
+            // Read only first: a refused page must not cost a full write of the document.
+            int requested = input.SignPageNumber <= 0 ? 1 : input.SignPageNumber;
+            using (var probe = new PdfDocument(new PdfReader(new MemoryStream(pdfBytes))))
+            {
+                if (requested > probe.GetNumberOfPages())
+                {
+                    throw new ApiValidationException(PreviewPageInvalidCode, "Appearance preview: page not in the document");
+                }
+            }
+            byte[] drawn;
+            int pageNumber;
+            using (var msDrawn = new MemoryStream())
+            {
+                using (var pdfDoc = new PdfDocument(new PdfReader(new MemoryStream(pdfBytes)), new PdfWriter(msDrawn)))
+                {
+                    var plan = PlanStamp(input, pdfDoc, companyName: null);
+                    var xobject = Render(plan, pdfDoc);
+                    var stampCanvas = new PdfCanvas(xobject, pdfDoc);
+                    DrawWatermark(stampCanvas, new Rectangle(0, 0, plan.Rect.GetWidth(), plan.Rect.GetHeight()), watermark, 0.9f);
+                    stampCanvas.Release();
+                    PlaceInContent(plan, pdfDoc, xobject);
+
+                    var page = pdfDoc.GetPage(plan.Page);
+                    var canvas = new PdfCanvas(page.NewContentStreamAfter(), page.GetResources(), pdfDoc);
+                    canvas.SaveState();
+                    if (!plan.Frame.IsIdentity)
+                    {
+                        var m = plan.Frame.ToPageMatrix();
+                        canvas.ConcatMatrix(m[0], m[1], m[2], m[3], m[4], m[5]);
+                    }
+                    DrawWatermark(canvas, plan.Frame.Box, watermark, 0.6f);
+                    canvas.RestoreState();
+                    canvas.Release();
+                    pageNumber = plan.Page;
+                }
+                drawn = msDrawn.ToArray();
+            }
+
+            using var msOut = new MemoryStream();
+            using (var source = new PdfDocument(new PdfReader(new MemoryStream(drawn))))
+            using (var preview = new PdfDocument(new PdfWriter(msOut)))
+            {
+                source.CopyPagesTo(pageNumber, pageNumber, preview);
+            }
+            return msOut.ToArray();
+        }
+
+        /// <summary>Light grey text diagonally across <paramref name="box"/>, sized to <paramref name="share"/> of its diagonal.</summary>
+        private static void DrawWatermark(PdfCanvas canvas, Rectangle box, string text, float share)
+        {
+            var font = AppFonts.Load(AppFontFamily.Sans, bold: true);
+            float diagonal = (float)Math.Sqrt(box.GetWidth() * box.GetWidth() + box.GetHeight() * box.GetHeight());
+            float unitWidth = font.GetWidth(text, 1);
+            // The text is the server's own, so this never happens; a preview without it must not go out.
+            if (unitWidth <= 0) throw new InvalidOperationException("Preview watermark has no width.");
+            float size = Math.Min(diagonal * share / unitWidth, 160f);
+            double angle = Math.Atan2(box.GetHeight(), box.GetWidth());
+            float cos = (float)Math.Cos(angle), sin = (float)Math.Sin(angle);
+            float textWidth = unitWidth * size;
+            float cx = box.GetX() + box.GetWidth() / 2, cy = box.GetY() + box.GetHeight() / 2;
+            // Start so that the text's middle (and half its cap height) sits in the middle of the box.
+            float x = cx - cos * textWidth / 2 + sin * size * 0.35f;
+            float y = cy - sin * textWidth / 2 - cos * size * 0.35f;
+
+            canvas.SaveState();
+            canvas.SetFillColor(new iText.Kernel.Colors.DeviceRgb(200, 200, 200));
+            canvas.BeginText();
+            canvas.SetFontAndSize(font, size);
+            canvas.SetTextMatrix(cos, sin, -sin, cos, x, y);
+            canvas.ShowText(text);
+            canvas.EndText();
+            canvas.RestoreState();
+        }
+
         /// <summary>Where a stamp lands, before anything is drawn.</summary>
         public sealed class StampPlan
         {
@@ -92,9 +194,11 @@ namespace DotNetSigningServer.Services
         /// The stamp in the page content of a document nobody signed yet. The old content is wrapped
         /// in q/Q, so an unbalanced <c>cm</c> in it cannot move the stamp away from the seal field.
         /// </summary>
-        public static void DrawIntoContent(StampPlan plan, PdfDocument pdfDoc)
+        public static void DrawIntoContent(StampPlan plan, PdfDocument pdfDoc) =>
+            PlaceInContent(plan, pdfDoc, Render(plan, pdfDoc));
+
+        private static void PlaceInContent(StampPlan plan, PdfDocument pdfDoc, PdfFormXObject xobject)
         {
-            var xobject = Render(plan, pdfDoc);
             var canvas = new PdfCanvas(pdfDoc.GetPage(plan.Page), true);
             canvas.SaveState();
             if (!plan.Frame.IsIdentity)
