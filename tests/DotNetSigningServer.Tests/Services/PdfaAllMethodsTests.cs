@@ -67,6 +67,14 @@ public class PdfaAllMethodsTests : IDisposable
             MimeType = mime,
         }, pdf));
 
+    private static byte[] AttachWithoutDescription(byte[] pdf, string fileName, byte[] content, string? mime) =>
+        Convert.FromBase64String(Service().AddAttachment(new AddAttachmentInput
+        {
+            AttachmentContent = Convert.ToBase64String(content),
+            FileName = fileName,
+            MimeType = mime,
+        }, pdf));
+
     private static byte[] FileContent(byte[] pdf, string key)
     {
         using var doc = new PdfDocument(new PdfReader(new MemoryStream(pdf)));
@@ -147,6 +155,37 @@ public class PdfaAllMethodsTests : IDisposable
         Assert.Equal(Evidence, FileContent(prepared.Pdf, "ses-evidence.p7m"));
         using var doc = new PdfDocument(new PdfReader(new MemoryStream(prepared.Pdf)));
         Assert.Equal(2, doc.GetCatalog().GetPdfObject().GetAsArray(PdfName.AF)!.Size());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("text/xml")]
+    public void PDFA_3B_converts_an_attachment_without_description_and_names_it_by_the_file(string? mime)
+    {
+        // An XML from a SharePoint column has no description; iText refused the file spec without /Desc.
+        var xml = System.Text.Encoding.UTF8.GetBytes("<?xml version=\"1.0\"?><dcc/>");
+        var pdf = AttachWithoutDescription(PresignPdfaTests.ScriptedFormEmbedded(), "dcc.xml", xml, mime);
+
+        var prepared = Prepare(pdf, "PDF/A-3B");
+
+        Assert.Equal(DocumentPreparation.PdfaOutcome.Converted, prepared.Report.Pdfa);
+        Assert.Empty(PdfAConformanceCheck.Problems(prepared.Pdf, PdfAConformance.PDF_A_3B));
+        Assert.Equal(xml, FileContent(prepared.Pdf, "dcc.xml"));
+        using var doc = new PdfDocument(new PdfReader(new MemoryStream(prepared.Pdf)));
+        var (_, spec) = EmbeddedFiles.Of(doc).Single();
+        Assert.Equal("dcc.xml", spec.GetAsString(PdfName.Desc)!.ToUnicodeString());
+    }
+
+    [Fact]
+    public void An_attachment_without_description_into_a_PDFA_3B_document_keeps_it_PDFA()
+    {
+        var pdfa = Prepare(PresignPdfaTests.ScriptedFormEmbedded(), "PDF/A-3B").Pdf;
+
+        var pdf = AttachWithoutDescription(pdfa, "dcc.xml", new byte[] { 1, 2, 3 }, "text/xml");
+
+        Assert.Empty(PdfAConformanceCheck.Problems(pdf, PdfAConformance.PDF_A_3B));
+        using var doc = new PdfDocument(new PdfReader(new MemoryStream(pdf)));
+        Assert.Equal("dcc.xml", EmbeddedFiles.Of(doc).Single().Spec.GetAsString(PdfName.Desc)!.ToUnicodeString());
     }
 
     private (string Path, string Hash, string CertPem, string Pfx, string Password) Presign(byte[] pdf, PdfAConformance? keep, string field)

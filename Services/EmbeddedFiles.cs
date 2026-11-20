@@ -79,6 +79,8 @@ public static class EmbeddedFiles
     {
         var parameters = new PdfDictionary();
         parameters.Put(PdfName.ModDate, modDate ?? new PdfDate().GetPdfObject());
+        // PDF/A-3 requires /Desc; an attachment from a SharePoint column comes without one.
+        if (string.IsNullOrWhiteSpace(description)) description = fileName;
         var spec = PdfFileSpec.CreateEmbeddedFileSpec(document, bytes, description, fileName,
             new PdfName(string.IsNullOrWhiteSpace(mimeType) ? DefaultMimeType : mimeType), parameters, relationship ?? PdfName.Unspecified);
         var catalog = document.GetCatalog();
