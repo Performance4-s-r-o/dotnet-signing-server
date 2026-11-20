@@ -52,7 +52,8 @@ public static class EmbeddedFiles
 
     /// <summary>
     /// Copies every embedded file of <paramref name="source"/> into <paramref name="target"/> as an
-    /// associated file, byte for byte under the same key, name and description. A file without
+    /// associated file, byte for byte under the same key, name and description (the name when it has
+    /// none, PDF/A-3 needs one). A file without
     /// content fails the conversion (<see cref="PdfException"/>, refused as a failed conversion)
     /// instead of being left out.
     /// </summary>
@@ -79,6 +80,8 @@ public static class EmbeddedFiles
     {
         var parameters = new PdfDictionary();
         parameters.Put(PdfName.ModDate, modDate ?? new PdfDate().GetPdfObject());
+        // PDF/A-3 requires /Desc; an attachment from a SharePoint column comes without one.
+        if (string.IsNullOrWhiteSpace(description)) description = fileName;
         var spec = PdfFileSpec.CreateEmbeddedFileSpec(document, bytes, description, fileName,
             new PdfName(string.IsNullOrWhiteSpace(mimeType) ? DefaultMimeType : mimeType), parameters, relationship ?? PdfName.Unspecified);
         var catalog = document.GetCatalog();
@@ -98,7 +101,7 @@ public static class EmbeddedFiles
     /// <summary>
     /// What keeps the document from being PDF/A of <paramref name="part"/> because of its embedded
     /// files: none allowed below part 3 (whether a file inside is itself PDF/A is not checked, so any
-    /// file counts), and in part 3 each must be an associated file with a MIME type.
+    /// file counts), and in part 3 each must be an associated file with a MIME type, /F, /UF and /Desc.
     /// </summary>
     public static bool Conform(PdfDocument document, string part)
     {
@@ -122,6 +125,8 @@ public static class EmbeddedFiles
             var stream = ef?.GetAsStream(PdfName.F) ?? ef?.GetAsStream(PdfName.UF);
             if (reference == null || !associated.Contains(reference)) return false;
             if (spec.GetAsName(PdfName.AFRelationship) == null) return false;
+            // iText refuses a spec without these when it writes PDF/A-3; keep the check as strict.
+            if (spec.Get(PdfName.F) == null || spec.Get(PdfName.UF) == null || spec.Get(PdfName.Desc) == null) return false;
             if (stream?.GetAsName(PdfName.Subtype) == null) return false;
         }
         return true;
