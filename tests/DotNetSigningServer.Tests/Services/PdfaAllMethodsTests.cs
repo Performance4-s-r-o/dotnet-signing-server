@@ -188,6 +188,28 @@ public class PdfaAllMethodsTests : IDisposable
         Assert.Equal("dcc.xml", EmbeddedFiles.Of(doc).Single().Spec.GetAsString(PdfName.Desc)!.ToUnicodeString());
     }
 
+    [Fact]
+    public void A_PDFA_3B_document_with_an_associated_file_without_desc_is_not_PDFA()
+    {
+        // Such a file can come from a customer; iText would refuse it on the next PDF/A write.
+        var pdfa = Prepare(PresignPdfaTests.ScriptedFormEmbedded(), "PDF/A-3B").Pdf;
+        using var output = new MemoryStream();
+        using (var doc = new PdfDocument(new PdfReader(new MemoryStream(pdfa)), new PdfWriter(output), new StampingProperties().UseAppendMode()))
+        {
+            var parameters = new PdfDictionary();
+            parameters.Put(PdfName.ModDate, new PdfDate().GetPdfObject());
+            var spec = iText.Kernel.Pdf.Filespec.PdfFileSpec.CreateEmbeddedFileSpec(doc, new byte[] { 1 }, null, "dcc.xml",
+                new PdfName("text/xml"), parameters, PdfName.Unspecified);
+            spec.GetPdfObject().MakeIndirect(doc);
+            var af = new PdfArray();
+            af.Add(spec.GetPdfObject());
+            doc.GetCatalog().Put(PdfName.AF, af);
+            doc.AddFileAttachment("dcc.xml", spec);
+        }
+
+        Assert.Contains(PdfAConformanceCheck.EmbeddedFileNotAllowed, PdfAConformanceCheck.Problems(output.ToArray(), PdfAConformance.PDF_A_3B));
+    }
+
     private (string Path, string Hash, string CertPem, string Pfx, string Password) Presign(byte[] pdf, PdfAConformance? keep, string field)
     {
         var (certPem, pfx, password) = TestHelpers.CreateTestCertificate();

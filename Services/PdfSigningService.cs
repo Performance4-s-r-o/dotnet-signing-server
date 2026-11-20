@@ -499,12 +499,14 @@ namespace DotNetSigningServer.Services
                 return Convert.ToBase64String(msOut.ToArray());
             }
 
+            // Without a description the name stands in: a later PDF/A-3 conversion needs /Desc.
+            var description = string.IsNullOrWhiteSpace(input.Description) ? uniqueFileName : input.Description;
             PdfFileSpec fileSpec = string.IsNullOrWhiteSpace(attachmentMimeType)
-                ? PdfFileSpec.CreateEmbeddedFileSpec(pdfDoc, attachmentBytes, input.Description, uniqueFileName, afRelationship)
+                ? PdfFileSpec.CreateEmbeddedFileSpec(pdfDoc, attachmentBytes, description, uniqueFileName, afRelationship)
                 : PdfFileSpec.CreateEmbeddedFileSpec(
                     pdfDoc,
                     attachmentBytes,
-                    input.Description,
+                    description,
                     uniqueFileName,
                     new PdfName(attachmentMimeType),
                     null,
