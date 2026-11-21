@@ -74,7 +74,6 @@ public sealed class CapacityPool
         {
             var delta = limit - _limit;
             if (delta == 0) return;
-            Volatile.Write(ref _limit, limit);
             if (delta > 0)
             {
                 var paid = Math.Min(_debt, delta);
@@ -86,6 +85,8 @@ public sealed class CapacityPool
                 _debt += -delta;
                 while (_debt > 0 && _semaphore.Wait(0)) _debt--;
             }
+            // Written after the slots moved, so a failed release leaves the old limit in force.
+            Volatile.Write(ref _limit, limit);
             if (limit == 0)
             {
                 // Off: whoever still waits gets a slot that the debt takes back on release.
@@ -112,6 +113,8 @@ public sealed class CapacityPool
         Interlocked.Increment(ref _waiting);
         try
         {
+            // Switched off between the check above and joining the waiters: no need to wait.
+            if (!Enabled) return new CapacityLease(true, false);
             var taken = await _semaphore.WaitAsync(wait, ct);
             RecordWait(Stopwatch.GetTimestamp() - started);
             if (taken) return Taken();
@@ -157,6 +160,15 @@ public sealed class CapacityPool
         }
     }
 
+    /// <summary>Slots still to be taken back after a shrink (diagnostics: why InUse can exceed Limit).</summary>
+    public int Debt
+    {
+        get
+        {
+            lock (_resize) return _debt;
+        }
+    }
+
     public PoolSnapshot Snapshot()
     {
         var waited = Interlocked.Read(ref _waitedCount);
@@ -172,7 +184,8 @@ public sealed class CapacityPool
             waited == 0 ? 0 : TicksToMs(Interlocked.Read(ref _waitTicksTotal)) / waited,
             TicksToMs(Interlocked.Read(ref _maxWaitTicks)),
             waits.P95Ms,
-            waits.P99Ms);
+            waits.P99Ms,
+            Debt);
     }
 
     private static double TicksToMs(long ticks) => Math.Round(ticks * 1000.0 / Stopwatch.Frequency, 1);
@@ -190,7 +203,8 @@ public sealed record PoolSnapshot(
     double AverageWaitMs,
     double MaxWaitMs,
     double P95WaitMs = 0,
-    double P99WaitMs = 0);
+    double P99WaitMs = 0,
+    int Debt = 0);
 
 /// <summary>
 /// The process-wide pools of #69: G (global, taken in <c>UserConcurrencyMiddleware</c>), H (heavy
@@ -253,16 +267,14 @@ public sealed class CapacityPools
     public IReadOnlyList<string> ApplyRuntimeSettings(Settings.IRuntimeSettings settings)
     {
         var changed = new List<string>();
-        void Set(CapacityPool pool, int limit, bool bounded = true)
+        void Set(CapacityPool pool, int limit)
         {
-            limit = Math.Max(0, limit);
-            if (bounded) limit = Math.Min(limit, BillingOptions.MaxPoolLimit);
+            limit = Math.Min(Math.Max(0, limit), BillingOptions.MaxPoolLimit);
             if (pool.Limit == limit) return;
             changed.Add($"{pool.Name} {pool.Limit} → {limit}");
             pool.SetLimit(limit);
         }
-        // G has no upper bound in env either.
-        Set(Global, settings.GetInt(Settings.RuntimeSettingKeys.GlobalConcurrencyLimit), bounded: false);
+        Set(Global, settings.GetInt(Settings.RuntimeSettingKeys.GlobalConcurrencyLimit));
         Set(Heavy, settings.GetInt(Settings.RuntimeSettingKeys.HeavyOperationsLimit));
         Set(Ai, settings.GetInt(Settings.RuntimeSettingKeys.AiOperationsLimit));
         var waitMs = Math.Min(settings.GetInt(Settings.RuntimeSettingKeys.GlobalConcurrencyWaitMs), BillingOptions.MaxGlobalWaitMilliseconds);
