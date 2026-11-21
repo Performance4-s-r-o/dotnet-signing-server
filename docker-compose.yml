@@ -80,12 +80,13 @@ services:
       # Sign-in and 2FA attempts per account whatever the IP (default 30 per 15 min).
       - AUTH_ACCOUNT_MAX_ATTEMPTS=${AUTH_ACCOUNT_MAX_ATTEMPTS:-}
       - AUTH_ACCOUNT_WINDOW_MINUTES=${AUTH_ACCOUNT_WINDOW_MINUTES:-}
-      # #69/#94: cap on concurrent operations of the whole server (G). Empty or 0 = off. A request
+      # #69/#94: cap on concurrent operations of the whole server (G). Set = overrides the runtime
+      # setting of the same name (#204, resized while running); 0 = off; empty = the runtime setting. A request
       # waits GLOBAL_CONCURRENCY_WAIT_MS (default 2000) for a slot of G, H or A, then 503.
       # The start hypotheses for this machine are logged at startup and shown on /internal/concurrency.
       - GLOBAL_CONCURRENCY_LIMIT=${GLOBAL_CONCURRENCY_LIMIT:-}
       - GLOBAL_CONCURRENCY_WAIT_MS=${GLOBAL_CONCURRENCY_WAIT_MS:-}
-      # Pools (#69), empty or 0 = off: H = presign/sign/seal/timestamp/extend/fill/PDF/A at once
+      # Pools (#69); set = overrides the runtime setting, 0 = off, empty = runtime setting (#204): H = presign/sign/seal/timestamp/extend/fill/PDF/A at once
       # (start at the CPU count), A = AI calls at once (start at 4).
       - HEAVY_OPERATIONS_LIMIT=${HEAVY_OPERATIONS_LIMIT:-}
       - AI_OPERATIONS_LIMIT=${AI_OPERATIONS_LIMIT:-}

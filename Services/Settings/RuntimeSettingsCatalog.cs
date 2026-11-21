@@ -65,6 +65,18 @@ public static class RuntimeSettingKeys
     /// <summary>Kill switch of every /api/ai/* route (closed).</summary>
     public const string AiEnabled = "ai_enabled";
 
+    /// <summary>Pool G: operations of the whole server at once; 0 = off (#204, resized while running).</summary>
+    public const string GlobalConcurrencyLimit = "global_concurrency_limit";
+
+    /// <summary>How long a request waits for a slot in G, H or A before the 503, milliseconds.</summary>
+    public const string GlobalConcurrencyWaitMs = "global_concurrency_wait_ms";
+
+    /// <summary>Pool H: heavy operations at once; 0 = off.</summary>
+    public const string HeavyOperationsLimit = "heavy_operations_limit";
+
+    /// <summary>Pool A: AI calls at once; 0 = off.</summary>
+    public const string AiOperationsLimit = "ai_operations_limit";
+
     public static readonly IReadOnlyList<RuntimeSettingDefinition> All =
     [
         new(MaxPendingPresignsPerUser, RuntimeSettingType.Int, 20, RuntimeSettingFailMode.LastKnown),
@@ -75,6 +87,10 @@ public static class RuntimeSettingKeys
         new(AuthAccountMaxAttempts, RuntimeSettingType.Int, 30, RuntimeSettingFailMode.LastKnown),
         new(AuthAccountWindowMinutes, RuntimeSettingType.Duration, 15, RuntimeSettingFailMode.LastKnown),
         new(AiEnabled, RuntimeSettingType.Bool, 0, RuntimeSettingFailMode.Closed),
+        new(GlobalConcurrencyLimit, RuntimeSettingType.Int, 0, RuntimeSettingFailMode.LastKnown),
+        new(GlobalConcurrencyWaitMs, RuntimeSettingType.Int, 2000, RuntimeSettingFailMode.LastKnown),
+        new(HeavyOperationsLimit, RuntimeSettingType.Int, 0, RuntimeSettingFailMode.LastKnown),
+        new(AiOperationsLimit, RuntimeSettingType.Int, 0, RuntimeSettingFailMode.LastKnown),
     ];
 
     private static readonly Dictionary<string, RuntimeSettingDefinition> ByKey =

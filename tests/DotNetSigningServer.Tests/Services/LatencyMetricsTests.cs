@@ -67,8 +67,9 @@ public class LatencyMetricsTests
     public async Task A_pool_reports_percentiles_of_the_waits()
     {
         var pool = new CapacityPool("heavy", 1);
-        Assert.True(await pool.TryEnterAsync(TimeSpan.Zero, CancellationToken.None));
-        for (var i = 0; i < 5; i++) Assert.False(await pool.TryEnterAsync(TimeSpan.FromMilliseconds(20), CancellationToken.None));
+        var lease1 = await pool.TryAcquireAsync(TimeSpan.Zero, CancellationToken.None);
+        Assert.True(lease1.Admitted);
+        for (var i = 0; i < 5; i++) Assert.False((await pool.TryAcquireAsync(TimeSpan.FromMilliseconds(20), CancellationToken.None)).Admitted);
 
         var s = pool.Snapshot();
         Assert.True(s.P95WaitMs >= 15, $"p95 {s.P95WaitMs}");

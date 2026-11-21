@@ -23,8 +23,9 @@ public class CapacityPoolTests
         var pool = new CapacityPool("heavy", 0);
         Assert.False(pool.Enabled);
         Assert.Null(pool.Available);
-        Assert.True(await pool.TryEnterAsync(TimeSpan.Zero, CancellationToken.None));
-        pool.Release();
+        var lease1 = await pool.TryAcquireAsync(TimeSpan.Zero, CancellationToken.None);
+        Assert.True(lease1.Admitted);
+        pool.Release(lease1);
         Assert.Equal(0, pool.InUse);
     }
 
@@ -32,8 +33,9 @@ public class CapacityPoolTests
     public async Task Full_pool_waits_then_refuses_and_counts_it()
     {
         var pool = new CapacityPool("heavy", 1);
-        Assert.True(await pool.TryEnterAsync(TimeSpan.Zero, CancellationToken.None));
-        Assert.False(await pool.TryEnterAsync(TimeSpan.FromMilliseconds(30), CancellationToken.None));
+        var lease2 = await pool.TryAcquireAsync(TimeSpan.Zero, CancellationToken.None);
+        Assert.True(lease2.Admitted);
+        Assert.False((await pool.TryAcquireAsync(TimeSpan.FromMilliseconds(30), CancellationToken.None)).Admitted);
 
         var snapshot = pool.Snapshot();
         Assert.Equal(1, snapshot.InUse);
@@ -42,7 +44,7 @@ public class CapacityPoolTests
         Assert.Equal(0, snapshot.Waiting);
         Assert.True(snapshot.MaxWaitMs >= 20);
 
-        pool.Release();
+        pool.Release(lease2);
         Assert.Equal(1, pool.Available);
     }
 
@@ -50,10 +52,11 @@ public class CapacityPoolTests
     public async Task Cancelled_wait_takes_no_slot()
     {
         var pool = new CapacityPool("ai", 1);
-        Assert.True(await pool.TryEnterAsync(TimeSpan.Zero, CancellationToken.None));
+        var lease3 = await pool.TryAcquireAsync(TimeSpan.Zero, CancellationToken.None);
+        Assert.True(lease3.Admitted);
         using var cts = new CancellationTokenSource(30);
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pool.TryEnterAsync(Bounded, cts.Token));
-        pool.Release();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pool.TryAcquireAsync(Bounded, cts.Token));
+        pool.Release(lease3);
         Assert.Equal(1, pool.Available);
         Assert.Equal(0, pool.Snapshot().Waiting);
     }
@@ -207,11 +210,12 @@ public class CapacityPoolTests
             CodeScanRaster.WithSlotAsync<int>(pool, Bounded, () => throw new InvalidOperationException("boom"), CancellationToken.None));
         Assert.Equal(1, pool.Available);
 
-        Assert.True(await pool.TryEnterAsync(TimeSpan.Zero, CancellationToken.None));
+        var lease4 = await pool.TryAcquireAsync(TimeSpan.Zero, CancellationToken.None);
+        Assert.True(lease4.Admitted);
         using var cts = new CancellationTokenSource(30);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             CodeScanRaster.WithSlotAsync(pool, Bounded, () => 1, cts.Token));
-        pool.Release();
+        pool.Release(lease4);
         Assert.Equal(1, pool.Available);
         Assert.Equal(0, pool.Snapshot().Waiting);
     }
@@ -220,7 +224,8 @@ public class CapacityPoolTests
     public async Task Raster_page_waits_for_the_slot_then_gets_capacity_exceeded()
     {
         var pool = new CapacityPool("raster", 1);
-        Assert.True(await pool.TryEnterAsync(TimeSpan.Zero, CancellationToken.None));
+        var lease5 = await pool.TryAcquireAsync(TimeSpan.Zero, CancellationToken.None);
+        Assert.True(lease5.Admitted);
 
         var started = false;
         var ex = await Assert.ThrowsAsync<CapacityExceededException>(() =>
@@ -251,7 +256,8 @@ public class CapacityPoolTests
                 return 0;
             }, CancellationToken.None))).ToArray();
 
-        SpinWait.SpinUntil(() => pool.InUse == 2 && pool.Snapshot().Waiting == 4, Bounded);
+        // Both holders must be inside the work, not just past the semaphore.
+        SpinWait.SpinUntil(() => Volatile.Read(ref running) == 2 && pool.Snapshot().Waiting == 4, Bounded);
         Assert.Equal(2, pool.InUse);
         gate.SetResult();
         await Task.WhenAll(tasks).WaitAsync(Bounded);

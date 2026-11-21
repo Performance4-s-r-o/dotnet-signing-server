@@ -15,13 +15,27 @@ public enum CapacityPoolKind
     Rasterization,
 }
 
+/// <summary>A slot taken from a <see cref="CapacityPool"/>; <see cref="Held"/> = false when the pool was off.</summary>
+public readonly record struct CapacityLease(bool Admitted, bool Held)
+{
+    public static readonly CapacityLease Rejected = new(false, false);
+}
+
 /// <summary>
 /// A counting slot pool with a short wait and counters for the diagnostics endpoint (#69).
 /// Limit 0 = off: every request passes and nothing is counted as held.
+/// The limit can change while the server runs (#204): a larger pool frees slots at once, a smaller
+/// one never stops a running operation; new entries wait until the count falls below the new limit.
 /// </summary>
 public sealed class CapacityPool
 {
-    private readonly SemaphoreSlim? _semaphore;
+    // Always present; with limit 0 its count is 0 and entries pass without it.
+    private readonly SemaphoreSlim _semaphore;
+    private readonly object _resize = new();
+    private int _limit;
+    // Slots still to be taken back after a shrink: a release pays the debt instead of freeing a slot.
+    private int _debt;
+    private long _held;
     private long _waiting;
     private long _acquired;
     private long _rejected;
@@ -33,46 +47,81 @@ public sealed class CapacityPool
     public CapacityPool(string name, int limit)
     {
         Name = name;
-        Limit = Math.Max(0, limit);
-        if (Limit > 0)
-        {
-            _semaphore = new SemaphoreSlim(Limit, Limit);
-        }
+        _limit = Math.Max(0, limit);
+        _semaphore = new SemaphoreSlim(_limit, int.MaxValue);
     }
 
     public string Name { get; }
 
-    public int Limit { get; }
+    public int Limit => Volatile.Read(ref _limit);
 
-    public bool Enabled => _semaphore != null;
+    public bool Enabled => Limit > 0;
 
     /// <summary>Free slots, or null when the pool is off.</summary>
-    public int? Available => _semaphore?.CurrentCount;
+    public int? Available => Enabled ? Math.Max(0, Limit - InUse) : null;
 
-    public int InUse => _semaphore == null ? 0 : Limit - _semaphore.CurrentCount;
+    public int InUse => (int)Interlocked.Read(ref _held);
 
     /// <summary>
-    /// Takes a slot, waiting at most <paramref name="wait"/>. True = taken (or the pool is off),
-    /// false = still full after the wait. Throws when <paramref name="ct"/> is cancelled.
+    /// Changes the limit. Growing frees slots for waiting requests; shrinking takes free slots back
+    /// now and the rest as running operations finish. 0 switches the pool off and lets the waiting
+    /// requests through.
     /// </summary>
-    public async Task<bool> TryEnterAsync(TimeSpan wait, CancellationToken ct)
+    public void SetLimit(int limit)
     {
-        if (_semaphore == null) return true;
-        if (_semaphore.Wait(0))
+        limit = Math.Max(0, limit);
+        lock (_resize)
         {
-            Interlocked.Increment(ref _acquired);
-            return true;
+            var delta = limit - _limit;
+            if (delta == 0) return;
+            if (delta > 0)
+            {
+                var paid = Math.Min(_debt, delta);
+                _debt -= paid;
+                if (delta - paid > 0) _semaphore.Release(delta - paid);
+            }
+            else
+            {
+                _debt += -delta;
+                while (_debt > 0 && _semaphore.Wait(0)) _debt--;
+            }
+            // Written after the slots moved, so a failed release leaves the old limit in force.
+            Volatile.Write(ref _limit, limit);
+            if (limit == 0)
+            {
+                // Off: whoever still waits gets a slot that the debt takes back on release.
+                var waiting = (int)Interlocked.Read(ref _waiting);
+                if (waiting > 0)
+                {
+                    _semaphore.Release(waiting);
+                    _debt += waiting;
+                }
+            }
         }
+    }
+
+    /// <summary>
+    /// Takes a slot, waiting at most <paramref name="wait"/>. Admitted = taken (or the pool is off),
+    /// not admitted = still full after the wait. Throws when <paramref name="ct"/> is cancelled.
+    /// </summary>
+    public async Task<CapacityLease> TryAcquireAsync(TimeSpan wait, CancellationToken ct)
+    {
+        if (!Enabled) return new CapacityLease(true, false);
+        if (_semaphore.Wait(0)) return Taken();
 
         var started = Stopwatch.GetTimestamp();
         Interlocked.Increment(ref _waiting);
         try
         {
+            // Switched off between the check above and joining the waiters: no need to wait.
+            if (!Enabled) return new CapacityLease(true, false);
             var taken = await _semaphore.WaitAsync(wait, ct);
-            if (taken) Interlocked.Increment(ref _acquired);
-            else Interlocked.Increment(ref _rejected);
             RecordWait(Stopwatch.GetTimestamp() - started);
-            return taken;
+            if (taken) return Taken();
+            // Switched off while this request waited: it passes like any other.
+            if (!Enabled) return new CapacityLease(true, false);
+            Interlocked.Increment(ref _rejected);
+            return CapacityLease.Rejected;
         }
         finally
         {
@@ -80,8 +129,24 @@ public sealed class CapacityPool
         }
     }
 
-    /// <summary>Gives back a slot taken by <see cref="TryEnterAsync"/>; a no-op when the pool is off.</summary>
-    public void Release() => _semaphore?.Release();
+    private CapacityLease Taken()
+    {
+        Interlocked.Increment(ref _held);
+        Interlocked.Increment(ref _acquired);
+        return new CapacityLease(true, true);
+    }
+
+    /// <summary>Gives back a slot from <see cref="TryAcquireAsync"/>; a no-op for a lease that holds nothing.</summary>
+    public void Release(CapacityLease lease)
+    {
+        if (!lease.Held) return;
+        Interlocked.Decrement(ref _held);
+        lock (_resize)
+        {
+            if (_debt > 0) _debt--;
+            else _semaphore.Release();
+        }
+    }
 
     private void RecordWait(long ticks)
     {
@@ -92,6 +157,15 @@ public sealed class CapacityPool
         while (ticks > (seen = Interlocked.Read(ref _maxWaitTicks))
                && Interlocked.CompareExchange(ref _maxWaitTicks, ticks, seen) != seen)
         {
+        }
+    }
+
+    /// <summary>Slots still to be taken back after a shrink (diagnostics: why InUse can exceed Limit).</summary>
+    public int Debt
+    {
+        get
+        {
+            lock (_resize) return _debt;
         }
     }
 
@@ -110,7 +184,8 @@ public sealed class CapacityPool
             waited == 0 ? 0 : TicksToMs(Interlocked.Read(ref _waitTicksTotal)) / waited,
             TicksToMs(Interlocked.Read(ref _maxWaitTicks)),
             waits.P95Ms,
-            waits.P99Ms);
+            waits.P99Ms,
+            Debt);
     }
 
     private static double TicksToMs(long ticks) => Math.Round(ticks * 1000.0 / Stopwatch.Frequency, 1);
@@ -128,7 +203,8 @@ public sealed record PoolSnapshot(
     double AverageWaitMs,
     double MaxWaitMs,
     double P95WaitMs = 0,
-    double P99WaitMs = 0);
+    double P99WaitMs = 0,
+    int Debt = 0);
 
 /// <summary>
 /// The process-wide pools of #69: G (global, taken in <c>UserConcurrencyMiddleware</c>), H (heavy
@@ -138,6 +214,10 @@ public sealed record PoolSnapshot(
 /// </summary>
 public sealed class CapacityPools
 {
+    private readonly int _processorCount;
+    private readonly int _defaultUserLimit;
+    private long _waitTicks;
+
     public CapacityPools(IOptions<BillingOptions> billing)
         : this(billing.Value, Environment.ProcessorCount)
     {
@@ -145,15 +225,15 @@ public sealed class CapacityPools
 
     public CapacityPools(BillingOptions billing, int processorCount)
     {
+        _processorCount = processorCount;
+        _defaultUserLimit = billing.ConcurrencyDefaultLimit;
         Global = new CapacityPool("global", BillingOptions.EffectiveGlobalLimit(billing, processorCount));
         Heavy = new CapacityPool("heavy", billing.HeavyOperationsLimit ?? 0);
         Ai = new CapacityPool("ai", billing.AiOperationsLimit ?? 0);
         // R was always on (a fixed semaphore in CodeScanRaster); unset keeps that, 0 switches it off.
         Raster = new CapacityPool("raster", billing.RasterOperationsLimit ?? BillingOptions.SuggestedRasterLimit(processorCount));
         RasterWait = TimeSpan.FromMilliseconds(Math.Max(0, billing.RasterWaitMilliseconds));
-        Wait = TimeSpan.FromMilliseconds(Math.Max(0, billing.GlobalConcurrencyWaitMilliseconds));
-        HeavyCapacity = Heavy.Enabled ? Heavy.Limit : BillingOptions.SuggestedHeavyLimit(processorCount);
-        SelfServiceMaxConcurrency = SelfServiceMax(HeavyCapacity, billing.ConcurrencyDefaultLimit);
+        _waitTicks = TimeSpan.FromMilliseconds(Math.Max(0, billing.GlobalConcurrencyWaitMilliseconds)).Ticks;
     }
 
     public CapacityPool Global { get; }
@@ -168,16 +248,40 @@ public sealed class CapacityPools
     public TimeSpan RasterWait { get; }
 
     /// <summary>How long a request waits for a slot in G, H or A before the 503.</summary>
-    public TimeSpan Wait { get; }
+    public TimeSpan Wait => TimeSpan.FromTicks(Interlocked.Read(ref _waitTicks));
 
     /// <summary>H in force, or the suggested H while the pool is off; the base of the self-service cap.</summary>
-    public int HeavyCapacity { get; }
+    public int HeavyCapacity => Heavy.Enabled ? Heavy.Limit : BillingOptions.SuggestedHeavyLimit(_processorCount);
 
     /// <summary>
     /// The highest concurrency a user may set for themselves: ⌊H/2⌋, but never below the plan
     /// default (a small machine must still accept it). More only by an operator.
     /// </summary>
-    public int SelfServiceMaxConcurrency { get; }
+    public int SelfServiceMaxConcurrency => SelfServiceMax(HeavyCapacity, _defaultUserLimit);
+
+    /// <summary>
+    /// Sizes G, H and A and the wait from the runtime settings (#204): env override, then the settings
+    /// service, then the default in code (0 = off). Running operations are never dropped.
+    /// Returns the pools whose limit changed, for the log.
+    /// </summary>
+    public IReadOnlyList<string> ApplyRuntimeSettings(Settings.IRuntimeSettings settings)
+    {
+        var changed = new List<string>();
+        void Set(CapacityPool pool, int limit)
+        {
+            limit = Math.Min(Math.Max(0, limit), BillingOptions.MaxPoolLimit);
+            if (pool.Limit == limit) return;
+            changed.Add($"{pool.Name} {pool.Limit} → {limit}");
+            pool.SetLimit(limit);
+        }
+        Set(Global, settings.GetInt(Settings.RuntimeSettingKeys.GlobalConcurrencyLimit));
+        Set(Heavy, settings.GetInt(Settings.RuntimeSettingKeys.HeavyOperationsLimit));
+        Set(Ai, settings.GetInt(Settings.RuntimeSettingKeys.AiOperationsLimit));
+        var waitMs = Math.Min(settings.GetInt(Settings.RuntimeSettingKeys.GlobalConcurrencyWaitMs), BillingOptions.MaxGlobalWaitMilliseconds);
+        var ticks = TimeSpan.FromMilliseconds(Math.Max(0, waitMs)).Ticks;
+        if (Interlocked.Exchange(ref _waitTicks, ticks) != ticks) changed.Add($"wait {waitMs} ms");
+        return changed;
+    }
 
     public CapacityPool Get(CapacityPoolKind kind) => kind switch
     {

@@ -388,13 +388,21 @@ builder.Services.AddOptions<BillingOptions>()
         options.GlobalConcurrencyLimit = EnvValues.Int(builder.Configuration, "GLOBAL_CONCURRENCY_LIMIT") ?? options.GlobalConcurrencyLimit;
         options.GlobalConcurrencyWaitMilliseconds = EnvValues.Int(builder.Configuration, "GLOBAL_CONCURRENCY_WAIT_MS") ?? options.GlobalConcurrencyWaitMilliseconds;
         // A value that makes no sense stops the server, it does not quietly switch the cap off.
-        if (options.GlobalConcurrencyLimit is < 0)
+        if (options.GlobalConcurrencyLimit is < 0 or > BillingOptions.MaxPoolLimit)
         {
-            throw new InvalidOperationException("GLOBAL_CONCURRENCY_LIMIT must be 0 (off) or a positive number.");
+            throw new InvalidOperationException($"GLOBAL_CONCURRENCY_LIMIT must be 0 (off) or 1-{BillingOptions.MaxPoolLimit}.");
         }
-        if (options.GlobalConcurrencyWaitMilliseconds < 0)
+        if (options.GlobalConcurrencyWaitMilliseconds is < 0 or > BillingOptions.MaxGlobalWaitMilliseconds)
         {
-            throw new InvalidOperationException("GLOBAL_CONCURRENCY_WAIT_MS must be 0 or a positive number of milliseconds.");
+            throw new InvalidOperationException($"GLOBAL_CONCURRENCY_WAIT_MS must be 0-{BillingOptions.MaxGlobalWaitMilliseconds} milliseconds.");
+        }
+        // #204: G, H and A follow the runtime settings; the Billing section would be overwritten silently.
+        foreach (var key in new[] { "GlobalConcurrencyLimit", "GlobalConcurrencyWaitMilliseconds", "HeavyOperationsLimit", "AiOperationsLimit" })
+        {
+            if (!string.IsNullOrWhiteSpace(builder.Configuration[$"Billing:{key}"]))
+            {
+                throw new InvalidOperationException($"Billing:{key} is no longer read; use the env variable or the runtime setting (#204).");
+            }
         }
         // #69: pools H and A, and the bounds of a user's queue.
         options.HeavyOperationsLimit = EnvValues.Int(builder.Configuration, "HEAVY_OPERATIONS_LIMIT") ?? options.HeavyOperationsLimit;
@@ -434,6 +442,8 @@ builder.Services.AddOptions<BillingOptions>()
     })
     .ValidateOnStart();
 builder.Services.AddSingleton<CapacityPools>();
+// #204: G, H and A follow the runtime settings while the server runs.
+builder.Services.AddHostedService<CapacityPoolsRefresher>();
 // On SIGTERM, requests already running may finish (#69): the longest deadline is 75 s. Stays
 // under the container's stop_grace_period (135 s); the .NET default is 30 s.
 builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = TimeSpan.FromSeconds(120));
