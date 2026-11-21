@@ -31,10 +31,10 @@ public sealed class CapacityPoolAttribute : Attribute, IAsyncResourceFilter
             return;
         }
 
-        bool entered;
+        CapacityLease lease;
         try
         {
-            entered = await pool.TryEnterAsync(pools!.Wait, context.HttpContext.RequestAborted);
+            lease = await pool.TryAcquireAsync(pools!.Wait, context.HttpContext.RequestAborted);
         }
         catch (OperationCanceledException) when (context.HttpContext.RequestAborted.IsCancellationRequested)
         {
@@ -43,7 +43,7 @@ public sealed class CapacityPoolAttribute : Attribute, IAsyncResourceFilter
             return;
         }
 
-        if (!entered)
+        if (!lease.Admitted)
         {
             var localizer = context.HttpContext.RequestServices
                 .GetRequiredService<IStringLocalizerFactory>().Create(typeof(SharedStrings));
@@ -64,7 +64,7 @@ public sealed class CapacityPoolAttribute : Attribute, IAsyncResourceFilter
         }
         finally
         {
-            pool.Release();
+            pool.Release(lease);
         }
     }
 }

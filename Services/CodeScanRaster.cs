@@ -320,7 +320,8 @@ public static class CodeScanRaster
     /// </summary>
     internal static async Task<T> WithSlotAsync<T>(CapacityPool pool, TimeSpan wait, Func<T> work, CancellationToken ct)
     {
-        if (!await pool.TryEnterAsync(wait, ct))
+        var lease = await pool.TryAcquireAsync(wait, ct);
+        if (!lease.Admitted)
         {
             throw new CapacityExceededException(pool.Name);
         }
@@ -330,7 +331,7 @@ public static class CodeScanRaster
         }
         finally
         {
-            pool.Release();
+            pool.Release(lease);
         }
     }
 }

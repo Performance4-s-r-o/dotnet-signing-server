@@ -434,6 +434,8 @@ builder.Services.AddOptions<BillingOptions>()
     })
     .ValidateOnStart();
 builder.Services.AddSingleton<CapacityPools>();
+// #204: G, H and A follow the runtime settings while the server runs.
+builder.Services.AddHostedService<CapacityPoolsRefresher>();
 // On SIGTERM, requests already running may finish (#69): the longest deadline is 75 s. Stays
 // under the container's stop_grace_period (135 s); the .NET default is 30 s.
 builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = TimeSpan.FromSeconds(120));

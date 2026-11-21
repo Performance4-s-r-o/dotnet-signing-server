@@ -82,6 +82,9 @@ public class BillingOptions
     /// <summary>Upper bound for a configured pool size; anything above is a typo.</summary>
     public const int MaxPoolLimit = 10_000;
 
+    /// <summary>Upper bound of the G/H/A wait from the settings service; a longer wait would hold requests too long.</summary>
+    public const int MaxGlobalWaitMilliseconds = 60_000;
+
     /// <summary>Starting hypothesis for A (#69).</summary>
     public const int SuggestedAiLimit = 4;
 

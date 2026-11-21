@@ -216,7 +216,7 @@ public class UserConcurrencyMiddleware
     // It used to be static and was swapped in the constructor; a request releasing into a
     // semaphore it never took from could then overfill it.
     private readonly CapacityPool _global;
-    private readonly TimeSpan _globalWait;
+    private readonly CapacityPools _pools;
 
     /// <summary>
     /// Free global slots, or null when the global cap is off. Diagnostics and tests: after any
@@ -248,7 +248,7 @@ public class UserConcurrencyMiddleware
         _logger = logger;
         _billingOptions = billingOptions.Value;
         _global = pools.Global;
-        _globalWait = pools.Wait;
+        _pools = pools;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -282,7 +282,7 @@ public class UserConcurrencyMiddleware
 
         // The finally releases exactly what was taken.
         var userSlotAcquired = false;
-        var globalSlotAcquired = false;
+        var globalLease = CapacityLease.Rejected;
 
         try
         {
@@ -338,13 +338,14 @@ public class UserConcurrencyMiddleware
             {
                 try
                 {
-                    globalSlotAcquired = await _global.TryEnterAsync(_globalWait, context.RequestAborted);
+                    // The wait is read per request: the runtime settings can change it (#204).
+                    globalLease = await _global.TryAcquireAsync(_pools.Wait, context.RequestAborted);
                 }
                 catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
                 {
                     return;
                 }
-                if (!globalSlotAcquired)
+                if (!globalLease.Admitted)
                 {
                     _logger.LogWarning("Global concurrency limit ({Limit}) reached", _global.Limit);
                     context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
@@ -369,7 +370,7 @@ public class UserConcurrencyMiddleware
         }
         finally
         {
-            if (globalSlotAcquired) _global.Release();
+            _global.Release(globalLease);
             if (userSlotAcquired) gate.Release();
         }
     }
