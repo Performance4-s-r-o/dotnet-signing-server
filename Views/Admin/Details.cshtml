@@ -55,6 +55,24 @@
 
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:1.25rem 0" />
 
+            <h3 class="billing-pricing-title">@L["MaxParallelRequests"]</h3>
+            <p class="muted" style="font-size:0.875rem;margin-bottom:0.75rem">@L["MaxConcurrentDescription"]</p>
+            <form method="post" action="/Admin/Users/@Model.User.Id/SetMaxConcurrentOperations" style="display:flex;gap:0.5rem;align-items:center">
+                @Html.AntiForgeryToken()
+                <input type="number" name="maxConcurrent" min="1" max="@DotNetSigningServer.Options.BillingOptions.MaxPoolLimit" required
+                       value="@(Model.User.MaxConcurrentOperations?.ToString() ?? "")"
+                       placeholder="@L["ConcurrencyDefault"]"
+                       style="width:6rem;padding:0.25rem 0.5rem;border:1px solid #d1d5db;border-radius:4px;font-size:0.875rem" />
+                <button type="submit" class="btn-small btn-secondary">@L["SaveLimit"]</button>
+                @if (Model.User.MaxConcurrentOperations.HasValue)
+                {
+                    <button type="submit" name="maxConcurrent" value="-1" formnovalidate class="btn-small btn-secondary"
+                            style="color:#6b7280">@L["UseGlobalDefault"]</button>
+                }
+            </form>
+
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:1.25rem 0" />
+
             <h3 class="billing-pricing-title">@L["ConcurrencyQueueTimeout"]</h3>
             <p class="muted" style="font-size:0.875rem;margin-bottom:0.75rem">@L["ConcurrencyQueueTimeoutDescription"]</p>
             <form method="post" action="/Admin/Users/@Model.User.Id/SetConcurrencyQueueTimeout" style="display:flex;gap:0.5rem;align-items:center">
