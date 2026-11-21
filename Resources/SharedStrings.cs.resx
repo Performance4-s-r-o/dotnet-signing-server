@@ -94,6 +94,10 @@
   <data name="SeePricing" xml:space="preserve"><value>Zobrazit ceník</value></data>
   <data name="InvalidConcurrencyLimit" xml:space="preserve"><value>Limit paralelizace musí být mezi 1 a {0} (prázdné = výchozí).</value></data>
   <data name="InvalidQueueTimeout" xml:space="preserve"><value>Timeout fronty musí být mezi 0 a {0} sekundami (prázdné = výchozí).</value></data>
+  <data name="InvalidMaxConcurrent" xml:space="preserve"><value>Maximální počet paralelních požadavků musí být mezi 1 a {0}.</value></data>
+  <data name="MaxConcurrentUpdated" xml:space="preserve"><value>Maximální počet paralelních požadavků uložen.</value></data>
+  <data name="MaxConcurrentDescription" xml:space="preserve"><value>Kolik operací účtu běží najednou. Účet nájemce bez vlastní hodnoty dědí hodnotu účtu integrátora; globální pooly serveru platí dál.</value></data>
+  <data name="InheritFromParent" xml:space="preserve"><value>Zdědit od nadřazeného účtu</value></data>
   <data name="ConcurrencyAboveSelfServiceCap" xml:space="preserve"><value>Váš limit {0} nastavil správce nad maximum pro vlastní nastavení ({1}). Dál platí; můžete ho snížit, ne zvýšit.</value></data>
   <data name="ConcurrencyLimitUpdated" xml:space="preserve"><value>Limit paralelizace uložen.</value></data>
   <data name="ConcurrencyPricingTitle" xml:space="preserve"><value>Cena za paralelní zpracování</value></data>

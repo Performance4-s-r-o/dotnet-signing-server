@@ -120,6 +120,36 @@ public class AdminAuditControllerTests
     }
 
     [Fact]
+    public async Task SetMaxConcurrentOperations_IsAuditedAndResets()
+    {
+        var (db, user) = await SeedAsync();
+        await Controller(db).SetMaxConcurrentOperations(user.Id, 16);
+        Assert.Equal(16, (await db.Users.SingleAsync(u => u.Id == user.Id)).MaxConcurrentOperations);
+
+        await Controller(db).SetMaxConcurrentOperations(user.Id, -1);
+        Assert.Null((await db.Users.SingleAsync(u => u.Id == user.Id)).MaxConcurrentOperations);
+
+        var entries = await db.AdminAuditEntries.OrderBy(a => a.CreatedAt).ToListAsync();
+        Assert.Equal(2, entries.Count);
+        Assert.All(entries, e => Assert.Equal(AdminAudit.Actions.MaxConcurrentOperations, e.Action));
+        Assert.Contains(entries, e => e.Change.Contains("\"to\":16"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-2)]
+    [InlineData(BillingOptions.MaxPoolLimit + 1)]
+    public async Task SetMaxConcurrentOperations_RejectsOutOfRange(int? value)
+    {
+        var (db, user) = await SeedAsync();
+        await Controller(db).SetMaxConcurrentOperations(user.Id, value);
+
+        Assert.Null((await db.Users.SingleAsync(u => u.Id == user.Id)).MaxConcurrentOperations);
+        Assert.Empty(await db.AdminAuditEntries.ToListAsync());
+    }
+
+    [Fact]
     public async Task ToggleEnterprise_WhenDetachingTheCardFails_ChangesNothing()
     {
         var db = TestHelpers.CreateInMemoryDbContext();

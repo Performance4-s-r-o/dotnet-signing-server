@@ -359,6 +359,45 @@ public class AdminController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    /// <summary>
+    /// Concurrency of an account (#87). A provisioned (child) account without its own value
+    /// inherits the parent's, so changing the integrator account moves every tenant that has none.
+    /// -1 = back to the inherited / default value.
+    /// </summary>
+    [HttpPost("/Admin/Users/{id:guid}/SetMaxConcurrentOperations")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetMaxConcurrentOperations(Guid id, [FromForm] int? maxConcurrent)
+    {
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (user == null)
+        {
+            TempData["Error"] = _localizer["UserNotFound"].Value;
+            return RedirectToAction(nameof(Index));
+        }
+
+        // The global pools (G, H) still cap the server; this is the account's own share.
+        if (maxConcurrent is null or 0 or < -1 or > BillingOptions.MaxPoolLimit)
+        {
+            TempData["Error"] = _localizer["InvalidMaxConcurrent", BillingOptions.MaxPoolLimit].Value;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var before = user.MaxConcurrentOperations;
+        user.MaxConcurrentOperations = maxConcurrent < 0 ? null : maxConcurrent;
+        AdminAudit.Record(_dbContext, User, user.Id, AdminAudit.Actions.MaxConcurrentOperations,
+            new { from = before, to = user.MaxConcurrentOperations }, _time.GetUtcNow());
+        await _dbContext.SaveChangesAsync();
+
+        // The cache is per process: other instances pick the change up within its TTL (60 s).
+        UserConcurrencyMiddleware.InvalidateLimitCache(id);
+        foreach (var childId in await _dbContext.Users.AsNoTracking().Where(u => u.ParentUserId == id).Select(u => u.Id).ToListAsync())
+        {
+            UserConcurrencyMiddleware.InvalidateLimitCache(childId);
+        }
+        TempData["Info"] = _localizer["MaxConcurrentUpdated"].Value;
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
     [HttpPost("/Admin/Users/{id:guid}/SetConcurrencyQueueTimeout")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SetConcurrencyQueueTimeout(Guid id, [FromForm] int? queueTimeoutSeconds)

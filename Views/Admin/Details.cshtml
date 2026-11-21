@@ -55,21 +55,46 @@
 
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:1.25rem 0" />
 
+            <h3 class="billing-pricing-title">@L["MaxParallelRequests"]</h3>
+            <p class="muted" style="font-size:0.875rem;margin-bottom:0.75rem">@L["MaxConcurrentDescription"]</p>
+            <form method="post" action="/Admin/Users/@Model.User.Id/SetMaxConcurrentOperations" style="display:flex;gap:0.5rem;align-items:center">
+                @Html.AntiForgeryToken()
+                <input type="number" name="maxConcurrent" min="1" max="@DotNetSigningServer.Options.BillingOptions.MaxPoolLimit" required
+                       value="@(Model.User.MaxConcurrentOperations?.ToString() ?? "")"
+                       placeholder="@(Model.User.ParentUserId != null ? L["InheritFromParent"] : L["ConcurrencyDefault"])"
+                       style="width:6rem;padding:0.25rem 0.5rem;border:1px solid #d1d5db;border-radius:4px;font-size:0.875rem" />
+                <button type="submit" class="btn-small btn-secondary">@L["SaveLimit"]</button>
+            </form>
+            @if (Model.User.MaxConcurrentOperations.HasValue)
+            {
+                @* Own form: a button in the value form would also send the field, and the field would win. *@
+                <form method="post" action="/Admin/Users/@Model.User.Id/SetMaxConcurrentOperations" style="margin-top:0.5rem">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="maxConcurrent" value="-1" />
+                    <button type="submit" class="btn-small btn-secondary" style="color:#6b7280">@(Model.User.ParentUserId != null ? L["InheritFromParent"] : L["UseGlobalDefault"])</button>
+                </form>
+            }
+
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:1.25rem 0" />
+
             <h3 class="billing-pricing-title">@L["ConcurrencyQueueTimeout"]</h3>
             <p class="muted" style="font-size:0.875rem;margin-bottom:0.75rem">@L["ConcurrencyQueueTimeoutDescription"]</p>
             <form method="post" action="/Admin/Users/@Model.User.Id/SetConcurrencyQueueTimeout" style="display:flex;gap:0.5rem;align-items:center">
                 @Html.AntiForgeryToken()
                 <input type="number" name="queueTimeoutSeconds" min="-1" max="@DotNetSigningServer.Options.BillingOptions.MaxQueueSeconds"
                        value="@(Model.User.ConcurrencyQueueTimeoutSeconds?.ToString() ?? "")"
-                       placeholder="@L["ConcurrencyQueueDefault"]"
+                       placeholder="@(Model.User.ParentUserId != null ? L["InheritFromParent"] : L["ConcurrencyQueueDefault"])"
                        style="width:6rem;padding:0.25rem 0.5rem;border:1px solid #d1d5db;border-radius:4px;font-size:0.875rem" />
                 <button type="submit" class="btn-small btn-secondary">@L["SaveLimit"]</button>
-                @if (Model.User.ConcurrencyQueueTimeoutSeconds.HasValue)
-                {
-                    <button type="submit" name="queueTimeoutSeconds" value="-1" class="btn-small btn-secondary"
-                            style="color:#6b7280">@L["UseGlobalDefault"]</button>
-                }
             </form>
+            @if (Model.User.ConcurrencyQueueTimeoutSeconds.HasValue)
+            {
+                <form method="post" action="/Admin/Users/@Model.User.Id/SetConcurrencyQueueTimeout" style="margin-top:0.5rem">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="queueTimeoutSeconds" value="-1" />
+                    <button type="submit" class="btn-small btn-secondary" style="color:#6b7280">@(Model.User.ParentUserId != null ? L["InheritFromParent"] : L["UseGlobalDefault"])</button>
+                </form>
+            }
 
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:1.25rem 0" />
 
