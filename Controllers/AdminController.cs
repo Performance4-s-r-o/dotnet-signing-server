@@ -388,7 +388,8 @@ public class AdminController : Controller
             new { from = before, to = user.MaxConcurrentOperations }, _time.GetUtcNow());
         await _dbContext.SaveChangesAsync();
 
-        UserConcurrencyMiddleware.InvalidateLimitCache(id);
+        // The cache is per process: other instances pick the change up within its TTL (60 s).
+UserConcurrencyMiddleware.InvalidateLimitCache(id);
         foreach (var childId in await _dbContext.Users.AsNoTracking().Where(u => u.ParentUserId == id).Select(u => u.Id).ToListAsync())
         {
             UserConcurrencyMiddleware.InvalidateLimitCache(childId);

@@ -97,6 +97,7 @@
   <data name="InvalidMaxConcurrent" xml:space="preserve"><value>Max parallel requests must be between 1 and {0}.</value></data>
   <data name="MaxConcurrentUpdated" xml:space="preserve"><value>Max parallel requests updated.</value></data>
   <data name="MaxConcurrentDescription" xml:space="preserve"><value>How many operations of the account run at once. A tenant account without its own value inherits the integrator account's; the server's global pools still apply.</value></data>
+  <data name="InheritFromParent" xml:space="preserve"><value>Inherit from the parent account</value></data>
   <data name="ConcurrencyAboveSelfServiceCap" xml:space="preserve"><value>Your limit {0} was set by an operator above the self-service maximum {1}. It still applies; you can lower it, not raise it.</value></data>
   <data name="ConcurrencyLimitUpdated" xml:space="preserve"><value>Concurrency limit updated.</value></data>
   <data name="ConcurrencyPricingTitle" xml:space="preserve"><value>Parallel processing pricing</value></data>
