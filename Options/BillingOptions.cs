@@ -33,6 +33,8 @@ public class BillingOptions
     /// default stays off until the callers' own limits are set below it
     /// (see <see cref="SuggestedGlobalLimit"/>). When exceeded after
     /// <see cref="GlobalConcurrencyWaitMilliseconds"/>, the server returns 503.
+    /// This and the wait, H and A are filled from env only (the <c>Billing</c> section is refused at
+    /// start); while running, <c>CapacityPoolsRefresher</c> follows the runtime settings (#204).
     /// </summary>
     public int? GlobalConcurrencyLimit { get; set; }
 
