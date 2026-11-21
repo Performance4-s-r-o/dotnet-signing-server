@@ -67,7 +67,7 @@
             </form>
             @if (Model.User.MaxConcurrentOperations.HasValue)
             {
-                @* Vlastní formulář: tlačítko v tom samém by odeslalo i hodnotu pole a ta by vyhrála. *@
+                @* Own form: a button in the value form would also send the field, and the field would win. *@
                 <form method="post" action="/Admin/Users/@Model.User.Id/SetMaxConcurrentOperations" style="margin-top:0.5rem">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="maxConcurrent" value="-1" />
@@ -83,7 +83,7 @@
                 @Html.AntiForgeryToken()
                 <input type="number" name="queueTimeoutSeconds" min="-1" max="@DotNetSigningServer.Options.BillingOptions.MaxQueueSeconds"
                        value="@(Model.User.ConcurrencyQueueTimeoutSeconds?.ToString() ?? "")"
-                       placeholder="@L["ConcurrencyQueueDefault"]"
+                       placeholder="@(Model.User.ParentUserId != null ? L["InheritFromParent"] : L["ConcurrencyQueueDefault"])"
                        style="width:6rem;padding:0.25rem 0.5rem;border:1px solid #d1d5db;border-radius:4px;font-size:0.875rem" />
                 <button type="submit" class="btn-small btn-secondary">@L["SaveLimit"]</button>
             </form>
